@@ -9,16 +9,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
-import io.ktor.util.network.*
-import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.receiveAsFlow
-import kotlinx.coroutines.selects.select
 
 @Composable
 fun App() {
@@ -46,59 +41,30 @@ fun App() {
 
 const val BROADCAST_PORT = 2121
 
-
 class Socketstuff {
 
-    private val sendSockets by lazy {
-        val selectorManager = SelectorManager(Dispatchers.IO)
+    private val serverSocket: BoundDatagramSocket by lazy {
+        val selectorManager = ActorSelectorManager(Dispatchers.IO)
 
-        val socketAddress: SocketAddress = InetSocketAddress("255.255.255.255", BROADCAST_PORT)
+        val socketAddress: SocketAddress = InetSocketAddress("0.0.0.0", BROADCAST_PORT)
 
-        aSocket(selectorManager).udp().connect(socketAddress) {
-            broadcast = true
-        }.also {
-            log("Client connected with: ${socketAddress}")
-
-            GlobalScope.launch(Dispatchers.IO) {
-
-                it.incoming.consumeEach {
-                    log("Received udp datagram from broadcast channel: ${it.address}: $it ")
-                }
-
-            }
-        }
-
+        aSocket(selectorManager).udp().bind(localAddress = socketAddress)
     }
 
     val channelFlow = callbackFlow<String> {
 
-        val soc = openSocket()
 
+        val soc = serverSocket
         log("Listening on ${soc.localAddress}")
 
-        val readChannel = soc.openReadChannel()
-
         while (true) {
+            val receive = soc.receive()
+            val text = receive.packet.readText()
+            log("received: $text from: ${receive.address}")
 
-//            kotlin.runCatching { readChannel.readUTF8Line(10) }
-//                .onSuccess { log("Read $it") }
-//                .onFailure { log("Failed reading: ${it}") }
-//
-            delay(1000)
-
-
-
-            log("waiting receive ${soc}")
-            readChannel.awaitContent()
-            log("received something? ")
-
-            val input =   soc.incoming.receive()
-
-            log("received? ${input.packet}")
-
-            val read = input.packet.readText(0, 10)
-            log(read)
+            send(text)
         }
+
 
 //        soc.incoming.receiveAsFlow().collect {
 //
@@ -107,35 +73,32 @@ class Socketstuff {
 //            send(it.packet.readText())
 //        }
 
-//        awaitClose {
+        awaitClose {
 //            soc.close()
-//        }
-    }
-
-
-    private fun openSocket(): BoundDatagramSocket {
-
-        val selectorManager = SelectorManager(Dispatchers.IO)
-
-        val socketAddress: SocketAddress = InetSocketAddress("localhost", BROADCAST_PORT)
-        val serverSocket = aSocket(selectorManager).udp().bind(socketAddress) {
-//            broadcast = true
         }
-
-        return serverSocket
     }
+
 
     suspend fun sendPackage(counter: Int) {
+        val address = InetSocketAddress("255.255.255.255", BROADCAST_PORT)
 
-        val address = InetSocketAddress(sendSockets.remoteAddress.toJavaAddress().hostname, BROADCAST_PORT)
-
-        log("Sending packet to: ${address}")
         val datagram = Datagram(
-            ByteReadPacket("Message number: $counter!!\n".encodeToByteArray()),
+            ByteReadPacket("Message number: $counter!!".encodeToByteArray()),
             address
         )
 
-        sendSockets.send(datagram)
+        log("Sending '${datagram.packet.readText()}' packet to: ${datagram.address}")
+        val socket = aSocket(ActorSelectorManager(Dispatchers.IO))
+            .udp()
+            .connect(address) { broadcast = true }
+
+        socket.send(datagram)
+        log("Closing socket")
+        socket.close()
+        log("Awaiting closed")
+        socket.awaitClosed()
+        log("Socket closed")
+
     }
 
 }
