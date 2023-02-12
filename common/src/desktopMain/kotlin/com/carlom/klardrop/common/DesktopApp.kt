@@ -3,9 +3,10 @@ package com.carlom.klardrop.common
 
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.flow.emptyFlow
 
 @Preview
 @Composable
 fun AppPreview() {
-    App()
+  App(emptyFlow())
 }

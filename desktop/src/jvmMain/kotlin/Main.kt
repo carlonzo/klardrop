@@ -1,11 +1,35 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.carlom.klardrop.common.App
+import com.carlom.klardrop.common.SocketBroadcastUtility
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
+fun main() {
 
-fun main() = application {
+  androidx.compose.ui.window.application {
+    val flow = SocketBroadcastUtility.listenToBroadcast(2121)
+    continuousCounter()
+
     Window(onCloseRequest = ::exitApplication) {
-        App()
+      App(flow)
     }
+  }
+
+}
+
+
+private fun continuousCounter() {
+  val channel = SocketBroadcastUtility.sendMessageChannel(2121)
+
+  GlobalScope.launch(Dispatchers.IO) {
+    var counter = 0
+    while (true) {
+      channel.send("Message number: $counter\n")
+      counter++
+      delay(2000)
+    }
+  }
 }
