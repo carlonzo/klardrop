@@ -9,7 +9,7 @@ import kotlinx.coroutines.launch
 
 fun main() {
 
-  androidx.compose.ui.window.application {
+  application {
     val flow = SocketBroadcastUtility.listenToBroadcast(2121)
     continuousCounter()
 
