@@ -43,6 +43,18 @@ const val BROADCAST_PORT = 2121
 
 class Socketstuff {
 
+    init {
+        GlobalScope.launch(Dispatchers.IO) {
+            var counter = 0
+            while (true) {
+                sendPackage(counter)
+                counter++
+                delay(2000)
+            }
+        }
+    }
+
+
     private val serverSocket: BoundDatagramSocket by lazy {
         val selectorManager = ActorSelectorManager(Dispatchers.IO)
 
@@ -51,54 +63,39 @@ class Socketstuff {
         aSocket(selectorManager).udp().bind(localAddress = socketAddress)
     }
 
-    val channelFlow = callbackFlow<String> {
+    val channelFlow = callbackFlow {
+        log("Listening on ${serverSocket.localAddress}")
 
+        while (isActive) {
+            val receive = serverSocket.receive()
 
-        val soc = serverSocket
-        log("Listening on ${soc.localAddress}")
-
-        while (true) {
-            val receive = soc.receive()
             val text = receive.packet.readText()
             log("received: $text from: ${receive.address}")
-
             send(text)
         }
 
-
-//        soc.incoming.receiveAsFlow().collect {
-//
-//            log("Received udp datagram from ${it.address}: $it ")
-//
-//            send(it.packet.readText())
-//        }
-
         awaitClose {
-//            soc.close()
+            serverSocket.close()
         }
     }
 
-
     suspend fun sendPackage(counter: Int) {
-        val address = InetSocketAddress("255.255.255.255", BROADCAST_PORT)
+        val selectorManager = SelectorManager(Dispatchers.IO)
+        val socketAddress: SocketAddress = InetSocketAddress("255.255.255.255", BROADCAST_PORT)
 
+        val sendSockets = aSocket(selectorManager).udp().connect(socketAddress) {
+            broadcast = true
+        }
+
+        log("Sending packet to: ${sendSockets.remoteAddress}")
         val datagram = Datagram(
-            ByteReadPacket("Message number: $counter!!".encodeToByteArray()),
-            address
+            ByteReadPacket("Message number: $counter!!\n".encodeToByteArray()),
+            sendSockets.remoteAddress
         )
 
-        log("Sending '${datagram.packet.readText()}' packet to: ${datagram.address}")
-        val socket = aSocket(ActorSelectorManager(Dispatchers.IO))
-            .udp()
-            .connect(address) { broadcast = true }
-
-        socket.send(datagram)
-        log("Closing socket")
-        socket.close()
-        log("Awaiting closed")
-        socket.awaitClosed()
-        log("Socket closed")
-
+        sendSockets.use {
+            it.send(datagram)
+        }
     }
 
 }
