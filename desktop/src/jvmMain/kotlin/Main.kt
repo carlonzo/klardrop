@@ -1,35 +1,41 @@
+import androidx.compose.material.Text
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.carlom.klardrop.common.App
+import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.common.SocketBroadcastUtility
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+
 fun main() {
 
+  val k = Klardrop(internalPlatformDependency = InternalPlatformDependencies())
+  k.init()
+  val d = k.discovery()
+
+  val discoveryFlow = d.start()
+
+
+
   application {
-    val flow = SocketBroadcastUtility.listenToBroadcast(2121)
-    continuousCounter()
+
 
     Window(onCloseRequest = ::exitApplication) {
-      App(flow)
+
+
+      val received by discoveryFlow.collectAsState("nothing")
+
+      Text(
+        text = received
+      )
+
     }
   }
 
-}
-
-
-private fun continuousCounter() {
-  val channel = SocketBroadcastUtility.sendMessageChannel(2121)
-
-  GlobalScope.launch(Dispatchers.IO) {
-    var counter = 0
-    while (true) {
-      channel.send("Message number: $counter\n")
-      counter++
-      delay(2000)
-    }
-  }
 }

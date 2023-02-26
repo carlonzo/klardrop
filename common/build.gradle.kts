@@ -1,11 +1,9 @@
 plugins {
-  kotlin("multiplatform")
-  id("org.jetbrains.compose")
-  id("com.android.library")
+  alias(deps.plugins.kotlin.multiplatform)
+  alias(deps.plugins.jetbrains.compose)
+  alias(deps.plugins.android.library)
+  alias(deps.plugins.kotlin.serialization)
 }
-
-group = "com.carlom.klardrop"
-version = "1.0-SNAPSHOT"
 
 kotlin {
   android()
@@ -14,32 +12,28 @@ kotlin {
       kotlinOptions.jvmTarget = "11"
     }
   }
+
   sourceSets {
+
     val commonMain by getting {
       dependencies {
         api(compose.runtime)
         api(compose.foundation)
         api(compose.material)
-        api("io.ktor:ktor-network:2.1.0")
-
+        implementation(deps.ktor.network)
+        implementation(deps.androidx.datastore.core)
+        implementation(deps.androidx.datastore.core.okio)
+        implementation(deps.kotlinx.serialization.protobuf)
       }
     }
+
     val commonTest by getting {
       dependencies {
         implementation(kotlin("test"))
       }
     }
-    val androidMain by getting {
-      dependencies {
-        api("androidx.appcompat:appcompat:1.2.0")
-        api("androidx.core:core-ktx:1.3.1")
-      }
-    }
-    val androidTest by getting {
-      dependencies {
-        implementation("junit:junit:4.13")
-      }
-    }
+
+
     val desktopMain by getting {
       dependencies {
         api(compose.preview)
@@ -50,14 +44,17 @@ kotlin {
 }
 
 android {
-  compileSdkVersion(31)
+  compileSdkVersion(33)
   sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
   defaultConfig {
     minSdkVersion(24)
-    targetSdkVersion(31)
+    targetSdkVersion(33)
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_1_8
     targetCompatibility = JavaVersion.VERSION_1_8
   }
+
+
 }
+

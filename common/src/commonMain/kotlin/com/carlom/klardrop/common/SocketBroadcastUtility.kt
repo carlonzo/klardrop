@@ -3,6 +3,7 @@ package com.carlom.klardrop.common
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.util.cio.*
+import io.ktor.util.network.*
 import io.ktor.utils.io.core.*
 import io.ktor.utils.io.core.use
 import kotlinx.coroutines.*
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.receiveAsFlow
+import java.net.NetworkInterface
 
 object SocketBroadcastUtility {
 
@@ -18,14 +20,20 @@ object SocketBroadcastUtility {
     val selectorManager = ActorSelectorManager(Dispatchers.IO)
     val socketAddress: SocketAddress = InetSocketAddress("0.0.0.0", port)
 
-    log("Registering to listen on ${socketAddress}")
+    val localAddresses = getLocalAddresses()
 
     val serverSocket = aSocket(selectorManager).udp().bind(localAddress = socketAddress)
 
     log("Listening on ${serverSocket.localAddress}")
 
     while (isActive) {
+
       val receive = serverSocket.receive()
+      val cleanedReceiverAddress = receive.address.toJavaAddress().toString().substringAfter('/').substringBefore(':')
+
+      if (cleanedReceiverAddress in localAddresses) {
+        continue
+      }
 
       val text = receive.packet.readText()
       log("received: $text from: ${receive.address}")
@@ -52,11 +60,11 @@ object SocketBroadcastUtility {
     }
   }
 
-  fun sendMessageChannel(port: Int): SendChannel<String> = Channel<String>(Channel.UNLIMITED).apply {
+  fun sendMessageChannel(port: Int, coroutineScope: CoroutineScope = GlobalScope): SendChannel<String> = Channel<String>(Channel.UNLIMITED).apply {
     val thisChannel = this
     val sendSockets = getSendSocket(port)
 
-    val listenerJob = GlobalScope.launch {
+    val listenerJob = coroutineScope.launch {
       for (message in thisChannel) {
         sendSockets.send(
           Datagram(
@@ -80,5 +88,14 @@ object SocketBroadcastUtility {
     return aSocket(selectorManager).udp().connect(socketAddress) {
       broadcast = true
     }
+  }
+
+  private fun getLocalAddresses(): Set<String>{
+    return NetworkInterface.getNetworkInterfaces().asSequence()
+      .filterNot { it.isLoopback || it.isVirtual }
+      .flatMap { networkInterface ->
+        networkInterface.inetAddresses.asSequence()
+        .map { inet -> inet.hostAddress }.filterNot { address -> address.contains(char = ':') }
+    }.toSet()
   }
 }
