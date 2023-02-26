@@ -22,7 +22,9 @@ class Klardrop(
     initProperties()
   }
 
-  fun discovery() = DiscoveryNetwork(commonComponent.coroutines, commonComponent.localProperties)
+  fun discovery() = DiscoveryNetwork(commonComponent.coroutines, commonComponent.knownDevicesRepository, commonComponent.discoveryMessenger)
+
+  fun knownDevices() = commonComponent.knownDevicesRepository.knownDevices
 
   private fun initProperties() {
     commonComponent.coroutines.appScope.launch {

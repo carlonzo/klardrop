@@ -47,7 +47,7 @@ android {
   compileSdkVersion(33)
   sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
   defaultConfig {
-    minSdkVersion(24)
+    minSdkVersion(23)
     targetSdkVersion(33)
   }
   compileOptions {

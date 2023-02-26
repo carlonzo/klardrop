@@ -2,21 +2,20 @@ package com.carlom.klardrop.common.discovery
 
 import com.carlom.klardrop.common.SocketBroadcastUtility
 import com.carlom.klardrop.common.log
-import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
+import com.carlom.klardrop.common.persistence.DeviceInfo
+import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.utils.Coroutines
+import io.ktor.network.sockets.*
+import io.ktor.utils.io.core.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.cancellable
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.selects.whileSelect
+import kotlinx.coroutines.withContext
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -25,55 +24,57 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 class DiscoveryNetwork(
   private val coroutines: Coroutines,
-  private val localPropertiesRepository: LocalPropertiesRepository
+  private val knownDevicesRepository: KnownDevicesRepository,
+  private val discoveryMessenger: DiscoveryMessenger
 ) {
 
   private val discoveryScope = CoroutineScope(coroutines.ioDispatcher)
 
-  fun start(): Flow<String> = flow {
+  fun start(): Job = discoveryScope.launch {
 
     log("Start discovery")
 
     val visibilityJob = launchVisibilityJob()
-    val currentFlowJob = currentCoroutineContext().job
 
-    val receiveChannel = SocketBroadcastUtility.listenToBroadcast(PORT).produceIn(discoveryScope)
-
-    whileSelect {
-
-      receiveChannel.onReceive {
-        emit(it)
-        !receiveChannel.isClosedForReceive
+    SocketBroadcastUtility.listenToBroadcast(PORT)
+      .cancellable()
+      .collect { datagram ->
+        val message = discoveryMessenger.decodeMessage(datagram.packet.readBytes())
+        onNewDeviceDiscovered(message, datagram.address)
       }
 
-      currentFlowJob.onJoin {
-        false
-      }
-
-    }
 
     log("cancelling discovery")
     visibilityJob.cancel()
-    receiveChannel.cancel()
   }
 
   private fun launchVisibilityJob() = discoveryScope.launch {
 
     val sendChannel = SocketBroadcastUtility.sendMessageChannel(PORT, this)
 
-
-    localPropertiesRepository.properties.mapLatest { it.deviceId }
-      .combine(tickerFlow(PING_TIME)) { deviceId, _ -> deviceId }
+    tickerFlow(PING_TIME)
       .cancellable()
-      .collect { deviceId ->
-
-        log("discovery sending $deviceId")
-        sendChannel.send(deviceId)
+      .collect {
+        val message = discoveryMessenger.getIntroMessage()
+        if (message.isNotEmpty()) sendChannel.send((message))
       }
 
 
-    log("closed visivility")
+    log("closed visibility job")
     sendChannel.close()
+  }
+
+  private suspend fun onNewDeviceDiscovered(discoveryMessage: DiscoveryMessenger.DiscoveryMessage, address: SocketAddress) {
+    withContext(coroutines.ioDispatcher) {
+      knownDevicesRepository.saveDeviceInfo(
+        DeviceInfo(
+          deviceId = discoveryMessage.deviceId,
+          lastAddress = address.toJavaAddress().toString(),
+          name = discoveryMessage.name,
+          deviceType = discoveryMessage.deviceType
+        )
+      )
+    }
   }
 
   private fun tickerFlow(delayDuration: Duration = 500.milliseconds) = flow {

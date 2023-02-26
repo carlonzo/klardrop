@@ -22,7 +22,7 @@ android {
   compileSdk = 33
   defaultConfig {
     applicationId = "com.carlom.klardrop.android"
-    minSdk = 24
+    minSdk = 23
     targetSdk = 33
     versionCode = 1
     versionName = "1.0-SNAPSHOT"

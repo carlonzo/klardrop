@@ -1,3 +1,4 @@
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,10 +19,9 @@ fun main() {
   val k = Klardrop(internalPlatformDependency = InternalPlatformDependencies())
   k.init()
   val d = k.discovery()
+  d.start()
 
-  val discoveryFlow = d.start()
-
-
+  val knownDevices = k.knownDevices()
 
   application {
 
@@ -29,11 +29,16 @@ fun main() {
     Window(onCloseRequest = ::exitApplication) {
 
 
-      val received by discoveryFlow.collectAsState("nothing")
+      val received by knownDevices.collectAsState(emptyMap())
 
-      Text(
-        text = received
-      )
+      Column {
+        received.map {
+          Text(
+            text = it.value.toString()
+          )
+        }
+      }
+
 
     }
   }

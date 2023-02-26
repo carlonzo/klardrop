@@ -16,7 +16,7 @@ import java.net.NetworkInterface
 
 object SocketBroadcastUtility {
 
-  fun listenToBroadcast(port: Int): Flow<String> = callbackFlow {
+  fun listenToBroadcast(port: Int): Flow<Datagram> = callbackFlow {
     val selectorManager = ActorSelectorManager(Dispatchers.IO)
     val socketAddress: SocketAddress = InetSocketAddress("0.0.0.0", port)
 
@@ -35,9 +35,8 @@ object SocketBroadcastUtility {
         continue
       }
 
-      val text = receive.packet.readText()
-      log("received: $text from: ${receive.address}")
-      send(text)
+      log("received from: ${receive.address}")
+      send(receive)
     }
 
     awaitClose {
@@ -60,7 +59,7 @@ object SocketBroadcastUtility {
     }
   }
 
-  fun sendMessageChannel(port: Int, coroutineScope: CoroutineScope = GlobalScope): SendChannel<String> = Channel<String>(Channel.UNLIMITED).apply {
+  fun sendMessageChannel(port: Int, coroutineScope: CoroutineScope = GlobalScope): SendChannel<ByteArray> = Channel<ByteArray>(Channel.UNLIMITED).apply {
     val thisChannel = this
     val sendSockets = getSendSocket(port)
 
@@ -68,7 +67,7 @@ object SocketBroadcastUtility {
       for (message in thisChannel) {
         sendSockets.send(
           Datagram(
-            ByteReadPacket(message.encodeToByteArray()),
+            ByteReadPacket(message),
             sendSockets.remoteAddress
           )
         )

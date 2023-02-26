@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.byteArrayPreferencesKey
 import androidx.datastore.preferences.core.edit
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.DeviceType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.withContext
@@ -13,18 +14,17 @@ import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
 
-interface KnownDevicesPropertiesRepository {
+interface KnownDevicesRepository {
 
   val knownDevices: Flow<Map<String, DeviceInfo>>
 
   suspend fun saveDeviceInfo(deviceInfo: DeviceInfo)
-
 }
 
-internal class KnownDevicesPropertiesRepositoryImpl(
+internal class KnownDevicesRepositoryImpl(
   private val dataStore: DataStore<Preferences>,
   private val coroutines: Coroutines,
-) : KnownDevicesPropertiesRepository {
+) : KnownDevicesRepository {
 
   private val protoBuf = ProtoBuf
 
@@ -39,7 +39,7 @@ internal class KnownDevicesPropertiesRepositoryImpl(
   override suspend fun saveDeviceInfo(deviceInfo: DeviceInfo) {
     withContext(coroutines.ioDispatcher) {
       dataStore.edit {
-        it.toMutablePreferences().putOrRemove(
+        it.putOrRemove(
           byteArrayPreferencesKey(deviceInfo.deviceId), protoBuf.encodeToByteArray(deviceInfo)
         )
       }
@@ -53,5 +53,5 @@ data class DeviceInfo(
   val deviceId: String,
   val lastAddress: String,
   val name: String,
-  val lastAck: Long
+  val deviceType: DeviceType
 )
