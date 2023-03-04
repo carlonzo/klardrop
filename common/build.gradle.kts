@@ -21,6 +21,7 @@ kotlin {
         api(compose.foundation)
         api(compose.material)
         implementation(deps.ktor.network)
+        implementation(deps.ktor.server.websockets)
         implementation(deps.androidx.datastore.core)
         implementation(deps.androidx.datastore.core.okio)
         implementation(deps.kotlinx.serialization.protobuf)

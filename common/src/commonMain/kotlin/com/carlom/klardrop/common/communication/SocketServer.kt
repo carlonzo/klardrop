@@ -1,49 +1,78 @@
-package com.carlom.klardrop.common
+package com.carlom.klardrop.common.communication
 
+import com.carlom.klardrop.common.log
+import com.carlom.klardrop.common.persistence.DeviceInfo
+import com.carlom.klardrop.common.utils.Coroutines
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
+import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DefaultExecutor.isActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.InetAddress
 import java.net.NetworkInterface
 
-object SocketBroadcastUtility {
+private const val SERVER_PORT = 65221
+class SocketServer(
+  private val connectionsPool: ConnectionsPool,
+  private val coroutines: Coroutines,
+  private val flow: Flow<Set<DeviceInfo>>,
+) {
 
-  fun listenToBroadcast(port: Int): Flow<Datagram> = callbackFlow {
-    val selectorManager = ActorSelectorManager(Dispatchers.IO)
-    val socketAddress: SocketAddress = InetSocketAddress("0.0.0.0", port)
+  private val serverScope = CoroutineScope(coroutines.ioDispatcher)
+  private val knownDevices = flow.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = emptySet())
+  private fun isAcceptedSender(receiverAddress: String): Boolean {
+    // TODO should notify the user if wants to accept the connection
+    return true
+  }
 
-    val localAddresses = getLocalAddresses()
+  fun startServer(): Job {
+    val selectorManager = ActorSelectorManager(coroutines.ioDispatcher)
+    val socketAddress: SocketAddress = InetSocketAddress(InetAddress.getLocalHost().hostName, SERVER_PORT)
 
-    val serverSocket = aSocket(selectorManager).udp().bind(localAddress = socketAddress)
+    val serverSocket = aSocket(selectorManager).tcp().bind(localAddress = socketAddress)
 
-    log("Listening on ${serverSocket.localAddress}")
+    log("Starting server on ${serverSocket.localAddress}")
 
-    while (isActive) {
+    return serverScope.launch {
 
-      val receive = serverSocket.receive()
-      val cleanedReceiverAddress = receive.address.cleanup()
+      while (isActive && !serverSocket.isClosed) {
+        val socket = serverSocket.accept()
 
-      if (cleanedReceiverAddress in localAddresses) {
-        continue
+        log("Server received connection from: ${socket.remoteAddress}")
+        onStartedConnectionWith(socket)
       }
 
-      log("received from: ${receive.address}")
-      send(receive)
+      serverSocket.awaitClosed()
+      connectionsPool.closeAllConnections()
+    }
+  }
+
+  private fun onStartedConnectionWith(socket: Socket) {
+    serverScope.launch {
+
+      val readChannel = socket.openReadChannel()
+
+      readChannel.cancel()
+
+
+
+
     }
 
-    awaitClose {
-      log("Closing broadcast listener flow on $socketAddress")
-      serverSocket.close()
-    }
   }
 
   suspend fun sendMessage(text: String, port: Int) {
@@ -82,14 +111,7 @@ object SocketBroadcastUtility {
       }
     }
 
-  private fun getSendSocket(port: Int): ConnectedDatagramSocket {
-    val selectorManager = SelectorManager(Dispatchers.IO)
-    val socketAddress: SocketAddress = InetSocketAddress("255.255.255.255", port)
 
-    return aSocket(selectorManager).udp().connect(socketAddress) {
-      broadcast = true
-    }
-  }
 
   private fun getLocalAddresses(): Set<String> {
     return NetworkInterface.getNetworkInterfaces().asSequence()
