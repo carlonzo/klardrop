@@ -1,128 +1,97 @@
 package com.carlom.klardrop.common.communication
 
+import com.carlom.klardrop.common.communication.envelopes.Envelope
+import com.carlom.klardrop.common.communication.envelopes.IntroductionEnvelope
+import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
 import com.carlom.klardrop.common.log
 import com.carlom.klardrop.common.persistence.DeviceInfo
+import com.carlom.klardrop.common.persistence.KlardropProperties
+import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
-import io.ktor.network.selector.*
-import io.ktor.network.sockets.*
-import io.ktor.utils.io.*
-import io.ktor.utils.io.core.*
+import io.ktor.server.application.*
+import io.ktor.server.cio.*
+import io.ktor.server.engine.*
+import io.ktor.server.routing.*
+import io.ktor.server.websocket.*
+import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.DefaultExecutor.isActive
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.SendChannel
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.InetAddress
-import java.net.NetworkInterface
+import kotlinx.serialization.protobuf.ProtoBuf
 
-private const val SERVER_PORT = 65221
+internal const val SERVER_PORT = 65221
+
 class SocketServer(
+  private val localPropertiesRepository: LocalPropertiesRepository,
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
-  private val flow: Flow<Set<DeviceInfo>>,
+  private val flowKnownDevices: Flow<Set<DeviceInfo>>,
+  private val incomingMessagesRouter: IncomingMessagesRouter,
 ) {
 
   private val serverScope = CoroutineScope(coroutines.ioDispatcher)
-  private val knownDevices = flow.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = emptySet())
-  private fun isAcceptedSender(receiverAddress: String): Boolean {
-    // TODO should notify the user if wants to accept the connection
-    return true
+  private val knownDevices = flowKnownDevices.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = emptySet())
+  private val properties =
+    localPropertiesRepository.properties.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = KlardropProperties(""))
+  private val proto = ProtoBuf
+
+  private fun isAcceptedSender(deviceId: String, receiverAddress: String): Boolean {
+
+    return knownDevices.value.firstOrNull { it.deviceId == deviceId } != null
   }
 
-  fun startServer(): Job {
-    val selectorManager = ActorSelectorManager(coroutines.ioDispatcher)
-    val socketAddress: SocketAddress = InetSocketAddress(InetAddress.getLocalHost().hostName, SERVER_PORT)
+  fun startServer() {
+    embeddedServer(CIO, port = SERVER_PORT) {
 
-    val serverSocket = aSocket(selectorManager).tcp().bind(localAddress = socketAddress)
-
-    log("Starting server on ${serverSocket.localAddress}")
-
-    return serverScope.launch {
-
-      while (isActive && !serverSocket.isClosed) {
-        val socket = serverSocket.accept()
-
-        log("Server received connection from: ${socket.remoteAddress}")
-        onStartedConnectionWith(socket)
+      install(WebSockets) {
+        pingPeriodMillis = 10_000
+        contentConverter = WebSocketEnvelopeContentConverted(proto)
       }
 
-      serverSocket.awaitClosed()
-      connectionsPool.closeAllConnections()
-    }
-  }
+      routing {
+        webSocket("/connect") {
+          val remoteAddress = call.request.local.remoteAddress
+          log("New connection from: $remoteAddress")
 
-  private fun onStartedConnectionWith(socket: Socket) {
-    serverScope.launch {
-
-      val readChannel = socket.openReadChannel()
-
-      readChannel.cancel()
-
-
-
-
-    }
-
-  }
-
-  suspend fun sendMessage(text: String, port: Int) {
-    val sendSockets = getSendSocket(port)
-
-    log("Sending packet to: ${sendSockets.remoteAddress}")
-    val datagram = Datagram(
-      ByteReadPacket(text.encodeToByteArray()),
-      sendSockets.remoteAddress
-    )
-
-    sendSockets.use {
-      it.send(datagram)
-    }
-  }
-
-  fun sendMessageChannel(port: Int, coroutineScope: CoroutineScope = GlobalScope): SendChannel<ByteArray> =
-    Channel<ByteArray>(Channel.UNLIMITED).apply {
-      val thisChannel = this
-      val sendSockets = getSendSocket(port)
-
-      val listenerJob = coroutineScope.launch {
-        for (message in thisChannel) {
-          sendSockets.send(
-            Datagram(
-              ByteReadPacket(message),
-              sendSockets.remoteAddress
-            )
-          )
+          onConnectionRequest(this, remoteAddress)
         }
       }
 
-      invokeOnClose {
-        sendSockets.close()
-        listenerJob.cancel()
-      }
     }
-
-
-
-  private fun getLocalAddresses(): Set<String> {
-    return NetworkInterface.getNetworkInterfaces().asSequence()
-      .filterNot { it.isLoopback || it.isVirtual }
-      .flatMap { networkInterface ->
-        networkInterface.inetAddresses.asSequence()
-          .map { inet -> inet.hostAddress }.filterNot { address -> address.contains(char = ':') }
-      }.toSet()
   }
 
-  private fun SocketAddress.cleanup(): String{
-    return toJavaAddress().toString().substringAfter('/').substringBefore(':')
+  private suspend fun onConnectionRequest(wsSession: DefaultWebSocketServerSession, remoteAddress: String) {
+    val request = wsSession.receiveDeserialized<IntroductionEnvelope>()
+
+    if (isAcceptedSender(request.deviceId, remoteAddress)) {
+      val connection = Connection(wsSession, request.deviceId)
+      val connectionMessenger = ConnectionMessenger(connection, incomingMessagesRouter)
+
+      connectionsPool.updateConnection(request.deviceId, connectionMessenger)
+
+      connectionMessenger.acceptIncomingMessages()
+      log("Connection accepted from: $remoteAddress")
+
+      //    send back introduction
+      val intro = IntroductionEnvelope(properties.value.deviceId)
+      sendEnvelope(request.deviceId, intro)
+    } else {
+      log("Connection rejected from: $remoteAddress")
+      wsSession.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Connection rejected"))
+    }
+  }
+
+  private suspend fun sendEnvelope(receiverDeviceId: String, envelope: Envelope) {
+    withContext(coroutines.ioDispatcher) {
+      connectionsPool.getConnection(receiverDeviceId)?.send(envelope)
+    }
+  }
+
+  suspend fun closeConnection(deviceId: String) {
+    withContext(coroutines.ioDispatcher) {
+      connectionsPool.getConnection(deviceId)?.close()
+    }
   }
 }

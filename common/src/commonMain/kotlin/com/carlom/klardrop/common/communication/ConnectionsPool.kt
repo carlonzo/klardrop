@@ -1,43 +1,66 @@
 package com.carlom.klardrop.common.communication
 
-import io.ktor.network.sockets.*
+import io.ktor.websocket.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class ConnectionsPool {
+interface ConnectionsPool {
+
+  suspend fun isAvailable(deviceId: String): Boolean
+
+  suspend fun updateConnection(deviceId: String, socket: ConnectionMessenger)
+
+  suspend fun getConnection(deviceId: String): ConnectionMessenger?
+
+  suspend fun closeAllConnections()
+}
+
+internal class ConnectionsPoolImpl : ConnectionsPool {
 
   private val mutex = Mutex(locked = false)
+  private val connections = mutableMapOf<String, ConnectionMessenger>()
 
-  private val connections = mutableMapOf<String, Socket>()
+  override suspend fun isAvailable(deviceId: String): Boolean {
+    mutex.withLock {
+      val connection = connections[deviceId]?.connection ?: return false
 
-  suspend fun isAvailable(deviceId: String): Boolean {
-    return mutex.withLock {
-      connections.containsKey(deviceId)
+      if (!connection.session.isActive) {
+        connections.remove(deviceId)
+        return false
+      } else {
+        return true
+      }
     }
   }
 
-  suspend fun updateConnection(deviceId: String, socket: Socket) {
+  override suspend fun updateConnection(deviceId: String, connectionMessenger: ConnectionMessenger) {
     mutex.withLock {
-      connections[deviceId]?.close()
+      connections[deviceId]?.connection?.session?.close()
       println("ConnectionPool: Closing connection before updating with $deviceId")
 
-      connections.put(deviceId, socket)
+      connections.put(deviceId, connectionMessenger)
     }
   }
 
-  suspend fun getConnection(deviceId: String): Socket? {
+  override suspend fun getConnection(deviceId: String): ConnectionMessenger? {
     return mutex.withLock {
       connections[deviceId]
     }
   }
 
-  suspend fun closeAllConnections() {
+  override suspend fun closeAllConnections() {
     mutex.withLock {
-      connections.forEach { (_, socket) ->
-        socket.close()
+      connections.forEach { (_, connectionMessenger) ->
+        connectionMessenger.connection.session.close()
       }
       connections.clear()
     }
   }
 
 }
+
+data class Connection(
+  val session: DefaultWebSocketSession,
+  val deviceId: String
+)

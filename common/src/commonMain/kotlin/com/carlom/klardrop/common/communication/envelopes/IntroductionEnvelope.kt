@@ -1,8 +1,18 @@
 package com.carlom.klardrop.common.communication.envelopes
 
-class IntroductionEnvelope(private val deviceId: String): StaticEnvelope {
-  override val payload: ByteArray
-    get() = deviceId.toByteArray()
+import io.ktor.utils.io.charsets.*
+import io.ktor.utils.io.core.*
+
+class IntroductionEnvelope(
+  val deviceId: String,
+): Envelope {
+  override fun serialize(charset: Charset) = deviceId.toByteArray(Charsets.UTF_8)
 
   override val type = EnvelopeTypes.INTRO
+
+  companion object {
+    fun deserialize(payload: ByteArray, charset: Charset): IntroductionEnvelope {
+      return IntroductionEnvelope(String(payload, charset = charset))
+    }
+  }
 }

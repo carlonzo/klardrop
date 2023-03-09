@@ -5,18 +5,14 @@ import com.carlom.klardrop.common.log
 import com.carlom.klardrop.common.persistence.DeviceInfo
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.tickerFlow
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.core.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.cancellable
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -24,8 +20,8 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 class DiscoveryNetwork(
   private val coroutines: Coroutines,
-  private val knownDevicesRepository: KnownDevicesRepository,
-  private val discoveryMessenger: DiscoveryMessenger
+  private val discoveryMessenger: DiscoveryMessenger,
+  private val visibleDevices: VisibleDevices
 ) {
 
   private val discoveryScope = CoroutineScope(coroutines.ioDispatcher)
@@ -66,10 +62,10 @@ class DiscoveryNetwork(
 
   private suspend fun onNewDeviceDiscovered(discoveryMessage: DiscoveryMessenger.DiscoveryMessage, address: SocketAddress) {
     withContext(coroutines.ioDispatcher) {
-      knownDevicesRepository.saveDeviceInfo(
+      visibleDevices.onNewDeviceVisible(
         DeviceInfo(
           deviceId = discoveryMessage.deviceId,
-          lastAddress = address.toJavaAddress().toString(),
+          lastAddress = address.toString(),
           name = discoveryMessage.name,
           deviceType = discoveryMessage.deviceType
         )
@@ -77,15 +73,6 @@ class DiscoveryNetwork(
     }
   }
 
-  private fun tickerFlow(delayDuration: Duration = 500.milliseconds) = flow {
-
-    while (currentCoroutineContext().isActive) {
-      emit(Unit)
-
-      delay(delayDuration)
-    }
-
-  }
 
   private companion object {
     private const val PORT = 65321

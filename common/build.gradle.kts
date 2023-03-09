@@ -12,6 +12,7 @@ kotlin {
       kotlinOptions.jvmTarget = "11"
     }
   }
+  iosArm64()
 
   sourceSets {
 
@@ -20,8 +21,15 @@ kotlin {
         api(compose.runtime)
         api(compose.foundation)
         api(compose.material)
+
         implementation(deps.ktor.network)
         implementation(deps.ktor.server.websockets)
+        implementation(deps.ktor.server.core)
+        implementation(deps.ktor.server.cio )
+        implementation(deps.ktor.client.websockets)
+        implementation(deps.ktor.client.cio )
+        implementation(deps.ktor.serialization.protobuf)
+
         implementation(deps.androidx.datastore.core)
         implementation(deps.androidx.datastore.core.okio)
         implementation(deps.kotlinx.serialization.protobuf)
