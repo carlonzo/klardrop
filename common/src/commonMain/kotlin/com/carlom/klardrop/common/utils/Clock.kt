@@ -1,6 +1,6 @@
 package com.carlom.klardrop.common.utils
 
-expect class Clock {
+expect class Clock() {
 
   fun currentTimeMillis(): Long
 

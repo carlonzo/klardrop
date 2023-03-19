@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.discovery
 import com.carlom.klardrop.common.persistence.DeviceInfo
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.tickerFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,10 @@ interface VisibleDevices {
 
   fun onNewDeviceVisible(deviceInfo: DeviceInfo)
 
+  suspend fun isDeviceVisible(deviceId: String): Boolean
+
+  suspend fun getDeviceInfo(deviceId: String): DeviceInfo?
+
 }
 
 internal class VisibleDevicesImpl(
@@ -29,7 +34,7 @@ internal class VisibleDevicesImpl(
 ) : VisibleDevices {
 
   private val currentVisibleDevices = mutableMapOf<String, DeviceInfo>()
-  private val visibleDevicesFlow = MutableStateFlow(currentVisibleDevices)
+  private val visibleDevicesFlow = MutableStateFlow(emptyMap<String, DeviceInfo>())
 
   private val timeLastSeen = mutableMapOf<String, Long>()
   private val mutex = Mutex(locked = false)
@@ -47,35 +52,56 @@ internal class VisibleDevicesImpl(
           mutex.withLock {
             val currentTime = clock.currentTimeMillis()
             val devicesToRemove = timeLastSeen.filterValues { currentTime - it > TTL_VISIBLE_DEVICES }
-            devicesToRemove.forEach {
-              currentVisibleDevices.remove(it.key)
-              timeLastSeen.remove(it.key)
+
+            if (devicesToRemove.isNotEmpty()) {
+              devicesToRemove.forEach {
+                currentVisibleDevices.remove(it.key)
+                timeLastSeen.remove(it.key)
+              }
+
+              visibleDevicesFlow.emit(currentVisibleDevices)
+              log("VisibleDevices cleanup. removed: $devicesToRemove")
             }
           }
 
-          visibleDevicesFlow.emit(currentVisibleDevices)
         }
     }
   }
 
   override val visibleDevices: Flow<Map<String, DeviceInfo>> = visibleDevicesFlow.asStateFlow()
+    .onEach { log("VisibleDevices flow. emitting: $it") }
+
   override fun onNewDeviceVisible(deviceInfo: DeviceInfo) {
     coroutines.appScope.launch {
-      addDevice(deviceInfo)
+      val isNew = addDevice(deviceInfo)
 
+      if (isNew) log("VisibleDevices. new device: $currentVisibleDevices")
       visibleDevicesFlow.emit(currentVisibleDevices)
     }
   }
 
-  private suspend fun addDevice(deviceInfo: DeviceInfo) {
-    coroutines.ioDispatcher.invoke {
-      mutex.withLock {
-        currentVisibleDevices[deviceInfo.deviceId] = deviceInfo
-        timeLastSeen[deviceInfo.deviceId] = clock.currentTimeMillis()
-      }
-    }
-
+  override suspend fun isDeviceVisible(deviceId: String): Boolean {
+    return mutex.withLock { currentVisibleDevices.containsKey(deviceId) }
   }
 
+  override suspend fun getDeviceInfo(deviceId: String): DeviceInfo? {
+    return mutex.withLock { currentVisibleDevices[deviceId] }
+  }
+
+  /**
+   * @return true if the device was never seen before
+   */
+  private suspend fun addDevice(deviceInfo: DeviceInfo): Boolean {
+    return coroutines.ioDispatcher {
+      mutex.withLock {
+        val containsAlready = currentVisibleDevices.containsKey(deviceInfo.deviceId)
+
+        currentVisibleDevices[deviceInfo.deviceId] = deviceInfo
+        timeLastSeen[deviceInfo.deviceId] = clock.currentTimeMillis()
+
+        !containsAlready
+      }
+    }
+  }
 
 }

@@ -2,54 +2,99 @@ package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.envelopes.Envelope
 import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
+import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.log
+import io.ktor.client.plugins.websocket.*
 import io.ktor.serialization.*
 import io.ktor.server.websocket.*
 import io.ktor.util.reflect.*
-import io.ktor.utils.io.core.*
 import io.ktor.websocket.*
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import io.ktor.websocket.serialization.*
 
-// makes handshaking
-// receives messages
-class ConnectionMessenger(
+class ConnectionMessenger internal constructor(
+  private val coroutineScope: Coroutines,
   val connection: Connection,
   private val incomingMessagesRouter: IncomingMessagesRouter
-) : Closeable {
+) {
 
-  private val reader: ReceiveChannel<Frame>
 
   init {
 
-    if (!connection.session.isActive) {
-      throw IllegalStateException("Socket is closed")
+    if (connection.session.isClosed()) {
+      throw IllegalStateException("Socket with ${connection.deviceId} is closed. Reason: ${connection.session.closeReason.getCompleted()}")
     }
 
-    reader = connection.session.incoming
   }
 
   //  activates read from socket
-  fun acceptIncomingMessages() {
-    connection.session.launch {
-      while (isActive) {
-        val envelope = connection.session.receiveDeserialized<Envelope>()
+  suspend fun acceptIncomingMessages() {
+    log("ConnectionMessenger: Reading from socket with ${connection.deviceId}")
 
-        incomingMessagesRouter.onMessageReceived(connection.deviceId, envelope)
-      }
+    val wsSession = connection.session
+
+    while (!wsSession.incoming.isClosedForReceive) {
+
+      val envelope = connection.session.receiveDeserialized<Envelope>()
+
+      incomingMessagesRouter.onMessageReceived(connection.deviceId, envelope)
     }
+
+
+    log("ConnectionMessenger: Stop listening for messages from ${connection.deviceId} ${connection.session.closeReason.isCompleted}")
+    log("ConnectionMessenger: Close reason ${connection.session.closeReason.await()}")
   }
 
   suspend fun <E : Envelope> send(envelope: E) {
-    val session = connection.session
-
-    session.converter!!.serialize(session.call.request.headers.suitableCharset(), typeInfo<Any>(), envelope)
+    connection.session.sendSerialized(envelope)
   }
 
-  override fun close() {
-    reader.cancel()
+}
+
+internal suspend inline fun <reified T> DefaultWebSocketSession.receiveDeserialized(): T {
+
+  return when (this) {
+    is DefaultClientWebSocketSession -> {
+      receiveDeserializedBase<T>(
+        converter ?: throw WebsocketConverterNotFoundException("No converter was found for websocket"),
+        call.request.headers.suitableCharset()
+      ) as T
+    }
+
+    is DefaultWebSocketServerSession -> {
+      receiveDeserializedBase<T>(
+        converter ?: throw WebsocketConverterNotFoundException("No converter was found for websocket"),
+        call.request.headers.suitableCharset()
+      ) as T
+    }
+
+    else -> throw WebsocketConverterNotFoundException("Current websocket session is not supported")
   }
 
+}
+
+internal suspend fun <T : Envelope> DefaultWebSocketSession.sendSerialized(envelope: T) {
+  val type = typeInfo<Any>()
+
+  val frame = when (this) {
+    is DefaultClientWebSocketSession -> {
+      converter!!.serializeNullable(
+        charset = call.request.headers.suitableCharset(),
+        typeInfo = type,
+        value = envelope
+      )
+
+    }
+
+    is DefaultWebSocketServerSession -> {
+      converter!!.serializeNullable(
+        charset = call.request.headers.suitableCharset(),
+        typeInfo = type,
+        value = envelope
+      )
+    }
+
+    else -> throw WebsocketConverterNotFoundException("Current websocket session is not supported")
+  }
+
+  outgoing.send(frame)
 }

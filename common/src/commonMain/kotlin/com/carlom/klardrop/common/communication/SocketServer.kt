@@ -3,11 +3,11 @@ package com.carlom.klardrop.common.communication
 import com.carlom.klardrop.common.communication.envelopes.Envelope
 import com.carlom.klardrop.common.communication.envelopes.IntroductionEnvelope
 import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
-import com.carlom.klardrop.common.log
-import com.carlom.klardrop.common.persistence.DeviceInfo
 import com.carlom.klardrop.common.persistence.KlardropProperties
+import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.log
 import io.ktor.server.application.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
@@ -15,7 +15,6 @@ import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
@@ -27,23 +26,24 @@ class SocketServer(
   private val localPropertiesRepository: LocalPropertiesRepository,
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
-  private val flowKnownDevices: Flow<Set<DeviceInfo>>,
+  private val knownDevicesRepository: KnownDevicesRepository,
   private val incomingMessagesRouter: IncomingMessagesRouter,
 ) {
 
   private val serverScope = CoroutineScope(coroutines.ioDispatcher)
-  private val knownDevices = flowKnownDevices.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = emptySet())
+  private val knownDevices =
+    knownDevicesRepository.knownDevices.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
   private val properties =
     localPropertiesRepository.properties.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = KlardropProperties(""))
   private val proto = ProtoBuf
 
   private fun isAcceptedSender(deviceId: String, receiverAddress: String): Boolean {
-
-    return knownDevices.value.firstOrNull { it.deviceId == deviceId } != null
+    return knownDevices.value.containsKey(deviceId)
   }
 
-  fun startServer() {
-    embeddedServer(CIO, port = SERVER_PORT) {
+  @Suppress("ExtractKtorModule")
+  fun startServer(): ApplicationEngine {
+    return embeddedServer(CIO, port = SERVER_PORT) {
 
       install(WebSockets) {
         pingPeriodMillis = 10_000
@@ -53,32 +53,36 @@ class SocketServer(
       routing {
         webSocket("/connect") {
           val remoteAddress = call.request.local.remoteAddress
-          log("New connection from: $remoteAddress")
+          log("Server: New connection from: $remoteAddress")
 
           onConnectionRequest(this, remoteAddress)
         }
       }
 
-    }
+    }.start(wait = false)
   }
 
   private suspend fun onConnectionRequest(wsSession: DefaultWebSocketServerSession, remoteAddress: String) {
     val request = wsSession.receiveDeserialized<IntroductionEnvelope>()
 
+    log("Server: Connection request from: $remoteAddress - ${request.deviceId}")
+
     if (isAcceptedSender(request.deviceId, remoteAddress)) {
       val connection = Connection(wsSession, request.deviceId)
-      val connectionMessenger = ConnectionMessenger(connection, incomingMessagesRouter)
+      val connectionMessenger = ConnectionMessenger(coroutines, connection, incomingMessagesRouter)
 
       connectionsPool.updateConnection(request.deviceId, connectionMessenger)
 
-      connectionMessenger.acceptIncomingMessages()
-      log("Connection accepted from: $remoteAddress")
-
       //    send back introduction
       val intro = IntroductionEnvelope(properties.value.deviceId)
+      log("Server: Sending greetings back to ${request.deviceId} on $remoteAddress")
       sendEnvelope(request.deviceId, intro)
+
+      log("Server: Connection accepted from: $remoteAddress")
+
+      connectionMessenger.acceptIncomingMessages()
     } else {
-      log("Connection rejected from: $remoteAddress")
+      log("Server: Connection rejected from: $remoteAddress")
       wsSession.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Connection rejected"))
     }
   }
@@ -89,9 +93,4 @@ class SocketServer(
     }
   }
 
-  suspend fun closeConnection(deviceId: String) {
-    withContext(coroutines.ioDispatcher) {
-      connectionsPool.getConnection(deviceId)?.close()
-    }
-  }
 }

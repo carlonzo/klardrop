@@ -1,8 +1,8 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-  kotlin("multiplatform")
-  id("org.jetbrains.compose")
+  alias(deps.plugins.kotlin.multiplatform)
+  alias(deps.plugins.jetbrains.compose)
 }
 
 group = "com.carlom.klardrop"
@@ -20,7 +20,9 @@ kotlin {
     val jvmMain by getting {
       dependencies {
         implementation(project(":common"))
+        implementation(project(":common-ui"))
         implementation(compose.desktop.currentOs)
+        implementation(deps.kotlinx.coroutines.core)
       }
     }
     val jvmTest by getting

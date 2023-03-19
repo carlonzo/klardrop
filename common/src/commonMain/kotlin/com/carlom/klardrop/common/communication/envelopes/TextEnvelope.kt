@@ -5,7 +5,7 @@ import io.ktor.utils.io.core.*
 
 
 class TextEnvelope(
-  private val text: String
+  val text: String
 ) : Envelope {
   override fun serialize(charset: Charset): ByteArray {
     return text.toByteArray(charset)

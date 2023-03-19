@@ -1,4 +1,3 @@
-
 dependencyResolutionManagement {
   versionCatalogs {
     register("deps") {
@@ -22,3 +21,4 @@ pluginManagement {
 rootProject.name = "klardrop"
 
 include(":android", ":desktop", ":common")
+include("common-ui")

@@ -3,7 +3,6 @@ package com.carlom.klardrop.common.discovery
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.DeviceTypesSerializer
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -31,7 +30,13 @@ class DiscoveryMessenger(
 
           if (introMessage.size > 65500) {
             // udp package size must be below 65507 bytes
-            throw IllegalArgumentException("Discovery message is too big ${introMessage.size}: ${protoBuf.decodeFromByteArray<DiscoveryMessage>(introMessage)}")
+            throw IllegalArgumentException(
+              "Discovery message is too big ${introMessage.size}: ${
+                protoBuf.decodeFromByteArray<DiscoveryMessage>(
+                  introMessage
+                )
+              }"
+            )
           }
         }
     }
@@ -41,7 +46,7 @@ class DiscoveryMessenger(
     return introMessage
   }
 
-  fun decodeMessage(message: ByteArray): DiscoveryMessage {
+  fun decodeDiscoveryMessage(message: ByteArray): DiscoveryMessage {
     return protoBuf.decodeFromByteArray(message)
   }
 

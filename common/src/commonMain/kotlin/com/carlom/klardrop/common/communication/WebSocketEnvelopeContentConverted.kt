@@ -11,7 +11,7 @@ import io.ktor.websocket.*
 import kotlinx.serialization.protobuf.ProtoBuf
 
 class WebSocketEnvelopeContentConverted(
-  private val proto: ProtoBuf.Default
+  private val proto: ProtoBuf
 ) : WebsocketContentConverter {
   override suspend fun deserialize(charset: Charset, typeInfo: TypeInfo, content: Frame): Envelope {
     val idType = content.data[0].toInt()

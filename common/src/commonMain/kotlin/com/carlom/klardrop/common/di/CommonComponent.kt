@@ -1,10 +1,12 @@
 package com.carlom.klardrop.common.di
 
 import com.carlom.klardrop.common.InternalPlatformDependencies
-import com.carlom.klardrop.common.discovery.DiscoveryMessenger
+import com.carlom.klardrop.common.communication.CommunicationModule
+import com.carlom.klardrop.common.discovery.DiscoveryModule
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.UtilsModule
 
@@ -14,11 +16,44 @@ class CommonComponent(
   private val internalPlatformDependency: InternalPlatformDependencies
 ) {
 
-  val localProperties: LocalPropertiesRepository by lazy { storageModule.localPropertiesRepository(coroutines, internalPlatformDependency::getRootPath) }
-  val knownDevicesRepository: KnownDevicesRepository by lazy { storageModule.knownDevicesRepository(coroutines, internalPlatformDependency::getRootPath) }
-  val coroutines: Coroutines by lazy { utilsModule.coroutines() }
+  private val localProperties: LocalPropertiesRepository by lazy {
+    storageModule.localPropertiesRepository(
+      coroutines, internalPlatformDependency::getRootPath
+    )
+  }
 
-  val discoveryMessenger: DiscoveryMessenger
-    get() = DiscoveryMessenger(utilsModule.coroutines(), localProperties, internalPlatformDependency.getDeviceName(), internalPlatformDependency.deviceType())
+  private val knownDevicesRepository: KnownDevicesRepository by lazy {
+    storageModule.knownDevicesRepository(
+      coroutines, internalPlatformDependency::getRootPath
+    )
+  }
+
+  private val coroutines: Coroutines by lazy { utilsModule.coroutines() }
+  private val clock: Clock by lazy { utilsModule.clock() }
+
+  private val communicationModule by lazy {
+    CommunicationModule(
+      coroutines,
+      knownDevicesRepository,
+      localProperties,
+      discoveryModule.visibleDevices()
+    )
+  }
+  private val discoveryModule by lazy {
+    DiscoveryModule(
+      coroutines, localProperties, internalPlatformDependency, clock
+    )
+  }
+
+  fun discoveryNetwork() = discoveryModule.discoveryNetwork()
+  fun server() = communicationModule.server()
+  fun coroutines() = coroutines
+  fun localPropertiesRepository() = localProperties
+
+  fun visibleDevices() = discoveryModule.visibleDevices()
+
+  fun knownDevicesRepository() = knownDevicesRepository
+
+  fun messenger() = communicationModule.messenger()
 
 }

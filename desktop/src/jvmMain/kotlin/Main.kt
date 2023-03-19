@@ -1,27 +1,15 @@
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material.Text
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import com.carlom.klardrop.common.App
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
-import com.carlom.klardrop.common.SocketBroadcastUtility
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 
 fun main() {
 
   val k = Klardrop(internalPlatformDependency = InternalPlatformDependencies())
   k.init()
-  val d = k.discovery()
-  d.start()
 
-  val knownDevices = k.knownDevices()
+  val discoveryController = DiscoveryUIController(k.commonComponent)
 
   application {
 
@@ -29,15 +17,7 @@ fun main() {
     Window(onCloseRequest = ::exitApplication) {
 
 
-      val received by knownDevices.collectAsState(emptyMap())
-
-      Column {
-        received.map {
-          Text(
-            text = it.value.toString()
-          )
-        }
-      }
+      DiscoveryDashboard(discoveryController)
 
 
     }

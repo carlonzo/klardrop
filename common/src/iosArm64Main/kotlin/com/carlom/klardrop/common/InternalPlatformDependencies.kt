@@ -4,15 +4,15 @@ import com.carlom.klardrop.common.utils.DeviceType
 
 actual class InternalPlatformDependencies {
   actual fun getRootPath(): String {
-    return (System.getenv("HOME") + "/")
+    TODO("Not yet implemented")
   }
 
   actual fun getDeviceName(): String {
-    return ProcessBuilder("hostname").start().inputStream.use { it.bufferedReader().readText().trim() }
+    TODO("Not yet implemented")
   }
 
   actual fun deviceType(): DeviceType {
-    return DeviceType.DESKTOP
+    TODO("Not yet implemented")
   }
 
 }

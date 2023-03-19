@@ -1,10 +1,8 @@
 package com.carlom.klardrop.common.discovery
 
-import com.carlom.klardrop.common.SocketBroadcastUtility
-import com.carlom.klardrop.common.log
 import com.carlom.klardrop.common.persistence.DeviceInfo
-import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.tickerFlow
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.core.*
@@ -21,7 +19,8 @@ import kotlin.time.Duration.Companion.milliseconds
 class DiscoveryNetwork(
   private val coroutines: Coroutines,
   private val discoveryMessenger: DiscoveryMessenger,
-  private val visibleDevices: VisibleDevices
+  private val visibleDevices: VisibleDevices,
+  private val socketBroadcastUtility: SocketBroadcastUtility
 ) {
 
   private val discoveryScope = CoroutineScope(coroutines.ioDispatcher)
@@ -32,11 +31,15 @@ class DiscoveryNetwork(
 
     val visibilityJob = launchVisibilityJob()
 
-    SocketBroadcastUtility.listenToBroadcast(PORT)
+    socketBroadcastUtility.listenToBroadcast(PORT)
       .cancellable()
       .collect { datagram ->
-        val message = discoveryMessenger.decodeMessage(datagram.packet.readBytes())
+        val message = discoveryMessenger.decodeDiscoveryMessage(datagram.packet.readBytes())
+
+        val isKnown = visibleDevices.isDeviceVisible(message.deviceId)
         onNewDeviceDiscovered(message, datagram.address)
+
+        if (!isKnown) log("DiscoveryNetwork. discovered: ${datagram.address}")
       }
 
 
@@ -46,7 +49,7 @@ class DiscoveryNetwork(
 
   private fun launchVisibilityJob() = discoveryScope.launch {
 
-    val sendChannel = SocketBroadcastUtility.sendMessageChannel(PORT, this)
+    val sendChannel = socketBroadcastUtility.sendMessageChannel(PORT, this)
 
     tickerFlow(PING_TIME)
       .cancellable()
@@ -65,7 +68,7 @@ class DiscoveryNetwork(
       visibleDevices.onNewDeviceVisible(
         DeviceInfo(
           deviceId = discoveryMessage.deviceId,
-          lastAddress = address.toString(),
+          lastAddress = address.cleanup(),
           name = discoveryMessage.name,
           deviceType = discoveryMessage.deviceType
         )
@@ -79,4 +82,8 @@ class DiscoveryNetwork(
     private val PING_TIME = 1500.milliseconds
   }
 
+}
+
+internal fun SocketAddress.cleanup(): String {
+  return this.toString().removePrefix("/").substringBefore(":")
 }

@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.communication
 
+import com.carlom.klardrop.common.utils.log
 import io.ktor.websocket.*
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -25,28 +25,33 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
     mutex.withLock {
       val connection = connections[deviceId]?.connection ?: return false
 
-      if (!connection.session.isActive) {
-        connections.remove(deviceId)
-        return false
-      } else {
-        return true
-      }
+//      if (!connection.session.isClosed()) {
+//        log("ConnectionPool: Connection with $deviceId is closed, removing")
+//
+//        connections[deviceId]?.connection?.session?.close()
+//        connections.remove(deviceId)
+//        return false
+//      } else {
+      return true
+//      }
     }
   }
 
-  override suspend fun updateConnection(deviceId: String, connectionMessenger: ConnectionMessenger) {
+  override suspend fun updateConnection(deviceId: String, socket: ConnectionMessenger) {
     mutex.withLock {
-      connections[deviceId]?.connection?.session?.close()
-      println("ConnectionPool: Closing connection before updating with $deviceId")
+      if (connections.containsKey(deviceId)) {
+        connections[deviceId]?.connection?.session?.close()
+        connections.remove(deviceId)
+        log("ConnectionPool: Closing connection before updating with $deviceId")
+      }
 
-      connections.put(deviceId, connectionMessenger)
+      connections[deviceId] = socket
+      log("ConnectionPool: Updated connection with $deviceId")
     }
   }
 
   override suspend fun getConnection(deviceId: String): ConnectionMessenger? {
-    return mutex.withLock {
-      connections[deviceId]
-    }
+    return mutex.withLock { connections[deviceId] }
   }
 
   override suspend fun closeAllConnections() {
@@ -64,3 +69,8 @@ data class Connection(
   val session: DefaultWebSocketSession,
   val deviceId: String
 )
+
+internal fun DefaultWebSocketSession.isClosed(): Boolean {
+  // if there is a close reason, the connection may be closed
+  return closeReason.isCompleted
+}

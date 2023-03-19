@@ -2,38 +2,51 @@ package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.envelopes.IntroductionEnvelope
 import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
-import com.carlom.klardrop.common.log
-import com.carlom.klardrop.common.persistence.DeviceInfo
+import com.carlom.klardrop.common.persistence.KnownDevicesRepository
+import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.log
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.protobuf.ProtoBuf
 
-class Client(
+interface Client {
+  suspend fun connectTo(deviceId: String)
+}
+
+class ClientImpl(
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
-  private val flowKnownDevices: Flow<Set<DeviceInfo>>,
-  private val incomingMessagesRouter: IncomingMessagesRouter
-) {
+  private val knownDevicesRepository: KnownDevicesRepository,
+  private val incomingMessagesRouter: IncomingMessagesRouter,
+  private val localPropertiesRepository: LocalPropertiesRepository
+) : Client {
 
   private val clientScope = CoroutineScope(coroutines.ioDispatcher)
-  private val knownDevices = flowKnownDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptySet())
+  private val knownDevices =
+    knownDevicesRepository.knownDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
+  private val currentDeviceId =
+    localPropertiesRepository.properties.map { it.deviceId }.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = "")
+
+  private val proto = ProtoBuf
 
   private val client by lazy {
     HttpClient(CIO) {
       install(WebSockets) {
         pingInterval = 20_000
+        contentConverter = WebSocketEnvelopeContentConverted(proto)
       }
     }
   }
 
-  suspend fun connectTo(deviceId: String) {
+  override suspend fun connectTo(deviceId: String) {
     withContext(coroutines.ioDispatcher) {
 
       if (connectionsPool.isAvailable(deviceId)) {
@@ -42,19 +55,34 @@ class Client(
       }
 
 
-      val deviceInfo = knownDevices.value.find { it.deviceId == deviceId } ?: kotlin.run {
+      val deviceInfo = knownDevices.value[deviceId] ?: kotlin.run {
         log("Client cant connect. Device $deviceId cant be found")
         return@withContext
       }
 
-      client.webSocket(method = HttpMethod.Get, host = deviceInfo.lastAddress, port = SERVER_PORT, path = "/connect") {
-        val introEnvelope = receiveDeserialized<IntroductionEnvelope>()
+      log("Client. Connecting to $deviceId, ${deviceInfo.lastAddress}")
+      client.webSocket(
+        method = HttpMethod.Get,
+        host = deviceInfo.lastAddress,
+        port = SERVER_PORT,
+        path = "/connect"
+      ) {
+        log("Client. Connected to $deviceInfo. Sending greetings")
+        val introEnvelope = IntroductionEnvelope(currentDeviceId.value)
+        sendSerialized(introEnvelope)
 
-        if (introEnvelope.deviceId == deviceId) {
+        log("Client. Waiting for response greetings from $deviceId")
+        val serverIntroEnvelope = receiveDeserialized<IntroductionEnvelope>()
+
+        if (serverIntroEnvelope.deviceId == deviceId) {
           val connection = Connection(this, deviceId)
-          val connectionMessenger = ConnectionMessenger(connection, incomingMessagesRouter)
+          val connectionMessenger = ConnectionMessenger(coroutines, connection, incomingMessagesRouter)
 
           connectionsPool.updateConnection(deviceId, connectionMessenger)
+          log("Client. Connection established with ${serverIntroEnvelope.deviceId}")
+
+          // suspends so the connection is kept alive
+          log("Client: closing reason: ${closeReason.await()}")
         } else {
           log("Client cant connect. Device $deviceId found is wrong: ${introEnvelope.deviceId}")
         }

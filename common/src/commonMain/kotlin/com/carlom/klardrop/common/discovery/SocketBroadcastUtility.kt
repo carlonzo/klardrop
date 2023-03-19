@@ -1,10 +1,12 @@
-package com.carlom.klardrop.common
+package com.carlom.klardrop.common.discovery
 
+import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.network.NetworkAddressUtil
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.core.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.SendChannel
@@ -13,15 +15,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.net.NetworkInterface
 
-object SocketBroadcastUtility {
+class SocketBroadcastUtility(
+  private val coroutines: Coroutines,
+  private val networkAddressUtil: NetworkAddressUtil
+) {
 
   fun listenToBroadcast(port: Int): Flow<Datagram> = callbackFlow {
-    val selectorManager = ActorSelectorManager(Dispatchers.IO)
+    val selectorManager = SelectorManager(coroutines.ioDispatcher)
     val socketAddress: SocketAddress = InetSocketAddress("0.0.0.0", port)
 
-    val localAddresses = getLocalAddresses()
+    val localAddresses = networkAddressUtil.getLocalAddresses()
 
     val serverSocket = aSocket(selectorManager).udp().bind(localAddress = socketAddress)
 
@@ -30,33 +34,19 @@ object SocketBroadcastUtility {
     while (isActive) {
 
       val receive = serverSocket.receive()
-      val cleanedReceiverAddress = receive.address.cleanup()
+      val cleanedReceiverAddress = receive.address.toString()
 
       if (cleanedReceiverAddress in localAddresses) {
         continue
       }
 
-      log("received from: ${receive.address}")
+//      log("received from: ${receive.address}")
       send(receive)
     }
 
     awaitClose {
       log("Closing broadcast listener flow on $socketAddress")
       serverSocket.close()
-    }
-  }
-
-  suspend fun sendMessage(text: String, port: Int) {
-    val sendSockets = getSendSocket(port)
-
-    log("Sending packet to: ${sendSockets.remoteAddress}")
-    val datagram = Datagram(
-      ByteReadPacket(text.encodeToByteArray()),
-      sendSockets.remoteAddress
-    )
-
-    sendSockets.use {
-      it.send(datagram)
     }
   }
 
@@ -83,7 +73,7 @@ object SocketBroadcastUtility {
     }
 
   private fun getSendSocket(port: Int): ConnectedDatagramSocket {
-    val selectorManager = SelectorManager(Dispatchers.IO)
+    val selectorManager = SelectorManager(coroutines.ioDispatcher)
     val socketAddress: SocketAddress = InetSocketAddress("255.255.255.255", port)
 
     return aSocket(selectorManager).udp().connect(socketAddress) {
@@ -91,16 +81,4 @@ object SocketBroadcastUtility {
     }
   }
 
-  private fun getLocalAddresses(): Set<String> {
-    return NetworkInterface.getNetworkInterfaces().asSequence()
-      .filterNot { it.isLoopback || it.isVirtual }
-      .flatMap { networkInterface ->
-        networkInterface.inetAddresses.asSequence()
-          .map { inet -> inet.hostAddress }.filterNot { address -> address.contains(char = ':') }
-      }.toSet()
-  }
-
-  private fun SocketAddress.cleanup(): String{
-    return toJavaAddress().toString().substringAfter('/').substringBefore(':')
-  }
 }
