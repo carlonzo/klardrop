@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -33,7 +34,6 @@ internal class VisibleDevicesImpl(
   private val clock: Clock,
 ) : VisibleDevices {
 
-  private val currentVisibleDevices = mutableMapOf<String, DeviceInfo>()
   private val visibleDevicesFlow = MutableStateFlow(emptyMap<String, DeviceInfo>())
 
   private val timeLastSeen = mutableMapOf<String, Long>()
@@ -54,12 +54,19 @@ internal class VisibleDevicesImpl(
             val devicesToRemove = timeLastSeen.filterValues { currentTime - it > TTL_VISIBLE_DEVICES }
 
             if (devicesToRemove.isNotEmpty()) {
-              devicesToRemove.forEach {
-                currentVisibleDevices.remove(it.key)
-                timeLastSeen.remove(it.key)
+
+              visibleDevicesFlow.update { currentMap ->
+                val map = currentMap.toMutableMap()
+
+                devicesToRemove.forEach {
+
+                  map.remove(it.key)
+                  timeLastSeen.remove(it.key)
+                }
+
+                map
               }
 
-              visibleDevicesFlow.emit(currentVisibleDevices)
               log("VisibleDevices cleanup. removed: $devicesToRemove")
             }
           }
@@ -75,17 +82,16 @@ internal class VisibleDevicesImpl(
     coroutines.appScope.launch {
       val isNew = addDevice(deviceInfo)
 
-      if (isNew) log("VisibleDevices. new device: $currentVisibleDevices")
-      visibleDevicesFlow.emit(currentVisibleDevices)
+      if (isNew) log("VisibleDevices. new device: $deviceInfo")
     }
   }
 
   override suspend fun isDeviceVisible(deviceId: String): Boolean {
-    return mutex.withLock { currentVisibleDevices.containsKey(deviceId) }
+    return mutex.withLock { visibleDevicesFlow.value.containsKey(deviceId) }
   }
 
   override suspend fun getDeviceInfo(deviceId: String): DeviceInfo? {
-    return mutex.withLock { currentVisibleDevices[deviceId] }
+    return mutex.withLock { visibleDevicesFlow.value[deviceId] }
   }
 
   /**
@@ -94,9 +100,17 @@ internal class VisibleDevicesImpl(
   private suspend fun addDevice(deviceInfo: DeviceInfo): Boolean {
     return coroutines.ioDispatcher {
       mutex.withLock {
-        val containsAlready = currentVisibleDevices.containsKey(deviceInfo.deviceId)
 
-        currentVisibleDevices[deviceInfo.deviceId] = deviceInfo
+        val containsAlready = visibleDevicesFlow.value.containsKey(deviceInfo.deviceId)
+
+        visibleDevicesFlow.update {
+
+          it.toMutableMap().apply {
+            put(deviceInfo.deviceId, deviceInfo)
+          }
+
+        }
+
         timeLastSeen[deviceInfo.deviceId] = clock.currentTimeMillis()
 
         !containsAlready

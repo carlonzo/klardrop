@@ -26,8 +26,8 @@ fun DiscoveryDashboard(discoveryUIController: DiscoveryUIController) {
       discoveryUIController.onDeviceKnownChanged(device.deviceId, markAsKnown)
     },
 
-    sendText = { device: DiscoveryDeviceUi, text: String ->
-      discoveryUIController.sendText(device.deviceId, text)
+    sendText = { device: DiscoveryDeviceUi ->
+      discoveryUIController.sendText(device.deviceId)
     }
   )
 }
@@ -37,14 +37,14 @@ fun DiscoveryDashboard(discoveryUIController: DiscoveryUIController) {
 internal fun DiscoveryDashboard(
   devices: List<DiscoveryDeviceUi>,
   onDeviceClicked: ((Boolean, DiscoveryDeviceUi) -> Unit),
-  sendText: (DiscoveryDeviceUi, String) -> Unit
+  sendText: (DiscoveryDeviceUi) -> Unit
 ) {
   Surface {
     LazyColumn {
       items(devices, key = { it.deviceId }) { device ->
 
         Row(modifier = Modifier
-          .clickable { sendText(device, "Message from ${device.deviceName}. Hi! ") }
+          .clickable { sendText(device) }
         ) {
           Column(modifier = Modifier.wrapContentWidth(align = Alignment.Start)) {
             Text(device.deviceName)

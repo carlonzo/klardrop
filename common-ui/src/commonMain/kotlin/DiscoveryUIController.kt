@@ -18,7 +18,6 @@ class DiscoveryUIController(
   private val visibleDevices: VisibleDevices,
   private val knownDevicesRepository: KnownDevicesRepository,
   private val messenger: Messenger
-
 ) {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -43,7 +42,6 @@ class DiscoveryUIController(
         )
       }
     }.stateIn(controllerScope, started = SharingStarted.Lazily, emptyList())
-    .onEach { log("DiscoveryUIController showing $it") }
 
   fun onDeviceKnownChanged(deviceId: String, markAsKnown: Boolean) {
     controllerScope.launch(coroutines.ioDispatcher) {
@@ -57,9 +55,9 @@ class DiscoveryUIController(
 
   }
 
-  fun sendText(deviceId: String, text: String) {
+  fun sendText(deviceId: String) {
     controllerScope.launch(coroutines.ioDispatcher) {
-      messenger.send(deviceId, TextEnvelope(text))
+      messenger.send(deviceId, TextEnvelope("Hi from here!"))
     }
 
   }

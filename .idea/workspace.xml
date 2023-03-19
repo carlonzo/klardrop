@@ -4,70 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="c1123958-8e75-42b4-b82c-a18f7ebaf5b2" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/artifacts/common_ui_desktop.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common-ui/src/commonMain/kotlin/DiscoveryUIController.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common-ui/src/commonMain/kotlin/dicovery_ui_components.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/androidMain/kotlin/com/carlom/klardrop/common/utils/CoroutinesImpl.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/androidMain/kotlin/com/carlom/klardrop/common/utils/UUIDGenerator.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/androidMain/kotlin/com/carlom/klardrop/common/utils/network/NetworkAddressUtil.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/CommunicationComponent.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/Messenger.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/discovery/DiscoveryModule.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/UUIDGenerator.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/di_providers.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/logger.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/network/NetworkAddressUtil.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/desktopMain/kotlin/com/carlom/klardrop/common/utils/CoroutinesImpl.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/desktopMain/kotlin/com/carlom/klardrop/common/utils/UUIDGenerator.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/desktopMain/kotlin/com/carlom/klardrop/common/utils/network/NetworkAddressUtil.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/iosArm64Main/kotlin/com/carlom/klardrop/common/InternalPlatformDependencies.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/iosArm64Main/kotlin/com/carlom/klardrop/common/utils/CoroutinesImpl.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/iosArm64Main/kotlin/com/carlom/klardrop/common/utils/UUIDGenerator.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/common/src/iosArm64Main/kotlin/com/carlom/klardrop/common/utils/network/NetworkAddressUtil.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/artifacts/common_desktop_1_0_SNAPSHOT.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/artifacts/common_jvm.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/codeStyles/Project.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/gradle.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/kotlinc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/kotlinc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/android/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/android/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/android/src/main/java/com/carlom/klardrop/android/MainActivity.kt" beforeDir="false" afterPath="$PROJECT_DIR$/android/src/main/java/com/carlom/klardrop/android/MainActivity.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/common/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/androidMain/AndroidManifest.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/androidMain/kotlin/com/carlom/klardrop/common/platform.kt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/App.kt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/KlardropInit.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/Klardrop.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/SocketBroadcastUtility.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/discovery/SocketBroadcastUtility.kt" afterDir="false" />
+    <list default="true" id="c1123958-8e75-42b4-b82c-a18f7ebaf5b2" name="Changes" comment="Something is sent-received">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/Client.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/Client.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/ConnectionMessenger.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/ConnectionMessenger.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/ConnectionsPool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/ConnectionsPool.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/SocketServer.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/SocketServer.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/WebSocketEnvelopeContentConverted.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/WebSocketEnvelopeContentConverted.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/envelopes/TextEnvelope.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/envelopes/TextEnvelope.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/router/IncomingMessagesRouter.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/router/IncomingMessagesRouter.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/di/CommonComponent.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/di/CommonComponent.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/discovery/DiscoveryMessenger.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/discovery/DiscoveryMessenger.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/discovery/DiscoveryNetwork.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/discovery/DiscoveryNetwork.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/discovery/VisibleDevices.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/discovery/VisibleDevices.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/persistence/KnownDevicesRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/persistence/KnownDevicesRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/platform.kt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/Clock.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/Clock.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/Coroutines.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/Coroutines.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/UtilsModule.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/utils/UtilsModule.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/desktopMain/kotlin/com/carlom/klardrop/common/InternalPlatformDependencies.kt" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/desktopMain/kotlin/com/carlom/klardrop/common/InternalPlatformDependencies.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/src/desktopMain/kotlin/com/carlom/klardrop/common/platform.kt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/desktop/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/desktop/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/desktop/src/jvmMain/kotlin/Main.kt" beforeDir="false" afterPath="$PROJECT_DIR$/desktop/src/jvmMain/kotlin/Main.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradle.properties" beforeDir="false" afterPath="$PROJECT_DIR$/gradle.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradle/dependencies.toml" beforeDir="false" afterPath="$PROJECT_DIR$/gradle/dependencies.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.jar" beforeDir="false" afterPath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.jar" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" beforeDir="false" afterPath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradlew" beforeDir="false" afterPath="$PROJECT_DIR$/gradlew" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradlew.bat" beforeDir="false" afterPath="$PROJECT_DIR$/gradlew.bat" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/settings.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/settings.gradle.kts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -220,19 +160,38 @@
       <updated>1678629004161</updated>
       <workItem from="1678629006689" duration="972000" />
       <workItem from="1678643362077" duration="7804000" />
-      <workItem from="1679222427534" duration="12026000" />
+      <workItem from="1679222427534" duration="13207000" />
     </task>
+    <task id="LOCAL-00001" summary="Something is sent-received">
+      <created>1679235196520</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1679235196521</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Something is sent-received">
+      <created>1679235208421</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1679235208421</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Something is sent-received" />
+    <option name="LAST_COMMIT_MESSAGE" value="Something is sent-received" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" type="kotlin-line">
           <url>file://$PROJECT_DIR$/common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/ConnectionsPool.kt</url>
-          <line>28</line>
+          <line>27</line>
           <option name="timeStamp" value="6" />
         </line-breakpoint>
       </breakpoints>

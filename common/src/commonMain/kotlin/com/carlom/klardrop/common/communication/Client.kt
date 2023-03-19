@@ -81,6 +81,8 @@ class ClientImpl(
           connectionsPool.updateConnection(deviceId, connectionMessenger)
           log("Client. Connection established with ${serverIntroEnvelope.deviceId}")
 
+          connectionMessenger.acceptIncomingMessages()
+
           // suspends so the connection is kept alive
           log("Client: closing reason: ${closeReason.await()}")
         } else {
