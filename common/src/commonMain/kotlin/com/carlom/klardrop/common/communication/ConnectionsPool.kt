@@ -14,6 +14,8 @@ interface ConnectionsPool {
   suspend fun getConnection(deviceId: String): ConnectionMessenger?
 
   suspend fun closeAllConnections()
+
+  suspend fun closeConnection(deviceId: String)
 }
 
 internal class ConnectionsPoolImpl : ConnectionsPool {
@@ -23,8 +25,8 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
 
   override suspend fun isAvailable(deviceId: String): Boolean {
     mutex.withLock {
-      val connection = connections[deviceId]?.connection ?: return false
-
+//      val connection = connections[deviceId]?.connection ?: return false
+//
 //      if (!connection.session.isClosed()) {
 //        log("ConnectionPool: Connection with $deviceId is closed, removing")
 //
@@ -40,7 +42,7 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
   override suspend fun updateConnection(deviceId: String, socket: ConnectionMessenger) {
     mutex.withLock {
       if (connections.containsKey(deviceId)) {
-        connections[deviceId]?.connection?.session?.close()
+        connections[deviceId]?.close()
         connections.remove(deviceId)
         log("ConnectionPool: Closing connection before updating with $deviceId")
       }
@@ -56,10 +58,16 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
 
   override suspend fun closeAllConnections() {
     mutex.withLock {
-      connections.forEach { (_, connectionMessenger) ->
-        connectionMessenger.connection.session.close()
-      }
-      connections.clear()
+      connections.keys.forEach { closeConnection(it) }
+    }
+  }
+
+  override suspend fun closeConnection(deviceId: String) {
+    return mutex.withLock {
+      val connectionMessenger = connections[deviceId] ?: return
+
+      connectionMessenger.close()
+      connections.remove(deviceId)
     }
   }
 

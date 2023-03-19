@@ -6,12 +6,12 @@ import io.ktor.utils.io.core.*
 
 class TextEnvelope(
   val text: String
-) : Envelope {
+) : StaticEnvelope {
   override fun serialize(charset: Charset): ByteArray {
     return text.toByteArray(charset)
   }
 
-  override val type = EnvelopeTypes.TEXT
+  override val type = EnvelopeType.TEXT
 
   companion object {
     fun deserialize(payload: ByteArray, charset: Charset): TextEnvelope {

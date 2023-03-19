@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.envelopes.Envelope
+import com.carlom.klardrop.common.communication.envelopes.StreamingEnvelope
 import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -8,15 +9,17 @@ import io.ktor.client.plugins.websocket.*
 import io.ktor.serialization.*
 import io.ktor.server.websocket.*
 import io.ktor.util.reflect.*
+import io.ktor.utils.io.core.*
 import io.ktor.websocket.*
 import io.ktor.websocket.serialization.*
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.withContext
 
 class ConnectionMessenger internal constructor(
   private val coroutineScope: Coroutines,
-  val connection: Connection,
+  private val connection: Connection,
   private val incomingMessagesRouter: IncomingMessagesRouter
 ) {
-
 
   init {
 
@@ -27,27 +30,33 @@ class ConnectionMessenger internal constructor(
   }
 
   //  activates read from socket
+  @OptIn(DelicateCoroutinesApi::class)
   suspend fun acceptIncomingMessages() {
-    log("ConnectionMessenger: Reading from socket with ${connection.deviceId}")
+    withContext(coroutineScope.ioDispatcher) {
+      while (!connection.session.incoming.isClosedForReceive) {
 
-    val wsSession = connection.session
+        val envelope = connection.session.receiveDeserialized<Envelope>()
 
-    while (!wsSession.incoming.isClosedForReceive) {
+        if (envelope is StreamingEnvelope) {
 
-      val envelope = connection.session.receiveDeserialized<Envelope>()
+        }
 
-      incomingMessagesRouter.onMessageReceived(connection.deviceId, envelope)
+        incomingMessagesRouter.onMessageReceived(connection.deviceId, envelope, connection.session.incoming)
+      }
+
+      log("ConnectionMessenger: Stop listening for messages from ${connection.deviceId}")
     }
 
-
-    log("ConnectionMessenger: Stop listening for messages from ${connection.deviceId} ${connection.session.closeReason.isCompleted}")
-    log("ConnectionMessenger: Close reason ${connection.session.closeReason.await()}")
   }
 
   suspend fun <E : Envelope> send(envelope: E) {
     connection.session.sendSerialized(envelope)
   }
 
+  suspend fun close() {
+    log("ConnectionMessenger: Closing connection with ${connection.deviceId}")
+    connection.session.close()
+  }
 }
 
 internal suspend inline fun <reified T> DefaultWebSocketSession.receiveDeserialized(): T {

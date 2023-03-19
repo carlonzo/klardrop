@@ -5,10 +5,10 @@ import io.ktor.utils.io.core.*
 
 class IntroductionEnvelope(
   val deviceId: String,
-): Envelope {
+): StaticEnvelope {
   override fun serialize(charset: Charset) = deviceId.toByteArray(Charsets.UTF_8)
 
-  override val type = EnvelopeTypes.INTRO
+  override val type = EnvelopeType.INTRO
 
   companion object {
     fun deserialize(payload: ByteArray, charset: Charset): IntroductionEnvelope {
