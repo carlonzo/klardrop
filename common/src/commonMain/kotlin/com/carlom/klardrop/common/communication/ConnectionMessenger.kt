@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.envelopes.Envelope
-import com.carlom.klardrop.common.communication.envelopes.StreamingEnvelope
+import com.carlom.klardrop.common.communication.envelopes.EnvelopeHandler
 import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -9,14 +9,13 @@ import io.ktor.client.plugins.websocket.*
 import io.ktor.serialization.*
 import io.ktor.server.websocket.*
 import io.ktor.util.reflect.*
-import io.ktor.utils.io.core.*
 import io.ktor.websocket.*
 import io.ktor.websocket.serialization.*
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.withContext
 
 class ConnectionMessenger internal constructor(
-  private val coroutineScope: Coroutines,
+  private val coroutines: Coroutines,
   private val connection: Connection,
   private val incomingMessagesRouter: IncomingMessagesRouter
 ) {
@@ -32,14 +31,10 @@ class ConnectionMessenger internal constructor(
   //  activates read from socket
   @OptIn(DelicateCoroutinesApi::class)
   suspend fun acceptIncomingMessages() {
-    withContext(coroutineScope.ioDispatcher) {
+    withContext(coroutines.ioDispatcher) {
       while (!connection.session.incoming.isClosedForReceive) {
 
         val envelope = connection.session.receiveDeserialized<Envelope>()
-
-        if (envelope is StreamingEnvelope) {
-
-        }
 
         incomingMessagesRouter.onMessageReceived(connection.deviceId, envelope, connection.session.incoming)
       }
@@ -49,8 +44,14 @@ class ConnectionMessenger internal constructor(
 
   }
 
+  private val outgoing = connection.session.outgoing
+
   suspend fun <E : Envelope> send(envelope: E) {
     connection.session.sendSerialized(envelope)
+  }
+
+  suspend fun <E : Envelope> send(envelope: E, envelopeHandler: EnvelopeHandler<E>) {
+    envelopeHandler.handleOutgoing(envelope, outgoing)
   }
 
   suspend fun close() {

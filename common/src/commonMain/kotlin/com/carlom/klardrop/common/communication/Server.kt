@@ -22,11 +22,11 @@ import kotlinx.serialization.protobuf.ProtoBuf
 
 internal const val SERVER_PORT = 65221
 
-class SocketServer(
-  private val localPropertiesRepository: LocalPropertiesRepository,
+class Server(
+  localPropertiesRepository: LocalPropertiesRepository,
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
-  private val knownDevicesRepository: KnownDevicesRepository,
+  knownDevicesRepository: KnownDevicesRepository,
   private val incomingMessagesRouter: IncomingMessagesRouter,
 ) {
 
@@ -74,7 +74,7 @@ class SocketServer(
       connectionsPool.updateConnection(request.deviceId, connectionMessenger)
 
       //    send back introduction
-      val intro = IntroductionEnvelope(properties.value.deviceId)
+      val intro = IntroductionEnvelope(deviceId = properties.value.deviceId)
       log("Server: Sending greetings back to ${request.deviceId} on $remoteAddress")
       sendEnvelope(request.deviceId, intro)
 

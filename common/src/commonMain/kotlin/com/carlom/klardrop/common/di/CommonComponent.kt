@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.di
 
 import com.carlom.klardrop.common.InternalPlatformDependencies
-import com.carlom.klardrop.common.communication.CommunicationModule
+import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.DiscoveryModule
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository

@@ -1,21 +1,11 @@
 package com.carlom.klardrop.common.communication.envelopes
 
-import io.ktor.utils.io.charsets.*
-import io.ktor.utils.io.core.*
+import kotlinx.serialization.Serializable
 
-
-class TextEnvelope(
+@Serializable
+data class TextEnvelope(
   val text: String
-) : StaticEnvelope {
-  override fun serialize(charset: Charset): ByteArray {
-    return text.toByteArray(charset)
-  }
+) : Envelope.StaticEnvelope {
 
   override val type = EnvelopeType.TEXT
-
-  companion object {
-    fun deserialize(payload: ByteArray, charset: Charset): TextEnvelope {
-      return TextEnvelope(String(payload, charset = charset))
-    }
-  }
 }
