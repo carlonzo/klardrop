@@ -1,15 +1,13 @@
 import com.carlom.klardrop.common.communication.Messenger
-import com.carlom.klardrop.common.communication.envelopes.TextEnvelope
+import com.carlom.klardrop.common.communication.message.TextEnvelope
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.utils.Coroutines
-import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 

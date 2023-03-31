@@ -7,10 +7,10 @@ import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerImpl
 import com.carlom.klardrop.common.communication.Server
-import com.carlom.klardrop.common.communication.envelopes.EnvelopeHandlers
-import com.carlom.klardrop.common.communication.envelopes.EnvelopeHandlersImpl
-import com.carlom.klardrop.common.communication.envelopes.EnvelopeType
-import com.carlom.klardrop.common.communication.envelopes.FileEnvelopeHandler
+import com.carlom.klardrop.common.communication.message.EnvelopeHandlers
+import com.carlom.klardrop.common.communication.message.EnvelopeHandlersImpl
+import com.carlom.klardrop.common.communication.message.MessageType
+import com.carlom.klardrop.common.communication.message.FileEnvelopeHandler
 import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
 import com.carlom.klardrop.common.communication.router.IncomingMessagesRouterImpl
 import com.carlom.klardrop.common.discovery.VisibleDevices
@@ -30,7 +30,7 @@ class CommunicationModule(
   private val envelopeHandlers = SingletonProvider<EnvelopeHandlers> {
     EnvelopeHandlersImpl(
       mapOf(
-        EnvelopeType.FILE to FileEnvelopeHandler("".toPath()),
+        MessageType.FILE to FileEnvelopeHandler("".toPath()),
 
         )
     )

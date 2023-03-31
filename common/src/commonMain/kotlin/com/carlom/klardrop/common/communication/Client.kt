@@ -1,6 +1,6 @@
 package com.carlom.klardrop.common.communication
 
-import com.carlom.klardrop.common.communication.envelopes.IntroductionEnvelope
+import com.carlom.klardrop.common.communication.message.Handshake
 import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
@@ -41,7 +41,6 @@ class ClientImpl(
     HttpClient(CIO) {
       install(WebSockets) {
         pingInterval = 20_000
-        contentConverter = WebSocketEnvelopeContentConverted(proto)
       }
     }
   }
@@ -50,13 +49,13 @@ class ClientImpl(
     withContext(coroutines.ioDispatcher) {
 
       if (connectionsPool.isAvailable(deviceId)) {
-        log("Client has already a connection with $deviceId. skipping")
+        log("Client", "has already a connection with $deviceId. skipping")
         return@withContext
       }
 
 
       val deviceInfo = knownDevices.value[deviceId] ?: kotlin.run {
-        log("Client cant connect. Device $deviceId cant be found")
+        log("Client", "cant connect. Device $deviceId cant be found")
         return@withContext
       }
 
@@ -67,26 +66,26 @@ class ClientImpl(
         port = SERVER_PORT,
         path = "/connect"
       ) {
-        log("Client. Connected to $deviceInfo. Sending greetings")
-        val introEnvelope = IntroductionEnvelope(currentDeviceId.value)
+        log("Client", "Connected to $deviceInfo. Sending greetings")
+        val introEnvelope = Handshake(currentDeviceId.value)
         sendSerialized(introEnvelope)
 
-        log("Client. Waiting for response greetings from $deviceId")
-        val serverIntroEnvelope = receiveDeserialized<IntroductionEnvelope>()
+        log("Client", "Waiting for response greetings from $deviceId")
+        val serverIntroEnvelope = receiveDeserialized<Handshake>()
 
         if (serverIntroEnvelope.deviceId == deviceId) {
           val connection = Connection(this, deviceId)
           val connectionMessenger = ConnectionMessenger(coroutines, connection, incomingMessagesRouter)
 
           connectionsPool.updateConnection(deviceId, connectionMessenger)
-          log("Client. Connection established with ${serverIntroEnvelope.deviceId}")
+          log("Client", "Connection established with ${serverIntroEnvelope.deviceId}")
 
           connectionMessenger.acceptIncomingMessages()
 
           // suspends so the connection is kept alive
           log("Client: closing reason: ${closeReason.await()}")
         } else {
-          log("Client cant connect. Device $deviceId found is wrong: ${introEnvelope.deviceId}")
+          log("Client", "cant connect. Device $deviceId found is wrong: ${introEnvelope.deviceId}")
         }
 
       }

@@ -1,28 +1,35 @@
-package com.carlom.klardrop.common.communication.envelopes
+package com.carlom.klardrop.common.communication.message
 
+import com.carlom.klardrop.common.communication.EnvelopeSerializer
 import com.carlom.klardrop.common.persistence.CurrentFileSystem
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okio.Path
 
 @Serializable
 data class FileEnvelope(
-  val fileName: String
-) : Envelope.StreamingEnvelope {
-  override val type: EnvelopeType = EnvelopeType.FILE
+  val fileName: String,
+  val size: Int,
+) : Message {
+  override val type: MessageType = MessageType.FILE
+
+  class SendRequest(
+    override val message: Message,
+    val pathFile: Path
+  ) : SendMessageRequest
 }
 
 class FileEnvelopeHandler(
-  private val storePath: Path
-) : EnvelopeHandler<FileEnvelope> {
+  private val storePath: Path,
+  private val serializer: EnvelopeSerializer
+) : EnvelopeHandler<FileEnvelope, FileEnvelope.SendRequest> {
 
-  override suspend fun handleIncoming(envelope: FileEnvelope, receiveChannel: ReceiveChannel<Frame>) {
+  override suspend fun handleIncoming(message: FileEnvelope, receiveChannel: ReceiveChannel<Frame>) {
 
     CurrentFileSystem.write(
-      file = storePath.resolve(envelope.fileName),
+      file = storePath.resolve(message.fileName),
       mustCreate = true
     ) {
 
@@ -41,11 +48,12 @@ class FileEnvelopeHandler(
 
   }
 
-  override suspend fun handleOutgoing(envelope: FileEnvelope, sendChannel: SendChannel<Frame>) {
+  override suspend fun handleOutgoing(request: FileEnvelope.SendRequest, sendChannel: SendChannel<Frame>) {
 
-// todo send envelope first
+    val initialMessage = serializer.serialize(request.message)
+    sendChannel.send(initialMessage)
 
-    val path = storePath.resolve(envelope.fileName)
+    val path = request.pathFile
     CurrentFileSystem.read(path) {
 
       // maybe we can do a better job here with the buffer. read and write in parallel? read about okio.bugger
@@ -61,5 +69,6 @@ class FileEnvelopeHandler(
     }
 
   }
+
 
 }

@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.communication
 
-import com.carlom.klardrop.common.communication.envelopes.Envelope
-import com.carlom.klardrop.common.communication.envelopes.IntroductionEnvelope
+import com.carlom.klardrop.common.communication.message.Message
+import com.carlom.klardrop.common.communication.message.Handshake
 import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
 import com.carlom.klardrop.common.persistence.KlardropProperties
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
@@ -53,7 +53,7 @@ class Server(
       routing {
         webSocket("/connect") {
           val remoteAddress = call.request.local.remoteAddress
-          log("Server: New connection from: $remoteAddress")
+          log("Server", "New connection from: $remoteAddress")
 
           onConnectionRequest(this, remoteAddress)
         }
@@ -63,9 +63,9 @@ class Server(
   }
 
   private suspend fun onConnectionRequest(wsSession: DefaultWebSocketServerSession, remoteAddress: String) {
-    val request = wsSession.receiveDeserialized<IntroductionEnvelope>()
+    val request = wsSession.receiveDeserialized<Handshake>()
 
-    log("Server: Connection request from: $remoteAddress - ${request.deviceId}")
+    log("Server", "Connection request from: $remoteAddress - ${request.deviceId}")
 
     if (isAcceptedSender(request.deviceId, remoteAddress)) {
       val connection = Connection(wsSession, request.deviceId)
@@ -74,22 +74,22 @@ class Server(
       connectionsPool.updateConnection(request.deviceId, connectionMessenger)
 
       //    send back introduction
-      val intro = IntroductionEnvelope(deviceId = properties.value.deviceId)
-      log("Server: Sending greetings back to ${request.deviceId} on $remoteAddress")
+      val intro = Handshake(deviceId = properties.value.deviceId)
+      log("Server", "Sending greetings back to ${request.deviceId} on $remoteAddress")
       sendEnvelope(request.deviceId, intro)
 
-      log("Server: Connection accepted from: $remoteAddress")
+      log("Server", "Connection accepted from: $remoteAddress")
 
       connectionMessenger.acceptIncomingMessages()
     } else {
-      log("Server: Connection rejected from: $remoteAddress")
+      log("Server", "Connection rejected from: $remoteAddress")
       wsSession.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Connection rejected"))
     }
   }
 
-  private suspend fun sendEnvelope(receiverDeviceId: String, envelope: Envelope) {
+  private suspend fun sendEnvelope(receiverDeviceId: String, message: Message) {
     withContext(coroutines.ioDispatcher) {
-      connectionsPool.getConnection(receiverDeviceId)?.send(envelope)
+      connectionsPool.getConnection(receiverDeviceId)?.send(message)
     }
   }
 
