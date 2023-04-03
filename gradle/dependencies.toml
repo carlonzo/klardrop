@@ -1,8 +1,7 @@
 [versions]
 agp = "7.4.1"
-kotlin = "1.8.20"
+kotlin = "1.8.10"
 coroutines = "1.7.0-Beta"
-okHttp = "4.10.0"
 serialization = "1.5.0"
 compose-plugin = "1.3.1"
 okio = "3.3.0"
@@ -33,9 +32,6 @@ androidx-datastore-core = { module = "androidx.datastore:datastore-preferences-c
 androidx-datastore-core-okio = { module = "androidx.datastore:datastore-core-okio", version.ref = "datastore" }
 
 android-material = { module = "com.google.android.material:material", version = "1.8.0" }
-
-okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okHttp" }
-okhttp-logging = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "okHttp" }
 
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
