@@ -1,8 +1,7 @@
 package com.carlom.klardrop.common.communication
 
-import com.carlom.klardrop.common.communication.envelopes.Envelope
-import com.carlom.klardrop.common.communication.envelopes.IntroductionEnvelope
-import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
+import com.carlom.klardrop.common.communication.message.HandshakeMessage
+import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.persistence.KlardropProperties
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
@@ -17,8 +16,6 @@ import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.protobuf.ProtoBuf
 
 internal const val SERVER_PORT = 65221
 
@@ -27,7 +24,8 @@ class Server(
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
   knownDevicesRepository: KnownDevicesRepository,
-  private val incomingMessagesRouter: IncomingMessagesRouter,
+  private val messagesRouter: MessagesRouter,
+  private val serializer: MessageSerializer,
 ) {
 
   private val serverScope = CoroutineScope(coroutines.ioDispatcher)
@@ -35,7 +33,6 @@ class Server(
     knownDevicesRepository.knownDevices.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
   private val properties =
     localPropertiesRepository.properties.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = KlardropProperties(""))
-  private val proto = ProtoBuf
 
   private fun isAcceptedSender(deviceId: String, receiverAddress: String): Boolean {
     return knownDevices.value.containsKey(deviceId)
@@ -47,13 +44,12 @@ class Server(
 
       install(WebSockets) {
         pingPeriodMillis = 10_000
-        contentConverter = WebSocketEnvelopeContentConverted(proto)
       }
 
       routing {
         webSocket("/connect") {
           val remoteAddress = call.request.local.remoteAddress
-          log("Server: New connection from: $remoteAddress")
+          log("Server", "New connection from: $remoteAddress")
 
           onConnectionRequest(this, remoteAddress)
         }
@@ -63,33 +59,27 @@ class Server(
   }
 
   private suspend fun onConnectionRequest(wsSession: DefaultWebSocketServerSession, remoteAddress: String) {
-    val request = wsSession.receiveDeserialized<IntroductionEnvelope>()
+    val request = serializer.deserialize(wsSession.incoming.receive()) as HandshakeMessage
 
-    log("Server: Connection request from: $remoteAddress - ${request.deviceId}")
+    log("Server", "Connection request from: $remoteAddress - ${request.deviceId}")
 
     if (isAcceptedSender(request.deviceId, remoteAddress)) {
       val connection = Connection(wsSession, request.deviceId)
-      val connectionMessenger = ConnectionMessenger(coroutines, connection, incomingMessagesRouter)
+      val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
 
       connectionsPool.updateConnection(request.deviceId, connectionMessenger)
 
       //    send back introduction
-      val intro = IntroductionEnvelope(deviceId = properties.value.deviceId)
-      log("Server: Sending greetings back to ${request.deviceId} on $remoteAddress")
-      sendEnvelope(request.deviceId, intro)
+      val intro = HandshakeMessage(deviceId = properties.value.deviceId)
+      log("Server", "Sending greetings back to ${request.deviceId} on $remoteAddress")
+      wsSession.send(serializer.serialize(intro))
 
-      log("Server: Connection accepted from: $remoteAddress")
+      log("Server", "Connection accepted from: $remoteAddress")
 
       connectionMessenger.acceptIncomingMessages()
     } else {
-      log("Server: Connection rejected from: $remoteAddress")
+      log("Server", "Connection rejected from: $remoteAddress")
       wsSession.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Connection rejected"))
-    }
-  }
-
-  private suspend fun sendEnvelope(receiverDeviceId: String, envelope: Envelope) {
-    withContext(coroutines.ioDispatcher) {
-      connectionsPool.getConnection(receiverDeviceId)?.send(envelope)
     }
   }
 

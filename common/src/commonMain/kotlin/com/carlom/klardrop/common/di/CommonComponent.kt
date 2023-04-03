@@ -9,6 +9,7 @@ import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.UtilsModule
+import kotlinx.serialization.protobuf.ProtoBuf
 
 class CommonComponent(
   private val storageModule: StorageModule,
@@ -30,13 +31,16 @@ class CommonComponent(
 
   private val coroutines: Coroutines by lazy { utilsModule.coroutines() }
   private val clock: Clock by lazy { utilsModule.clock() }
+  private val protoBuf = ProtoBuf {  }
 
   private val communicationModule by lazy {
     CommunicationModule(
       coroutines,
       knownDevicesRepository,
       localProperties,
-      discoveryModule.visibleDevices()
+      discoveryModule.visibleDevices(),
+      protoBuf,
+      internalPlatformDependency
     )
   }
   private val discoveryModule by lazy {

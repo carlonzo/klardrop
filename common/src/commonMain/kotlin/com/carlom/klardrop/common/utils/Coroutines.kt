@@ -9,6 +9,7 @@ interface Coroutines {
 
   val ioDispatcher: CoroutineDispatcher
   val mainDispatcher: CoroutineDispatcher
+  val cpuDispatcher: CoroutineDispatcher
 }
 
 expect class CoroutinesImpl() : Coroutines

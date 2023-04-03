@@ -1,50 +1,70 @@
 package com.carlom.klardrop.common.communication.di
 
+import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.Client
 import com.carlom.klardrop.common.communication.ClientImpl
 import com.carlom.klardrop.common.communication.ConnectionsPool
 import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
+import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerImpl
+import com.carlom.klardrop.common.communication.ReceivedMessagesBroadcast
 import com.carlom.klardrop.common.communication.Server
-import com.carlom.klardrop.common.communication.envelopes.EnvelopeHandlers
-import com.carlom.klardrop.common.communication.envelopes.EnvelopeHandlersImpl
-import com.carlom.klardrop.common.communication.envelopes.EnvelopeType
-import com.carlom.klardrop.common.communication.envelopes.FileEnvelopeHandler
-import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
-import com.carlom.klardrop.common.communication.router.IncomingMessagesRouterImpl
+import com.carlom.klardrop.common.communication.message.FileMessageHandler
+import com.carlom.klardrop.common.communication.message.MessageHandlers
+import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
+import com.carlom.klardrop.common.communication.message.MessageType
+import com.carlom.klardrop.common.communication.router.MessagesRouter
+import com.carlom.klardrop.common.communication.router.MessagesRouterImpl
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.SingletonProvider
-import okio.Path.Companion.toPath
+import kotlinx.serialization.protobuf.ProtoBuf
 
 class CommunicationModule(
   private val coroutines: Coroutines,
   private val knownDevicesRepository: KnownDevicesRepository,
   private val localPropertiesRepository: LocalPropertiesRepository,
   private val visibleDevices: VisibleDevices,
+  private val protoBuf: ProtoBuf,
+  private val platformDependencies: InternalPlatformDependencies
 ) {
 
-  private val envelopeHandlers = SingletonProvider<EnvelopeHandlers> {
-    EnvelopeHandlersImpl(
+  private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
+
+  private val messageHandlers = SingletonProvider<MessageHandlers> {
+    MessageHandlersImpl(
       mapOf(
-        EnvelopeType.FILE to FileEnvelopeHandler("".toPath()),
+        MessageType.FILE to FileMessageHandler({ platformDependencies.getStoragePath() }, serializer),
 
         )
     )
   }
 
+  private val receivedMessagesBroadcast = SingletonProvider {
+    ReceivedMessagesBroadcast(coroutines)
+  }
+
   private val connectionsPool = SingletonProvider<ConnectionsPool> { ConnectionsPoolImpl() }
-  private val incomingMessagesRouter = SingletonProvider<IncomingMessagesRouter> { IncomingMessagesRouterImpl(envelopeHandlers.get()) }
+  private val messagesRouter = SingletonProvider<MessagesRouter> {
+    MessagesRouterImpl(
+      messageHandlers.get(),
+      serializer,
+      coroutines,
+      receivedMessagesBroadcast.get()
+    )
+  }
+
   private val client = SingletonProvider<Client> {
     ClientImpl(
       connectionsPool(),
       coroutines,
       knownDevicesRepository,
       incomingMessagesRouter(),
-      localPropertiesRepository
+      localPropertiesRepository,
+      serializer
     )
   }
   private val server = SingletonProvider {
@@ -53,7 +73,8 @@ class CommunicationModule(
       connectionsPool(),
       coroutines,
       knownDevicesRepository,
-      incomingMessagesRouter()
+      incomingMessagesRouter(),
+      serializer
     )
   }
   private val messenger: Messenger by lazy {
@@ -62,12 +83,11 @@ class CommunicationModule(
       connectionsPool(),
       client(),
       coroutines,
-      envelopeHandlers.get()
     )
   }
 
   fun connectionsPool() = connectionsPool.get()
-  fun incomingMessagesRouter() = incomingMessagesRouter.get()
+  fun incomingMessagesRouter() = messagesRouter.get()
   fun client() = client.get()
   fun server() = server.get()
 

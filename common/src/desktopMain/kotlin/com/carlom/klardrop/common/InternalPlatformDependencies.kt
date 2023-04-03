@@ -1,10 +1,15 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.DeviceType
+import okio.Path
+import okio.Path.Companion.toPath
 
 actual class InternalPlatformDependencies {
+
+  private val homeFolder = (System.getenv("HOME"))
+
   actual fun getRootPath(): String {
-    return (System.getenv("HOME") + "/")
+    return ("$homeFolder/")
   }
 
   actual fun getDeviceName(): String {
@@ -13,6 +18,10 @@ actual class InternalPlatformDependencies {
 
   actual fun deviceType(): DeviceType {
     return DeviceType.DESKTOP
+  }
+
+  actual fun getStoragePath(): Path {
+    return ("$homeFolder/Downloads/").toPath()
   }
 
 }

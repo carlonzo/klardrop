@@ -25,6 +25,7 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
 
   override suspend fun isAvailable(deviceId: String): Boolean {
     mutex.withLock {
+//      TODO check if connection is closed. below looks like was not working
 //      val connection = connections[deviceId]?.connection ?: return false
 //
 //      if (!connection.session.isClosed()) {

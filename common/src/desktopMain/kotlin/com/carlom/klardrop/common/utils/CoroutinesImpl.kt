@@ -13,4 +13,6 @@ actual class CoroutinesImpl actual constructor() : Coroutines {
     get() = Dispatchers.IO
   override val mainDispatcher: CoroutineDispatcher
     get() = Dispatchers.IO.limitedParallelism(1)
+  override val cpuDispatcher: CoroutineDispatcher
+    get() = Dispatchers.Default
 }
