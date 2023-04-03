@@ -1,5 +1,7 @@
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import com.carlom.klardrop.DiscoveryDashboard
+import com.carlom.klardrop.ShowVisibleDevicesController
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 
@@ -7,7 +9,7 @@ fun main() {
   val k = Klardrop(internalPlatformDependency = InternalPlatformDependencies())
   k.init()
 
-  val discoveryController = DiscoveryUIController(k.commonComponent)
+  val discoveryController = ShowVisibleDevicesController(k.commonComponent)
 
   application {
 
@@ -16,7 +18,6 @@ fun main() {
 
 
       DiscoveryDashboard(discoveryController)
-
 
     }
   }

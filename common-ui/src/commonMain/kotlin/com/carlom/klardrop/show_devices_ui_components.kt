@@ -1,5 +1,6 @@
-import DiscoveryUIController.DiscoveryDeviceUi
-import androidx.compose.foundation.ExperimentalFoundationApi
+package com.carlom.klardrop
+
+import com.carlom.klardrop.ShowVisibleDevicesController.DiscoveryDeviceUi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,18 +17,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
 @Composable
-fun DiscoveryDashboard(discoveryUIController: DiscoveryUIController) {
+fun DiscoveryDashboard(showVisibleDevicesController: ShowVisibleDevicesController) {
 
-  val devices by discoveryUIController.flow.collectAsState(emptyList())
+  val devices by showVisibleDevicesController.flow.collectAsState(emptyList())
 
   DiscoveryDashboard(
     devices = devices,
     onDeviceClicked = { markAsKnown: Boolean, device: DiscoveryDeviceUi ->
-      discoveryUIController.onDeviceKnownChanged(device.deviceId, markAsKnown)
+      showVisibleDevicesController.onDeviceKnownChanged(device.deviceId, markAsKnown)
     },
 
     sendText = { device: DiscoveryDeviceUi ->
-      discoveryUIController.sendText(device.deviceId)
+      showVisibleDevicesController.sendText(device.deviceId)
     }
   )
 }

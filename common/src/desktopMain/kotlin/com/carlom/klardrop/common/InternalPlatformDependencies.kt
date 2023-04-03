@@ -1,8 +1,12 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.DeviceType
+import okio.BufferedSource
 import okio.Path
 import okio.Path.Companion.toPath
+import okio.buffer
+import okio.source
+import java.io.File
 
 actual class InternalPlatformDependencies {
 
@@ -22,6 +26,10 @@ actual class InternalPlatformDependencies {
 
   actual fun getStoragePath(): Path {
     return ("$homeFolder/Downloads/").toPath()
+  }
+
+  actual fun getReadStreamFromUri(uri: String): BufferedSource {
+    return File(uri).inputStream().source().buffer()
   }
 
 }

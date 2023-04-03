@@ -1,6 +1,8 @@
+package com.carlom.klardrop.device_selection
+
 import com.carlom.klardrop.common.communication.Messenger
-import com.carlom.klardrop.common.communication.message.TextMessage
-import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
+import com.carlom.klardrop.common.communication.message.FileMessage
+import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
@@ -12,7 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class DiscoveryUIController(
+class DevicesSelectionController(
   private val coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
   private val knownDevicesRepository: KnownDevicesRepository,
@@ -28,12 +30,16 @@ class DiscoveryUIController(
 
   private val controllerScope = CoroutineScope(coroutines.mainDispatcher)
 
+  lateinit var stringUri: String
+  lateinit var filename: String
+  var fileSize: Long = 0
 
-  val flow: Flow<List<DiscoveryDeviceUi>> = visibleDevices.visibleDevices
+
+  val flow: Flow<List<SelectionDeviceUi>> = visibleDevices.visibleDevices
     .combine(knownDevicesRepository.knownDevices) { visible, known ->
       visible.map {
         val deviceInfo = it.value
-        DiscoveryDeviceUi(
+        SelectionDeviceUi(
           deviceInfo.deviceId,
           deviceInfo.name,
           it.value.deviceType.name,
@@ -42,26 +48,19 @@ class DiscoveryUIController(
       }
     }.stateIn(controllerScope, started = SharingStarted.Lazily, emptyList())
 
-  fun onDeviceKnownChanged(deviceId: String, markAsKnown: Boolean) {
-    controllerScope.launch(coroutines.ioDispatcher) {
-      if (markAsKnown) {
-        val deviceInfo = visibleDevices.getDeviceInfo(deviceId)!!
-        knownDevicesRepository.addKnownDevice(deviceInfo)
-      } else {
-        knownDevicesRepository.removeKnownDevice(deviceId)
-      }
+  fun sendTo(deviceId: String) {
+    coroutines.appScope.launch {
+      messenger.send(
+        deviceId,
+        FileMessage(
+          filename,
+          fileSize
+        ).toSendRequest(stringUri)
+      )
     }
-
   }
 
-  fun sendText(deviceId: String) {
-    controllerScope.launch(coroutines.ioDispatcher) {
-      messenger.send(deviceId, TextMessage("Hi from here!").toSimpleSendRequest())
-    }
-
-  }
-
-  data class DiscoveryDeviceUi(
+  data class SelectionDeviceUi(
     val deviceId: String,
     val deviceName: String,
     val deviceType: String,

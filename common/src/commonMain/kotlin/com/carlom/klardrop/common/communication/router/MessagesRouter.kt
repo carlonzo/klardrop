@@ -32,6 +32,7 @@ class MessagesRouterImpl(
       val firstFrame = receiveChannel.receive()
 
       val message = envelopeSerializer.deserialize(firstFrame)
+      log("MessagesRouter", "Received message from $fromDeviceId: $message")
 
       if (message.hasPayload) {
         // message has extra payload. we need to handle it
@@ -56,12 +57,21 @@ class MessagesRouterImpl(
     coroutines.ioDispatcher {
 
       val message = sendMessageRequest.message
-      val messageHandler = handlers[message.type] ?: run {
-        log("MessagesRouter", "No handler for message type ${message.type}")
-        return@ioDispatcher
+
+      if (message.hasPayload) {
+        // message has extra payload. we need to handle it
+
+        val messageHandler = handlers[message.type] ?: run {
+          log("MessagesRouter", "No handler for message type ${message.type}")
+          return@ioDispatcher
+        }
+
+        messageHandler.handleOutgoing(sendMessageRequest, sendChannel)
+      } else {
+        // message has no payload. we can send it directly
+        sendChannel.send(envelopeSerializer.serialize(message))
       }
 
-      messageHandler.handleOutgoing(sendMessageRequest, sendChannel)
     }
   }
 

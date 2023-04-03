@@ -35,7 +35,7 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
 //        connections.remove(deviceId)
 //        return false
 //      } else {
-      return true
+      return connections.containsKey(deviceId)
 //      }
     }
   }

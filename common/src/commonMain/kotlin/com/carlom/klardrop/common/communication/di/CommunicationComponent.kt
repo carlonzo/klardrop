@@ -37,7 +37,7 @@ class CommunicationModule(
   private val messageHandlers = SingletonProvider<MessageHandlers> {
     MessageHandlersImpl(
       mapOf(
-        MessageType.FILE to FileMessageHandler({ platformDependencies.getStoragePath() }, serializer),
+        MessageType.FILE to FileMessageHandler({ platformDependencies.getStoragePath() }, serializer, platformDependencies),
 
         )
     )
