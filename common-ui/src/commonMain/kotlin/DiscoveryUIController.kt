@@ -1,5 +1,6 @@
 import com.carlom.klardrop.common.communication.Messenger
-import com.carlom.klardrop.common.communication.message.TextEnvelope
+import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
@@ -55,7 +56,7 @@ class DiscoveryUIController(
 
   fun sendText(deviceId: String) {
     controllerScope.launch(coroutines.ioDispatcher) {
-      messenger.send(deviceId, TextEnvelope("Hi from here!"))
+      messenger.send(deviceId, TextMessage("Hi from here!").toSimpleSendRequest())
     }
 
   }

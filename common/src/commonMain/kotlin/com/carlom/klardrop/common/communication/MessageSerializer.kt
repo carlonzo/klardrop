@@ -1,17 +1,17 @@
 package com.carlom.klardrop.common.communication
 
+import com.carlom.klardrop.common.communication.message.FileMessage
+import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.MessageType
-import com.carlom.klardrop.common.communication.message.FileEnvelope
-import com.carlom.klardrop.common.communication.message.Handshake
-import com.carlom.klardrop.common.communication.message.TextEnvelope
+import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.utils.Coroutines
 import io.ktor.websocket.*
 import kotlinx.coroutines.invoke
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.protobuf.ProtoBuf
 
-class EnvelopeSerializer(
+class MessageSerializer(
   private val proto: ProtoBuf,
   private val coroutines: Coroutines
 ) {
@@ -42,9 +42,9 @@ class EnvelopeSerializer(
 
   private fun <E : Message> serializer(messageType: MessageType): KSerializer<E> {
     return when (messageType) {
-      MessageType.INTRO -> Handshake.serializer() as KSerializer<E>
-      MessageType.TEXT -> TextEnvelope.serializer() as KSerializer<E>
-      MessageType.FILE -> FileEnvelope.serializer() as KSerializer<E>
+      MessageType.HANDSHAKE -> HandshakeMessage.serializer() as KSerializer<E>
+      MessageType.TEXT -> TextMessage.serializer() as KSerializer<E>
+      MessageType.FILE -> FileMessage.serializer() as KSerializer<E>
     }
   }
 }

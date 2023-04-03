@@ -3,11 +3,14 @@ package com.carlom.klardrop.common.communication.message
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
-import okio.BufferedSource
 
 enum class MessageType(val id: Byte) {
 
-  INTRO(0), TEXT(1), FILE(2);
+  HANDSHAKE(0),
+  TEXT(1),
+  FILE(2),
+
+  ;
 
   companion object {
     fun fromId(id: Byte): MessageType {
@@ -19,21 +22,26 @@ enum class MessageType(val id: Byte) {
 
 sealed interface Message {
   val type: MessageType
+  val hasPayload: Boolean
 }
 
 sealed interface SendMessageRequest {
   val message: Message
 }
 
+fun Message.toSimpleSendRequest(): SendMessageRequest {
+  if (hasPayload) {
+    throw IllegalStateException("Message has payload. Cant use an empty send request")
+  }
 
-interface EnvelopeHandler<E : Message, R: SendMessageRequest> {
+  return SimpleSendMessageRequest(this)
+}
+
+class SimpleSendMessageRequest(override val message: Message) : SendMessageRequest
+
+interface MessageHandler<E : Message, R : SendMessageRequest> {
 
   suspend fun handleIncoming(message: E, receiveChannel: ReceiveChannel<Frame>)
   suspend fun handleOutgoing(request: R, sendChannel: SendChannel<Frame>)
 
-}
-
-object NoopSendMessageRequest : SendMessageRequest {
-  override val message: Message
-    get() = throw NotImplementedError()
 }

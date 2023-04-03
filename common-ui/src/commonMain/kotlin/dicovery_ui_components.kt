@@ -32,7 +32,6 @@ fun DiscoveryDashboard(discoveryUIController: DiscoveryUIController) {
   )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun DiscoveryDashboard(
   devices: List<DiscoveryDeviceUi>,

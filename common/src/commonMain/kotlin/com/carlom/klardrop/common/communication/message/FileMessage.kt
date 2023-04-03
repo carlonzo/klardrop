@@ -1,6 +1,6 @@
 package com.carlom.klardrop.common.communication.message
 
-import com.carlom.klardrop.common.communication.EnvelopeSerializer
+import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.persistence.CurrentFileSystem
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -9,11 +9,12 @@ import kotlinx.serialization.Serializable
 import okio.Path
 
 @Serializable
-data class FileEnvelope(
+data class FileMessage(
   val fileName: String,
   val size: Int,
 ) : Message {
   override val type: MessageType = MessageType.FILE
+  override val hasPayload: Boolean = true
 
   class SendRequest(
     override val message: Message,
@@ -21,15 +22,15 @@ data class FileEnvelope(
   ) : SendMessageRequest
 }
 
-class FileEnvelopeHandler(
-  private val storePath: Path,
-  private val serializer: EnvelopeSerializer
-) : EnvelopeHandler<FileEnvelope, FileEnvelope.SendRequest> {
+class FileMessageHandler(
+  private val storePathProvider: () -> Path,
+  private val serializer: MessageSerializer
+) : MessageHandler<FileMessage, FileMessage.SendRequest> {
 
-  override suspend fun handleIncoming(message: FileEnvelope, receiveChannel: ReceiveChannel<Frame>) {
+  override suspend fun handleIncoming(message: FileMessage, receiveChannel: ReceiveChannel<Frame>) {
 
     CurrentFileSystem.write(
-      file = storePath.resolve(message.fileName),
+      file = storePathProvider().resolve(message.fileName),
       mustCreate = true
     ) {
 
@@ -48,7 +49,7 @@ class FileEnvelopeHandler(
 
   }
 
-  override suspend fun handleOutgoing(request: FileEnvelope.SendRequest, sendChannel: SendChannel<Frame>) {
+  override suspend fun handleOutgoing(request: FileMessage.SendRequest, sendChannel: SendChannel<Frame>) {
 
     val initialMessage = serializer.serialize(request.message)
     sendChannel.send(initialMessage)

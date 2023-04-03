@@ -1,7 +1,6 @@
 package com.carlom.klardrop.common.communication
 
-import com.carlom.klardrop.common.communication.message.Message
-import com.carlom.klardrop.common.communication.message.EnvelopeHandlers
+import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -11,7 +10,7 @@ import kotlinx.coroutines.withContext
  * Messenger used to send envelops
  */
 interface Messenger {
-  suspend fun send(deviceId: String, message: Message)
+  suspend fun send(deviceId: String, messageRequest: SendMessageRequest)
 }
 
 class MessengerImpl(
@@ -19,10 +18,9 @@ class MessengerImpl(
   private val connectionsPool: ConnectionsPool,
   private val client: Client,
   private val coroutines: Coroutines,
-  private val envelopeHandlers: EnvelopeHandlers
 ) : Messenger {
 
-  override suspend fun send(deviceId: String, message: Message) {
+  override suspend fun send(deviceId: String, messageRequest: SendMessageRequest) {
 
 //    skip if not visible
     if (!visibleDevices.isDeviceVisible(deviceId)) {
@@ -38,21 +36,14 @@ class MessengerImpl(
         log("Messenger", "Client has already a connection with $deviceId. skipping")
       }
 
-      log("Client sending message to $deviceId: $message")
+      log("Client sending message to $deviceId: ${messageRequest.message}")
 
       val connectionMessenger = connectionsPool.getConnection(deviceId) ?: run {
         log("Messenger", "No connection available for $deviceId")
         return@withContext
       }
 
-      val envelopeHandler = envelopeHandlers[message.type]
-
-      if (envelopeHandler == null) {
-        connectionMessenger.send(message)
-      } else {
-        connectionMessenger.send(message, envelopeHandler)
-      }
-
+      connectionMessenger.send(messageRequest)
     }
 
   }

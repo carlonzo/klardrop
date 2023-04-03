@@ -1,9 +1,7 @@
 package com.carlom.klardrop.common.communication
 
-import com.carlom.klardrop.common.communication.message.Message
-import com.carlom.klardrop.common.communication.message.EnvelopeHandler
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
-import com.carlom.klardrop.common.communication.router.IncomingMessagesRouter
+import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.websocket.*
@@ -13,7 +11,7 @@ import kotlinx.coroutines.withContext
 class ConnectionMessenger internal constructor(
   private val coroutines: Coroutines,
   private val connection: Connection,
-  private val incomingMessagesRouter: IncomingMessagesRouter
+  private val messagesRouter: MessagesRouter
 ) {
 
   init {
@@ -30,7 +28,8 @@ class ConnectionMessenger internal constructor(
     withContext(coroutines.ioDispatcher) {
       while (!connection.session.incoming.isClosedForReceive) {
 
-        incomingMessagesRouter.onMessageIncoming(connection.deviceId, connection.session.incoming)
+        // suspension for messages in within the messagesRouter
+        messagesRouter.onMessageIncoming(connection.deviceId, outgoing, incoming)
       }
 
       log("ConnectionMessenger: Stop listening for messages from ${connection.deviceId}")
@@ -39,9 +38,10 @@ class ConnectionMessenger internal constructor(
   }
 
   private val outgoing = connection.session.outgoing
+  private val incoming = connection.session.incoming
 
-  suspend fun <M: Message, S : SendMessageRequest> send(sendRequest: S, envelopeHandler: EnvelopeHandler<M, S>) {
-    envelopeHandler.handleOutgoing(sendRequest, outgoing)
+  suspend fun <S : SendMessageRequest> send(sendRequest: S) {
+    messagesRouter.onSendingMessage(connection.deviceId, sendRequest, outgoing, incoming)
   }
 
   suspend fun close() {
