@@ -26,6 +26,12 @@ kotlin {
         implementation(project(":common"))
       }
     }
+
+    val desktopMain by getting {
+      dependencies {
+        implementation(compose.preview)
+      }
+    }
   }
 }
 
