@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.FileResolver
 import okio.BufferedSource
 import okio.Path
 import okio.Path.Companion.toPath
@@ -35,26 +36,8 @@ actual class InternalPlatformDependencies(private val context: Context) {
     return file.absolutePath.toPath()
   }
 
-  @SuppressLint("Recycle")
-  actual fun getReadStreamFromUri(uri: String): BufferedSource {
-    val schema = uri.substringBefore(":")
-
-    when (schema) {
-      "file" -> {
-        val path = uri.substringAfter("file://")
-        return File(path).source().buffer()
-      }
-
-      "content" -> {
-        val contentResolver = context.contentResolver
-        val inputStream = contentResolver.openInputStream(Uri.parse(uri))
-        return inputStream!!.source().buffer()
-      }
-
-      else -> {
-        throw IllegalArgumentException("Schema $schema not supported for uri $uri")
-      }
-    }
+  actual fun fileResolver(): FileResolver {
+    return FileResolver(context)
   }
 
 }

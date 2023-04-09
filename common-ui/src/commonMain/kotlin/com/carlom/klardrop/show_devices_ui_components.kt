@@ -38,7 +38,7 @@ internal fun DiscoveryDashboard(
 
       devices.forEach { device ->
 
-        DeviceLarge(device, onDeviceActionListener)
+        DeviceDiscovery(device, onDeviceActionListener)
 
       }
 

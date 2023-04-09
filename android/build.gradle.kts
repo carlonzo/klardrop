@@ -2,6 +2,7 @@ plugins {
   alias(deps.plugins.kotlin.android)
   alias(deps.plugins.android.application)
   alias(deps.plugins.jetbrains.compose)
+  kotlin("kapt")
 }
 
 group "com.carlom.klardrop"
@@ -17,6 +18,8 @@ dependencies {
   implementation("androidx.activity:activity-compose:1.7.0")
   implementation("androidx.appcompat:appcompat:1.6.1")
   implementation("androidx.core:core-ktx:1.10.0")
+  implementation(deps.dagger)
+  kapt(deps.dagger.compiler)
 }
 
 android {

@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.FileResolver
 import okio.BufferedSource
 import okio.Path
 
@@ -11,6 +12,5 @@ expect class InternalPlatformDependencies {
   fun deviceType(): DeviceType
   fun getStoragePath(): Path
 
-  fun getReadStreamFromUri(uri: String): BufferedSource
-
+  fun fileResolver(): FileResolver
 }

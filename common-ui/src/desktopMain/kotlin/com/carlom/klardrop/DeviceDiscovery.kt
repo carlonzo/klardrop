@@ -28,11 +28,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.onExternalDrag
 import androidx.compose.ui.unit.dp
-import com.carlom.klardrop.OnDeviceActionListener.OnDataToSend
 
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
-actual fun DeviceLarge(
+actual fun DeviceDiscovery(
   deviceUi: DeviceUi,
   onDeviceActionListener: OnDeviceActionListener
 ) {

@@ -36,7 +36,7 @@ class MessengerImpl(
         log("Messenger", "Client has already a connection with $deviceId. skipping")
       }
 
-      log("Client sending message to $deviceId: ${messageRequest.message}")
+      log("Messenger", "Client sending message to $deviceId: ${messageRequest.message}")
 
       val connectionMessenger = connectionsPool.getConnection(deviceId) ?: run {
         log("Messenger", "No connection available for $deviceId")

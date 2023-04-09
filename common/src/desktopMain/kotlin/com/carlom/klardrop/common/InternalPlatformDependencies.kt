@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.FileResolver
 import okio.BufferedSource
 import okio.Path
 import okio.Path.Companion.toPath
@@ -28,8 +29,8 @@ actual class InternalPlatformDependencies {
     return ("$homeFolder/Downloads/").toPath()
   }
 
-  actual fun getReadStreamFromUri(uri: String): BufferedSource {
-    return File(uri).inputStream().source().buffer()
+  actual fun fileResolver(): FileResolver {
+    return FileResolver()
   }
 
 }

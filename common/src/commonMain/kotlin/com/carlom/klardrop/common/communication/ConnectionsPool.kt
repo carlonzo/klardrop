@@ -45,11 +45,11 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
       if (connections.containsKey(deviceId)) {
         connections[deviceId]?.close()
         connections.remove(deviceId)
-        log("ConnectionPool: Closing connection before updating with $deviceId")
+        log("ConnectionPool","Closing connection before updating with $deviceId")
       }
 
       connections[deviceId] = socket
-      log("ConnectionPool: Updated connection with $deviceId")
+      log("ConnectionPool","Updated connection with $deviceId")
     }
   }
 

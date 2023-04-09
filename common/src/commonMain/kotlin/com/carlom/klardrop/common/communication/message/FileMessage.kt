@@ -1,8 +1,8 @@
 package com.carlom.klardrop.common.communication.message
 
-import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.persistence.CurrentFileSystem
+import com.carlom.klardrop.common.utils.FileResolver
 import com.carlom.klardrop.common.utils.log
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -17,6 +17,7 @@ import okio.use
 data class FileMessage(
   val fileName: String,
   val size: Long,
+  val mimeType: String? = null
 ) : Message {
   override val type: MessageType = MessageType.FILE
   override val hasPayload: Boolean = true
@@ -34,7 +35,7 @@ fun FileMessage.toSendRequest(filePath: String): FileMessage.SendRequest {
 class FileMessageHandler(
   private val storePathProvider: () -> Path,
   private val serializer: MessageSerializer,
-  private val platformDependencies: InternalPlatformDependencies
+  private val fileResolver: FileResolver
 ) : MessageHandler<FileMessage, FileMessage.SendRequest> {
 
   override suspend fun handleIncoming(message: FileMessage, receiveChannel: ReceiveChannel<Frame>) {
@@ -70,7 +71,7 @@ class FileMessageHandler(
     sendChannel.send(initialMessage)
 
     val path = request.pathFile
-    val bufferedSource = platformDependencies.getReadStreamFromUri(path)
+    val bufferedSource = fileResolver.getReadStreamFromUri(path)
 
     log("FileMessage", "Sending file with path: $path")
     var counter = 1

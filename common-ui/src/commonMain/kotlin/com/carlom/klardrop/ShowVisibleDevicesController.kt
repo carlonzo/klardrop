@@ -1,26 +1,33 @@
 package com.carlom.klardrop
 
 import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.FileResolver
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+// TODO should this be composable and get the dispose callback to cancel scope?
 class ShowVisibleDevicesController(
   private val coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
   private val knownDevicesRepository: KnownDevicesRepository,
   private val messenger: Messenger,
+  private val fileResolver: FileResolver,
 ) : OnDeviceActionListener {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -28,10 +35,12 @@ class ShowVisibleDevicesController(
     commonComponent.visibleDevices(),
     commonComponent.knownDevicesRepository(),
     commonComponent.messenger(),
+    commonComponent.fileResolver()
   )
 
   private val controllerScope = CoroutineScope(coroutines.mainDispatcher)
 
+  val actionsFlow = MutableSharedFlow<ActionUi>()
 
   val flow: Flow<List<DeviceUi>> = visibleDevices.visibleDevices
     .combine(knownDevicesRepository.knownDevices) { visible, known ->
@@ -57,41 +66,57 @@ class ShowVisibleDevicesController(
 
   }
 
-  private suspend fun sendText(deviceId: String, text: String) {
-    messenger.send(deviceId, TextMessage(text).toSimpleSendRequest())
+  private fun sendText(deviceId: String, text: String) {
+    coroutines.appScope.launch {
+      messenger.send(deviceId, TextMessage(text).toSimpleSendRequest())
+    }
   }
 
-  private suspend fun sendFiles(deviceId: String, filesPaths: List<String>) {
-    log("ShowVisibleDevicesController", "TODO sendFiles: $filesPaths")
+  private fun sendFiles(deviceId: String, filesPaths: List<String>) {
+    coroutines.appScope.launch {
+      filesPaths.forEach { filePath ->
+        val fileData = fileResolver.getResolvedFileData(filePath)
+        messenger.send(
+          deviceId, FileMessage(
+            fileData.fileName,
+            fileData.fileSize,
+            fileData.mimeType
+          ).toSendRequest(filePath)
+        )
+      }
+    }
   }
 
   override fun onDeviceClick(deviceUi: DeviceUi) {
     log("ShowVisibleDevicesController", "on device click: ${deviceUi.deviceName}")
   }
 
-  override fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDeviceActionListener.OnDataToSend) {
+  override fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend) {
 
-    coroutines.appScope.launch {
-
-      when (onDataToSend) {
-        is OnDeviceActionListener.OnDataToSend.FilesList -> sendFiles(deviceUi.deviceId, onDataToSend.filesPath)
-        is OnDeviceActionListener.OnDataToSend.Text -> sendText(deviceUi.deviceId, onDataToSend.text)
-      }
-
+    when (onDataToSend) {
+      is OnDataToSend.FilesList -> sendFiles(deviceUi.deviceId, onDataToSend.filesPath)
+      is OnDataToSend.Text -> sendText(deviceUi.deviceId, onDataToSend.text)
     }
 
   }
 
   override fun openFilePicker(deviceUi: DeviceUi) {
 
-//    coroutines.appScope.launch {
-//
-//      val filesPath = platformActions.openFileChooser()
-//      sendFiles(deviceUi.deviceId, filesPath)
-//
-//    }
+    controllerScope.launch {
+      actionsFlow.emit(ActionUi.OpenFilePicker(deviceUi))
+    }
 
   }
+
+  fun dispose() {
+    controllerScope.cancel()
+  }
+
+}
+
+sealed interface ActionUi {
+
+  class OpenFilePicker(val deviceUi: DeviceUi) : ActionUi
 
 }
 

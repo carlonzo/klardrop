@@ -60,5 +60,5 @@ class CommonComponent(
 
   fun messenger() = communicationModule.messenger()
 
-
+  fun fileResolver() = internalPlatformDependency.fileResolver()
 }

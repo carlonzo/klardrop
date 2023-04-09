@@ -1,27 +1,22 @@
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.onExternalDrag
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogState
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import androidx.compose.ui.window.rememberWindowState
+import com.carlom.klardrop.ActionUi
 import com.carlom.klardrop.DiscoveryDashboard
+import com.carlom.klardrop.OnDataToSend
 import com.carlom.klardrop.ShowVisibleDevicesController
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
+import com.carlom.klardrop.features.openFileChooser
 import com.carlom.klardrop.theme.AppTheme
-import com.carlom.klardrop.theme.md_theme_light_background
-import java.awt.FileDialog
+import kotlinx.coroutines.launch
 
 fun main() {
   val k = Klardrop(internalPlatformDependency = InternalPlatformDependencies())
@@ -32,14 +27,12 @@ fun main() {
 
   application {
 
-
-
     Window(
       title = "Klardrop",
       onCloseRequest = ::exitApplication,
       resizable = true,
     ) {
-      val state = rememberWindowState(width = 800.dp, height = 600.dp)
+//      val state = rememberWindowState(width = 800.dp, height = 600.dp)
 
       AppTheme {
 
@@ -63,6 +56,19 @@ fun main() {
           }
 
 
+        }
+      }
+
+      k.commonComponent.coroutines().appScope.launch {
+        discoveryController.actionsFlow.collect {
+          val action = it
+          when (action) {
+            is ActionUi.OpenFilePicker -> {
+              openFileChooser {
+                discoveryController.onSendData(action.deviceUi, OnDataToSend.FilesList(it))
+              }
+            }
+          }
         }
       }
 

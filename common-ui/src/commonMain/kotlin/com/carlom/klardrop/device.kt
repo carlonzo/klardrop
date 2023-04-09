@@ -1,23 +1,38 @@
 package com.carlom.klardrop
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.common.utils.log
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun DeviceSmall(deviceUi: DeviceUi, onClick: () -> Unit) {
+fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceActionListener) {
 
   Column(
     modifier = Modifier
-      .size(100.dp)
-      .clickable(onClick = onClick),
+      .padding(16.dp)
+      .sizeIn(maxWidth = 120.dp)
+      .combinedClickable(
+        onClick = {
+          log("Device clicked ${deviceUi.deviceName}")
+          onDeviceActionListener.onDeviceClick(deviceUi)
+//          onDeviceActionListener.onSendData(deviceUi, OnDataToSend.Text("Hello World"))
+        },
+        onLongClick = {
+          onDeviceActionListener.openFilePicker(deviceUi)
+        }
+      ),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
 
@@ -25,7 +40,6 @@ fun DeviceSmall(deviceUi: DeviceUi, onClick: () -> Unit) {
 
     Text(
       text = deviceUi.deviceName,
-      color = Color.Black,
       maxLines = 2
     )
   }
@@ -33,7 +47,7 @@ fun DeviceSmall(deviceUi: DeviceUi, onClick: () -> Unit) {
 }
 
 @Composable
-expect fun DeviceLarge(
+expect fun DeviceDiscovery(
   deviceUi: DeviceUi, onDeviceActionListener: OnDeviceActionListener
 )
 
@@ -49,12 +63,13 @@ fun CircleDevice(deviceUi: DeviceUi) {
 }
 
 interface OnDeviceActionListener {
-  fun onDeviceClick(deviceUi: DeviceUi)
-  fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend)
-  fun openFilePicker(deviceUi: DeviceUi)
-
-  sealed interface OnDataToSend {
-    data class Text(val text: String) : OnDataToSend
-    data class FilesList(val filesPath: List<String>) : OnDataToSend
+  fun onDeviceClick(deviceUi: DeviceUi) {
+    throw IllegalStateException("Not implemented")
+  }
+  fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend) {
+    throw IllegalStateException("Not implemented")
+  }
+  fun openFilePicker(deviceUi: DeviceUi) {
+    throw IllegalStateException("Not implemented")
   }
 }

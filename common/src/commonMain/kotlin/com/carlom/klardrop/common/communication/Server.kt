@@ -16,6 +16,7 @@ import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 internal const val SERVER_PORT = 65221
 
@@ -39,23 +40,27 @@ class Server(
   }
 
   @Suppress("ExtractKtorModule")
-  fun startServer(): ApplicationEngine {
-    return embeddedServer(CIO, port = SERVER_PORT) {
+  fun startServer() {
+    serverScope.launch {
 
-      install(WebSockets) {
-        pingPeriodMillis = 10_000
-      }
+      embeddedServer(CIO, port = SERVER_PORT) {
 
-      routing {
-        webSocket("/connect") {
-          val remoteAddress = call.request.local.remoteAddress
-          log("Server", "New connection from: $remoteAddress")
-
-          onConnectionRequest(this, remoteAddress)
+        install(WebSockets) {
+          pingPeriodMillis = 10_000
         }
-      }
 
-    }.start(wait = false)
+        routing {
+          webSocket("/connect") {
+            val remoteAddress = call.request.local.remoteAddress
+            log("Server", "New connection from: $remoteAddress")
+
+            onConnectionRequest(this, remoteAddress)
+          }
+        }
+
+      }.start(wait = false)
+
+    }
   }
 
   private suspend fun onConnectionRequest(wsSession: DefaultWebSocketServerSession, remoteAddress: String) {
