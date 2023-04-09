@@ -31,7 +31,7 @@ class CommonComponent(
 
   private val coroutines: Coroutines by lazy { utilsModule.coroutines() }
   private val clock: Clock by lazy { utilsModule.clock() }
-  private val protoBuf = ProtoBuf {  }
+  private val protoBuf = ProtoBuf { }
 
   private val communicationModule by lazy {
     CommunicationModule(
@@ -59,5 +59,6 @@ class CommonComponent(
   fun knownDevicesRepository() = knownDevicesRepository
 
   fun messenger() = communicationModule.messenger()
+
 
 }

@@ -1,64 +1,49 @@
 package com.carlom.klardrop
 
-import com.carlom.klardrop.ShowVisibleDevicesController.DiscoveryDeviceUi
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.Checkbox
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
 @Composable
-fun DiscoveryDashboard(showVisibleDevicesController: ShowVisibleDevicesController) {
+fun DiscoveryDashboard(
+  modifier: Modifier = Modifier,
+  showVisibleDevicesController: ShowVisibleDevicesController
+) {
 
   val devices by showVisibleDevicesController.flow.collectAsState(emptyList())
 
   DiscoveryDashboard(
+    modifier = modifier,
     devices = devices,
-    onDeviceClicked = { markAsKnown: Boolean, device: DiscoveryDeviceUi ->
-      showVisibleDevicesController.onDeviceKnownChanged(device.deviceId, markAsKnown)
-    },
-
-    sendText = { device: DiscoveryDeviceUi ->
-      showVisibleDevicesController.sendText(device.deviceId)
-    }
+    onDeviceActionListener = showVisibleDevicesController
   )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DiscoveryDashboard(
-  devices: List<DiscoveryDeviceUi>,
-  onDeviceClicked: ((Boolean, DiscoveryDeviceUi) -> Unit),
-  sendText: (DiscoveryDeviceUi) -> Unit
+  modifier: Modifier,
+  devices: List<DeviceUi>,
+  onDeviceActionListener: OnDeviceActionListener
 ) {
-  Surface {
-    LazyColumn {
-      items(devices, key = { it.deviceId }) { device ->
+  Box(
+    modifier = modifier
+  ) {
 
-        Row(modifier = Modifier
-          .clickable { sendText(device) }
-        ) {
-          Column(modifier = Modifier.wrapContentWidth(align = Alignment.Start)) {
-            Text(device.deviceName)
-            Text(device.deviceId)
-          }
+    FlowRow {
 
-          Checkbox(
-            onCheckedChange = { checked -> onDeviceClicked(checked, device) },
-            checked = device.isKnown,
-          )
+      devices.forEach { device ->
 
-        }
+        DeviceLarge(device, onDeviceActionListener)
 
       }
+
     }
+
+
   }
 }

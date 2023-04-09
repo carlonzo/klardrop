@@ -16,7 +16,7 @@ import com.carlom.klardrop.DiscoveryDashboard
 import com.carlom.klardrop.ShowVisibleDevicesController
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
-import com.carlom.klardrop.device_selection.DeviceSelectionDashabord
+import com.carlom.klardrop.device_selection.DeviceSelectionDashboard
 import com.carlom.klardrop.device_selection.DevicesSelectionController
 
 class MainActivity : AppCompatActivity() {
@@ -44,7 +44,7 @@ class MainActivity : AppCompatActivity() {
           Text("Select Image")
         }
 
-        DeviceSelectionDashabord(devicesSelectionController)
+        DeviceSelectionDashboard(devicesSelectionController)
 
       }
 

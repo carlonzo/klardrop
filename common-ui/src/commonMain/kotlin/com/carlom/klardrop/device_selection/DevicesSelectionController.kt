@@ -1,5 +1,6 @@
 package com.carlom.klardrop.device_selection
 
+import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
@@ -35,15 +36,14 @@ class DevicesSelectionController(
   var fileSize: Long = 0
 
 
-  val flow: Flow<List<SelectionDeviceUi>> = visibleDevices.visibleDevices
+  val flow: Flow<List<DeviceUi>> = visibleDevices.visibleDevices
     .combine(knownDevicesRepository.knownDevices) { visible, known ->
       visible.map {
         val deviceInfo = it.value
-        SelectionDeviceUi(
+        DeviceUi(
           deviceInfo.deviceId,
           deviceInfo.name,
-          it.value.deviceType.name,
-          known.containsKey(it.key)
+          it.value.deviceType,
         )
       }
     }.stateIn(controllerScope, started = SharingStarted.Lazily, emptyList())
@@ -59,11 +59,4 @@ class DevicesSelectionController(
       )
     }
   }
-
-  data class SelectionDeviceUi(
-    val deviceId: String,
-    val deviceName: String,
-    val deviceType: String,
-    val isKnown: Boolean
-  )
 }
