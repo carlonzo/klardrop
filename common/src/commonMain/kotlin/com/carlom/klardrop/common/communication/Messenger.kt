@@ -50,3 +50,9 @@ class MessengerImpl(
 
 
 }
+
+sealed interface MessengerSendProgress {
+  data class InProgress(val percentage: Int) : MessengerSendProgress
+  object Completed : MessengerSendProgress
+  object Error : MessengerSendProgress
+}

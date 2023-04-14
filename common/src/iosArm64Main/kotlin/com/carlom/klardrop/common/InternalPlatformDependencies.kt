@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.FileResolver
 import okio.BufferedSource
 import okio.Path
 
@@ -21,8 +22,9 @@ actual class InternalPlatformDependencies {
     TODO("Not yet implemented")
   }
 
-  actual fun getReadStreamFromUri(uri: String): BufferedSource {
+  actual fun fileResolver(): FileResolver {
     TODO("Not yet implemented")
   }
+
 
 }
