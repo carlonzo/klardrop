@@ -40,7 +40,8 @@ class CommonComponent(
       localProperties,
       discoveryModule.visibleDevices(),
       protoBuf,
-      internalPlatformDependency
+      internalPlatformDependency,
+      clock
     )
   }
   private val discoveryModule by lazy {

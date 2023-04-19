@@ -1,5 +1,8 @@
 package com.carlom.klardrop
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateSizeAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -7,8 +10,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,11 +58,21 @@ expect fun DeviceDiscovery(
 
 @Composable
 fun CircleDevice(deviceUi: DeviceUi) {
-  Canvas(
-    modifier = Modifier.size(60.dp)
-  ) {
 
-    drawCircle(Color.LightGray)
+  val isSending = deviceUi.activityState is ActivityState.Sending
+  val targetCircleSize = if (isSending) 55.dp else 60.dp
+
+  val circleSize by animateDpAsState(targetValue = targetCircleSize)
+
+  if (isSending) {
+    val progress = (deviceUi.activityState as ActivityState.Sending).progressPercentage / 100.0f
+    CircularProgressIndicator(progress, modifier = Modifier.size(circleSize), color = Color.Blue)
+  }
+
+  Canvas(
+    modifier = Modifier.size(circleSize)
+  ) {
+    drawCircle(Color.LightGray, radius = (targetCircleSize - 5.dp).toPx())
 
   }
 }

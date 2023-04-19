@@ -9,6 +9,11 @@ fun log(message: String, throwable: Throwable) {
   throwable.printStackTrace()
 }
 
+fun log(tag: String, message: String, throwable: Throwable) {
+  println("[Klardrop]: [$tag]: $message")
+  throwable.printStackTrace()
+}
+
 fun log(tag: String, message: String) {
   println("[Klardrop]: [$tag]: $message")
 }

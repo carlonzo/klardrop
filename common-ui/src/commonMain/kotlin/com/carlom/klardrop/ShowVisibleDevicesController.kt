@@ -123,5 +123,19 @@ sealed interface ActionUi {
 data class DeviceUi(
   val deviceId: String,
   val deviceName: String,
-  val deviceType: DeviceType
+  val deviceType: DeviceType,
+  val activityState: ActivityState = ActivityState.Idle
 )
+
+sealed interface ActivityState {
+
+  object Idle : ActivityState
+
+  data class SentCompleted(val error: Boolean = false) : ActivityState
+//  data class ReceiveCompleted(val error: Boolean = false) : ActivityState
+
+  data class Sending(val progressPercentage : Float) : ActivityState
+
+//  data class Receiving(val progressPercentage : Int) : ActivityState
+
+}

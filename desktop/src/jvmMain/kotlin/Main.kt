@@ -44,8 +44,8 @@ fun main() {
 
             Text("Hello in Klardrop")
 
-//            val minPanelWidth = (state.size.width / 3) * 2
-//            val panelWidth = if (state.size.width > minPanelWidth) minPanelWidth else state.size.width
+//            val minPanelWidth = (state.fileSize.width / 3) * 2
+//            val panelWidth = if (state.fileSize.width > minPanelWidth) minPanelWidth else state.fileSize.width
 
             DiscoveryDashboard(
               modifier = Modifier

@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Parcelable
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,7 +15,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.carlom.klardrop.ActivityState
 import com.carlom.klardrop.DeviceDiscovery
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.OnDataToSend
@@ -22,6 +24,14 @@ import com.carlom.klardrop.OnDeviceActionListener
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.theme.AppTheme
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flatMapConcat
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 class ShareToDeviceActivity : AppCompatActivity() {
@@ -45,23 +55,26 @@ class ShareToDeviceActivity : AppCompatActivity() {
       AppTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
 
-          Text("Share with:")
+          Column {
+            Text("Share with:")
 
-          FlowRow {
-            devices.forEach {
+            FlowRow {
+              devices.forEach {
 
-              DeviceDiscovery(it, onDeviceActionListener)
+                DeviceDiscovery(it, onDeviceActionListener)
 
+              }
             }
           }
+
 
         }
       }
 
     }
 
-    when {
-      intent?.action == Intent.ACTION_SEND -> {
+    when (intent?.action) {
+      Intent.ACTION_SEND -> {
         if ("text/plain" == intent.type) {
           log("ShareToDeviceActivity", "Handling text $intent")
           handleSendText(intent) // Handle text being sent
@@ -70,12 +83,10 @@ class ShareToDeviceActivity : AppCompatActivity() {
           handleSendFile(intent) // Handle single image being sent
         }
       }
-
-      intent?.action == Intent.ACTION_SEND_MULTIPLE -> {
+      Intent.ACTION_SEND_MULTIPLE -> {
         log("ShareToDeviceActivity", "Handling multiple files $intent")
         handleSendMultipleFiles(intent)
       }
-
       else -> {
         // Handle other intents, such as being started from the home screen
         log("ShareToDeviceActivity", "Unhandled intent: $intent")
@@ -87,7 +98,20 @@ class ShareToDeviceActivity : AppCompatActivity() {
     override fun onDeviceClick(deviceUi: DeviceUi) {
       shareToDeviceController.onDeviceClick(deviceUi)
 
-//      finish()
+      // wait until sent is completed and then finish the activity
+      lifecycleScope.launch {
+
+        shareToDeviceController.devicesFlow
+          .mapNotNull {
+            it.firstOrNull { it.deviceId == deviceUi.deviceId }
+          }
+          .filter { it.activityState is ActivityState.SentCompleted }
+          .onEach { log("ShareToDeviceActivity", "filtered $it") }
+          .firstOrNull()
+
+        log("ShareToDeviceActivity", "Received sent completed, finishing activity")
+        finish()
+      }
     }
   }
 

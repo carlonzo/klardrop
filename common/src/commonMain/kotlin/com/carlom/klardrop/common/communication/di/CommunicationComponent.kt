@@ -17,8 +17,10 @@ import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.communication.router.MessagesRouterImpl
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.persistence.CurrentFileSystem
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.SingletonProvider
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -29,7 +31,8 @@ class CommunicationModule(
   private val localPropertiesRepository: LocalPropertiesRepository,
   private val visibleDevices: VisibleDevices,
   private val protoBuf: ProtoBuf,
-  private val platformDependencies: InternalPlatformDependencies
+  private val platformDependencies: InternalPlatformDependencies,
+  private val clock: Clock
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -37,7 +40,7 @@ class CommunicationModule(
   private val messageHandlers = SingletonProvider<MessageHandlers> {
     MessageHandlersImpl(
       mapOf(
-        MessageType.FILE to FileMessageHandler({ platformDependencies.getStoragePath() }, serializer, platformDependencies.fileResolver()),
+        MessageType.FILE to FileMessageHandler({ platformDependencies.getStoragePath() }, serializer, platformDependencies.fileResolver(), CurrentFileSystem, clock),
 
         )
     )

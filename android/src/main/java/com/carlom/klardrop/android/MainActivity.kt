@@ -16,7 +16,6 @@ import com.carlom.klardrop.ActionUi
 import com.carlom.klardrop.DiscoveryDashboard
 import com.carlom.klardrop.OnDataToSend
 import com.carlom.klardrop.ShowVisibleDevicesController
-import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
 import kotlinx.coroutines.launch
@@ -27,7 +26,8 @@ class MainActivity : AppCompatActivity() {
   private lateinit var showVisibleDevicesController: ShowVisibleDevicesController
   private var actionUi: ActionUi? = null
 
-  @Inject lateinit var klardrop: Klardrop
+  @Inject
+  lateinit var klardrop: Klardrop
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -59,7 +59,6 @@ class MainActivity : AppCompatActivity() {
         }
       }
     }
-
   }
 
 
