@@ -28,6 +28,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.onExternalDrag
 import androidx.compose.ui.unit.dp
+import java.net.URI
+import kotlin.io.path.pathString
+import kotlin.io.path.toPath
 
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -66,8 +69,10 @@ actual fun DeviceDiscovery(
 
           when (dragData) {
             is DragData.FilesList -> {
-              println("onDrop ${dragData.readFiles()}")
-              onDeviceActionListener.onSendData(deviceUi, OnDataToSend.FilesList(dragData.readFiles()))
+              val filePaths = dragData.readFiles().map { URI.create(it).toPath().pathString }
+              println("onDrop $filePaths")
+
+              onDeviceActionListener.onSendData(deviceUi, OnDataToSend.FilesList(filePaths))
             }
 
             is DragData.Text -> {

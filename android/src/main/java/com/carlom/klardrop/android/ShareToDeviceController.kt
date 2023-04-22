@@ -16,7 +16,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.utils.Coroutines
-import com.carlom.klardrop.common.utils.FileResolver
+import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
@@ -34,7 +34,7 @@ class ShareToDeviceController(
   private val visibleDevices: VisibleDevices,
   private val knownDevicesRepository: KnownDevicesRepository,
   private val messenger: Messenger,
-  private val fileResolver: FileResolver
+  private val platformFileSystem: PlatformFileSystem
 ) {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -42,7 +42,7 @@ class ShareToDeviceController(
     visibleDevices = commonComponent.visibleDevices(),
     knownDevicesRepository = commonComponent.knownDevicesRepository(),
     messenger = commonComponent.messenger(),
-    fileResolver = commonComponent.fileResolver()
+    platformFileSystem = commonComponent.platformFileSystem()
   )
 
   private val controllerScope = CoroutineScope(coroutines.mainDispatcher)
@@ -95,7 +95,7 @@ class ShareToDeviceController(
   private fun sendFiles(deviceId: String, filesPaths: List<String>) {
     coroutines.appScope.launch {
       filesPaths.forEach { filePath ->
-        val fileData = fileResolver.getResolvedFileData(filePath)
+        val fileData = platformFileSystem.getResolvedFileData(filePath)
         messenger.send(
           deviceId, FileMessage(
             fileData.fileName,

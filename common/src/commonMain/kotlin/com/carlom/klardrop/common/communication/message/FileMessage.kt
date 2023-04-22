@@ -1,16 +1,19 @@
 package com.carlom.klardrop.common.communication.message
 
+import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.utils.Clock
-import com.carlom.klardrop.common.utils.FileResolver
+import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.websocket.*
-import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.invoke
 import kotlinx.serialization.Serializable
-import okio.*
+import okio.Buffer
+import okio.BufferedSource
+import okio.use
 
 @Serializable
 data class FileMessage(
@@ -32,43 +35,41 @@ fun FileMessage.toSendRequest(filePath: String): FileMessage.SendRequest {
 }
 
 class FileMessageHandler(
-  private val storePathProvider: () -> Path,
   private val serializer: MessageSerializer,
-  private val fileResolver: FileResolver,
-  private val fileSystem: FileSystem,
+  private val fileManager: FileManager,
   private val clock: Clock,
+  private val coroutines: Coroutines
 ) : MessageHandler<FileMessage, FileMessage.SendRequest> {
 
   override suspend fun handleIncoming(message: FileMessage, receiveChannel: ReceiveChannel<Frame>) {
+    log("FileMessageHandler", "Receiving file $message")
 
-    val rootFolder = storePathProvider()
-    val destinationPath = rootFolder.resolve(message.fileName)
-    log("FileMessageHandler", "Receiving file $message and saving to $destinationPath")
+    coroutines.ioDispatcher.invoke {
+      val fileTransfer = fileManager.prepareSaveFile(
+        fileName = message.fileName,
+      )
 
-    var newDestinationPath = destinationPath
-    while (fileSystem.exists(newDestinationPath)) {
-      newDestinationPath = generateNewFilePath(rootFolder, newDestinationPath)
-    }
+      runCatching {
+        fileTransfer.bufferedSink.use {
 
-    fileSystem.write(
-      file = newDestinationPath,
-      mustCreate = true
-    ) {
+          var totalBytesReceived = 0
+          while (totalBytesReceived < message.fileSize) {
+            val newFrame = receiveChannel.receive()
+            val data = newFrame.data
+            it.write(data)
 
-      log("FileMessageHandler", "Writing file $message into $newDestinationPath with size ${message.fileSize}")
+            totalBytesReceived += data.size
+            log("FileMessageHandler", "Received file frame of ${data.size}")
+          }
 
-      var totalBytesReceived = 0
-      while (totalBytesReceived < message.fileSize) {
-        val newFrame = receiveChannel.receive()
-        val data = newFrame.data
-        write(data)
-
-        totalBytesReceived += data.size
-        log("FileMessageHandler", "Received file frame of ${data.size}")
+          it.flush()
+          log("FileMessageHandler", "Received file with size: $totalBytesReceived")
+        }
+      }.onSuccess {
+        fileTransfer.onTransferCompleted()
+      }.onFailure {
+        fileTransfer.onTransferFailed()
       }
-
-      flush()
-      log("FileMessageHandler", "Received file with size: $totalBytesReceived")
     }
 
   }
@@ -78,68 +79,56 @@ class FileMessageHandler(
     webSocketSession: WebSocketSession,
     progressFlow: MutableSharedFlow<MessengerSendProgress>
   ) {
+    coroutines.ioDispatcher.invoke {
 
-    updateSentProgress(progressFlow, 0, request.message.fileSize)
+      updateSentProgress(progressFlow, 0, request.message.fileSize)
 
-    val initialMessage = serializer.serialize(request.message)
-    webSocketSession.send(initialMessage)
+      val initialMessage = serializer.serialize(request.message)
+      webSocketSession.send(initialMessage)
 
-    val path = request.pathFile
-    val bufferedSource = fileResolver.getReadStreamFromUri(path)
+      val path = request.pathFile
 
-    log("FileMessageHandler", "Sending file with path: $path")
+      log("FileMessageHandler", "Sending file with path: $path")
 
-    val sendScope = CoroutineScope(Dispatchers.IO)
-    val flushJobs = mutableListOf<Deferred<Unit>>()
 
-    bufferedSource.use {
+      fileManager.getReadStreamFromUri(path).use {
 
-      val buffer = Buffer()
-      var totalSent = 0L
+        val buffer = Buffer()
+        var totalSent = 0L
+        var frameCount = 0
 
-      var frameCount = 0
+        val start = clock.currentTimeMillis()
+        runCatching {
+          while (!it.exhausted()) {
 
-      val start = clock.currentTimeMillis()
-      runCatching {
-        while (!it.exhausted()) {
+            it.fillBuffer(buffer, 1_00_000)
 
-          it.fillBuffer(buffer, 1_000_000)
+            // closing the Frame with fin so the receiver can receive the full frame and flush to disk
+            val flush = (frameCount % 5 == 0 && frameCount > 0) || it.exhausted()
+            val bufferSize = buffer.size
 
-          // closing the Frame with fin so the receiver can receive the full frame and flush to disk
-          val flush = (frameCount % 5 == 0 && frameCount > 0) || it.exhausted()
-          val bufferSize = buffer.size
+            webSocketSession.send(Frame.Binary(flush, buffer.readByteArray()))
 
-          if (flush) log("FileMessageHandler", "Sending file frame : ${buffer.size} bytes")
-          webSocketSession.send(Frame.Binary(flush, buffer.readByteArray()))
+            if (flush) {
+              webSocketSession.flush()
+            }
 
-          if (flush) {
-//            sendScope
-//              .async { webSocketSession.flush() }
-//              .let { flushJobs.add(it) }
-            webSocketSession.flush()
+            totalSent += bufferSize
+            updateSentProgress(progressFlow, totalSent, request.message.fileSize)
+
+            frameCount += 1
           }
 
-          totalSent += bufferSize
-          updateSentProgress(progressFlow, totalSent, request.message.fileSize)
-
-          frameCount += 1
+          webSocketSession.flush()
+        }.onFailure {
+          log("FileMessageHandler", "Error sending file", it)
+        }.onSuccess {
+          log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
         }
-        log("FileMessageHandler", "Flushing web socket session after last frame")
 
-        webSocketSession.flush()
-        flushJobs.awaitAll()
-        sendScope.cancel()
-
-        log("FileMessageHandler", "Flushing web socket session completed")
-      }.onFailure {
-        log("FileMessageHandler", "Error sending file", it)
-      }.onSuccess {
-        log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
+        buffer.close()
       }
-
-      buffer.close()
     }
-
   }
 
   private fun BufferedSource.fillBuffer(buffer: Buffer, size: Long) {
@@ -156,27 +145,6 @@ class FileMessageHandler(
     log("FileMessageHandler", "Sending update progress: $progressValue")
   }
 
-  private fun generateNewFilePath(parentPath: Path, path: Path): Path {
-    val regex = ".+\\((\\d+)\\)".toRegex() // "file (1).txt"
-    val fileNameWithExtension = path.name
-    val extension = fileNameWithExtension.substringAfterLast(".", "")
-    val fileName = fileNameWithExtension.removeSuffix(".$extension")
-
-    val match = regex.find(fileName)
-
-    if (match == null) {
-      return parentPath.resolve("$fileName (1).$extension")
-    } else {
-      match.groups[1]?.value?.toInt()?.let {
-        val newNumber = it + 1
-        val newFileName = fileName.replace("($it)", "($newNumber)")
-        return parentPath.resolve("$newFileName.$extension")
-      } ?: run {
-        return parentPath.resolve("$fileName (1).$extension")
-      }
-    }
-
-  }
 
 }
 
