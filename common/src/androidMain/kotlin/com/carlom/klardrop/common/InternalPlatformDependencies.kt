@@ -1,17 +1,12 @@
 package com.carlom.klardrop.common
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.FileResolver
-import okio.BufferedSource
+import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
-import okio.Path.Companion.toPath
-import okio.buffer
-import okio.source
-import java.io.File
+import okio.Path.Companion.toOkioPath
 
 actual class InternalPlatformDependencies(private val context: Context) {
 
@@ -28,16 +23,16 @@ actual class InternalPlatformDependencies(private val context: Context) {
   }
 
   actual fun getStoragePath(): Path {
-    val file = File(context.filesDir, "received")
-    if (!file.exists()) {
-      file.mkdirs()
-    }
 
-    return file.absolutePath.toPath()
+    return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).toOkioPath()
   }
 
-  actual fun fileResolver(): FileResolver {
-    return FileResolver(context)
+  actual fun getTempStoragePath(): Path {
+    return context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.toOkioPath() ?: context.filesDir.toOkioPath()
+  }
+
+  actual fun platformFileSystem(): PlatformFileSystem {
+    return PlatformFileSystem(context)
   }
 
 }

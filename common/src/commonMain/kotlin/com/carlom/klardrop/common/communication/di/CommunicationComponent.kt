@@ -1,15 +1,7 @@
 package com.carlom.klardrop.common.communication.di
 
-import com.carlom.klardrop.common.InternalPlatformDependencies
-import com.carlom.klardrop.common.communication.Client
-import com.carlom.klardrop.common.communication.ClientImpl
-import com.carlom.klardrop.common.communication.ConnectionsPool
-import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
-import com.carlom.klardrop.common.communication.MessageSerializer
-import com.carlom.klardrop.common.communication.Messenger
-import com.carlom.klardrop.common.communication.MessengerImpl
-import com.carlom.klardrop.common.communication.ReceivedMessagesBroadcast
-import com.carlom.klardrop.common.communication.Server
+import com.carlom.klardrop.common.FileManager
+import com.carlom.klardrop.common.communication.*
 import com.carlom.klardrop.common.communication.message.FileMessageHandler
 import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
@@ -19,6 +11,7 @@ import com.carlom.klardrop.common.communication.router.MessagesRouterImpl
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.SingletonProvider
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -29,7 +22,8 @@ class CommunicationModule(
   private val localPropertiesRepository: LocalPropertiesRepository,
   private val visibleDevices: VisibleDevices,
   private val protoBuf: ProtoBuf,
-  private val platformDependencies: InternalPlatformDependencies
+  private val clock: Clock,
+  private val fileManager: FileManager,
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -37,9 +31,8 @@ class CommunicationModule(
   private val messageHandlers = SingletonProvider<MessageHandlers> {
     MessageHandlersImpl(
       mapOf(
-        MessageType.FILE to FileMessageHandler({ platformDependencies.getStoragePath() }, serializer, platformDependencies.fileResolver()),
-
-        )
+        MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines)
+      )
     )
   }
 
@@ -90,6 +83,5 @@ class CommunicationModule(
   fun incomingMessagesRouter() = messagesRouter.get()
   fun client() = client.get()
   fun server() = server.get()
-
   fun messenger() = messenger
 }

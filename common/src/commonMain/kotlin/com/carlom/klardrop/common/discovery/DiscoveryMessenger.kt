@@ -29,7 +29,7 @@ class DiscoveryMessenger(
           )
 
           if (introMessage.size > 65500) {
-            // udp package size must be below 65507 bytes
+            // udp package fileSize must be below 65507 bytes
             throw IllegalArgumentException(
               "Discovery message is too big ${introMessage.size}: ${
                 protoBuf.decodeFromByteArray<DiscoveryMessage>(

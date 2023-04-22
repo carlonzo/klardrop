@@ -1,5 +1,6 @@
 package com.carlom.klardrop.android
 
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.compose.setContent
@@ -16,10 +17,10 @@ import com.carlom.klardrop.ActionUi
 import com.carlom.klardrop.DiscoveryDashboard
 import com.carlom.klardrop.OnDataToSend
 import com.carlom.klardrop.ShowVisibleDevicesController
-import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
 import kotlinx.coroutines.launch
+import java.io.FileDescriptor
 import javax.inject.Inject
 
 class MainActivity : AppCompatActivity() {
@@ -27,7 +28,8 @@ class MainActivity : AppCompatActivity() {
   private lateinit var showVisibleDevicesController: ShowVisibleDevicesController
   private var actionUi: ActionUi? = null
 
-  @Inject lateinit var klardrop: Klardrop
+  @Inject
+  lateinit var klardrop: Klardrop
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -59,7 +61,6 @@ class MainActivity : AppCompatActivity() {
         }
       }
     }
-
   }
 
 
@@ -75,6 +76,8 @@ class MainActivity : AppCompatActivity() {
     } else {
       Log.d("PhotoPicker", "No media selected")
     }
+
+
   }
 
   override fun onDestroy() {

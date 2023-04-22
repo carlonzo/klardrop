@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.websocket.*
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.withContext
 
 class ConnectionMessenger internal constructor(
@@ -40,8 +41,8 @@ class ConnectionMessenger internal constructor(
   private val outgoing = connection.session.outgoing
   private val incoming = connection.session.incoming
 
-  suspend fun <S : SendMessageRequest> send(sendRequest: S) {
-    messagesRouter.onSendingMessage(connection.deviceId, sendRequest, outgoing, incoming)
+  suspend fun <S : SendMessageRequest> send(sendRequest: S, flow: MutableSharedFlow<MessengerSendProgress>) {
+    messagesRouter.onSendingMessage(connection.deviceId, sendRequest, connection.session, flow)
   }
 
   suspend fun close() {

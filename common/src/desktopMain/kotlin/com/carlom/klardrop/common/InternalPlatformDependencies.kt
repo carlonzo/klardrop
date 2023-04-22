@@ -1,12 +1,9 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.FileResolver
-import okio.BufferedSource
+import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
 import okio.Path.Companion.toPath
-import okio.buffer
-import okio.source
 import java.io.File
 
 actual class InternalPlatformDependencies {
@@ -14,7 +11,7 @@ actual class InternalPlatformDependencies {
   private val homeFolder = (System.getenv("HOME"))
 
   actual fun getRootPath(): String {
-    return ("$homeFolder/")
+    return "$homeFolder/"
   }
 
   actual fun getDeviceName(): String {
@@ -26,11 +23,15 @@ actual class InternalPlatformDependencies {
   }
 
   actual fun getStoragePath(): Path {
-    return ("$homeFolder/Downloads/").toPath()
+    return "$homeFolder/Downloads/".toPath()
   }
 
-  actual fun fileResolver(): FileResolver {
-    return FileResolver()
+  actual fun getTempStoragePath(): Path {
+    return System.getenv("TMPDIR").toPath()
+  }
+
+  actual fun platformFileSystem(): PlatformFileSystem {
+    return PlatformFileSystem(this)
   }
 
 }

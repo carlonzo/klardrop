@@ -1,8 +1,7 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.FileResolver
-import okio.BufferedSource
+import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
 
 actual class InternalPlatformDependencies {
@@ -21,8 +20,11 @@ actual class InternalPlatformDependencies {
   actual fun getStoragePath(): Path {
     TODO("Not yet implemented")
   }
+  actual fun getTempStoragePath(): Path {
+    TODO("Not yet implemented")
+  }
 
-  actual fun fileResolver(): FileResolver {
+  actual fun platformFileSystem(): PlatformFileSystem {
     TODO("Not yet implemented")
   }
 

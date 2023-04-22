@@ -1,29 +1,31 @@
 package com.carlom.klardrop.common.communication.message
 
+import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.MessageSerializer
-import com.carlom.klardrop.common.persistence.CurrentFileSystem
-import com.carlom.klardrop.common.utils.FileResolver
+import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.utils.Clock
+import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.invoke
 import kotlinx.serialization.Serializable
 import okio.Buffer
 import okio.BufferedSource
-import okio.Path
 import okio.use
 
 @Serializable
 data class FileMessage(
   val fileName: String,
-  val size: Long,
+  val fileSize: Long,
   val mimeType: String? = null
 ) : Message {
   override val type: MessageType = MessageType.FILE
   override val hasPayload: Boolean = true
 
   class SendRequest(
-    override val message: Message,
+    override val message: FileMessage,
     val pathFile: String
   ) : SendMessageRequest
 }
@@ -33,69 +35,100 @@ fun FileMessage.toSendRequest(filePath: String): FileMessage.SendRequest {
 }
 
 class FileMessageHandler(
-  private val storePathProvider: () -> Path,
   private val serializer: MessageSerializer,
-  private val fileResolver: FileResolver
+  private val fileManager: FileManager,
+  private val clock: Clock,
+  private val coroutines: Coroutines
 ) : MessageHandler<FileMessage, FileMessage.SendRequest> {
 
   override suspend fun handleIncoming(message: FileMessage, receiveChannel: ReceiveChannel<Frame>) {
+    log("FileMessageHandler", "Receiving file $message")
 
-    val destinationPath = storePathProvider().resolve(message.fileName)
-    log("FileMessage", "Receiving file $message and saving to $destinationPath")
+    coroutines.ioDispatcher.invoke {
+      val fileTransfer = fileManager.prepareSaveFile(
+        fileName = message.fileName,
+      )
 
-    CurrentFileSystem.write(
-      file = destinationPath,
-      mustCreate = true
-    ) {
+      runCatching {
+        fileTransfer.bufferedSink.use {
 
-      log("FileMessage", "Writing file $message into $destinationPath")
+          var totalBytesReceived = 0
+          while (totalBytesReceived < message.fileSize) {
+            val newFrame = receiveChannel.receive()
+            val data = newFrame.data
+            it.write(data)
 
-      while (true) {
+            totalBytesReceived += data.size
+            log("FileMessageHandler", "Received file frame of ${data.size}")
+          }
 
-        val newFrame = receiveChannel.receive()
-        write(newFrame.data)
-
-        if (newFrame.fin) {
-          break
+          it.flush()
+          log("FileMessageHandler", "Received file with size: $totalBytesReceived")
         }
-
+      }.onSuccess {
+        fileTransfer.onTransferCompleted()
+      }.onFailure {
+        fileTransfer.onTransferFailed()
       }
-
     }
 
   }
 
-  override suspend fun handleOutgoing(request: FileMessage.SendRequest, sendChannel: SendChannel<Frame>) {
+  override suspend fun handleOutgoing(
+    request: FileMessage.SendRequest,
+    webSocketSession: WebSocketSession,
+    progressFlow: MutableSharedFlow<MessengerSendProgress>
+  ) {
+    coroutines.ioDispatcher.invoke {
 
-    val initialMessage = serializer.serialize(request.message)
-    sendChannel.send(initialMessage)
+      updateSentProgress(progressFlow, 0, request.message.fileSize)
 
-    val path = request.pathFile
-    val bufferedSource = fileResolver.getReadStreamFromUri(path)
+      val initialMessage = serializer.serialize(request.message)
+      webSocketSession.send(initialMessage)
 
-    log("FileMessage", "Sending file with path: $path")
-    var counter = 1
+      val path = request.pathFile
 
-    bufferedSource.use {
+      log("FileMessageHandler", "Sending file with path: $path")
 
-      val buffer = Buffer()
-      while (!it.exhausted()) {
 
-        it.fillBuffer(buffer, 500_000)
+      fileManager.getReadStreamFromUri(path).use {
 
-        log("FileMessage", "Sending file frame counter: $counter - ${buffer.size} bytes")
+        val buffer = Buffer()
+        var totalSent = 0L
+        var frameCount = 0
 
-        val fin = it.exhausted()
-        sendChannel.send(Frame.Binary(fin, buffer.readByteArray()))
+        val start = clock.currentTimeMillis()
+        runCatching {
+          while (!it.exhausted()) {
 
-        buffer.clear()
-        counter += 1
+            it.fillBuffer(buffer, 1_00_000)
+
+            // closing the Frame with fin so the receiver can receive the full frame and flush to disk
+            val flush = (frameCount % 5 == 0 && frameCount > 0) || it.exhausted()
+            val bufferSize = buffer.size
+
+            webSocketSession.send(Frame.Binary(flush, buffer.readByteArray()))
+
+            if (flush) {
+              webSocketSession.flush()
+            }
+
+            totalSent += bufferSize
+            updateSentProgress(progressFlow, totalSent, request.message.fileSize)
+
+            frameCount += 1
+          }
+
+          webSocketSession.flush()
+        }.onFailure {
+          log("FileMessageHandler", "Error sending file", it)
+        }.onSuccess {
+          log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
+        }
+
+        buffer.close()
       }
-
-      buffer.close()
     }
-
-    log("FileMessage", "File sent with: $path")
   }
 
   private fun BufferedSource.fillBuffer(buffer: Buffer, size: Long) {
@@ -106,4 +139,14 @@ class FileMessageHandler(
 
   }
 
+  private suspend fun updateSentProgress(progress: MutableSharedFlow<MessengerSendProgress>, sent: Long, total: Long) {
+    val progressValue = (sent * 100.0) / total
+    progress.emit(MessengerSendProgress.InProgress(progressValue.toFloat()))
+    log("FileMessageHandler", "Sending update progress: $progressValue")
+  }
+
+
 }
+
+
+

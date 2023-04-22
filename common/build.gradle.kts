@@ -39,6 +39,7 @@ kotlin {
     val androidMain by getting {
       dependencies {
         implementation(deps.kotlinx.coroutines.android)
+        implementation(deps.simplestorage)
       }
     }
 

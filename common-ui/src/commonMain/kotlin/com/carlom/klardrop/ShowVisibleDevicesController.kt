@@ -10,7 +10,7 @@ import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.FileResolver
+import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
@@ -27,7 +27,7 @@ class ShowVisibleDevicesController(
   private val visibleDevices: VisibleDevices,
   private val knownDevicesRepository: KnownDevicesRepository,
   private val messenger: Messenger,
-  private val fileResolver: FileResolver,
+  private val platformFileSystem: PlatformFileSystem,
 ) : OnDeviceActionListener {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -35,7 +35,7 @@ class ShowVisibleDevicesController(
     commonComponent.visibleDevices(),
     commonComponent.knownDevicesRepository(),
     commonComponent.messenger(),
-    commonComponent.fileResolver()
+    commonComponent.platformFileSystem()
   )
 
   private val controllerScope = CoroutineScope(coroutines.mainDispatcher)
@@ -75,7 +75,7 @@ class ShowVisibleDevicesController(
   private fun sendFiles(deviceId: String, filesPaths: List<String>) {
     coroutines.appScope.launch {
       filesPaths.forEach { filePath ->
-        val fileData = fileResolver.getResolvedFileData(filePath)
+        val fileData = platformFileSystem.getResolvedFileData(filePath)
         messenger.send(
           deviceId, FileMessage(
             fileData.fileName,
@@ -123,5 +123,19 @@ sealed interface ActionUi {
 data class DeviceUi(
   val deviceId: String,
   val deviceName: String,
-  val deviceType: DeviceType
+  val deviceType: DeviceType,
+  val activityState: ActivityState = ActivityState.Idle
 )
+
+sealed interface ActivityState {
+
+  object Idle : ActivityState
+
+  data class SentCompleted(val error: Boolean = false) : ActivityState
+//  data class ReceiveCompleted(val error: Boolean = false) : ActivityState
+
+  data class Sending(val progressPercentage : Float) : ActivityState
+
+//  data class Receiving(val progressPercentage : Int) : ActivityState
+
+}

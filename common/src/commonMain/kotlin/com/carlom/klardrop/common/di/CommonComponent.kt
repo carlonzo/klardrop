@@ -1,5 +1,7 @@
 package com.carlom.klardrop.common.di
 
+import com.carlom.klardrop.common.FileManager
+import com.carlom.klardrop.common.FileManagerImpl
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.DiscoveryModule
@@ -8,6 +10,7 @@ import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.UtilsModule
 import kotlinx.serialization.protobuf.ProtoBuf
 
@@ -40,7 +43,8 @@ class CommonComponent(
       localProperties,
       discoveryModule.visibleDevices(),
       protoBuf,
-      internalPlatformDependency
+      clock,
+      fileManager
     )
   }
   private val discoveryModule by lazy {
@@ -48,6 +52,12 @@ class CommonComponent(
       coroutines, localProperties, internalPlatformDependency, clock
     )
   }
+
+  private val platformFileSystem: PlatformFileSystem
+    get() = internalPlatformDependency.platformFileSystem()
+
+  private val fileManager: FileManager
+    get() = FileManagerImpl(platformFileSystem, internalPlatformDependency)
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
   fun server() = communicationModule.server()
@@ -60,5 +70,6 @@ class CommonComponent(
 
   fun messenger() = communicationModule.messenger()
 
-  fun fileResolver() = internalPlatformDependency.fileResolver()
+  fun platformFileSystem() = platformFileSystem
+
 }
