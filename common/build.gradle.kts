@@ -6,7 +6,8 @@ plugins {
 
 kotlin {
   android()
-  jvm("desktop")
+  jvm("desktopJvm")
+  macosArm64("desktopMacos")
   iosArm64()
 
   sourceSets {
@@ -44,8 +45,23 @@ kotlin {
     }
 
 
-    val desktopMain by getting
-    val desktopTest by getting
+    val desktopJvmMain by getting
+    val desktopJvmTest by getting
+
+    val iosMain by creating {
+      dependsOn(commonMain)
+    }
+    val iosTest by creating {
+      dependsOn(commonTest)
+    }
+
+    val iosArm64Main by getting {
+      dependsOn(iosMain)
+    }
+
+    val desktopMacosMain by getting {
+      dependsOn(iosMain)
+    }
 
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
@@ -56,10 +72,10 @@ kotlin {
 
 android {
   namespace = "com.klardrop.common"
-  compileSdkVersion(33)
+  compileSdk = 33
   defaultConfig {
-    minSdkVersion(23)
-    targetSdkVersion(33)
+    minSdk = 23
+    setTargetSdkVersion("33")
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_1_8

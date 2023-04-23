@@ -35,14 +35,6 @@ actual class PlatformFileSystem(
     return uri.toFile.outputStream().sink().buffer()
   }
 
-  actual fun exists(uri: String): Boolean {
-    return uri.toFile.exists()
-  }
-
-  actual fun move(from: String, to: String) {
-    fileSystem.atomicMove(from.toPath(), to.toPath())
-  }
-
   actual fun delete(uri: String) {
     uri.toFile.delete()
   }

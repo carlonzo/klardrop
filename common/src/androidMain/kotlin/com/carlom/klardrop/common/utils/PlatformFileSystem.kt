@@ -92,25 +92,6 @@ actual class PlatformFileSystem(private val context: Context) {
     }
   }
 
-  actual fun exists(uri: String): Boolean {
-    return when (uri.substringBefore(":")) {
-
-      "content" -> {
-        val contentResolver = context.contentResolver
-        contentResolver.openFileDescriptor(Uri.parse(uri), "r")?.use { it.fileDescriptor.valid() } ?: false
-      }
-
-      else -> {
-        val path = uri.substringAfter("file://")
-        File(path).exists()
-      }
-    }
-  }
-
-  actual fun move(from: String, to: String) {
-    TODO()
-  }
-
   actual fun delete(uri: String) {
     when (uri.substringBefore(":")) {
 

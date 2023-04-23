@@ -10,10 +10,6 @@ expect class PlatformFileSystem {
 
   fun getResolvedFileData(uri: String): ResolvedFileData
 
-  fun exists(uri: String): Boolean
-
-  fun move(from: String, to: String)
-
   fun delete(uri: String)
   suspend fun moveToStorage(filePath: String, mimeType: String?)
 
