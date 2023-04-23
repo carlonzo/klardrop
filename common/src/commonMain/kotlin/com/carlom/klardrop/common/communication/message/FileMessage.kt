@@ -6,14 +6,17 @@ import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
+import io.ktor.utils.io.core.ByteReadPacket.Companion.Empty
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.invoke
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
 import okio.Buffer
 import okio.BufferedSource
 import okio.use
+import kotlin.time.Duration.Companion.seconds
 
 @Serializable
 data class FileMessage(
@@ -45,17 +48,35 @@ class FileMessageHandler(
     log("FileMessageHandler", "Receiving file $message")
 
     coroutines.ioDispatcher.invoke {
+      log("FileMessageHandler", "Ready to receive file $message")
+
       val fileTransfer = fileManager.prepareSaveFile(
         fileName = message.fileName,
       )
 
+      log("FileMessageHandler", "Prepared file transfer for $message")
+
+      var totalBytesReceived = 0
+
       runCatching {
         fileTransfer.bufferedSink.use {
 
-          var totalBytesReceived = 0
           while (totalBytesReceived < message.fileSize) {
-            val newFrame = receiveChannel.receive()
+
+            log("FileMessageHandler", "Waiting to receive new frame for $message")
+            val newFrame = withTimeout(10.seconds) {
+              receiveChannel.receive()
+            }
+
             val data = newFrame.data
+
+            log("FileMessageHandler", "Received frame $newFrame")
+
+            if (newFrame.fin && data.isEmpty()) {
+              log("FileMessageHandler", "Received empty frame. Finishing")
+              break
+            }
+
             it.write(data)
 
             totalBytesReceived += data.size
@@ -63,12 +84,14 @@ class FileMessageHandler(
           }
 
           it.flush()
-          log("FileMessageHandler", "Received file with size: $totalBytesReceived")
         }
       }.onSuccess {
+        log("FileMessageHandler", "Received file with size: $totalBytesReceived")
         fileTransfer.onTransferCompleted()
       }.onFailure {
+        log("FileMessageHandler", "Error while receiving file", it)
         fileTransfer.onTransferFailed()
+        throw it
       }
     }
 
@@ -120,13 +143,17 @@ class FileMessageHandler(
           }
 
           webSocketSession.flush()
+        }.onSuccess {
+          buffer.close()
+          log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
         }.onFailure {
           log("FileMessageHandler", "Error sending file", it)
-        }.onSuccess {
-          log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
-        }
+          webSocketSession.send(Frame.Binary(true, Empty))
+          webSocketSession.flush()
+          buffer.close()
 
-        buffer.close()
+          throw it
+        }
       }
     }
   }
@@ -140,8 +167,8 @@ class FileMessageHandler(
   }
 
   private suspend fun updateSentProgress(progress: MutableSharedFlow<MessengerSendProgress>, sent: Long, total: Long) {
-    val progressValue = (sent * 100.0) / total
-    progress.emit(MessengerSendProgress.InProgress(progressValue.toFloat()))
+    val progressValue = (sent * 100) / total
+    progress.emit(MessengerSendProgress.InProgress(progressValue.toInt()))
     log("FileMessageHandler", "Sending update progress: $progressValue")
   }
 

@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.utils.log
 import okio.BufferedSink
 import okio.BufferedSource
 import okio.FileSystem
@@ -21,7 +22,8 @@ fun getAvailableFilePath(parentPath: Path, requestedFileName: String, fileSystem
   var destinationPath = parentPath.resolve(requestedFileName)
 
   while (fileSystem.exists(destinationPath)) {
-    destinationPath = generateNewFilePath(parentPath, requestedFileName)
+    destinationPath = generateNewFilePath(parentPath, destinationPath.name)
+    log("FileManagerImpl", "File already exists, generated new path: $destinationPath")
   }
 
   return destinationPath

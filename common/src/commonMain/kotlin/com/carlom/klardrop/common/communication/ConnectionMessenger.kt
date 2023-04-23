@@ -29,8 +29,16 @@ class ConnectionMessenger internal constructor(
     withContext(coroutines.ioDispatcher) {
       while (!connection.session.incoming.isClosedForReceive) {
 
+        log("ConnectionMessenger: Listening for new messages from ${connection.deviceId}")
+
         // suspension for messages in within the messagesRouter
-        messagesRouter.onMessageIncoming(connection.deviceId, outgoing, incoming)
+        runCatching {
+          messagesRouter.onMessageIncoming(connection.deviceId, outgoing, incoming)
+        }.onFailure {
+          log("ConnectionMessenger: Error while listening for messages from ${connection.deviceId}. Closing connection", it)
+          close()
+        }
+
       }
 
       log("ConnectionMessenger: Stop listening for messages from ${connection.deviceId}")
@@ -48,5 +56,9 @@ class ConnectionMessenger internal constructor(
   suspend fun close() {
     log("ConnectionMessenger: Closing connection with ${connection.deviceId}")
     connection.session.close()
+  }
+
+  fun isClosed(): Boolean{
+    return connection.session.isClosed()
   }
 }

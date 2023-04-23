@@ -46,7 +46,11 @@ class Server(
       embeddedServer(CIO, port = SERVER_PORT) {
 
         install(WebSockets) {
+
           pingPeriodMillis = 10_000
+          timeoutMillis = 10_000
+
+          extensions { install(FrameLoggerExtension) }
         }
 
         routing {

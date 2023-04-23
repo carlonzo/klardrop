@@ -85,7 +85,7 @@ fun Flow<MessengerSendProgress>.untilCompleted(): Flow<MessengerSendProgress> {
 
 sealed interface MessengerSendProgress {
   object Pending : MessengerSendProgress
-  data class InProgress(val percentage: Float) : MessengerSendProgress
+  data class InProgress(val percentage: Int) : MessengerSendProgress
   object Completed : MessengerSendProgress
   data class Error(val message: String = "") : MessengerSendProgress
 

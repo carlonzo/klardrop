@@ -11,7 +11,6 @@ import com.anggrayudi.storage.file.CreateMode
 import com.anggrayudi.storage.file.moveFileToDownloadMedia
 import com.anggrayudi.storage.media.FileDescription
 import com.anggrayudi.storage.media.MediaFile
-import com.anggrayudi.storage.media.MediaStoreCompat
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okio.*
 import java.io.File
@@ -146,8 +145,12 @@ actual class PlatformFileSystem(private val context: Context) {
       }, CreateMode.CREATE_NEW)
     }
 
+    when (result) {
+      is MediaFile -> log("PlatformFileSystem", "Created Media in Mediastore uri ${result.uri}")
+      is DocumentFile -> log("PlatformFileSystem", "Created Document uri ${result.uri}")
+      else -> log("PlatformFileSystem", "Created unknown file $result")
+    }
 
-    log("PlatformFileSystem", "Created mediastore for file: $result")
   }
 
   private companion object {

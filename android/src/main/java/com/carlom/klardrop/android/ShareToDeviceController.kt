@@ -121,7 +121,7 @@ class ShareToDeviceController(
           MessengerSendProgress.Completed -> ActivityState.SentCompleted()
           is MessengerSendProgress.Error -> ActivityState.SentCompleted(error = true)
           is MessengerSendProgress.InProgress -> ActivityState.Sending(progress.percentage)
-          MessengerSendProgress.Pending -> ActivityState.Sending(0f)
+          MessengerSendProgress.Pending -> ActivityState.Sending(0)
         }
 
         newDevices[deviceId] = device.copy(

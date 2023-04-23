@@ -14,11 +14,7 @@ import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 // TODO should this be composable and get the dispose callback to cancel scope?
@@ -134,7 +130,7 @@ sealed interface ActivityState {
   data class SentCompleted(val error: Boolean = false) : ActivityState
 //  data class ReceiveCompleted(val error: Boolean = false) : ActivityState
 
-  data class Sending(val progressPercentage : Float) : ActivityState
+  data class Sending(val progressPercentage: Int) : ActivityState
 
 //  data class Receiving(val progressPercentage : Int) : ActivityState
 

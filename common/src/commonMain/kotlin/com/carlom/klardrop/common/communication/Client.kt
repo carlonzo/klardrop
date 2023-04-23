@@ -42,6 +42,9 @@ class ClientImpl(
     HttpClient(CIO) {
       install(WebSockets) {
         pingInterval = 20_000
+
+
+        extensions { install(FrameLoggerExtension) }
       }
     }
   }
