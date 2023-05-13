@@ -5,7 +5,6 @@ import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
 import okio.Path.Companion.toPath
 import platform.Foundation.*
-import platform.UIKit.UIDevice
 
 actual class InternalPlatformDependencies {
   actual fun getRootPath(): String {
@@ -13,7 +12,7 @@ actual class InternalPlatformDependencies {
   }
 
   actual fun getDeviceName(): String {
-    return UIDevice.currentDevice.name
+    return NSFullUserName()
   }
 
   actual fun deviceType(): DeviceType {

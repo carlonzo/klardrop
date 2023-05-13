@@ -6,7 +6,7 @@ plugins {
 
 kotlin {
   android()
-  jvm("desktop") {
+  jvm("desktopJvm") {
     compilations.all {
       kotlinOptions.jvmTarget = "11"
     }
@@ -28,7 +28,7 @@ kotlin {
       }
     }
 
-    val desktopMain by getting {
+    val desktopJvmMain by getting {
       dependencies {
         implementation(compose.preview)
       }

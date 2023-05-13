@@ -20,5 +20,5 @@ pluginManagement {
 
 rootProject.name = "klardrop"
 
-include(":android", ":desktop")
-include(":common-ui", ":common")
+include(":android", ":desktop", ":common", "macos")
+include("common-ui")

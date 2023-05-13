@@ -4,7 +4,6 @@ import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
 import okio.Path.Companion.toPath
-import java.io.File
 
 actual class InternalPlatformDependencies {
 

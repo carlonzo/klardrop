@@ -1,13 +1,18 @@
+import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+
 plugins {
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.serialization)
 }
 
+@OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
+  targetHierarchy.default()
+
   android()
   jvm("desktopJvm")
-  macosArm64("desktopMacos")
+  macosArm64()
   iosArm64()
 
   sourceSets {
@@ -44,28 +49,12 @@ kotlin {
       }
     }
 
-
     val desktopJvmMain by getting
     val desktopJvmTest by getting
 
-    val iosMain by creating {
-      dependsOn(commonMain)
-    }
-    val iosTest by creating {
-      dependsOn(commonTest)
-    }
+    val appleMain by getting
+    val appleTest by getting
 
-    val iosArm64Main by getting {
-      dependsOn(iosMain)
-    }
-
-    val iosArm64Test by getting {
-      dependsOn(iosTest)
-    }
-
-    val desktopMacosMain by getting {
-      dependsOn(iosMain)
-    }
 
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
