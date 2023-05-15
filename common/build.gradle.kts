@@ -59,6 +59,10 @@ kotlin {
       dependsOn(iosMain)
     }
 
+    val iosArm64Test by getting {
+      dependsOn(iosTest)
+    }
+
     val desktopMacosMain by getting {
       dependsOn(iosMain)
     }
@@ -75,13 +79,6 @@ android {
   compileSdk = 33
   defaultConfig {
     minSdk = 23
-    setTargetSdkVersion("33")
   }
-  compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
-  }
-
-
 }
 

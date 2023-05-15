@@ -1,3 +1,4 @@
+import com.android.build.gradle.internal.dsl.BaseAppModuleExtension
 
 group "com.carlom.klardrop"
 version "1.0-SNAPSHOT"
@@ -21,26 +22,35 @@ allprojects {
 
 subprojects {
 
-  pluginManager.withPlugin("android-library") {
+  val javaVersion = JavaVersion.VERSION_17
+
+  pluginManager.withPlugin("com.android.library") {
     configure<com.android.build.gradle.BaseExtension> {
       compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = javaVersion
+        targetCompatibility = javaVersion
       }
     }
+  }
 
-
+  pluginManager.withPlugin("com.android.application") {
+    configure<BaseAppModuleExtension> {
+      compileOptions {
+        sourceCompatibility = javaVersion
+        targetCompatibility = javaVersion
+      }
+    }
   }
 
   tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
       kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
+        jvmTarget = javaVersion.toString()
       }
   }
 
   tasks.withType<JavaCompile>().configureEach {
-     sourceCompatibility = JavaVersion.VERSION_1_8.toString()
-     targetCompatibility = JavaVersion.VERSION_1_8.toString()
+     sourceCompatibility = javaVersion.toString()
+     targetCompatibility = javaVersion.toString()
   }
 
 }

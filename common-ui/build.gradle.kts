@@ -38,15 +38,8 @@ kotlin {
 
 android {
   namespace = "com.klardrop.common.ui"
-  compileSdkVersion(33)
+  compileSdk = 33
   defaultConfig {
-    minSdkVersion(23)
-    targetSdkVersion(33)
+    minSdk = 23
   }
-  compileOptions {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
-  }
-
-
 }
