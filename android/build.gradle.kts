@@ -45,6 +45,7 @@ android {
       "META-INF/versions/**"
     )
   )
+  namespace = "com.carlom.klardrop.android"
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
