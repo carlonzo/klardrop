@@ -7,7 +7,7 @@ compose-plugin = "1.4.0"
 okio = "3.3.0"
 ktor = "2.3.0"
 datastore = "1.1.0-alpha04"
-dagger = "2.45"
+dagger = "2.46.1"
 
 [libraries]
 kotlin-gp = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
