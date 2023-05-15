@@ -17,7 +17,7 @@ dependencies {
   implementation(project(":common-ui"))
   implementation("androidx.activity:activity-compose:1.7.1")
   implementation("androidx.appcompat:appcompat:1.6.1")
-  implementation("androidx.core:core-ktx:1.10.0")
+  implementation("androidx.core:core-ktx:1.10.1")
   implementation(deps.dagger)
   kapt(deps.dagger.compiler)
 }
