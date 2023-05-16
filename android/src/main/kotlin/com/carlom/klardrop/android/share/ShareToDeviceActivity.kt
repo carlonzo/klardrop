@@ -1,4 +1,4 @@
-package com.carlom.klardrop.android
+package com.carlom.klardrop.android.share
 
 import android.content.Intent
 import android.net.Uri
@@ -21,16 +21,14 @@ import com.carlom.klardrop.DeviceDiscovery
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.OnDataToSend
 import com.carlom.klardrop.OnDeviceActionListener
+import com.carlom.klardrop.android.applicationComponent
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.theme.AppTheme
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.flatMapConcat
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 

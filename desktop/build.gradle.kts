@@ -36,6 +36,10 @@ compose.desktop {
       targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
       packageName = "klardrop"
       packageVersion = "1.0.0"
+      modules("jdk.unsupported")
+    }
+    buildTypes.release.proguard {
+      configurationFiles.from("rules.pro")
     }
   }
 }

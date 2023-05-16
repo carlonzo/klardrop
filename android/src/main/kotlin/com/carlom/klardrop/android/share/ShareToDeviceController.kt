@@ -1,4 +1,4 @@
-package com.carlom.klardrop.android
+package com.carlom.klardrop.android.share
 
 import com.carlom.klardrop.ActivityState
 import com.carlom.klardrop.DeviceUi

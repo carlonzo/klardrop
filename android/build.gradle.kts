@@ -20,6 +20,9 @@ dependencies {
   implementation("androidx.core:core-ktx:1.10.1")
   implementation(deps.dagger)
   kapt(deps.dagger.compiler)
+
+  debugImplementation("androidx.compose.ui:ui-tooling:1.4.3")
+  implementation("androidx.compose.ui:ui-tooling-preview:1.4.3")
 }
 
 android {

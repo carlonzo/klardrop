@@ -1,0 +1,2 @@
+-dontwarn io.ktor.events.**
+-dontwarn  org.slf4j.**

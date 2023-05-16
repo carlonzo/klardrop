@@ -1,13 +1,14 @@
 package com.carlom.klardrop
 
-import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateSizeAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,7 +28,7 @@ fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceActionListen
   Column(
     modifier = Modifier
       .padding(16.dp)
-      .sizeIn(maxWidth = 120.dp)
+      .sizeIn(maxWidth = 100.dp)
       .combinedClickable(
         onClick = {
           log("Device clicked ${deviceUi.deviceName}")
@@ -58,32 +59,37 @@ expect fun DeviceDiscovery(
 
 @Composable
 fun CircleDevice(deviceUi: DeviceUi) {
-
   val isSending = deviceUi.activityState is ActivityState.Sending
-  val targetCircleSize = if (isSending) 55.dp else 60.dp
+  val targetCircleSize = if (isSending) 60.dp else 70.dp
 
   val circleSize by animateDpAsState(targetValue = targetCircleSize)
 
-  if (isSending) {
-    val progress = (deviceUi.activityState as ActivityState.Sending).progressPercentage / 100.0f
-    CircularProgressIndicator(progress, modifier = Modifier.size(circleSize), color = Color.Blue)
+
+  Box(modifier = Modifier.size(circleSize)) {
+    if (isSending) {
+      val progress = (deviceUi.activityState as ActivityState.Sending).progressPercentage / 100.0f
+      CircularProgressIndicator(progress, modifier = Modifier.size(circleSize), color = Color.Blue)
+    }
+
+    Canvas(
+      modifier = Modifier.size(circleSize)
+    ) {
+      drawCircle(Color.LightGray, radius = (targetCircleSize / 2 - 5.dp).toPx())
+
+    }
   }
 
-  Canvas(
-    modifier = Modifier.size(circleSize)
-  ) {
-    drawCircle(Color.LightGray, radius = (targetCircleSize - 5.dp).toPx())
-
-  }
 }
 
 interface OnDeviceActionListener {
   fun onDeviceClick(deviceUi: DeviceUi) {
     throw IllegalStateException("Not implemented")
   }
+
   fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend) {
     throw IllegalStateException("Not implemented")
   }
+
   fun openFilePicker(deviceUi: DeviceUi) {
     throw IllegalStateException("Not implemented")
   }

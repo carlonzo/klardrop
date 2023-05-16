@@ -33,6 +33,13 @@ kotlin {
         implementation(compose.preview)
       }
     }
+
+    val androidMain by getting {
+      dependencies {
+        implementation(compose.preview)
+        implementation(compose.uiTooling)
+      }
+    }
   }
 }
 

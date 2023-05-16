@@ -1,7 +1,7 @@
 package com.carlom.klardrop.android.di
 
 import com.carlom.klardrop.android.MainActivity
-import com.carlom.klardrop.android.ShareToDeviceActivity
+import com.carlom.klardrop.android.share.ShareToDeviceActivity
 import com.carlom.klardrop.common.Klardrop
 import dagger.BindsInstance
 import dagger.Component

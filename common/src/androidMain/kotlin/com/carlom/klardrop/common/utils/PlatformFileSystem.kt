@@ -110,7 +110,7 @@ actual class PlatformFileSystem(private val context: Context) {
 
   actual suspend fun moveToStorage(filePath: String, mimeType: String?) {
     val file = File(filePath)
-    val fd = FileDescription(file.name, file.parent!!, mimeType)
+    val fd = FileDescription(file.name, "Klardrop", mimeType)
 
     val source = DocumentFile.fromFile(file)
 
