@@ -65,6 +65,7 @@ actual fun DeviceDiscovery(
         onDragExit = { dragging = false },
         onDrop = {
           dragging = false
+          @Suppress("MoveVariableDeclarationIntoWhen")
           val dragData = it.dragData
 
           when (dragData) {

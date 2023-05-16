@@ -27,7 +27,7 @@ fun DiscoveryDashboard(
 @Composable
 internal fun DiscoveryDashboard(
   modifier: Modifier,
-  devices: List<DeviceUi>,
+  devices: Collection<DeviceUi>,
   onDeviceActionListener: OnDeviceActionListener
 ) {
   Box(

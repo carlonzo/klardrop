@@ -2,7 +2,7 @@ package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.router.MessagesRouter
-import com.carlom.klardrop.common.persistence.KnownDevicesRepository
+import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -25,15 +25,15 @@ interface Client {
 class ClientImpl(
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
-  private val knownDevicesRepository: KnownDevicesRepository,
   private val messagesRouter: MessagesRouter,
   private val localPropertiesRepository: LocalPropertiesRepository,
   private val serializer: MessageSerializer,
+  private val visibleDevices: VisibleDevices
 ) : Client {
 
   private val clientScope = CoroutineScope(coroutines.ioDispatcher)
-  private val knownDevices =
-    knownDevicesRepository.knownDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
+  private val visibleDevicesFlow =
+    visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
   private val currentDeviceId =
     localPropertiesRepository.properties.map { it.deviceId }.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = "")
 
@@ -58,7 +58,7 @@ class ClientImpl(
       }
 
 
-      val deviceInfo = knownDevices.value[deviceId] ?: kotlin.run {
+      val deviceInfo = visibleDevicesFlow.value[deviceId] ?: kotlin.run {
         log("Client", "cant connect. Device $deviceId cant be found")
         return@withContext
       }

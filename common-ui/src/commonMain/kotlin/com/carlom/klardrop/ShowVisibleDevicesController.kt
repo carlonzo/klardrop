@@ -5,9 +5,9 @@ import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
+import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.VisibleDevices
-import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
 class ShowVisibleDevicesController(
   private val coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
-  private val knownDevicesRepository: KnownDevicesRepository,
   private val messenger: Messenger,
   private val platformFileSystem: PlatformFileSystem,
 ) : OnDeviceActionListener {
@@ -29,42 +28,20 @@ class ShowVisibleDevicesController(
   constructor(commonComponent: CommonComponent) : this(
     commonComponent.coroutines(),
     commonComponent.visibleDevices(),
-    commonComponent.knownDevicesRepository(),
     commonComponent.messenger(),
     commonComponent.platformFileSystem()
   )
 
   private val controllerScope = CoroutineScope(coroutines.mainDispatcher)
+  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices)
 
   val actionsFlow = MutableSharedFlow<ActionUi>()
-
-  val flow: Flow<List<DeviceUi>> = visibleDevices.visibleDevices
-    .combine(knownDevicesRepository.knownDevices) { visible, known ->
-      visible.map {
-        val deviceInfo = it.value
-        DeviceUi(
-          deviceInfo.deviceId,
-          deviceInfo.name,
-          it.value.deviceType,
-        )
-      }
-    }.stateIn(controllerScope, started = SharingStarted.Lazily, emptyList())
-
-  fun onDeviceKnownChanged(deviceId: String, markAsKnown: Boolean) {
-    controllerScope.launch(coroutines.ioDispatcher) {
-      if (markAsKnown) {
-        val deviceInfo = visibleDevices.getDeviceInfo(deviceId)!!
-        knownDevicesRepository.addKnownDevice(deviceInfo)
-      } else {
-        knownDevicesRepository.removeKnownDevice(deviceId)
-      }
-    }
-
-  }
+  val flow: Flow<Collection<DeviceUi>> = showDevicesHelper.devicesFlow
 
   private fun sendText(deviceId: String, text: String) {
     coroutines.appScope.launch {
       messenger.send(deviceId, TextMessage(text).toSimpleSendRequest())
+        .untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
     }
   }
 
@@ -78,7 +55,7 @@ class ShowVisibleDevicesController(
             fileData.fileSize,
             fileData.mimeType
           ).toSendRequest(filePath)
-        )
+        ).untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
       }
     }
   }
@@ -125,7 +102,11 @@ data class DeviceUi(
 
 sealed interface ActivityState {
 
-  object Idle : ActivityState
+  object Idle : ActivityState {
+    override fun toString(): String {
+      return "Idle"
+    }
+  }
 
   data class SentCompleted(val error: Boolean = false) : ActivityState
 //  data class ReceiveCompleted(val error: Boolean = false) : ActivityState

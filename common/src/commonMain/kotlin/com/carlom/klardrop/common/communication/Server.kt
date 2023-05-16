@@ -2,8 +2,8 @@ package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.router.MessagesRouter
+import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KlardropProperties
-import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -24,19 +24,17 @@ class Server(
   localPropertiesRepository: LocalPropertiesRepository,
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
-  knownDevicesRepository: KnownDevicesRepository,
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,
 ) {
 
   private val serverScope = CoroutineScope(coroutines.ioDispatcher)
-  private val knownDevices =
-    knownDevicesRepository.knownDevices.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
+
   private val properties =
     localPropertiesRepository.properties.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = KlardropProperties(""))
 
   private fun isAcceptedSender(deviceId: String, receiverAddress: String): Boolean {
-    return knownDevices.value.containsKey(deviceId)
+    return true // always accept for now. should only accept if known? or just hold the connection if known?
   }
 
   @Suppress("ExtractKtorModule")

@@ -54,10 +54,10 @@ class CommunicationModule(
     ClientImpl(
       connectionsPool(),
       coroutines,
-      knownDevicesRepository,
       incomingMessagesRouter(),
       localPropertiesRepository,
-      serializer
+      serializer,
+      visibleDevices
     )
   }
   private val server = SingletonProvider {
@@ -65,7 +65,6 @@ class CommunicationModule(
       localPropertiesRepository,
       connectionsPool(),
       coroutines,
-      knownDevicesRepository,
       incomingMessagesRouter(),
       serializer
     )
