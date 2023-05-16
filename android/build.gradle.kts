@@ -33,11 +33,18 @@ android {
     targetSdk = 33
     versionCode = 1
     versionName = "1.0-SNAPSHOT"
+    proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
   }
 
   buildTypes {
+
     getByName("release") {
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      signingConfig = signingConfigs.getByName("debug")
+    }
+
+    getByName("debug") {
+      signingConfig = signingConfigs.getByName("debug")
     }
   }
   android.packagingOptions.resources.pickFirsts.addAll(

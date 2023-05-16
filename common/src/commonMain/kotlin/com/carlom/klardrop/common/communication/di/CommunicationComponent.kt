@@ -18,7 +18,6 @@ import kotlinx.serialization.protobuf.ProtoBuf
 
 class CommunicationModule(
   private val coroutines: Coroutines,
-  private val knownDevicesRepository: KnownDevicesRepository,
   private val localPropertiesRepository: LocalPropertiesRepository,
   private val visibleDevices: VisibleDevices,
   private val protoBuf: ProtoBuf,

@@ -39,7 +39,6 @@ class CommonComponent(
   private val communicationModule by lazy {
     CommunicationModule(
       coroutines,
-      knownDevicesRepository,
       localProperties,
       discoveryModule.visibleDevices(),
       protoBuf,
