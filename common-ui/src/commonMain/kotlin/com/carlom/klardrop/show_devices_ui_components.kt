@@ -26,7 +26,7 @@ fun DiscoveryDashboard(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DiscoveryDashboard(
-  modifier: Modifier,
+  modifier: Modifier = Modifier,
   devices: Collection<DeviceUi>,
   onDeviceActionListener: OnDeviceActionListener
 ) {

@@ -12,8 +12,9 @@ kotlin {
 
   android()
   jvm("desktopJvm")
-  macosArm64()
+//  macosArm64()
   iosArm64()
+  iosSimulatorArm64()
 
   sourceSets {
 
