@@ -3,29 +3,40 @@ package com.carlom.klardrop.common
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
+import okio.Path.Companion.toPath
+import platform.Foundation.*
+import platform.UIKit.UIDevice
 
 actual class InternalPlatformDependencies {
   actual fun getRootPath(): String {
-    TODO("Not yet implemented")
+    return NSHomeDirectory()
   }
 
   actual fun getDeviceName(): String {
-    TODO("Not yet implemented")
+    return UIDevice.currentDevice.name
   }
 
   actual fun deviceType(): DeviceType {
-    TODO("Not yet implemented")
+    return DeviceType.MOBILE
   }
 
   actual fun getStoragePath(): Path {
-    TODO("Not yet implemented")
+    val downloadDirectory = NSFileManager.defaultManager.URLForDirectory(
+      directory = NSDownloadsDirectory,
+      inDomain = NSUserDomainMask,
+      appropriateForURL = null,
+      create = false,
+      error = null
+    )
+
+    return requireNotNull(downloadDirectory).path?.toPath()?.resolve("Klardrop")!!
   }
   actual fun getTempStoragePath(): Path {
-    TODO("Not yet implemented")
+    return NSTemporaryDirectory().toPath()
   }
 
   actual fun platformFileSystem(): PlatformFileSystem {
-    TODO("Not yet implemented")
+    return PlatformFileSystem()
   }
 
 

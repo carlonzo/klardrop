@@ -1,0 +1,56 @@
+package com.carlom.klardrop.common.utils
+
+import com.carlom.klardrop.common.persistence.CurrentFileSystem
+import kotlinx.cinterop.*
+import okio.BufferedSink
+import okio.BufferedSource
+import okio.Path.Companion.toPath
+import okio.buffer
+import platform.Foundation.*
+
+actual class PlatformFileSystem {
+
+  actual fun getReadStreamFromUri(uri: String): BufferedSource {
+    return CurrentFileSystem.source(uri.toPath()).buffer()
+  }
+
+  actual fun getResolvedFileData(uri: String): ResolvedFileData {
+
+    val nsFileManager = NSFileManager.defaultManager
+    memScoped {
+      val startError = alloc<ObjCObjectVar<NSError?>>()
+
+      val attributesFile = nsFileManager.attributesOfItemAtPath(uri, startError.ptr)!!
+
+      val error = startError.value
+      if (error != null) {
+        throw IllegalArgumentException("Got error in getResolvedFileData $error")
+      }
+
+      val fileSize = attributesFile[NSFileSize] as? Long ?: 0L
+      val fileName = nsFileManager.displayNameAtPath(uri)
+      val fileURL = NSURL.fileURLWithPath(uri)
+      val mimeType = getMimeTypeFromExtension(fileURL.pathExtension)
+
+      return ResolvedFileData(
+        fileName = fileName,
+        mimeType = mimeType,
+        fileSize = fileSize
+      )
+    }
+
+  }
+
+  actual fun getWriteStreamFromUri(uri: String): BufferedSink {
+    return CurrentFileSystem.sink(uri.toPath(), mustCreate = true).buffer()
+  }
+
+  actual fun delete(uri: String) {
+    NSFileManager.defaultManager.removeItemAtPath(uri, null)
+  }
+
+  actual suspend fun moveToStorage(filePath: String, mimeType: String?) {
+    // no-op
+  }
+
+}

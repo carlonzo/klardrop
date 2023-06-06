@@ -16,7 +16,9 @@ kotlin {
     }
     withJava()
   }
+
   sourceSets {
+
     val jvmMain by getting {
       dependencies {
         implementation(project(":common"))
@@ -26,6 +28,7 @@ kotlin {
       }
     }
     val jvmTest by getting
+
   }
 }
 

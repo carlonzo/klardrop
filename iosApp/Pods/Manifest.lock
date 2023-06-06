@@ -1,0 +1,16 @@
+PODS:
+  - common_ui (1.0.0)
+
+DEPENDENCIES:
+  - common_ui (from `../common-ui`)
+
+EXTERNAL SOURCES:
+  common_ui:
+    :path: "../common-ui"
+
+SPEC CHECKSUMS:
+  common_ui: 563be7f4e2c81c5e427fdd3b5537addbbbf3a1b9
+
+PODFILE CHECKSUM: aef38a0bb67b5cebbbe6b43bdff9c502bf6d93c9
+
+COCOAPODS: 1.12.1
