@@ -37,16 +37,15 @@ private fun generateNewFilePath(parentPath: Path, requestedFileName: String): Pa
 
   val match = regex.find(fileName)
 
-  if (match == null) {
-    return parentPath.resolve("$fileName (1).$extension")
+  return if (match == null) {
+    parentPath.resolve("$fileName (1).$extension")
   } else {
     match.groups[1]?.value?.toInt()?.let {
       val newNumber = it + 1
       val newFileName = fileName.replace("($it)", "($newNumber)")
-      return parentPath.resolve("$newFileName.$extension")
-    } ?: run {
-      return parentPath.resolve("$fileName (1).$extension")
-    }
+      parentPath.resolve("$newFileName.$extension")
+    } ?: parentPath.resolve("$fileName (1).$extension")
+
   }
 
 }

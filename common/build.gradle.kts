@@ -50,7 +50,12 @@ kotlin {
       }
     }
 
-    val desktopJvmMain by getting
+    val desktopJvmMain by getting{
+      dependencies {
+        implementation(deps.jmdns)
+//        implementation("org.slf4j:slf4j-simple:2.0.7") // for debug logs. remove
+      }
+    }
     val desktopJvmTest by getting
 
     val appleMain by getting

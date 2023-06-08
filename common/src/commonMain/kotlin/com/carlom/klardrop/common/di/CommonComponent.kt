@@ -71,4 +71,6 @@ class CommonComponent(
 
   fun platformFileSystem() = platformFileSystem
 
+  fun nearbyShare() = discoveryModule.nearbyShare()
+
 }

@@ -43,14 +43,14 @@ subprojects {
   }
 
   tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
-      kotlinOptions {
-        jvmTarget = javaVersion.toString()
-      }
+    kotlinOptions {
+      jvmTarget = javaVersion.toString()
+    }
   }
 
   tasks.withType<JavaCompile>().configureEach {
-     sourceCompatibility = javaVersion.toString()
-     targetCompatibility = javaVersion.toString()
+    sourceCompatibility = javaVersion.toString()
+    targetCompatibility = javaVersion.toString()
   }
 
 }

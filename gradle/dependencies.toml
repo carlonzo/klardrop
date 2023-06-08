@@ -48,6 +48,8 @@ dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = 
 
 simplestorage = { module = "com.anggrayudi:storage", version = "1.5.4" }
 
+jmdns = { module = "org.jmdns:jmdns", version = "3.5.8" }
+
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

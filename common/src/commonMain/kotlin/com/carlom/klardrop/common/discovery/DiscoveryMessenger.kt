@@ -13,19 +13,20 @@ import kotlinx.serialization.protobuf.ProtoBuf
 class DiscoveryMessenger(
   private val coroutines: Coroutines,
   private val localPropertiesRepository: LocalPropertiesRepository,
-  private val deviceName: String,
-  private val deviceType: DeviceType
+  private val currentDevice: CurrentDevice
 ) {
 
   private val protoBuf = ProtoBuf
   private var introMessage: ByteArray = byteArrayOf()
 
   init {
+
+
     coroutines.appScope.launch {
       localPropertiesRepository.properties.mapLatest { it.deviceId }
         .collect { deviceId ->
           introMessage = protoBuf.encodeToByteArray(
-            DiscoveryMessage(deviceId, deviceName, deviceType)
+            DiscoveryMessage(currentDevice.deviceId, currentDevice.deviceName, currentDevice.deviceType)
           )
 
           if (introMessage.size > 65500) {

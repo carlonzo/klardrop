@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
@@ -37,6 +38,10 @@ actual class InternalPlatformDependencies {
 
   actual fun platformFileSystem(): PlatformFileSystem {
     return PlatformFileSystem()
+  }
+
+  actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
+    return ServiceDiscoveryMdns()
   }
 
 

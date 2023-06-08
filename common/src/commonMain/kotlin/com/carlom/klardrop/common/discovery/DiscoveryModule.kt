@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.discovery
 
 import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.mdns.NearbyShare
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
@@ -26,10 +27,18 @@ internal class DiscoveryModule(
     DiscoveryNetwork(coroutines, discoveryMessenger(), visibleDevices(), socketBroadcastUtility())
   }
 
+  private val nearbyShare = SingletonProvider {
+    NearbyShare(
+      internalPlatformDependency.serviceDiscoveryMdns(),
+      internalPlatformDependency.getDeviceName(),
+      internalPlatformDependency.deviceType()
+    )
+  }
+
 
   private fun socketBroadcastUtility() = SocketBroadcastUtility(coroutines, NetworkAddressUtil())
   private fun discoveryMessenger() = discoveryMessenger.get()
   fun discoveryNetwork() = discoveryNetwork.get()
-
   fun visibleDevices() = visibleDevices.get()
+  fun nearbyShare() = nearbyShare.get()
 }

@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.UUIDGenerator
 import com.carlom.klardrop.common.utils.UtilsModule
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -21,10 +22,12 @@ class Klardrop(
     initProperties()
 
     // start discovery
-    commonComponent.discoveryNetwork().start()
+//    commonComponent.discoveryNetwork().start()
 
     // start server
     commonComponent.server().startServer()
+
+    commonComponent.nearbyShare().startDiscovery()
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()
