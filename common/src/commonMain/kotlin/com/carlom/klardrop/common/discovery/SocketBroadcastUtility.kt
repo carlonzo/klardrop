@@ -40,7 +40,6 @@ class SocketBroadcastUtility(
         continue
       }
 
-//      log("received from: ${receive.address}")
       send(receive)
     }
 

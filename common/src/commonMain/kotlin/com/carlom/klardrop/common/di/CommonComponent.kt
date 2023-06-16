@@ -4,7 +4,9 @@ import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileManagerImpl
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.di.CommunicationModule
+import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
+import com.carlom.klardrop.common.mdns.NearbyModule
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
@@ -35,6 +37,12 @@ class CommonComponent(
   private val coroutines: Coroutines by lazy { utilsModule.coroutines() }
   private val clock: Clock by lazy { utilsModule.clock() }
   private val protoBuf = ProtoBuf { }
+  private val currentDeviceProvider by lazy {
+    CurrentDeviceProvider(
+      localProperties,
+      internalPlatformDependency
+    )
+  }
 
   private val communicationModule by lazy {
     CommunicationModule(
@@ -46,9 +54,16 @@ class CommonComponent(
       fileManager
     )
   }
+
   private val discoveryModule by lazy {
     DiscoveryModule(
-      coroutines, localProperties, internalPlatformDependency, clock
+      coroutines, currentDeviceProvider, internalPlatformDependency, clock
+    )
+  }
+
+  private val nearbyModule by lazy {
+    NearbyModule(
+      coroutines, internalPlatformDependency, discoveryModule.serviceDiscoveryMdns(), currentDeviceProvider, visibleDevices(), fileManager
     )
   }
 
@@ -58,19 +73,17 @@ class CommonComponent(
   private val fileManager: FileManager
     get() = FileManagerImpl(platformFileSystem, internalPlatformDependency)
 
+
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
   fun server() = communicationModule.server()
   fun coroutines() = coroutines
-  fun localPropertiesRepository() = localProperties
-
   fun visibleDevices() = discoveryModule.visibleDevices()
-
-  fun knownDevicesRepository() = knownDevicesRepository
-
   fun messenger() = communicationModule.messenger()
 
   fun platformFileSystem() = platformFileSystem
 
-  fun nearbyShare() = discoveryModule.nearbyShare()
+  fun nearbyShare() = nearbyModule.nearbyShare()
+
+  fun nearbyServer() = nearbyModule.nearbyServer()
 
 }

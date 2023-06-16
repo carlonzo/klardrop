@@ -4,6 +4,7 @@ plugins {
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.serialization)
+  alias(deps.plugins.squareup.wire)
 }
 
 @OptIn(ExperimentalKotlinGradlePluginApi::class)
@@ -34,6 +35,7 @@ kotlin {
         implementation(deps.androidx.datastore.core)
         implementation(deps.androidx.datastore.core.okio)
         implementation(deps.kotlinx.serialization.protobuf)
+        implementation(deps.ukey2)
       }
     }
 
@@ -74,6 +76,11 @@ android {
   compileSdk = 33
   defaultConfig {
     minSdk = 23
+  }
+}
+
+wire {
+  kotlin {
   }
 }
 

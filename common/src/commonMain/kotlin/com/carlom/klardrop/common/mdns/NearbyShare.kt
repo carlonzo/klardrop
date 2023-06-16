@@ -1,10 +1,15 @@
 package com.carlom.klardrop.common.mdns
 
+import com.carlom.klardrop.common.discovery.CurrentDevice
+import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.DeviceInfo
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -12,16 +17,18 @@ import kotlin.random.Random
 
 class NearbyShare(
   private val serviceDiscoveryMdns: ServiceDiscoveryMdns,
-  deviceName: String,
-  private val deviceType: DeviceType,
+  private val currentDeviceProvider: CurrentDeviceProvider,
   private val visibleDevices: VisibleDevices,
-  private val coroutines: Coroutines
+  coroutines: Coroutines
 ) {
 
-  private val deviceName = "Klardrop $deviceName"
   private val nearbyShareScope = CoroutineScope(coroutines.mainDispatcher)
+  private val currentDevice = nearbyShareScope.async(coroutines.ioDispatcher) { currentDeviceProvider.get() }
+
+  private var publishingJob: Job? = null
 
   fun startDiscovery() {
+
     nearbyShareScope.launch {
 
       serviceDiscoveryMdns.discoverServices(serviceType).collect {
@@ -35,11 +42,11 @@ class NearbyShare(
       }
     }
 
-
   }
 
   fun startPublishingService(port: Int) {
-    nearbyShareScope.launch {
+    publishingJob?.cancel()
+    publishingJob = nearbyShareScope.launch {
       serviceDiscoveryMdns.registerService(
         buildServiceInfo(port)
       )
@@ -64,15 +71,12 @@ class NearbyShare(
     )
   }
 
-  private fun buildServiceInfo(port: Int): ServiceInfo {
-    val alphabet: List<Char> = ('a'..'z') + ('A'..'Z') + ('0'..'9')
+  private suspend fun buildServiceInfo(port: Int): ServiceInfo {
+    val currentDevice = currentDevice.await()
 
     val nameBytes = byteArrayOf(
       0x23.toByte(), // PCP
-      alphabet.random().code.toByte(), // endpoint
-      alphabet.random().code.toByte(),
-      alphabet.random().code.toByte(),
-      alphabet.random().code.toByte(),
+      *getDeviceEndpoint(currentDevice), // 4 bytes unique device id
       0xFC.toByte(), 0x9F.toByte(), 0x5E.toByte(), // Service ID hash
       0.toByte(), 0.toByte(),
     )
@@ -80,9 +84,10 @@ class NearbyShare(
 
     // urlsafe base64
     val name = urlSafeBase64EncodedString(nameBytes)
+    val deviceName = currentDevice.deviceName
 
     val endpointInfo = byteArrayOf(
-      (deviceTypeId shl 3).toByte(), // 0000 ddd0 (d == devicetype)
+      (deviceTypeId() shl 1).toByte(), // 0000 ddd0 (d == devicetype)
       *Random.nextBytes(16), // 16 bytes random
       deviceName.length.toByte(),
       *deviceName.encodeToByteArray()
@@ -96,21 +101,40 @@ class NearbyShare(
     )
   }
 
+  private fun getDeviceEndpoint(currentDevice: CurrentDevice): ByteArray {
+    val deviceId = currentDevice.deviceId
 
-  private val deviceTypeId: Int
-    get() = when (deviceType) {
+    return buildString {
+
+      deviceId.forEach {
+        while (length < 4) {
+          if (it.isLetterOrDigit()) {
+            append(it)
+          }
+        }
+      }
+
+    }.encodeToByteArray()
+  }
+
+  private suspend fun deviceTypeId(): Int {
+    return when (currentDevice.await().deviceType) {
       DeviceType.MOBILE -> 1
       DeviceType.TABLET -> 2
       DeviceType.DESKTOP -> 3
 //      else -> 0
     }
+  }
 
   private fun deviceTypeFromId(id: Int): DeviceType {
     return when (id) {
       1 -> DeviceType.MOBILE
       2 -> DeviceType.TABLET
       3 -> DeviceType.DESKTOP
-      else -> throw IllegalStateException("Unknown device type id: $id")
+      else -> {
+        log("NearbyShare", "Unknown device type id: $id")
+        DeviceType.MOBILE
+      }
     }
   }
 

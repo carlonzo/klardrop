@@ -47,9 +47,9 @@ actual class ServiceDiscoveryMdns() {
         }
 
         override fun serviceResolved(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceResolved: $event")
+          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inetAddresses.map { it.toString() }}")
           val attributes = txtByteToMap(event.info.textBytes)
-          val serviceInfo = ServiceInfo(event.info.port, event.info.name, event.info.type, attributes)
+          val serviceInfo = ServiceInfo(event.info.port, event.info.name, event.info.type, attributes, event.info.hostAddress)
 
           val newList = listServices.toMutableList()
           newList.add(serviceInfo)
@@ -108,14 +108,17 @@ actual class ServiceDiscoveryMdns() {
 
       jmdns.forEach { it.registerService(jmdnsServiceInfo) }
 
+      log("ServiceDiscoveryMdns", "publishing service: $serviceInfo")
+
       it.invokeOnCancellation {
         jmdns.forEach { it.unregisterService(jmdnsServiceInfo) }
       }
     }
 
+
   }
 
-  fun txtByteToMap(array: ByteArray): Map<String, String>{
+  private fun txtByteToMap(array: ByteArray): Map<String, String>{
     val list = mutableListOf<ByteArray>()
 
     fun getTxt(array: ByteArray, firstIndex: Int): ByteArray {

@@ -49,6 +49,7 @@ dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = 
 simplestorage = { module = "com.anggrayudi:storage", version = "1.5.4" }
 
 jmdns = { module = "org.jmdns:jmdns", version = "3.5.8" }
+ukey2 = { module = "com.carlom:ukey2-kmp", version = "1.0-SNAPSHOT" }
 
 
 [plugins]
@@ -60,3 +61,4 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
 jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "compose-plugin" }
+squareup-wire = {id= "com.squareup.wire", version = "4.7.0" }

@@ -3,7 +3,6 @@
     <option name="MAIN_CLASS_NAME" value="MainKt" />
     <module name="klardrop.desktop.jvmMain" />
     <shortenClasspath name="NONE" />
-    <option name="VM_PARAMETERS" value="-Dorg.slf4j.simpleLogger.defaultLogLevel=DEBUG" />
     <method v="2">
       <option name="Gradle.BeforeRunTask" enabled="true" tasks="build" externalProjectPath="$PROJECT_DIR$/desktop" vmOptions="" scriptParameters="" />
     </method>

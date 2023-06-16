@@ -59,7 +59,6 @@ expect fun DeviceDiscovery(
 
 @Composable
 fun CircleDevice(deviceUi: DeviceUi) {
-  println("composing circle device with $deviceUi")
   val isSending = deviceUi.activityState is ActivityState.Sending
   val targetCircleSize = if (isSending) 60.dp else 70.dp
 
