@@ -20,7 +20,7 @@ class NearbyModule(
   private val nearbyServer = SingletonProvider {
     NearbyShareServer(
       coroutines,
-      NearbyConnectionHandler(internalPlatformDependencies, fileManager, coroutines),
+      NearbyReceiverConnectionHandler(internalPlatformDependencies, fileManager, coroutines),
     )
   }
 
@@ -39,6 +39,15 @@ class NearbyModule(
 
   fun nearbyShare(): NearbyShare {
     return nearbyShare.get()
+  }
+
+  fun nearbyClient(): NearbyClient {
+    return NearbyClient(
+      coroutines,
+      currentDeviceProvider,
+      internalPlatformDependencies,
+      fileManager,
+    )
   }
 
 }

@@ -8,7 +8,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.NetworkInterface
-import java.util.concurrent.TimeUnit
 import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceListener
@@ -97,28 +96,36 @@ actual class ServiceDiscoveryMdns() {
 
     suspendCancellableCoroutine<Unit> {
 
-      val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
-        serviceInfo.serviceType,
-        serviceInfo.serviceName,
-        serviceInfo.port,
-        0,
-        0,
-        serviceInfo.attributes
-      )
+      val registrations = mutableListOf<Pair<JmDNS, javax.jmdns.ServiceInfo>>()
 
-      jmdns.forEach { it.registerService(jmdnsServiceInfo) }
+      jmdns.forEach { instance ->
+        val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
+          serviceInfo.serviceType,
+          serviceInfo.serviceName,
+          serviceInfo.port,
+          0,
+          0,
+          serviceInfo.attributes
+        )
+
+        instance.registerService(jmdnsServiceInfo)
+
+        registrations.add(instance to jmdnsServiceInfo)
+      }
 
       log("ServiceDiscoveryMdns", "publishing service: $serviceInfo")
 
       it.invokeOnCancellation {
-        jmdns.forEach { it.unregisterService(jmdnsServiceInfo) }
+        registrations.forEach { (jmdns, jmdnsServiceInfo) ->
+          jmdns.unregisterService(jmdnsServiceInfo)
+        }
       }
     }
 
 
   }
 
-  private fun txtByteToMap(array: ByteArray): Map<String, String>{
+  private fun txtByteToMap(array: ByteArray): Map<String, String> {
     val list = mutableListOf<ByteArray>()
 
     fun getTxt(array: ByteArray, firstIndex: Int): ByteArray {
@@ -127,7 +134,7 @@ actual class ServiceDiscoveryMdns() {
     }
 
     var index = 0
-    while (index<array.size) {
+    while (index < array.size) {
       val txt = getTxt(array, index)
       list.add(txt)
       index += txt.size + 1

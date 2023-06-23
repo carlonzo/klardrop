@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +33,7 @@ class MessengerImpl(
   private val connectionsPool: ConnectionsPool,
   private val client: Client,
   private val coroutines: Coroutines,
+  private val nearbyClient: NearbyClient,
 ) : Messenger {
 
   private val sendScope = CoroutineScope(coroutines.ioDispatcher)
@@ -44,29 +46,32 @@ class MessengerImpl(
 
       flow.emit(MessengerSendProgress.Pending)
 
-      //    skip if not visible
-      if (!visibleDevices.isDeviceVisible(deviceId)) {
-        log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
-        flow.emit(Error("$deviceId but it is not visible"))
-        return@launch
-      }
+//      //    skip if not visible
+//      if (!visibleDevices.isDeviceVisible(deviceId)) {
+//        log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
+//        flow.emit(Error("$deviceId but it is not visible"))
+//        return@launch
+//      }
+//
+//      // if there is no connection, create one
+//      if (!connectionsPool.isAvailable(deviceId)) {
+//        client.connectTo(deviceId)
+//      } else {
+//        log("Messenger", "Client has already a connection with $deviceId. skipping")
+//      }
+//
+//      log("Messenger", "Client sending message to $deviceId: ${messageRequest.message}")
+//
+//      val connectionMessenger = connectionsPool.getConnection(deviceId) ?: run {
+//        log("Messenger", "No connection available for $deviceId")
+//        flow.emit(Error("No connection available for $deviceId"))
+//        return@launch
+//      }
+//
+//      connectionMessenger.send(messageRequest, flow)
 
-      // if there is no connection, create one
-      if (!connectionsPool.isAvailable(deviceId)) {
-        client.connectTo(deviceId)
-      } else {
-        log("Messenger", "Client has already a connection with $deviceId. skipping")
-      }
 
-      log("Messenger", "Client sending message to $deviceId: ${messageRequest.message}")
-
-      val connectionMessenger = connectionsPool.getConnection(deviceId) ?: run {
-        log("Messenger", "No connection available for $deviceId")
-        flow.emit(Error("No connection available for $deviceId"))
-        return@launch
-      }
-
-      connectionMessenger.send(messageRequest, flow)
+      nearbyClient.
 
       flow.emit(Completed)
     }

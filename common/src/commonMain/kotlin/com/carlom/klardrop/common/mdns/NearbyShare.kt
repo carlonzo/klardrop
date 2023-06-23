@@ -81,17 +81,10 @@ class NearbyShare(
       0.toByte(), 0.toByte(),
     )
 
+    val endpointInfo = createEndpointInfo(currentDevice)
 
     // urlsafe base64
     val name = urlSafeBase64EncodedString(nameBytes)
-    val deviceName = currentDevice.deviceName
-
-    val endpointInfo = byteArrayOf(
-      (deviceTypeId() shl 1).toByte(), // 0000 ddd0 (d == devicetype)
-      *Random.nextBytes(16), // 16 bytes random
-      deviceName.length.toByte(),
-      *deviceName.encodeToByteArray()
-    )
 
     return ServiceInfo(
       port = port,
@@ -115,15 +108,6 @@ class NearbyShare(
       }
 
     }.encodeToByteArray()
-  }
-
-  private suspend fun deviceTypeId(): Int {
-    return when (currentDevice.await().deviceType) {
-      DeviceType.MOBILE -> 1
-      DeviceType.TABLET -> 2
-      DeviceType.DESKTOP -> 3
-//      else -> 0
-    }
   }
 
   private fun deviceTypeFromId(id: Int): DeviceType {
