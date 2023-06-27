@@ -46,9 +46,16 @@ actual class ServiceDiscoveryMdns() {
         }
 
         override fun serviceResolved(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inetAddresses.map { it.toString() }}")
+          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
           val attributes = txtByteToMap(event.info.textBytes)
-          val serviceInfo = ServiceInfo(event.info.port, event.info.name, event.info.type, attributes, event.info.hostAddress)
+
+          val serviceInfo = ServiceInfo(
+            port = event.info.port,
+            serviceName = event.info.nameWithoutNumber(),
+            serviceType = event.info.type,
+            attributes = attributes,
+            addresses = event.info.inet4Addresses.map { it.hostAddress }
+          )
 
           val newList = listServices.toMutableList()
           newList.add(serviceInfo)
@@ -150,6 +157,23 @@ actual class ServiceDiscoveryMdns() {
       val value = it.copyOfRange(split + 1, it.size)
 
       key.decodeToString() to value.decodeToString()
+    }
+  }
+
+  /**
+   * Jmdns append a number at the end of the name if there are 2 services with the same name.
+   * This method remove the number at the end of the name
+   *
+   * From "Izc3Nzf8n14AAA (2)" to "Izc3Nzf8n14AAA"
+   */
+  private fun javax.jmdns.ServiceInfo.nameWithoutNumber(): String{
+    val name = this.name
+
+    return if (name.endsWith(")")) {
+      val index = name.lastIndexOf("(")
+      name.substring(0, index).trimEnd()
+    }else{
+      name
     }
   }
 

@@ -3,6 +3,7 @@ import androidx.compose.runtime.Composable
 import com.carlom.klardrop.DeviceSmall
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.OnDeviceActionListener
+import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.utils.DeviceType.MOBILE
 
 @Preview
@@ -12,7 +13,8 @@ fun DevicePreview() {
     DeviceUi(
       deviceName = "Carlo's phone",
       deviceId = "1234567890",
-      deviceType = MOBILE
+      deviceType = MOBILE,
+      connectionTypes = listOf(DeviceConnection.DeviceConnectionType.KLARDROP, DeviceConnection.DeviceConnectionType.NEARBY)
     ),
     object : OnDeviceActionListener {
 

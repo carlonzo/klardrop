@@ -38,6 +38,8 @@ class NearbyClientConnectionHandler(
 
   suspend fun onConnection(connection: Socket) {
 
+    log("NearbyClientConnectionHandler", "Starting connection")
+
     try {
       val readChannel = connection.openReadChannel()
       val writeChannel = connection.openWriteChannel(autoFlush = true)
@@ -69,7 +71,7 @@ class NearbyClientConnectionHandler(
 
     // unknown first payload
     sendEncryptedWrappedPayload(
-      totalBytePayload = listOf(8, 1, 18, 11, 8, 7, 58, 7, 13, 0, 0, 0, 0, 16, 1).toByteArray().toByteString(),
+      payload = listOf(8, 1, 18, 11, 8, 7, 58, 7, 13, 0, 0, 0, 0, 16, 1).toByteArray(),
       writeChannel = writeChannel,
       nearbyConnection = nearbyConnection
     )
@@ -84,7 +86,7 @@ class NearbyClientConnectionHandler(
           log("initiateTransfer", "Trasnfering text message: ${textMessage}")
 
           sendEncryptedWrappedPayload(
-            totalBytePayload = textMessage.text.toByteArray().toByteString(),
+            payload = textMessage.text.toByteArray(),
             payloadType = PayloadTransferFrame.PayloadHeader.PayloadType.BYTES,
             payloadId = id,
             writeChannel = writeChannel,
@@ -128,7 +130,7 @@ class NearbyClientConnectionHandler(
       val offlineFrame = nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
 
       if (offlineFrame.v1?.type == V1Frame.FrameType.KEEP_ALIVE) {
-        delay(500)
+        delay(5000)
         continue
       }
 
@@ -196,7 +198,12 @@ class NearbyClientConnectionHandler(
       )
     )
 
-    sendEncryptedWrappedPayload(introductionTransferFrame, writeChannel, nearbyConnection)
+    val frame = Frame(
+      version = Frame.Version.V1,
+      v1 = introductionTransferFrame
+    )
+
+    sendEncryptedWrappedPayload(frame, writeChannel, nearbyConnection)
   }
 
   private suspend fun handleKeyPairExchange(
@@ -242,14 +249,24 @@ class NearbyClientConnectionHandler(
   }
 
   private suspend fun sendConnectionRequest(writeChannel: ByteWriteChannel) {
+    log("NearbyClientConnectionHandler", "Sending sendConnectionRequest")
     val currentDevice = currentDeviceProvider.get()
 
     val endpointInfo = createEndpointInfo(currentDevice)
 
+    val chars = listOf(('0'..'9'), ('A'..'Z')).flatten()
+    val endpointId = "${chars.random()}${chars.random()}${chars.random()}${chars.random()}"
+
     OfflineFrame(
+      version = OfflineFrame.Version.V1,
       v1 = V1Frame(
+        type = V1Frame.FrameType.CONNECTION_REQUEST,
         connection_request = ConnectionRequestFrame(
-          endpoint_info = endpointInfo.toByteString()
+          endpoint_id = endpointId,
+          endpoint_info = endpointInfo.toByteString(),
+          endpoint_name = endpointInfo.toByteString().toString(),
+          mediums = listOf(ConnectionRequestFrame.Medium.WIFI_LAN),
+          medium_metadata = MediumMetadata(wifi_lan_usable_channels = WifiLanUsableChannels())
         )
       )
     ).send(writeChannel)
@@ -258,27 +275,34 @@ class NearbyClientConnectionHandler(
   private suspend fun createConnection(readChannel: ByteReadChannel, writeChannel: ByteWriteChannel): D2DConnectionContext {
     val client = Ukey2Handshake.forInitiator(Ukey2Handshake.HandshakeCipher.P256_SHA512)
 
+    log("// Message 1 (Client Init)")
     // Message 1 (Client Init)
     var handshakeMessage = client.nextHandshakeMessage
     writeChannel.writeFullyNearby(handshakeMessage)
 
+    log("// Message 2 (Server Init)")
     // Message 2 (Server Init)
     handshakeMessage = readChannel.readByteArray()
     client.parseHandshakeMessage(handshakeMessage)
 
+    log("// Message 3 (Client Finish)")
     // Message 3 (Client Finish)
     handshakeMessage = client.nextHandshakeMessage
     writeChannel.writeFullyNearby(handshakeMessage)
 
+    log("getVerificationString")
     // Get the auth string
     val clientAuthString = client.getVerificationString(32)
 
+    log("verifyHandshake")
     // accept the handshake
     client.verifyHandshake()
 
+    log("send CONNECTION_RESPONSE")
     //send connection response
     // V1Frame{type=CONNECTION_RESPONSE, connection_response=ConnectionResponseFrame{status=0, response=ACCEPT, os_info=OsInfo{type=ANDROID}, multiplex_socket_bitmask=0}}
     OfflineFrame(
+      version = OfflineFrame.Version.V1,
       v1 = V1Frame(
         type = V1Frame.FrameType.CONNECTION_RESPONSE,
         connection_response = ConnectionResponseFrame(

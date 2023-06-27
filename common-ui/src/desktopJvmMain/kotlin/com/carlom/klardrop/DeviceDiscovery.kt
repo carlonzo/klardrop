@@ -3,12 +3,7 @@ package com.carlom.klardrop
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.PointerMatcher
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.onClick
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -93,6 +88,17 @@ actual fun DeviceDiscovery(
       ) {
 
         CircleDevice(deviceUi)
+
+        Spacer(modifier = Modifier.size(12.dp))
+
+        Column {
+          deviceUi.connectionTypes.forEach {
+            Text(
+              text = it.name,
+              color = Color.Black,
+            )
+          }
+        }
 
         Spacer(modifier = Modifier.size(16.dp))
 

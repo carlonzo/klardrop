@@ -5,7 +5,6 @@ import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
-import com.carlom.klardrop.common.utils.SingletonProvider
 
 class NearbyModule(
   private val coroutines: Coroutines,
@@ -17,14 +16,14 @@ class NearbyModule(
 ) {
 
 
-  private val nearbyServer = SingletonProvider {
+  private val nearbyServer by lazy {
     NearbyShareServer(
       coroutines,
       NearbyReceiverConnectionHandler(internalPlatformDependencies, fileManager, coroutines),
     )
   }
 
-  private val nearbyShare = SingletonProvider {
+  private val nearbyShare by lazy {
     NearbyShare(
       serviceDiscoveryMdns,
       currentDeviceProvider,
@@ -34,11 +33,11 @@ class NearbyModule(
   }
 
   fun nearbyServer(): NearbyShareServer {
-    return nearbyServer.get()
+    return nearbyServer
   }
 
   fun nearbyShare(): NearbyShare {
-    return nearbyShare.get()
+    return nearbyShare
   }
 
   fun nearbyClient(): NearbyClient {

@@ -4,15 +4,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.byteArrayPreferencesKey
 import androidx.datastore.preferences.core.edit
+import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.utils.Coroutines
-import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -58,11 +55,3 @@ internal class KnownDevicesRepositoryImpl(
     }
   }
 }
-
-@Serializable
-data class DeviceInfo(
-  val deviceId: String,
-  val lastAddress: String,
-  val name: String,
-  val deviceType: DeviceType
-)

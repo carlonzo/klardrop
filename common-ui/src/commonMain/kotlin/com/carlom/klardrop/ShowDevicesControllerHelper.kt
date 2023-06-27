@@ -25,11 +25,13 @@ class ShowDevicesControllerHelper(
   init {
     coroutineScope.launch {
       visibleDevices.visibleDevices.map {
-        it.values.map { deviceInfo ->
+        it.values.map { device ->
+          val deviceInfo = device.deviceInfo
           DeviceUi(
-            deviceInfo.deviceId,
-            deviceInfo.name,
-            deviceInfo.deviceType
+            deviceId = deviceInfo.deviceId,
+            deviceName = deviceInfo.name,
+            deviceType = deviceInfo.deviceType,
+            connectionTypes = device.deviceConnections.map { it.deviceConnectionType },
           )
         }
       }.collect { _devicesFlow.emit(it.associateBy { device -> device.deviceId }.toMutableMap()) }

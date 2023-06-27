@@ -66,10 +66,13 @@ internal suspend fun D2DConnectionContext.receiveEncryptedOfflineMessage(
   // todo recursive read buffer for byes payload
   val offlineFrame = decodeMessageFromPeer(readChannel.readByteArray()).let { OfflineFrame.ADAPTER.decode(it) }
 
-  // if message received here was a keep alive, reply and read again
+  // if message received here was a keep alive, reply and read again if is not and ack
   if (offlineFrame.v1?.type == V1Frame.FrameType.KEEP_ALIVE) {
-    log("NearbyReceiverConnectionHandler", "Received keep alive. Replying")
-    replyKeepAlive(writeChannel, this)
+    log("NearbyReceiverConnectionHandler", "Received keep alive with ack: ${offlineFrame.v1.keep_alive?.ack}")
+
+    if (offlineFrame.v1.keep_alive?.ack == false) {
+      replyKeepAlive(writeChannel, this)
+    }
 
     return receiveEncryptedOfflineMessage(readChannel, writeChannel)
   }
@@ -83,13 +86,17 @@ internal suspend fun D2DConnectionContext.receiveEncryptedOfflineMessage(
   val header = offlineFrame.v1?.payload_transfer?.payload_header
   require(header != null) { "Payload header not found: $offlineFrame" }
 
-  return if (header.type != BYTES) {
+  val msg =  if (header.type != BYTES) {
     offlineFrame
   } else {
     val chunkBody = offlineFrame.v1.payload_transfer.payload_chunk?.body
     require(chunkBody != null) { "Payload chunk not found" }
     recursiveReadOfflineFrame(readChannel, offlineFrame, header.id, chunkBody.toByteArray())
   }
+
+  log("NearbyReceiverConnectionHandler", "receiveEncryptedOfflineMessage: Received message: $msg")
+
+  return msg
 }
 
 private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
@@ -215,34 +222,33 @@ internal suspend fun sendEncryptedWrappedPayload(
   payloadType: PayloadHeader.PayloadType = BYTES,
   payloadId: Long = Random.nextLong()
 ) {
-  sendEncryptedWrappedPayload(frame.encodeByteString(), writeChannel, nearbyConnection, payloadType, payloadId)
+  sendEncryptedWrappedPayload(frame.encode(), writeChannel, nearbyConnection, payloadType, payloadId)
 }
 
 internal suspend fun sendEncryptedWrappedPayload(
-  totalBytePayload: ByteString,
+  payload: ByteArray,
   writeChannel: ByteWriteChannel,
   nearbyConnection: D2DConnectionContext,
   payloadType: PayloadHeader.PayloadType = BYTES,
   payloadId: Long = Random.nextLong()
 ) {
 
-  val totalSize = totalBytePayload.size
+  val totalSize = payload.size
   val totalSizeLong = totalSize.toLong()
   val parts = ceil(totalSize.toFloat() / SANE_FRAME_LENGTH).roundToInt()
 
   (0 until parts).forEach { chunkIndex ->
 
     val sizeStartRange = (chunkIndex * SANE_FRAME_LENGTH)
-    val sizeEndRange = min(totalSize, (chunkIndex + 1) * SANE_FRAME_LENGTH)
-
-    val chunkBody = totalBytePayload.substring(sizeStartRange, sizeEndRange)
-    println("Sending chunk $chunkIndex range $sizeStartRange - $sizeEndRange. chunkBody ${chunkBody.size} total size $totalSize")
+    val size = min(SANE_FRAME_LENGTH, totalSize - sizeStartRange)
+    val chunk =  payload.toByteString(sizeStartRange, size)
+    println("Sending chunk $chunkIndex chunkBody from:sizeStartRange size: ${size} chunkSize: ${chunk.size} total size $totalSize")
 
     sendChunkWrappedPayload(
       totalSize = totalSizeLong,
       payloadId = payloadId,
       offset = sizeStartRange.toLong(),
-      bodyChunk = totalBytePayload.substring(sizeStartRange, sizeEndRange),
+      bodyChunk = chunk,
       payloadType = payloadType,
       writeChannel = writeChannel,
       nearbyConnection = nearbyConnection
@@ -274,25 +280,28 @@ internal suspend fun sendEncryptedWrappedPayload(
   val parts = ceil(totalSize.toFloat() / SANE_FRAME_LENGTH).roundToInt()
   val readBuffer = Buffer()
 
+  var sentOffset = 0L
   (0 until parts).forEach { chunkIndex ->
 
-    val sizeStartRange = chunkIndex * SANE_FRAME_LENGTH
-    val sizeEndRange = min(totalSize.toInt(), (chunkIndex + 1) * SANE_FRAME_LENGTH)
+    val sizeStartRange = (chunkIndex * SANE_FRAME_LENGTH)
+    val size = min(SANE_FRAME_LENGTH, totalSize.toInt() - sizeStartRange)
 
-    bufferedSource.fillBuffer(readBuffer, (sizeEndRange - sizeStartRange).toLong())
+    bufferedSource.fillBuffer(readBuffer, size.toLong())
 
     val chunkBody = readBuffer.readByteString()
-    println("Sending chunk $chunkIndex range $sizeStartRange - $sizeEndRange. chunkBody ${chunkBody.size} total size $totalSize")
+    println("Sending chunk $chunkIndex range $sizeStartRange chunkBody ${chunkBody.size} total size $totalSize")
 
     sendChunkWrappedPayload(
       totalSize = totalSize,
       payloadId = payloadId,
-      offset = sizeStartRange.toLong(),
+      offset = sentOffset,
       bodyChunk = chunkBody,
       payloadType = payloadType,
       writeChannel = writeChannel,
       nearbyConnection = nearbyConnection
     )
+
+    sentOffset += chunkBody.size
   }
 
   // send last chuck

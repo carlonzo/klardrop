@@ -41,6 +41,10 @@ class NearbyReceiverConnectionHandler(
 
       // connection request
       val connectionRequest = readChannel.readByteArray().let { OfflineFrame.ADAPTER.decode(it) }
+
+      val msg = connectionRequest.toString()
+      log("NearbyReceiverConnectionHandler", "Connection request received ${msg.substring(0, msg.length / 2)}")
+      log("NearbyReceiverConnectionHandler", "Connection request received ${msg.substring(msg.length / 2)}")
       processConnectionRequest(connectionRequest)
 
       val nearbyConnection = createConnection(readChannel, writeChannel)
@@ -253,7 +257,7 @@ class NearbyReceiverConnectionHandler(
     log("NearbyReceiverConnectionHandler", "Sent connection response")
 
 
-  //receive keypair
+    //receive keypair
     val keyPairSetupFrame = receiveTransferSetupFrame(nearbyConnection, readChannel, writeChannel)
     log("NearbyReceiverConnectionHandler", "Received keypair $keyPairSetupFrame")
 
@@ -282,7 +286,8 @@ class NearbyReceiverConnectionHandler(
     nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
       .let { offline ->
         val paylod = offline.v1?.payload_transfer?.payload_chunk!!
-        log("NearbyReceiverConnectionHandler", "Received key result: ${Frame.ADAPTER.decode(paylod.body!!) }}") }
+        log("NearbyReceiverConnectionHandler", "Received key result: ${Frame.ADAPTER.decode(paylod.body!!)}}")
+      }
 
 
     log("NearbyReceiverConnectionHandler", "Sending paired encryption completed")

@@ -7,6 +7,7 @@ import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.di.CommonComponent
+import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
@@ -97,7 +98,8 @@ data class DeviceUi(
   val deviceId: String,
   val deviceName: String,
   val deviceType: DeviceType,
-  val activityState: ActivityState = ActivityState.Idle
+  val activityState: ActivityState = ActivityState.Idle,
+  val connectionTypes: List<DeviceConnection.DeviceConnectionType>
 )
 
 sealed interface ActivityState {

@@ -34,6 +34,7 @@ class ClientImpl(
   private val clientScope = CoroutineScope(coroutines.ioDispatcher)
   private val visibleDevicesFlow =
     visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
+
   private val currentDeviceId =
     localPropertiesRepository.properties.map { it.deviceId }.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = "")
 
@@ -58,54 +59,81 @@ class ClientImpl(
       }
 
 
-      val deviceInfo = visibleDevicesFlow.value[deviceId] ?: kotlin.run {
+      val discoveryDevice = visibleDevicesFlow.value[deviceId] ?: kotlin.run {
         log("Client", "cant connect. Device $deviceId cant be found")
         return@withContext
       }
 
-      log("Client","Connecting to $deviceId, ${deviceInfo.lastAddress}")
+      val connections = discoveryDevice.getKlardropConnection()
+
+      require(connections.isNotEmpty()) {
+        "Cant connect to $deviceId. KLARDROP connection is not available"
+      }
+
 
       val connectionJob = CompletableDeferred<Boolean>()
 
       coroutines.appScope.launch {
-        client.webSocket(
-          method = HttpMethod.Get,
-          host = deviceInfo.lastAddress,
-          port = SERVER_PORT,
-          path = "/connect"
-        ) {
-          log("Client", "Connected to $deviceInfo. Sending greetings")
-          val introEnvelope = HandshakeMessage(currentDeviceId.value)
 
-          send(serializer.serialize(introEnvelope))
+        connections.forEach { connection ->
+          val address = connection.address
 
-          log("Client", "Waiting for response greetings from $deviceId")
-          val serverIntroEnvelope = serializer.deserialize(incoming.receive()) as HandshakeMessage
+          log("Client", "Connecting to $deviceId with address $address")
 
-          if (serverIntroEnvelope.deviceId == deviceId) {
-            val connection = Connection(this, deviceId)
-            val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
-
-            connectionsPool.updateConnection(deviceId, connectionMessenger)
-            log("Client", "Connection established with ${serverIntroEnvelope.deviceId}")
-
-            connectionJob.complete(true)
-
-            connectionMessenger.acceptIncomingMessages()
-
-            // suspends so the connection is kept alive
-            log("Client", "closing reason: ${closeReason.await()}")
-          } else {
-            connectionJob.complete(false)
-            log("Client", "cant connect. Device $deviceId found is wrong: ${introEnvelope.deviceId}")
-          }
+          estabilishConnection(address, deviceId, connectionJob)
+            .onSuccess {
+              // if connected, return
+              return@forEach
+            }
+            .onFailure {
+              log("Client", "Failed to connect to $deviceId with address $address", it)
+            }
 
         }
+
       }
 
       log("Client", "Awaiting for client to finish connection")
       val await = connectionJob.await()
       log("Client", "On client finished connection: $await")
+    }
+
+  }
+
+  private suspend fun estabilishConnection(address: String, deviceId: String, connectionJob: CompletableDeferred<Boolean>) = runCatching {
+
+    client.webSocket(
+      method = HttpMethod.Get,
+      host = address,
+      port = SERVER_PORT,
+      path = "/connect"
+    ) {
+      log("Client", "Connected to $address. Sending greetings")
+      val introEnvelope = HandshakeMessage(currentDeviceId.value)
+
+      send(serializer.serialize(introEnvelope))
+
+      log("Client", "Waiting for response greetings from $deviceId")
+      val serverIntroEnvelope = serializer.deserialize(incoming.receive()) as HandshakeMessage
+
+      if (serverIntroEnvelope.deviceId == deviceId) {
+        val connection = Connection(this, deviceId)
+        val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
+
+        connectionsPool.updateConnection(deviceId, connectionMessenger)
+        log("Client", "Connection established with ${serverIntroEnvelope.deviceId}")
+
+        connectionJob.complete(true)
+
+        connectionMessenger.acceptIncomingMessages()
+
+        // suspends so the connection is kept alive
+        log("Client", "closing reason: ${closeReason.await()}")
+      } else {
+        connectionJob.complete(false)
+        log("Client", "cant connect. Device $deviceId found is wrong: ${introEnvelope.deviceId}")
+      }
+
     }
 
   }

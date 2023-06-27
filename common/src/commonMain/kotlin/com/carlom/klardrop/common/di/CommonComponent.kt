@@ -51,7 +51,8 @@ class CommonComponent(
       discoveryModule.visibleDevices(),
       protoBuf,
       clock,
-      fileManager
+      fileManager,
+      nearbyModule.nearbyClient()
     )
   }
 

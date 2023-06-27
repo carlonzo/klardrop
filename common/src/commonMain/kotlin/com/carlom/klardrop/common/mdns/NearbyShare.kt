@@ -1,9 +1,6 @@
 package com.carlom.klardrop.common.mdns
 
-import com.carlom.klardrop.common.discovery.CurrentDevice
-import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
-import com.carlom.klardrop.common.discovery.VisibleDevices
-import com.carlom.klardrop.common.persistence.DeviceInfo
+import com.carlom.klardrop.common.discovery.*
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
@@ -13,7 +10,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
-import kotlin.random.Random
 
 class NearbyShare(
   private val serviceDiscoveryMdns: ServiceDiscoveryMdns,
@@ -33,11 +29,19 @@ class NearbyShare(
 
       serviceDiscoveryMdns.discoverServices(serviceType).collect {
 
-        it.map { serviceInfo ->
-          serviceInfo.toDeviceInfo()
-        }.forEach { deviceInfo ->
-          visibleDevices.onNewDeviceVisible(deviceInfo)
+        log("NearbyShare", "Discovered services: $it")
+
+        it.mapNotNull { serviceInfo ->
+          if (serviceInfo.addresses.isNullOrEmpty()) {
+            log("NearbyShare", "Ignoring discovered device $it because it has no addresses")
+            null
+          } else {
+            serviceInfo.toDeviceInfo() to DeviceConnection.Nearby(serviceInfo.addresses.first(), serviceInfo.port)
+          }
         }
+          .forEach { (deviceInfo, deviceConnection) ->
+            visibleDevices.onNewDeviceVisible(deviceInfo, deviceConnection)
+          }
 
       }
     }
@@ -67,7 +71,6 @@ class NearbyShare(
       name = deviceName,
       deviceId = serviceName,
       deviceType = deviceType,
-      lastAddress = address ?: "",
     )
   }
 

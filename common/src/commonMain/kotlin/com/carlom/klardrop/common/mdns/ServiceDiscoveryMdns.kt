@@ -14,7 +14,7 @@ class ServiceInfo(
   val serviceName: String,
   val serviceType: String,
   val attributes: Map<String, String>,
-  val address: String? = null
+  val addresses: List<String>? = null
 ){
   override fun toString(): String {
     return "ServiceInfo(port=$port, serviceName='$serviceName', serviceType='$serviceType', attributes=$attributes)"
