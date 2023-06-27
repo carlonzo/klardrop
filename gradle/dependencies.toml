@@ -1,11 +1,12 @@
 [versions]
 agp = "7.4.1"
-kotlin = "1.8.20"
-coroutines = "1.6.4" # waiting for https://github.com/ktorio/ktor/pull/3609
+kotlin = "1.8.21"
+coroutines = "1.7.1"
 serialization = "1.5.1"
-compose-plugin = "1.5.0-dev1063"
+compose-plugin = "1.5.0-dev1080"
+compose-compiler = "1.4.7" # https://github.com/JetBrains/compose-multiplatform/blob/master/gradle-plugins/compose/src/main/kotlin/org/jetbrains/compose/ComposeCompilerCompatibility.kt
 okio = "3.3.0"
-ktor = "2.3.0"
+ktor = "2.3.2-eap-701"
 datastore = "1.1.0-alpha04"
 dagger = "2.46.1"
 
@@ -46,7 +47,7 @@ ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging", versio
 dagger = { module = "com.google.dagger:dagger", version.ref = "dagger" }
 dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = "dagger" }
 
-simplestorage = { module = "com.anggrayudi:storage", version = "1.5.4" }
+simplestorage = { module = "com.anggrayudi:storage", version = "1.5.5" }
 
 jmdns = { module = "org.jmdns:jmdns", version = "3.5.8" }
 ukey2 = { module = "com.carlom:ukey2-kmp", version = "1.0-SNAPSHOT" }

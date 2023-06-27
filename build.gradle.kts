@@ -1,4 +1,5 @@
 import com.android.build.gradle.internal.dsl.BaseAppModuleExtension
+import org.jetbrains.compose.ComposeExtension
 
 group "com.carlom.klardrop"
 version "1.0-SNAPSHOT"
@@ -17,6 +18,7 @@ allprojects {
     google()
     mavenCentral()
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+    maven("https://maven.pkg.jetbrains.space/public/p/ktor/eap")
     mavenLocal()
   }
 }
@@ -40,6 +42,12 @@ subprojects {
         sourceCompatibility = javaVersion
         targetCompatibility = javaVersion
       }
+    }
+  }
+
+  pluginManager.withPlugin("org.jetbrains.compose") {
+    configure<ComposeExtension> {
+      kotlinCompilerPlugin.set(deps.versions.compose.compiler)
     }
   }
 
