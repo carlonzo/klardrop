@@ -5,7 +5,7 @@ coroutines = "1.6.4" # waiting for https://github.com/ktorio/ktor/pull/3609
 serialization = "1.5.1"
 compose-plugin = "1.5.0-dev1063"
 okio = "3.3.0"
-ktor = "2.3.0"
+ktor = "2.3.1"
 datastore = "1.1.0-alpha04"
 dagger = "2.46.1"
 
