@@ -6,7 +6,7 @@ serialization = "1.5.1"
 compose-plugin = "1.5.0-dev1080"
 compose-compiler = "1.4.7" # https://github.com/JetBrains/compose-multiplatform/blob/master/gradle-plugins/compose/src/main/kotlin/org/jetbrains/compose/ComposeCompilerCompatibility.kt
 okio = "3.3.0"
-ktor = "2.3.2-eap-701"
+ktor = "2.3.2-eap-703"
 datastore = "1.1.0-alpha04"
 dagger = "2.46.1"
 
