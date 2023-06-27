@@ -46,7 +46,7 @@ ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging", versio
 dagger = { module = "com.google.dagger:dagger", version.ref = "dagger" }
 dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = "dagger" }
 
-simplestorage = { module = "com.anggrayudi:storage", version = "1.5.4" }
+simplestorage = { module = "com.anggrayudi:storage", version = "1.5.5" }
 
 
 [plugins]
