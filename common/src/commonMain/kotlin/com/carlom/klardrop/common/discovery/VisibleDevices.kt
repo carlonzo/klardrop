@@ -46,7 +46,6 @@ internal class VisibleDevicesImpl(
 //    Ticker to clean the visible devices every [TTL_VISIBLE_DEVICES]
     coroutines.appScope.launch {
       tickerFlow(delayDuration = 10.seconds)
-        .onEach { }
         .flowOn(coroutines.ioDispatcher)
         .collect {
           mutex.withLock {

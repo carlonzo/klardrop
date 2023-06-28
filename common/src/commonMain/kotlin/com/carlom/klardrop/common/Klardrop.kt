@@ -1,10 +1,11 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.di.CommonComponent
+import com.carlom.klardrop.common.mdns.NearbyModule
 import com.carlom.klardrop.common.persistence.di.StorageModule
-import com.carlom.klardrop.common.utils.UUIDGenerator
 import com.carlom.klardrop.common.utils.UtilsModule
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
 class Klardrop(
@@ -14,32 +15,32 @@ class Klardrop(
 ) {
 
   lateinit var commonComponent: CommonComponent
+  private val appScope by lazy { commonComponent.coroutines().appScope }
 
   fun init() {
     commonComponent = CommonComponent(storageModule, utilsModule, internalPlatformDependency)
-
-    initProperties()
 
     // start discovery
     commonComponent.discoveryNetwork().start()
 
     // start server
     commonComponent.server().startServer()
+
+
+    // start nearby share
+    appScope.launch(commonComponent.coroutines().ioDispatcher) {
+      commonComponent.nearbyServer().start()
+
+      commonComponent.nearbyServer().status
+        .filter { it.isRunning }
+        .collect {
+          commonComponent.nearbyShare().startPublishingService(it.port)
+        }
+    }
+
+    commonComponent.nearbyShare().startDiscovery()
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()
-
-
-  private fun initProperties() {
-    commonComponent.coroutines().appScope.launch {
-      val localProperties = commonComponent.localPropertiesRepository()
-
-      val initialProperties = localProperties.properties.first()
-      if (initialProperties.deviceId.isEmpty()) {
-        localProperties.save(initialProperties.copy(deviceId = UUIDGenerator().generate()))
-      }
-    }
-
-  }
 
 }

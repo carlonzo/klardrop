@@ -1,9 +1,12 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
 import okio.Path.Companion.toPath
+
 
 actual class InternalPlatformDependencies {
 
@@ -14,7 +17,7 @@ actual class InternalPlatformDependencies {
   }
 
   actual fun getDeviceName(): String {
-    return ProcessBuilder("hostname").start().inputStream.use { it.bufferedReader().readText().trim() }
+    return readFromBash("hostname")
   }
 
   actual fun deviceType(): DeviceType {
@@ -33,4 +36,21 @@ actual class InternalPlatformDependencies {
     return PlatformFileSystem(this)
   }
 
+  actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
+    return ServiceDiscoveryMdns()
+  }
+
+  actual fun osType(): OsType {
+    val os = System.getProperty("os.name", "generic").lowercase()
+    return when {
+      os.contains("mac") || os.contains("darwin") -> OsType.APPLE
+      os.contains("win") -> OsType.WINDOWS
+      os.contains("nux") -> OsType.LINUX
+      else -> OsType.UNKNOWN
+    }
+  }
+
+  private fun readFromBash(vararg command: String): String {
+    return ProcessBuilder(*command).start().inputStream.use { it.bufferedReader().readText().trim() }
+  }
 }

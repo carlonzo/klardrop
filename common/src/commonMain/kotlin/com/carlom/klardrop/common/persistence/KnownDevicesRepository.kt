@@ -39,7 +39,6 @@ internal class KnownDevicesRepositoryImpl(
         deviceInfo.deviceId to deviceInfo
       }.toMap()
     }.onStart { emptyMap<String, DeviceInfo>() }
-    .onEach { log("Knowndevices. emitting: $it") }
 
   override suspend fun addKnownDevice(deviceInfo: DeviceInfo) {
     withContext(coroutines.ioDispatcher) {

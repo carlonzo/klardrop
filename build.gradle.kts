@@ -19,6 +19,7 @@ allprojects {
     mavenCentral()
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
     maven("https://maven.pkg.jetbrains.space/public/p/ktor/eap")
+    mavenLocal()
   }
 }
 
@@ -51,14 +52,14 @@ subprojects {
   }
 
   tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
-      kotlinOptions {
-        jvmTarget = javaVersion.toString()
-      }
+    kotlinOptions {
+      jvmTarget = javaVersion.toString()
+    }
   }
 
   tasks.withType<JavaCompile>().configureEach {
-     sourceCompatibility = javaVersion.toString()
-     targetCompatibility = javaVersion.toString()
+    sourceCompatibility = javaVersion.toString()
+    targetCompatibility = javaVersion.toString()
   }
 
 }

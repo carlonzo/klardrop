@@ -1,6 +1,8 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
 
@@ -11,4 +13,6 @@ expect class InternalPlatformDependencies {
   fun getStoragePath(): Path
   fun getTempStoragePath(): Path
   fun platformFileSystem(): PlatformFileSystem
+  fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
+  fun osType(): OsType
 }

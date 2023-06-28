@@ -28,14 +28,19 @@ class FileManagerImpl(
     private val destinationPath: Path,
     private val mimeType: String?
   ) : FileTransfer {
-    override val bufferedSink: BufferedSink
-      get() = platformFileSystem.getWriteStreamFromUri(destinationPath.toString())
+    override val bufferedSink: BufferedSink by lazy { platformFileSystem.getWriteStreamFromUri(destinationPath.toString()) }
 
     override suspend fun onTransferCompleted() {
+      bufferedSink.flush()
+      bufferedSink.close()
+
       platformFileSystem.moveToStorage(destinationPath.toString(), mimeType)
     }
 
     override suspend fun onTransferFailed() {
+      bufferedSink.flush()
+      bufferedSink.close()
+
       platformFileSystem.delete(destinationPath.toString())
     }
 
