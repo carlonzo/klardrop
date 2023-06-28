@@ -6,11 +6,11 @@ import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.log
+import com.carlonzo.ukey2.Ukey2Handshake
+import com.carlonzo.ukey2.d2d.D2DConnectionContext
 import com.google.location.nearby.connections.proto.*
 import com.google.security.cryptauth.lib.securegcm.DeviceType
-import com.google.security.cryptauth.lib.securegcm.Ukey2Handshake
 import com.squareup.wire.Message
-import d2d.D2DConnectionContext
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
@@ -164,7 +164,7 @@ class NearbyConnectionHandler(
     log("NearbyConnectionHandler", "Client Init received")
 
     // Message 2 (Server Init)
-    val nextHandshakeMessage = server.nextHandshakeMessage
+    val nextHandshakeMessage = server.getNextHandshakeMessage()
     writeChannel.writeFullyNearby(nextHandshakeMessage)
     log("NearbyConnectionHandler", "Server Init sent")
 

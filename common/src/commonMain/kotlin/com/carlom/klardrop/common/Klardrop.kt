@@ -20,11 +20,11 @@ class Klardrop(
   fun init() {
     commonComponent = CommonComponent(storageModule, utilsModule, internalPlatformDependency)
 
-//    // start discovery
-//    commonComponent.discoveryNetwork().start()
-//
-//    // start server
-//    commonComponent.server().startServer()
+    // start discovery
+    commonComponent.discoveryNetwork().start()
+
+    // start server
+    commonComponent.server().startServer()
 
 
     // start nearby share
