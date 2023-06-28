@@ -4,13 +4,13 @@ import com.carlom.klardrop.common.discovery.CurrentDevice
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.log
+import com.carlonzo.ukey2.d2d.D2DConnectionContext
 import com.google.location.nearby.connections.proto.*
 import com.google.location.nearby.connections.proto.PayloadTransferFrame.PacketType.DATA
 import com.google.location.nearby.connections.proto.PayloadTransferFrame.PayloadHeader
 import com.google.location.nearby.connections.proto.PayloadTransferFrame.PayloadHeader.PayloadType.BYTES
 import com.squareup.wire.Message
 import com.squareup.wire.ProtoAdapter
-import d2d.D2DConnectionContext
 import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
 import okio.*
@@ -141,7 +141,7 @@ private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
 
 }
 
-internal suspend fun ByteReadChannel.readNearbyFully(sink: Sink) {
+private suspend fun ByteReadChannel.readNearbyFully(sink: Sink) {
 
   val channel = this
   sink.buffer().use { buffer ->
@@ -182,6 +182,7 @@ internal suspend fun replyKeepAlive(writeChannel: ByteWriteChannel, nearbyConnec
   ).sendEncryptedNearby(writeChannel, nearbyConnection)
 }
 
+/** from server */
 internal suspend fun sendKeepAlive(writeChannel: ByteWriteChannel, nearbyConnection: D2DConnectionContext) {
   log("NearbyReceiverConnectionHandler", "Sending keep alive")
 

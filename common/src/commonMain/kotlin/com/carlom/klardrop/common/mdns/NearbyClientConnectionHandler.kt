@@ -9,11 +9,11 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.toByteArray
+import com.carlonzo.ukey2.Ukey2Handshake
+import com.carlonzo.ukey2.d2d.D2DConnectionContext
 import com.google.location.nearby.connections.proto.*
 import com.google.location.nearby.connections.proto.ConnectionResponseFrame
 import com.google.location.nearby.connections.proto.V1Frame
-import com.google.security.cryptauth.lib.securegcm.Ukey2Handshake
-import d2d.D2DConnectionContext
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
@@ -47,7 +47,7 @@ class NearbyClientConnectionHandler(
       sendConnectionRequest(writeChannel)
       val nearbyConnection = createConnection(readChannel, writeChannel)
 
-      makeIntroduction(nearbyConnection, readChannel, writeChannel)
+      makeIntroduction(readChannel)
       handleKeyPairExchange(readChannel, writeChannel, nearbyConnection)
 
       handleTransferSetup(writeChannel, nearbyConnection)
@@ -277,7 +277,7 @@ class NearbyClientConnectionHandler(
 
     log("// Message 1 (Client Init)")
     // Message 1 (Client Init)
-    var handshakeMessage = client.nextHandshakeMessage
+    var handshakeMessage = client.getNextHandshakeMessage()
     writeChannel.writeFullyNearby(handshakeMessage)
 
     log("// Message 2 (Server Init)")
@@ -287,7 +287,7 @@ class NearbyClientConnectionHandler(
 
     log("// Message 3 (Client Finish)")
     // Message 3 (Client Finish)
-    handshakeMessage = client.nextHandshakeMessage
+    handshakeMessage = client.getNextHandshakeMessage()
     writeChannel.writeFullyNearby(handshakeMessage)
 
     log("getVerificationString")
@@ -318,9 +318,7 @@ class NearbyClientConnectionHandler(
   }
 
   private suspend fun makeIntroduction(
-    nearbyConnection: D2DConnectionContext,
-    readChannel: ByteReadChannel,
-    writeChannel: ByteWriteChannel
+    readChannel: ByteReadChannel
   ) {
 
     // read connection response

@@ -5,10 +5,10 @@ import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
+import com.carlonzo.ukey2.Ukey2Handshake
+import com.carlonzo.ukey2.d2d.D2DConnectionContext
 import com.google.location.nearby.connections.proto.*
 import com.google.security.cryptauth.lib.securegcm.DeviceType
-import com.google.security.cryptauth.lib.securegcm.Ukey2Handshake
-import d2d.D2DConnectionContext
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
@@ -27,7 +27,6 @@ class NearbyReceiverConnectionHandler(
   coroutines: Coroutines,
 ) {
 
-  private var encryptionDone = false
   private val filesToTransfer = mutableMapOf<Long, FileTransfer>()
   private val connectionScope = CoroutineScope(coroutines.ioDispatcher)
 
@@ -180,7 +179,7 @@ class NearbyReceiverConnectionHandler(
     log("NearbyReceiverConnectionHandler", "Client Init received")
 
     // Message 2 (Server Init)
-    val nextHandshakeMessage = server.nextHandshakeMessage
+    val nextHandshakeMessage = server.getNextHandshakeMessage()
     writeChannel.writeFullyNearby(nextHandshakeMessage)
     log("NearbyReceiverConnectionHandler", "Server Init sent")
 
@@ -226,8 +225,7 @@ class NearbyReceiverConnectionHandler(
       )
     ).send(writeChannel)
 
-    encryptionDone = true
-
+    // from now on the messages are encrypted
   }
 
   private suspend fun handleKeyPairExchange(

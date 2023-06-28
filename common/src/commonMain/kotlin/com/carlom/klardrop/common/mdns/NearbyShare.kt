@@ -62,7 +62,7 @@ class NearbyShare(
     val endpointInfo = attributes.getValue("n")
     val endpointInfoBytes = urlSafeBase64DecodeString(endpointInfo)
 
-    val deviceType = deviceTypeFromId(endpointInfoBytes[0].toInt() shr 3)
+    val deviceType = deviceTypeFromId(endpointInfoBytes[0].toInt() shr 1)
     val deviceNameLength = endpointInfoBytes[17]
     val deviceName = endpointInfoBytes.sliceArray(18 until 18 + deviceNameLength.toInt()).decodeToString()
 
@@ -79,7 +79,7 @@ class NearbyShare(
 
     val nameBytes = byteArrayOf(
       0x23.toByte(), // PCP
-      *getDeviceEndpoint(currentDevice), // 4 bytes unique device id
+      *getDeviceId(currentDevice), // 4 bytes unique device id
       0xFC.toByte(), 0x9F.toByte(), 0x5E.toByte(), // Service ID hash
       0.toByte(), 0.toByte(),
     )
@@ -97,7 +97,7 @@ class NearbyShare(
     )
   }
 
-  private fun getDeviceEndpoint(currentDevice: CurrentDevice): ByteArray {
+  private fun getDeviceId(currentDevice: CurrentDevice): ByteArray {
     val deviceId = currentDevice.deviceId
 
     return buildString {
