@@ -9,10 +9,9 @@ import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import okio.IOException
 
 /**
- * Messenger used to send envelops
+ * Messenger used to send messages
  */
 interface Messenger {
   fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress>
@@ -22,7 +21,7 @@ class MessengerImpl(
   private val visibleDevices: VisibleDevices,
   private val connectionsPool: ConnectionsPool,
   private val client: Client,
-  private val coroutines: Coroutines,
+  coroutines: Coroutines,
   private val nearbyClient: NearbyClient,
 ) : Messenger {
 

@@ -25,7 +25,7 @@ interface MessagesRouter {
 
 class MessagesRouterImpl(
   private val handlers: MessageHandlers,
-  private val envelopeSerializer: MessageSerializer,
+  private val messageSerializer: MessageSerializer,
   private val coroutines: Coroutines,
   private val receivedMessagesBroadcast: ReceivedMessagesBroadcast
 ) : MessagesRouter {
@@ -33,7 +33,7 @@ class MessagesRouterImpl(
     coroutines.ioDispatcher {
       val firstFrame = receiveChannel.receive()
 
-      val message = envelopeSerializer.deserialize(firstFrame)
+      val message = messageSerializer.deserialize(firstFrame)
       log("MessagesRouter", "Received message from $fromDeviceId: $message")
 
       if (message.hasPayload) {
@@ -72,7 +72,7 @@ class MessagesRouterImpl(
         messageHandler.handleOutgoing(sendMessageRequest, webSocketSession, progress)
       } else {
         // message has no payload. we can send it directly
-        webSocketSession.send(envelopeSerializer.serialize(message))
+        webSocketSession.send(messageSerializer.serialize(message))
       }
 
     }

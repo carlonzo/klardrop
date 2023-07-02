@@ -30,16 +30,17 @@ class MessageSerializer(
     val type = message.type
     val serializer = serializer<Message>(type)
 
-    val encodedEnvelope = proto.encodeToByteArray(serializer, message)
+    val encodedMessage = proto.encodeToByteArray(serializer, message)
 
-    val payload = ByteArray(encodedEnvelope.size + 1)
+    val payload = ByteArray(encodedMessage.size + 1)
     payload[0] = message.type.id
 
-    encodedEnvelope.copyInto(payload, 1, 0, encodedEnvelope.size)
+    encodedMessage.copyInto(payload, 1, 0, encodedMessage.size)
 
     Frame.Binary(true, payload)
   }
 
+  @Suppress("UNCHECKED_CAST")
   private fun <E : Message> serializer(messageType: MessageType): KSerializer<E> {
     return when (messageType) {
       MessageType.HANDSHAKE -> HandshakeMessage.serializer() as KSerializer<E>

@@ -4,7 +4,6 @@ import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
-import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.client.*
@@ -14,7 +13,6 @@ import io.ktor.http.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,7 +26,7 @@ class ClientImpl(
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,
-  private val visibleDevices: VisibleDevices,
+  visibleDevices: VisibleDevices,
   private val currentDeviceProvider: CurrentDeviceProvider
 ) : Client {
 
@@ -109,19 +107,19 @@ class ClientImpl(
     ) {
       log("Client", "Connected to $address. Sending greetings")
 
-      val introEnvelope = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+      val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
 
-      send(serializer.serialize(introEnvelope))
+      send(serializer.serialize(handshakeMessage))
 
       log("Client", "Waiting for response greetings from $deviceId")
-      val serverIntroEnvelope = serializer.deserialize(incoming.receive()) as HandshakeMessage
+      val serverHandshakeMessage = serializer.deserialize(incoming.receive()) as HandshakeMessage
 
-      if (serverIntroEnvelope.deviceId == deviceId) {
+      if (serverHandshakeMessage.deviceId == deviceId) {
         val connection = Connection(this, deviceId)
         val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
 
         connectionsPool.updateConnection(deviceId, connectionMessenger)
-        log("Client", "Connection established with ${serverIntroEnvelope.deviceId}")
+        log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
 
         connectionJob.complete(true)
 
@@ -131,7 +129,7 @@ class ClientImpl(
         log("Client", "closing reason: ${closeReason.await()}")
       } else {
         connectionJob.complete(false)
-        log("Client", "cant connect. Device $deviceId found is wrong: ${introEnvelope.deviceId}")
+        log("Client", "cant connect. Device $deviceId found is wrong: ${handshakeMessage.deviceId}")
       }
 
     }
