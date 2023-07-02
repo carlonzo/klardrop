@@ -77,10 +77,11 @@ class ClientImpl(
 
         connections.forEach { connection ->
           val address = connection.address
+          val port = connection.port
 
-          log("Client", "Connecting to $deviceId with address $address")
+          log("Client", "Connecting to $deviceId with address $address port $port")
 
-          estabilishConnection(address, deviceId, connectionJob)
+          estabilishConnection(address, port, deviceId, connectionJob)
             .onSuccess {
               // if connected, return
               return@forEach
@@ -100,12 +101,12 @@ class ClientImpl(
 
   }
 
-  private suspend fun estabilishConnection(address: String, deviceId: String, connectionJob: CompletableDeferred<Boolean>) = runCatching {
+  private suspend fun estabilishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) = runCatching {
 
     client.webSocket(
       method = HttpMethod.Get,
       host = address,
-      port = SERVER_PORT,
+      port = port,
       path = "/connect"
     ) {
       log("Client", "Connected to $address. Sending greetings")

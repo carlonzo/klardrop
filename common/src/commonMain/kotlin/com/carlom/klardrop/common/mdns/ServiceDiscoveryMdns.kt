@@ -3,20 +3,26 @@ package com.carlom.klardrop.common.mdns
 import kotlinx.coroutines.flow.Flow
 
 expect class ServiceDiscoveryMdns {
-
-  fun discoverServices(serviceType: String): Flow<List<ServiceInfo>>
-  suspend fun registerService(serviceInfo: ServiceInfo)
-
+  fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent>
+  suspend fun registerService(registerServiceInfo: RegisterServiceInfo)
 }
 
-class ServiceInfo(
+sealed interface ServiceDiscoveryEvent {
+  data class ServiceFound(val serviceInfo: ServiceInfo) : ServiceDiscoveryEvent
+  data class ServiceLost(val serviceInfo: ServiceInfo) : ServiceDiscoveryEvent
+}
+
+data class ServiceInfo(
   val port: Int,
   val serviceName: String,
   val serviceType: String,
   val attributes: Map<String, String>,
-  val addresses: List<String>? = null
-){
-  override fun toString(): String {
-    return "ServiceInfo(port=$port, serviceName='$serviceName', serviceType='$serviceType', attributes=$attributes)"
-  }
-}
+  val addresses: List<String>
+)
+
+data class RegisterServiceInfo(
+  val port: Int,
+  val serviceName: String,
+  val serviceType: String,
+  val attributes: Map<String, String>
+)

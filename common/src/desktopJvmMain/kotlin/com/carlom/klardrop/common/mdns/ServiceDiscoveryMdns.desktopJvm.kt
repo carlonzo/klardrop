@@ -1,9 +1,11 @@
 package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.utils.log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -23,61 +25,48 @@ actual class ServiceDiscoveryMdns() {
     }
   }
 
-  actual fun discoverServices(serviceType: String): Flow<List<ServiceInfo>> {
-    var listServices = listOf<ServiceInfo>()
+  actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
 
-    val services = listOf(serviceType, "${serviceType}local.")
+    val serviceTypeLocal = "${serviceType}local."
 
     return callbackFlow {
 
+      val scope: CoroutineScope = this
+
       val listener = object : ServiceListener {
         override fun serviceAdded(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceAdded: $event")
-
         }
 
         override fun serviceRemoved(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceRemoved: $event")
+          log("ServiceDiscoveryMdns", "serviceRemoved: ${event.info}")
 
-          val newList = listServices.filter { it.serviceName != event.info.name }
-          listServices = newList.toMutableList()
-
-          trySend(newList)
+          scope.launch {
+            send(ServiceDiscoveryEvent.ServiceLost(event.toServiceInfo()))
+          }
         }
 
         override fun serviceResolved(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
-          val attributes = txtByteToMap(event.info.textBytes)
 
-          val serviceInfo = ServiceInfo(
-            port = event.info.port,
-            serviceName = event.info.nameWithoutNumber(),
-            serviceType = event.info.type,
-            attributes = attributes,
-            addresses = event.info.inet4Addresses.map { it.hostAddress }
-          )
+          if (event.info.inet4Addresses.isEmpty()){
+            return
+          } else {
+            log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
+          }
 
-          val newList = listServices.toMutableList()
-          newList.add(serviceInfo)
-          listServices = newList
-
-          trySend(newList)
+          scope.launch {
+            send(ServiceDiscoveryEvent.ServiceFound(event.toServiceInfo()))
+          }
         }
 
       }
 
       jmdns.forEach { instances ->
-        services.forEach { service ->
-          instances.addServiceListener(service, listener)
-        }
+        instances.addServiceListener(serviceTypeLocal, listener)
       }
 
       awaitClose {
         jmdns.forEach { instances ->
-          services.forEach {
-            instances.removeServiceListener(it, listener)
-          }
-
+          instances.removeServiceListener(serviceTypeLocal, listener)
         }
       }
     }
@@ -99,7 +88,7 @@ actual class ServiceDiscoveryMdns() {
     return addresses
   }
 
-  actual suspend fun registerService(serviceInfo: ServiceInfo) {
+  actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
 
     suspendCancellableCoroutine<Unit> {
 
@@ -107,12 +96,12 @@ actual class ServiceDiscoveryMdns() {
 
       jmdns.forEach { instance ->
         val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
-          serviceInfo.serviceType,
-          serviceInfo.serviceName,
-          serviceInfo.port,
+          registerServiceInfo.serviceType,
+          registerServiceInfo.serviceName,
+          registerServiceInfo.port,
           0,
           0,
-          serviceInfo.attributes
+          registerServiceInfo.attributes
         )
 
         instance.registerService(jmdnsServiceInfo)
@@ -120,7 +109,7 @@ actual class ServiceDiscoveryMdns() {
         registrations.add(instance to jmdnsServiceInfo)
       }
 
-      log("ServiceDiscoveryMdns", "publishing service: $serviceInfo")
+      log("ServiceDiscoveryMdns", "publishing service: $registerServiceInfo")
 
       it.invokeOnCancellation {
         registrations.forEach { (jmdns, jmdnsServiceInfo) ->
@@ -132,33 +121,6 @@ actual class ServiceDiscoveryMdns() {
 
   }
 
-  private fun txtByteToMap(array: ByteArray): Map<String, String> {
-    val list = mutableListOf<ByteArray>()
-
-    fun getTxt(array: ByteArray, firstIndex: Int): ByteArray {
-      val l = array[firstIndex].toInt()
-      return array.copyOfRange(firstIndex + 1, firstIndex + l + 1)
-    }
-
-    var index = 0
-    while (index < array.size) {
-      val txt = getTxt(array, index)
-      list.add(txt)
-      index += txt.size + 1
-    }
-
-
-    return list.associate {
-
-      val split = it.indexOf('='.code.toByte())
-
-
-      val key = it.copyOfRange(0, split)
-      val value = it.copyOfRange(split + 1, it.size)
-
-      key.decodeToString() to value.decodeToString()
-    }
-  }
 
   /**
    * Jmdns append a number at the end of the name if there are 2 services with the same name.
@@ -166,15 +128,27 @@ actual class ServiceDiscoveryMdns() {
    *
    * From "Izc3Nzf8n14AAA (2)" to "Izc3Nzf8n14AAA"
    */
-  private fun javax.jmdns.ServiceInfo.nameWithoutNumber(): String{
+  private fun javax.jmdns.ServiceInfo.nameWithoutNumber(): String {
     val name = this.name
 
     return if (name.endsWith(")")) {
       val index = name.lastIndexOf("(")
       name.substring(0, index).trimEnd()
-    }else{
+    } else {
       name
     }
+  }
+
+  private fun ServiceEvent.toServiceInfo(): ServiceInfo {
+    val attributes = txtByteToMap(this.info.textBytes)
+
+    return ServiceInfo(
+      port = this.info.port,
+      serviceName = this.info.nameWithoutNumber(),
+      serviceType = this.info.type,
+      attributes = attributes,
+      addresses = this.info.inet4Addresses.map { it.hostAddress }
+    )
   }
 
 }

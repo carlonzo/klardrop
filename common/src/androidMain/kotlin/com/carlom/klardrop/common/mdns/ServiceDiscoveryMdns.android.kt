@@ -5,17 +5,20 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import com.carlom.klardrop.common.utils.log
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 actual class ServiceDiscoveryMdns(private val context: Context) {
 
   private val nsdManager by lazy { context.getSystemService(Context.NSD_SERVICE) as NsdManager }
 
-  actual fun discoverServices(serviceType: String): Flow<List<ServiceInfo>> {
-    var listServices = mutableListOf<ServiceInfo>()
+  actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
 
     return callbackFlow {
 
@@ -38,28 +41,18 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceFound: $serviceInfo")
-          val attributes = serviceInfo.attributes.mapValues { it.value.decodeToString() }
 
-          val address = serviceInfo.host.hostAddress
-          val newList = listServices.toMutableList()
-          newList.add(
-            ServiceInfo(
-              serviceInfo.port,
-              serviceInfo.serviceName,
-              serviceInfo.serviceType,
-              attributes,
-              address?.let { listOf(it) } ?: emptyList()
-            )
-          )
-          listServices = newList
+          val service = serviceInfo.toServiceInfo()
 
-          trySend(newList)
+          trySend(ServiceDiscoveryEvent.ServiceFound(service))
         }
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceLost: $serviceInfo")
-          listServices.removeAll { it.serviceName == serviceInfo.serviceName }
-          trySend(listServices)
+
+          val service = serviceInfo.toServiceInfo()
+
+          trySend(ServiceDiscoveryEvent.ServiceLost(service))
         }
 
       }
@@ -81,9 +74,9 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
   }
 
-  actual suspend fun registerService(serviceInfo: ServiceInfo) {
+  actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
 
-    suspendCancellableCoroutine<Unit> {
+    suspendCancellableCoroutine {
 
       val listener = object : NsdManager.RegistrationListener {
         override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
@@ -92,10 +85,12 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
         override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
           log("ServiceDiscoveryMdns", "onRegistrationFailed: $serviceInfo $errorCode")
+          it.resumeWithException(Exception("Registration failed with error code $errorCode"))
         }
 
         override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceUnregistered: $serviceInfo")
+          it.resume(Unit)
         }
 
         override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -108,11 +103,11 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
       nsdManager.registerService(
         NsdServiceInfo().apply {
-          serviceName = serviceInfo.serviceName
-          serviceType = serviceInfo.serviceType
-          port = serviceInfo.port
+          serviceName = registerServiceInfo.serviceName
+          serviceType = registerServiceInfo.serviceType
+          port = registerServiceInfo.port
 
-          serviceInfo.attributes.forEach { (key, value) ->
+          registerServiceInfo.attributes.forEach { (key, value) ->
             setAttribute(key, value)
           }
         },
@@ -124,7 +119,6 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
         lock.release()
         nsdManager.unregisterService(listener)
       }
-
     }
 
   }
@@ -138,5 +132,18 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
     return lock
   }
 
+  private fun NsdServiceInfo.toServiceInfo(): ServiceInfo {
+    val attributes = this.attributes.mapValues { it.value.decodeToString() }
+
+    val addresses = this.host.hostAddress as String
+
+    return ServiceInfo(
+      this.port,
+      this.serviceName,
+      this.serviceType,
+      attributes,
+      listOf(addresses)
+    )
+  }
 
 }

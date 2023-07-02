@@ -1,64 +1,101 @@
 package com.carlom.klardrop.common.mdns
 
 import kotlinx.cinterop.*
+import kotlinx.coroutines.channels.ProducerScope
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.Foundation.*
 import platform.darwin.NSObject
+import platform.posix.memcpy
 
 actual class ServiceDiscoveryMdns {
 
-  actual fun discoverServices(serviceType: String): Flow<List<ServiceInfo>> {
+  private val browserReferencesHolder = mutableListOf<NSNetServiceBrowser>()
+  private val serviceReferencesHolder = mutableListOf<NSNetService>()
+  private lateinit var delegate: BonjourBrowserDelegate
+
+  actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> = callbackFlow {
+
     val browser = NSNetServiceBrowser()
+    delegate = BonjourBrowserDelegate(this)
+    browserReferencesHolder.add(browser)
 
-    val delegate = object : NSObject(), NSNetServiceBrowserDelegateProtocol {
-      override fun netServiceBrowserWillSearch(browser: NSNetServiceBrowser) {
-        println("Bonjour discovery started")
-      }
+    browser.delegate = delegate
+    browser.includesPeerToPeer = true
+    browser.scheduleInRunLoop(NSRunLoop.currentRunLoop(), NSDefaultRunLoopMode)
 
-      override fun netServiceBrowser(
-        browser: NSNetServiceBrowser,
-        didFindService: NSNetService,
-        moreComing: Boolean
-      ) {
-        println("Service discovered: ${didFindService.name}")
-//        onServiceDiscovered(didFindService.name)
-      }
+    browser.searchForServicesOfType(serviceType, inDomain = "local.")
 
-      override fun netServiceBrowserDidStopSearch(browser: NSNetServiceBrowser) {
-        println("Bonjour discovery stopped")
-      }
+    awaitClose {
+      browser.stop()
+      browser.delegate = null
+      browser.removeFromRunLoop(NSRunLoop.currentRunLoop(), NSDefaultRunLoopMode)
+      browserReferencesHolder.removeAll { it === browser }
+    }
+  }
 
-      override fun netServiceBrowser(
-        browser: NSNetServiceBrowser,
-        didNotSearch: Map<Any?, *>
-      ) {
-        println("Bonjour discovery error: ${didNotSearch}")
+  actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
+
+    suspendCancellableCoroutine<Unit> {
+      val service = NSNetService(
+        domain = "local.",
+        type = registerServiceInfo.serviceType,
+        name = registerServiceInfo.serviceName,
+        port = registerServiceInfo.port
+      )
+
+      serviceReferencesHolder.add(service)
+
+      // Set the TXT record on the service
+      service.setTXTRecordData(createTXTRecordData(registerServiceInfo.attributes))
+      service.includesPeerToPeer = true
+      service.delegate = BonjourServiceDelegate()
+
+      service.publish()
+
+      it.invokeOnCancellation {
+        service.stop()
+        service.delegate = null
+        serviceReferencesHolder.removeAll { ref -> ref === service }
       }
     }
 
-    browser.delegate = delegate
-    browser.searchForServicesOfType(serviceType, inDomain = "")
-
-//    // Keep the delegate object alive
-//    val delegatePtr = delegate.asCPointer()
-//    val objCObjectVar: ObjCObjectVar<NSObject> = delegatePtr.readValue()
-//    objCObjectVar.init(delegatePtr)
-    return emptyFlow()
   }
 
-  actual suspend fun registerService(serviceInfo: ServiceInfo) {
+  private inner class BonjourBrowserDelegate(private val producerScope: ProducerScope<ServiceDiscoveryEvent>) : NSObject(),
+    NSNetServiceBrowserDelegateProtocol {
 
-    val service = NSNetService(domain = "", type = serviceInfo.serviceType, name = serviceInfo.serviceName, port = serviceInfo.port)
+    override fun netServiceBrowserWillSearch(browser: NSNetServiceBrowser) {
+      println("Bonjour discovery started")
+    }
 
-    // Set the TXT record on the service
-    service.setTXTRecordData(createTXTRecordData(serviceInfo.attributes))
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netServiceBrowser(browser: NSNetServiceBrowser, didRemoveService: NSNetService, moreComing: Boolean) {
+      println("netServiceBrowser remove service: $didRemoveService")
 
-    service.delegate = BonjourServiceDelegate()
+      producerScope.trySend(ServiceDiscoveryEvent.ServiceLost(didRemoveService.toServiceInfo()))
+    }
 
-    service.publish()
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindService: NSNetService, moreComing: Boolean) {
+      println("netServiceBrowser found service: $didFindService")
 
+      producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(didFindService.toServiceInfo()))
+    }
+
+    override fun netServiceBrowserDidStopSearch(browser: NSNetServiceBrowser) {
+      println("Bonjour discovery stopped")
+    }
+
+    override fun netServiceBrowser(
+      browser: NSNetServiceBrowser,
+      didNotSearch: Map<Any?, *>
+    ) {
+      println("Bonjour discovery error: ${didNotSearch}")
+    }
   }
 
   private class BonjourServiceDelegate : NSObject(), NSNetServiceDelegateProtocol {
@@ -70,8 +107,14 @@ actual class ServiceDiscoveryMdns {
       println("Service published $sender")
     }
 
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
     override fun netService(sender: NSNetService, didNotPublish: Map<Any?, *>) {
-      println("Service publishing failed $sender")
+      println("Service publishing failed didNotPublish $sender")
+    }
+
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netService(sender: NSNetService, didNotResolve: Map<Any?, *>) {
+      println("Service publishing failed didNotResolve $sender")
     }
 
     override fun netServiceDidStop(sender: NSNetService) {
@@ -93,11 +136,28 @@ actual class ServiceDiscoveryMdns {
   }
 
   private fun ByteArray.toNSData(): NSData = memScoped {
-    NSData.create(bytes = allocArrayOf(this@toNSData),
-      length = this@toNSData.size.toULong())
+    NSData.create(
+      bytes = allocArrayOf(this@toNSData),
+      length = this@toNSData.size.toULong()
+    )
   }
 
+  private fun NSData.toByteArray(): ByteArray {
+    return bytes?.readBytes(length.toInt()) ?: ByteArray(0)
+  }
 
+  private fun NSNetService.toServiceInfo(): ServiceInfo {
 
+    val txtRecord = this.TXTRecordData()?.toByteArray() ?: ByteArray(0)
+    val attributes = txtByteToMap(txtRecord)
+
+    return ServiceInfo(
+      port = this.port.toInt(),
+      serviceName = this.name,
+      serviceType = this.type,
+      attributes = attributes,
+      addresses = this.addresses?.map { it.toString() } ?: emptyList()
+    )
+  }
 
 }

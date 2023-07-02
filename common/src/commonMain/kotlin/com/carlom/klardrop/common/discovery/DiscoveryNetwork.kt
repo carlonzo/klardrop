@@ -1,115 +1,133 @@
 package com.carlom.klardrop.common.discovery
 
-import com.carlom.klardrop.common.utils.Clock
+import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
+import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.KLARDROP_SERVICE_TYPE
+import com.carlom.klardrop.common.discovery.NearbyShareDiscoveryUtils.Companion.NEARBY_SERVICE_TYPE
+import com.carlom.klardrop.common.mdns.ServiceDiscoveryEvent
+import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
+import com.carlom.klardrop.common.mdns.ServiceInfo
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import com.carlom.klardrop.common.utils.tickerFlow
-import io.ktor.network.sockets.*
-import io.ktor.utils.io.core.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.cancellable
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * Service that keeps emitting pings to announce availability and discover new devices or update info of the known ones
  */
 class DiscoveryNetwork internal constructor(
   private val coroutines: Coroutines,
-  private val discoveryMessenger: DiscoveryMessenger,
   private val visibleDevices: VisibleDevices,
-  private val socketBroadcastUtility: SocketBroadcastUtility,
-  private val clock: Clock,
-
-  ) {
+  private val serviceDiscoveryMdns: ServiceDiscoveryMdns,
+  private val nearbyShareDiscoveryUtils: NearbyShareDiscoveryUtils,
+  private val klardropDiscoveryUtils: KlardropDiscoveryUtils,
+  private val currentDeviceProvider: CurrentDeviceProvider
+) {
 
   private val discoveryScope = CoroutineScope(coroutines.ioDispatcher)
-  private val timeLastSeen = mutableMapOf<String, Long>()
+  private val currentDevice = discoveryScope.async(coroutines.ioDispatcher) { currentDeviceProvider.get() }
 
-  init {
+  private var nearbySharePublishJob: Job? = null
+  private var klardropPublishJob: Job? = null
+
+
+  fun startPublishNearbyShare(port: Int) {
+
+    nearbySharePublishJob?.cancel()
+    nearbySharePublishJob = discoveryScope.launch {
+
+      val registerServiceInfo = nearbyShareDiscoveryUtils.buildServiceInfo(port, currentDevice.await())
+
+      serviceDiscoveryMdns.registerService(registerServiceInfo)
+    }
+
+  }
+
+  fun startPublishKlardrop(port: Int) {
+    klardropPublishJob?.cancel()
+    klardropPublishJob = discoveryScope.launch {
+
+      val registerServiceInfo = klardropDiscoveryUtils.provideRegisterServiceInfo(port, currentDevice.await())
+
+      serviceDiscoveryMdns.registerService(registerServiceInfo)
+    }
+  }
+
+
+  fun discoveryNearbyShareDevices() {
+
     discoveryScope.launch {
-      tickerFlow(delayDuration = 10.seconds)
-        .flowOn(coroutines.ioDispatcher)
-        .collect {
+      serviceDiscoveryMdns.discoverServices(NEARBY_SERVICE_TYPE).collect {
 
-          val currentTime = clock.currentTimeMillis()
-          val devicesToRemove = timeLastSeen.filterValues { currentTime - it > TTL_VISIBLE_DEVICES }
+        log("DiscoveryNetwork", "New discovery event for NearbyShare: $it")
 
-          devicesToRemove.keys.forEach {
-            visibleDevices.onDeviceLost(it)
+        when (it) {
+
+          is ServiceDiscoveryEvent.ServiceFound -> if (nearbyShareDiscoveryUtils.isValidService(it.serviceInfo)) {
+            onDiscoveredService(it.serviceInfo, DeviceConnectionType.NEARBY)
           }
 
-          log("VisibleDevices cleanup. removed: $devicesToRemove")
+          is ServiceDiscoveryEvent.ServiceLost -> onLostService(it.serviceInfo, DeviceConnectionType.NEARBY)
+
         }
+
+      }
+    }
+
+  }
+
+  fun discoveryKlardropDevices() {
+
+    discoveryScope.launch {
+      serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE).collect {
+        log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
+
+        when (it) {
+
+          is ServiceDiscoveryEvent.ServiceFound -> if (klardropDiscoveryUtils.isValidService(it.serviceInfo)) {
+            onDiscoveredService(it.serviceInfo, DeviceConnectionType.KLARDROP)
+          }
+
+          is ServiceDiscoveryEvent.ServiceLost -> onLostService(it.serviceInfo, DeviceConnectionType.KLARDROP)
+
+        }
+
+      }
+    }
+
+  }
+
+  private suspend fun onDiscoveredService(serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {
+    serviceInfo.addresses.forEach { address ->
+
+      val deviceConnection = when (connectionType) {
+        DeviceConnectionType.NEARBY -> DeviceConnection.Nearby(address, serviceInfo.port)
+        DeviceConnectionType.KLARDROP -> DeviceConnection.Klardrop(address, serviceInfo.port)
+      }
+
+      val deviceInfo = when(connectionType){
+        DeviceConnectionType.NEARBY -> nearbyShareDiscoveryUtils.toDeviceInfo(serviceInfo)
+        DeviceConnectionType.KLARDROP -> klardropDiscoveryUtils.toDeviceInfo(serviceInfo)
+      }
+
+      visibleDevices.onNewDeviceVisible(deviceInfo, deviceConnection)
     }
   }
 
-  fun start(): Job = discoveryScope.launch {
-
-    log("Start discovery")
-
-    val visibilityJob = launchVisibilityJob()
-
-    socketBroadcastUtility.listenToBroadcast(PORT)
-      .cancellable()
-      .collect { datagram ->
-        val message = discoveryMessenger.decodeDiscoveryMessage(datagram.packet.readBytes())
-
-        val isKnown = visibleDevices.isDeviceVisible(message.deviceId)
-        onNewDeviceDiscovered(message, datagram.address)
-
-        timeLastSeen[message.deviceId] = clock.currentTimeMillis()
-        if (!isKnown) log("DiscoveryNetwork. discovered: ${datagram.address}")
+  private suspend fun onLostService(serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {
+    if (serviceInfo.addresses.isNotEmpty()) {
+      serviceInfo.addresses.forEach { address ->
+        val deviceConnection = when (connectionType) {
+          DeviceConnectionType.NEARBY -> DeviceConnection.Nearby(address, serviceInfo.port)
+          DeviceConnectionType.KLARDROP -> DeviceConnection.Klardrop(address, serviceInfo.port)
+        }
+        visibleDevices.onDeviceLost(serviceInfo.serviceName, deviceConnection)
       }
-
-
-    log("cancelling discovery")
-    visibilityJob.cancel()
-  }
-
-  private fun launchVisibilityJob() = discoveryScope.launch {
-
-    val sendChannel = socketBroadcastUtility.sendMessageChannel(PORT, this)
-
-    tickerFlow(PING_TIME)
-      .cancellable()
-      .collect {
-        val message = discoveryMessenger.getIntroMessage()
-        if (message.isNotEmpty()) sendChannel.send((message))
-      }
-
-
-    log("closed visibility job")
-    sendChannel.close()
-  }
-
-  private suspend fun onNewDeviceDiscovered(discoveryMessage: DiscoveryMessenger.DiscoveryMessage, address: SocketAddress) {
-    withContext(coroutines.ioDispatcher) {
-      visibleDevices.onNewDeviceVisible(
-        DeviceInfo(
-          deviceId = discoveryMessage.deviceId,
-          name = discoveryMessage.name,
-          deviceType = discoveryMessage.deviceType
-        ),
-        DeviceConnection.Klardrop(address.cleanup())
-      )
+    } else {
+      visibleDevices.onDeviceLost(serviceInfo.serviceName)
     }
-  }
-
-
-  private companion object {
-    private const val PORT = 65321
-    private val PING_TIME = 1500.milliseconds
-
-    private val TTL_VISIBLE_DEVICES = 10.seconds.inWholeMilliseconds
   }
 
 }
 
-internal fun SocketAddress.cleanup(): String {
-  return this.toString().removePrefix("/").substringBefore(":")
-}

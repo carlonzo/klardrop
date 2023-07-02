@@ -2,22 +2,25 @@ package com.carlom.klardrop.common.discovery
 
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
-import kotlinx.coroutines.launch
 
 interface VisibleDevices {
 
   val visibleDevices: Flow<Map<String, DiscoveryDevice>>
 
-  fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection)
+  suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection)
 
   suspend fun isDeviceVisible(deviceId: String): Boolean
 
   suspend fun getDevice(deviceId: String): DiscoveryDevice?
 
   suspend fun onDeviceLost(deviceId: String)
-  suspend fun onDeviceLost(deviceId: String, deviceConnection: DeviceConnection)
+  suspend fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection)
 
 }
 
@@ -31,12 +34,12 @@ internal class VisibleDevicesImpl(
   override val visibleDevices: Flow<Map<String, DiscoveryDevice>> = visibleDevicesFlow.asStateFlow()
     .onEach { log("VisibleDevices flow. emitting: $it") }
 
-  override fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection) {
-    coroutines.appScope.launch {
-      val isNew = addDevice(deviceInfo, deviceConnection)
+  override suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection) {
 
-      if (isNew) log("VisibleDevices. new device: $deviceInfo")
-    }
+    val isNew = addDevice(deviceInfo, deviceConnection)
+
+    log("VisibleDevices. new device: $deviceInfo isNew: $isNew connections: ${deviceConnection.deviceConnectionType}")
+
   }
 
   override suspend fun isDeviceVisible(deviceId: String): Boolean {
@@ -53,13 +56,19 @@ internal class VisibleDevicesImpl(
     }
   }
 
-  override suspend fun onDeviceLost(deviceId: String, deviceConnection: DeviceConnection) {
-    visibleDevicesFlow.update {
-      it.toMutableMap().also { map ->
+  override suspend fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection) {
+
+    if (deviceConnectionToRemove is DeviceConnection.Nearby && deviceConnectionToRemove.port == 0 && deviceConnectionToRemove.address.isEmpty()) {
+      onDeviceLost(deviceId)
+      return
+    }
+
+    visibleDevicesFlow.update { currentMap ->
+      currentMap.toMutableMap().also { map ->
 
         val device = map[deviceId] ?: return@also
 
-        val newConnections = device.deviceConnections.filter { it.deviceConnectionType != deviceConnection.deviceConnectionType }.toSet()
+        val newConnections = device.deviceConnections.filterNot { it == deviceConnectionToRemove }
 
         if (newConnections.isEmpty()) {
           map.remove(deviceId)
@@ -86,11 +95,11 @@ internal class VisibleDevicesImpl(
 
       }
 
-      val storedDiscoveryDevice = (visibleDevicesFlow.value[deviceInfo.deviceId] ?: DiscoveryDevice(deviceInfo))
-
-      val newConnections = storedDiscoveryDevice.deviceConnections.toMutableSet().also { it.add(deviceConnection) }
-
       visibleDevicesFlow.update {
+        val storedDiscoveryDevice = (it[deviceInfo.deviceId] ?: DiscoveryDevice(deviceInfo))
+
+        val newConnections = storedDiscoveryDevice.deviceConnections.toMutableList().also { it.add(deviceConnection) }
+
         it.toMutableMap().apply {
 
           put(

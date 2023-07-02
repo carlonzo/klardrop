@@ -16,6 +16,11 @@ enum class DeviceType(val id: Byte) {
     fun fromId(id: Byte): DeviceType{
       return DeviceType.values().first { it.id == id }
     }
+
+    fun fromId(id: Int): DeviceType{
+      val b = id.toByte()
+      return DeviceType.values().first { it.id == b }
+    }
   }
 }
 

@@ -42,6 +42,8 @@ kotlin {
     val commonTest by getting {
       dependencies {
         implementation(kotlin("test"))
+        implementation(deps.turbine)
+        implementation(deps.kotlinx.coroutines.test)
       }
     }
 
