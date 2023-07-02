@@ -51,3 +51,6 @@ out/
 .DS_Store
 
 local.properties
+
+### XCode ###
+iosApp/iosApp.xcworkspace/xcuserdata/carlo.xcuserdatad/UserInterfaceState.xcuserstate
