@@ -1,9 +1,6 @@
 package com.carlom.klardrop.common.mdns
 
-import com.carlom.klardrop.common.discovery.CurrentDevice
-import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
-import com.carlom.klardrop.common.discovery.VisibleDevices
-import com.carlom.klardrop.common.persistence.DeviceInfo
+import com.carlom.klardrop.common.discovery.*
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
@@ -13,7 +10,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
-import kotlin.random.Random
 
 class NearbyShare(
   private val serviceDiscoveryMdns: ServiceDiscoveryMdns,
@@ -33,11 +29,19 @@ class NearbyShare(
 
       serviceDiscoveryMdns.discoverServices(serviceType).collect {
 
-        it.map { serviceInfo ->
-          serviceInfo.toDeviceInfo()
-        }.forEach { deviceInfo ->
-          visibleDevices.onNewDeviceVisible(deviceInfo)
+        log("NearbyShare", "Discovered services: $it")
+
+        it.mapNotNull { serviceInfo ->
+          if (serviceInfo.addresses.isNullOrEmpty()) {
+            log("NearbyShare", "Ignoring discovered device $it because it has no addresses")
+            null
+          } else {
+            serviceInfo.toDeviceInfo() to DeviceConnection.Nearby(serviceInfo.addresses.first(), serviceInfo.port)
+          }
         }
+          .forEach { (deviceInfo, deviceConnection) ->
+            visibleDevices.onNewDeviceVisible(deviceInfo, deviceConnection)
+          }
 
       }
     }
@@ -58,7 +62,7 @@ class NearbyShare(
     val endpointInfo = attributes.getValue("n")
     val endpointInfoBytes = urlSafeBase64DecodeString(endpointInfo)
 
-    val deviceType = deviceTypeFromId(endpointInfoBytes[0].toInt() shr 3)
+    val deviceType = deviceTypeFromId(endpointInfoBytes[0].toInt() shr 1)
     val deviceNameLength = endpointInfoBytes[17]
     val deviceName = endpointInfoBytes.sliceArray(18 until 18 + deviceNameLength.toInt()).decodeToString()
 
@@ -67,7 +71,6 @@ class NearbyShare(
       name = deviceName,
       deviceId = serviceName,
       deviceType = deviceType,
-      lastAddress = address ?: "",
     )
   }
 
@@ -76,22 +79,15 @@ class NearbyShare(
 
     val nameBytes = byteArrayOf(
       0x23.toByte(), // PCP
-      *getDeviceEndpoint(currentDevice), // 4 bytes unique device id
+      *getDeviceId(currentDevice), // 4 bytes unique device id
       0xFC.toByte(), 0x9F.toByte(), 0x5E.toByte(), // Service ID hash
       0.toByte(), 0.toByte(),
     )
 
+    val endpointInfo = createEndpointInfo(currentDevice)
 
     // urlsafe base64
     val name = urlSafeBase64EncodedString(nameBytes)
-    val deviceName = currentDevice.deviceName
-
-    val endpointInfo = byteArrayOf(
-      (deviceTypeId() shl 1).toByte(), // 0000 ddd0 (d == devicetype)
-      *Random.nextBytes(16), // 16 bytes random
-      deviceName.length.toByte(),
-      *deviceName.encodeToByteArray()
-    )
 
     return ServiceInfo(
       port = port,
@@ -101,7 +97,7 @@ class NearbyShare(
     )
   }
 
-  private fun getDeviceEndpoint(currentDevice: CurrentDevice): ByteArray {
+  private fun getDeviceId(currentDevice: CurrentDevice): ByteArray {
     val deviceId = currentDevice.deviceId
 
     return buildString {
@@ -115,15 +111,6 @@ class NearbyShare(
       }
 
     }.encodeToByteArray()
-  }
-
-  private suspend fun deviceTypeId(): Int {
-    return when (currentDevice.await().deviceType) {
-      DeviceType.MOBILE -> 1
-      DeviceType.TABLET -> 2
-      DeviceType.DESKTOP -> 3
-//      else -> 0
-    }
   }
 
   private fun deviceTypeFromId(id: Int): DeviceType {

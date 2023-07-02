@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 class NearbyShareServer constructor(
   private val coroutines: Coroutines,
-  private val nearbyConnectionHandler: NearbyConnectionHandler,
+  private val nearbyReceiverConnectionHandler: NearbyReceiverConnectionHandler,
 ) {
 
   private val nearbyShareScope = CoroutineScope(coroutines.ioDispatcher)
@@ -40,7 +40,7 @@ class NearbyShareServer constructor(
       val receive = serverSocket.accept()
       log("NearbyShareServer", "started receiving from: ${receive.remoteAddress}")
 
-      nearbyConnectionHandler.onConnection(receive)
+      nearbyReceiverConnectionHandler.onConnection(receive)
     }
 
     log("NearbyShareServer", "Closing NearbyShareServer")

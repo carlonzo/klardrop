@@ -4,6 +4,7 @@ import com.carlom.klardrop.ActivityState
 import com.carlom.klardrop.DeviceDiscovery
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.OnDeviceActionListener
+import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.utils.DeviceType
 
 @Preview
@@ -14,7 +15,8 @@ fun PreviewDeviceDiscovery() {
       deviceName = "Device Name",
       deviceType = DeviceType.MOBILE,
       deviceId = "Device Id",
-      activityState = ActivityState.Idle
+      activityState = ActivityState.Idle,
+      connectionTypes = listOf(DeviceConnection.DeviceConnectionType.KLARDROP, DeviceConnection.DeviceConnectionType.NEARBY)
     ),
     onDeviceActionListener = object : OnDeviceActionListener {}
   )

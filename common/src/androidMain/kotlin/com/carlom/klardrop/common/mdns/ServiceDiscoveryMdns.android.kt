@@ -40,9 +40,16 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
           log("ServiceDiscoveryMdns", "onServiceFound: $serviceInfo")
           val attributes = serviceInfo.attributes.mapValues { it.value.decodeToString() }
 
+          val address = serviceInfo.host.hostAddress
           val newList = listServices.toMutableList()
           newList.add(
-            ServiceInfo(serviceInfo.port, serviceInfo.serviceName, serviceInfo.serviceType, attributes ,serviceInfo.host.hostAddress)
+            ServiceInfo(
+              serviceInfo.port,
+              serviceInfo.serviceName,
+              serviceInfo.serviceType,
+              attributes,
+              address?.let { listOf(it) } ?: emptyList()
+            )
           )
           listServices = newList
 

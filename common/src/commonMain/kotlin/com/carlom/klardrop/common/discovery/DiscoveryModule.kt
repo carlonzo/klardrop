@@ -1,11 +1,8 @@
 package com.carlom.klardrop.common.discovery
 
 import com.carlom.klardrop.common.InternalPlatformDependencies
-import com.carlom.klardrop.common.mdns.NearbyShare
-import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
-import com.carlom.klardrop.common.utils.SingletonProvider
 import com.carlom.klardrop.common.utils.network.NetworkAddressUtil
 
 internal class DiscoveryModule(
@@ -15,21 +12,21 @@ internal class DiscoveryModule(
   private val clock: Clock
 ) {
 
-  private val discoveryMessenger = SingletonProvider {
+  private val discoveryMessenger by lazy {
     DiscoveryMessenger(
       coroutines, currentDeviceProvider
     )
   }
 
-  private val visibleDevices = SingletonProvider<VisibleDevices> { VisibleDevicesImpl(coroutines, clock) }
+  private val visibleDevices: VisibleDevices by lazy { VisibleDevicesImpl(coroutines) }
 
-  private val discoveryNetwork = SingletonProvider {
-    DiscoveryNetwork(coroutines, discoveryMessenger(), visibleDevices(), socketBroadcastUtility())
+  private val discoveryNetwork by lazy {
+    DiscoveryNetwork(coroutines, discoveryMessenger(), visibleDevices(), socketBroadcastUtility(), clock)
   }
 
   private fun socketBroadcastUtility() = SocketBroadcastUtility(coroutines, NetworkAddressUtil())
-  private fun discoveryMessenger() = discoveryMessenger.get()
-  fun discoveryNetwork() = discoveryNetwork.get()
-  fun visibleDevices() = visibleDevices.get()
+  private fun discoveryMessenger() = discoveryMessenger
+  fun discoveryNetwork() = discoveryNetwork
+  fun visibleDevices() = visibleDevices
   fun serviceDiscoveryMdns() = internalPlatformDependency.serviceDiscoveryMdns()
 }

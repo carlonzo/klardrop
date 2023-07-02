@@ -3,17 +3,14 @@ package com.carlom.klardrop.common.communication.di
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.*
 import com.carlom.klardrop.common.communication.message.FileMessageHandler
-import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
 import com.carlom.klardrop.common.communication.message.MessageType
-import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.communication.router.MessagesRouterImpl
 import com.carlom.klardrop.common.discovery.VisibleDevices
-import com.carlom.klardrop.common.persistence.KnownDevicesRepository
+import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
-import com.carlom.klardrop.common.utils.SingletonProvider
 import kotlinx.serialization.protobuf.ProtoBuf
 
 class CommunicationModule(
@@ -23,11 +20,12 @@ class CommunicationModule(
   private val protoBuf: ProtoBuf,
   private val clock: Clock,
   private val fileManager: FileManager,
+  private val nearbyClient: NearbyClient
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
 
-  private val messageHandlers = SingletonProvider<MessageHandlers> {
+  private val messageHandlers by lazy {
     MessageHandlersImpl(
       mapOf(
         MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines)
@@ -35,51 +33,51 @@ class CommunicationModule(
     )
   }
 
-  private val receivedMessagesBroadcast = SingletonProvider {
+  private val receivedMessagesBroadcast by lazy {
     ReceivedMessagesBroadcast(coroutines)
   }
 
-  private val connectionsPool = SingletonProvider<ConnectionsPool> { ConnectionsPoolImpl() }
-  private val messagesRouter = SingletonProvider<MessagesRouter> {
+  private val connectionsPool by lazy { ConnectionsPoolImpl() }
+  private val messagesRouter by lazy {
     MessagesRouterImpl(
-      messageHandlers.get(),
+      messageHandlers,
       serializer,
       coroutines,
-      receivedMessagesBroadcast.get()
+      receivedMessagesBroadcast
     )
   }
 
-  private val client = SingletonProvider<Client> {
+  private val client by lazy {
     ClientImpl(
-      connectionsPool(),
+      connectionsPool,
       coroutines,
-      incomingMessagesRouter(),
+      messagesRouter,
       localPropertiesRepository,
       serializer,
       visibleDevices
     )
   }
-  private val server = SingletonProvider {
+
+  private val server by lazy {
     Server(
       localPropertiesRepository,
-      connectionsPool(),
+      connectionsPool,
       coroutines,
-      incomingMessagesRouter(),
+      messagesRouter,
       serializer
     )
   }
   private val messenger: Messenger by lazy {
     MessengerImpl(
       visibleDevices,
-      connectionsPool(),
+      connectionsPool,
       client(),
       coroutines,
+      nearbyClient
     )
   }
 
-  fun connectionsPool() = connectionsPool.get()
-  fun incomingMessagesRouter() = messagesRouter.get()
-  fun client() = client.get()
-  fun server() = server.get()
+  fun client() = client
+  fun server() = server
   fun messenger() = messenger
 }

@@ -8,7 +8,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.NetworkInterface
-import java.util.concurrent.TimeUnit
 import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceListener
@@ -47,9 +46,16 @@ actual class ServiceDiscoveryMdns() {
         }
 
         override fun serviceResolved(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inetAddresses.map { it.toString() }}")
+          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
           val attributes = txtByteToMap(event.info.textBytes)
-          val serviceInfo = ServiceInfo(event.info.port, event.info.name, event.info.type, attributes, event.info.hostAddress)
+
+          val serviceInfo = ServiceInfo(
+            port = event.info.port,
+            serviceName = event.info.nameWithoutNumber(),
+            serviceType = event.info.type,
+            attributes = attributes,
+            addresses = event.info.inet4Addresses.map { it.hostAddress }
+          )
 
           val newList = listServices.toMutableList()
           newList.add(serviceInfo)
@@ -97,28 +103,36 @@ actual class ServiceDiscoveryMdns() {
 
     suspendCancellableCoroutine<Unit> {
 
-      val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
-        serviceInfo.serviceType,
-        serviceInfo.serviceName,
-        serviceInfo.port,
-        0,
-        0,
-        serviceInfo.attributes
-      )
+      val registrations = mutableListOf<Pair<JmDNS, javax.jmdns.ServiceInfo>>()
 
-      jmdns.forEach { it.registerService(jmdnsServiceInfo) }
+      jmdns.forEach { instance ->
+        val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
+          serviceInfo.serviceType,
+          serviceInfo.serviceName,
+          serviceInfo.port,
+          0,
+          0,
+          serviceInfo.attributes
+        )
+
+        instance.registerService(jmdnsServiceInfo)
+
+        registrations.add(instance to jmdnsServiceInfo)
+      }
 
       log("ServiceDiscoveryMdns", "publishing service: $serviceInfo")
 
       it.invokeOnCancellation {
-        jmdns.forEach { it.unregisterService(jmdnsServiceInfo) }
+        registrations.forEach { (jmdns, jmdnsServiceInfo) ->
+          jmdns.unregisterService(jmdnsServiceInfo)
+        }
       }
     }
 
 
   }
 
-  private fun txtByteToMap(array: ByteArray): Map<String, String>{
+  private fun txtByteToMap(array: ByteArray): Map<String, String> {
     val list = mutableListOf<ByteArray>()
 
     fun getTxt(array: ByteArray, firstIndex: Int): ByteArray {
@@ -127,7 +141,7 @@ actual class ServiceDiscoveryMdns() {
     }
 
     var index = 0
-    while (index<array.size) {
+    while (index < array.size) {
       val txt = getTxt(array, index)
       list.add(txt)
       index += txt.size + 1
@@ -143,6 +157,23 @@ actual class ServiceDiscoveryMdns() {
       val value = it.copyOfRange(split + 1, it.size)
 
       key.decodeToString() to value.decodeToString()
+    }
+  }
+
+  /**
+   * Jmdns append a number at the end of the name if there are 2 services with the same name.
+   * This method remove the number at the end of the name
+   *
+   * From "Izc3Nzf8n14AAA (2)" to "Izc3Nzf8n14AAA"
+   */
+  private fun javax.jmdns.ServiceInfo.nameWithoutNumber(): String{
+    val name = this.name
+
+    return if (name.endsWith(")")) {
+      val index = name.lastIndexOf("(")
+      name.substring(0, index).trimEnd()
+    }else{
+      name
     }
   }
 
