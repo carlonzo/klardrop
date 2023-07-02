@@ -14,14 +14,16 @@ import platform.posix.memcpy
 actual class ServiceDiscoveryMdns {
 
   private val browserReferencesHolder = mutableListOf<NSNetServiceBrowser>()
+  private val browserDelegateReferencesHolder = mutableListOf<BonjourBrowserDelegate>()
   private val serviceReferencesHolder = mutableListOf<NSNetService>()
-  private lateinit var delegate: BonjourBrowserDelegate
 
   actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> = callbackFlow {
 
     val browser = NSNetServiceBrowser()
-    delegate = BonjourBrowserDelegate(this)
+    val delegate = BonjourBrowserDelegate(this)
+
     browserReferencesHolder.add(browser)
+    browserDelegateReferencesHolder.add(delegate)
 
     browser.delegate = delegate
     browser.includesPeerToPeer = true
@@ -30,10 +32,12 @@ actual class ServiceDiscoveryMdns {
     browser.searchForServicesOfType(serviceType, inDomain = "local.")
 
     awaitClose {
+      println("closing browser for $serviceType")
       browser.stop()
       browser.delegate = null
       browser.removeFromRunLoop(NSRunLoop.currentRunLoop(), NSDefaultRunLoopMode)
       browserReferencesHolder.removeAll { it === browser }
+      browserDelegateReferencesHolder.removeAll { it === delegate }
     }
   }
 
@@ -57,6 +61,7 @@ actual class ServiceDiscoveryMdns {
       service.publish()
 
       it.invokeOnCancellation {
+        println("closing service publishing for ${registerServiceInfo.serviceName}")
         service.stop()
         service.delegate = null
         serviceReferencesHolder.removeAll { ref -> ref === service }
@@ -84,6 +89,16 @@ actual class ServiceDiscoveryMdns {
       println("netServiceBrowser found service: $didFindService")
 
       producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(didFindService.toServiceInfo()))
+    }
+
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindDomain: String, moreComing: Boolean) {
+      println("Bonjour found domain: $didFindDomain")
+    }
+
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netServiceBrowser(browser: NSNetServiceBrowser, didRemoveDomain: String, moreComing: Boolean) {
+      println("Bonjour removed domain: $didRemoveDomain")
     }
 
     override fun netServiceBrowserDidStopSearch(browser: NSNetServiceBrowser) {

@@ -102,6 +102,7 @@ internal class VisibleDevicesImpl(
 
         it.toMutableMap().apply {
 
+          log("VisibleDevices. updating device: $deviceInfo connections: $newConnections")
           put(
             deviceInfo.deviceId, storedDiscoveryDevice.copy(
               deviceConnections = newConnections
