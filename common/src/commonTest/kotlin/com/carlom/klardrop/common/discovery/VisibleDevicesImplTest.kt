@@ -47,8 +47,8 @@ class VisibleDevicesImplTest {
         assertContains(deviceInfos, device1)
         assertContains(deviceInfos, device2)
 
-        assertEquals(setOf(connection1), it.getValue(device1.deviceId).deviceConnections)
-        assertEquals(setOf(connection2), it.getValue(device2.deviceId).deviceConnections)
+        assertEquals(listOf(connection1), it.getValue(device1.deviceId).deviceConnections)
+        assertEquals(listOf(connection2), it.getValue(device2.deviceId).deviceConnections)
       }
 
       visibleDevices.onDeviceLost(device2.deviceId, connection2)
@@ -82,7 +82,7 @@ class VisibleDevicesImplTest {
 
         assertContains(deviceInfos, device1)
 
-        assertEquals(setOf(connection1, connection2), it.getValue(device1.deviceId).deviceConnections)
+        assertEquals(listOf(connection1, connection2), it.getValue(device1.deviceId).deviceConnections)
 
       }
 
@@ -117,6 +117,6 @@ class VisibleDevicesImplTest {
   val device2 = DeviceInfo("2", "device2", DeviceType.DESKTOP)
 
   val connection1 = DeviceConnection.Nearby("1.1.1.1", 8080)
-  val connection2 = DeviceConnection.Klardrop("1.1.1.2")
+  val connection2 = DeviceConnection.Klardrop("1.1.1.2", 8081)
 
 }
