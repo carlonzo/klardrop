@@ -17,7 +17,7 @@ interface VisibleDevices {
   suspend fun getDevice(deviceId: String): DiscoveryDevice?
 
   suspend fun onDeviceLost(deviceId: String)
-  suspend fun onDeviceLost(deviceId: String, deviceConnection: DeviceConnection)
+  suspend fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection)
 
 }
 
@@ -53,13 +53,19 @@ internal class VisibleDevicesImpl(
     }
   }
 
-  override suspend fun onDeviceLost(deviceId: String, deviceConnection: DeviceConnection) {
-    visibleDevicesFlow.update {
-      it.toMutableMap().also { map ->
+  override suspend fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection) {
+
+    if (deviceConnectionToRemove is DeviceConnection.Nearby && deviceConnectionToRemove.port == 0 && deviceConnectionToRemove.address.isEmpty()) {
+      onDeviceLost(deviceId)
+      return
+    }
+
+    visibleDevicesFlow.update { currentMap ->
+      currentMap.toMutableMap().also { map ->
 
         val device = map[deviceId] ?: return@also
 
-        val newConnections = device.deviceConnections.filter { it.deviceConnectionType != deviceConnection.deviceConnectionType }.toSet()
+        val newConnections = device.deviceConnections.filterNot { it == deviceConnectionToRemove }.toSet()
 
         if (newConnections.isEmpty()) {
           map.remove(deviceId)

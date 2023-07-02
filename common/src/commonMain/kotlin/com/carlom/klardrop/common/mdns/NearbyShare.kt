@@ -1,6 +1,10 @@
 package com.carlom.klardrop.common.mdns
 
-import com.carlom.klardrop.common.discovery.*
+import com.carlom.klardrop.common.discovery.CurrentDevice
+import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
+import com.carlom.klardrop.common.discovery.DeviceConnection
+import com.carlom.klardrop.common.discovery.DeviceInfo
+import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
@@ -27,25 +31,43 @@ class NearbyShare(
 
     nearbyShareScope.launch {
 
-      serviceDiscoveryMdns.discoverServices(serviceType).collect {
+      serviceDiscoveryMdns.discoverServices(NEARBY_SERVICE_TYPE).collect {
 
-        log("NearbyShare", "Discovered services: $it")
+        log("NearbyShare", "New discovery event: $it")
 
-        it.mapNotNull { serviceInfo ->
-          if (serviceInfo.addresses.isNullOrEmpty()) {
-            log("NearbyShare", "Ignoring discovered device $it because it has no addresses")
-            null
-          } else {
-            serviceInfo.toDeviceInfo() to DeviceConnection.Nearby(serviceInfo.addresses.first(), serviceInfo.port)
+        when (it) {
+
+
+          is ServiceDiscoveryEvent.ServiceFound -> it.serviceInfo.addresses.forEach { address ->
+            if (isValidService(it.serviceInfo)) {
+              visibleDevices.onNewDeviceVisible(it.serviceInfo.toDeviceInfo(), DeviceConnection.Nearby(address, it.serviceInfo.port))
+            } else {
+              log("NearbyShare", "Invalid service discovered: ${it.serviceInfo}. Will skip")
+            }
           }
+
+
+          is ServiceDiscoveryEvent.ServiceLost -> {
+
+            if (it.serviceInfo.addresses.isNotEmpty()) {
+              it.serviceInfo.addresses.forEach { address ->
+                visibleDevices.onDeviceLost(it.serviceInfo.serviceName, DeviceConnection.Nearby(address, it.serviceInfo.port))
+              }
+            } else {
+              visibleDevices.onDeviceLost(it.serviceInfo.serviceName)
+            }
+
+          }
+
         }
-          .forEach { (deviceInfo, deviceConnection) ->
-            visibleDevices.onNewDeviceVisible(deviceInfo, deviceConnection)
-          }
 
       }
     }
 
+  }
+
+  private fun isValidService(serviceInfo: ServiceInfo): Boolean {
+    return (serviceInfo.serviceType == NEARBY_SERVICE_TYPE || serviceInfo.serviceType == NEARBY_SERVICE_TYPE_LOCAL) && serviceInfo.addresses.isNotEmpty() && serviceInfo.attributes.isNotEmpty()
   }
 
   fun startPublishingService(port: Int) {
@@ -62,7 +84,12 @@ class NearbyShare(
     val endpointInfo = attributes.getValue("n")
     val endpointInfoBytes = urlSafeBase64DecodeString(endpointInfo)
 
-    val deviceType = deviceTypeFromId(endpointInfoBytes[0].toInt() shr 1)
+    // 1 byte: Version(3 bits)|Visibility(1 bit)|Device Type(3 bits)|Reserved(1 bits)
+    // Device types: unknown=0, phone=1, tablet=2, laptop=3
+    val deviceInfoByte = endpointInfoBytes[0].toInt()
+
+    val deviceTypeId = deviceInfoByte and 0b0000_1110
+    val deviceType = deviceTypeFromId(deviceTypeId shr 1) // 0000 ddd0 (d == devicetype)
     val deviceNameLength = endpointInfoBytes[17]
     val deviceName = endpointInfoBytes.sliceArray(18 until 18 + deviceNameLength.toInt()).decodeToString()
 
@@ -74,7 +101,7 @@ class NearbyShare(
     )
   }
 
-  private suspend fun buildServiceInfo(port: Int): ServiceInfo {
+  private suspend fun buildServiceInfo(port: Int): RegisterServiceInfo {
     val currentDevice = currentDevice.await()
 
     val nameBytes = byteArrayOf(
@@ -89,10 +116,10 @@ class NearbyShare(
     // urlsafe base64
     val name = urlSafeBase64EncodedString(nameBytes)
 
-    return ServiceInfo(
+    return RegisterServiceInfo(
       port = port,
       serviceName = name,
-      serviceType = serviceType,
+      serviceType = NEARBY_SERVICE_TYPE,
       attributes = mapOf("n" to urlSafeBase64EncodedString(endpointInfo))
     )
   }
@@ -151,7 +178,8 @@ class NearbyShare(
   }
 
   private companion object {
-    const val serviceType = "_FC9F5ED42C8A._tcp."
+    const val NEARBY_SERVICE_TYPE = "_FC9F5ED42C8A._tcp."
+    private const val NEARBY_SERVICE_TYPE_LOCAL = "_FC9F5ED42C8A._tcp.local."
   }
 
 }

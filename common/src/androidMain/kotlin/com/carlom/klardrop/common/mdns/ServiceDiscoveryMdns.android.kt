@@ -14,8 +14,7 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
   private val nsdManager by lazy { context.getSystemService(Context.NSD_SERVICE) as NsdManager }
 
-  actual fun discoverServices(serviceType: String): Flow<List<ServiceInfo>> {
-    var listServices = mutableListOf<ServiceInfo>()
+  actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
 
     return callbackFlow {
 
@@ -38,28 +37,18 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceFound: $serviceInfo")
-          val attributes = serviceInfo.attributes.mapValues { it.value.decodeToString() }
 
-          val address = serviceInfo.host.hostAddress
-          val newList = listServices.toMutableList()
-          newList.add(
-            ServiceInfo(
-              serviceInfo.port,
-              serviceInfo.serviceName,
-              serviceInfo.serviceType,
-              attributes,
-              address?.let { listOf(it) } ?: emptyList()
-            )
-          )
-          listServices = newList
+          val service = serviceInfo.toServiceInfo()
 
-          trySend(newList)
+          trySend(ServiceDiscoveryEvent.ServiceFound(service))
         }
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceLost: $serviceInfo")
-          listServices.removeAll { it.serviceName == serviceInfo.serviceName }
-          trySend(listServices)
+
+          val service = serviceInfo.toServiceInfo()
+
+          trySend(ServiceDiscoveryEvent.ServiceLost(service))
         }
 
       }
@@ -81,7 +70,7 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
   }
 
-  actual suspend fun registerService(serviceInfo: ServiceInfo) {
+  actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
 
     suspendCancellableCoroutine<Unit> {
 
@@ -108,11 +97,11 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
       nsdManager.registerService(
         NsdServiceInfo().apply {
-          serviceName = serviceInfo.serviceName
-          serviceType = serviceInfo.serviceType
-          port = serviceInfo.port
+          serviceName = registerServiceInfo.serviceName
+          serviceType = registerServiceInfo.serviceType
+          port = registerServiceInfo.port
 
-          serviceInfo.attributes.forEach { (key, value) ->
+          registerServiceInfo.attributes.forEach { (key, value) ->
             setAttribute(key, value)
           }
         },
@@ -138,5 +127,18 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
     return lock
   }
 
+  private fun NsdServiceInfo.toServiceInfo(): ServiceInfo {
+    val attributes = this.attributes.mapValues { it.value.decodeToString() }
+
+    val addresses = this.host.hostAddress as String
+
+    return ServiceInfo(
+      this.port,
+      this.serviceName,
+      this.serviceType,
+      attributes,
+      listOf(addresses)
+    )
+  }
 
 }

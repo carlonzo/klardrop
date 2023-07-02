@@ -36,7 +36,7 @@ class CommonComponent(
 
   private val coroutines: Coroutines by lazy { utilsModule.coroutines() }
   private val clock: Clock by lazy { utilsModule.clock() }
-  private val protoBuf = ProtoBuf { }
+  private val protoBuf = ProtoBuf
   private val currentDeviceProvider by lazy {
     CurrentDeviceProvider(
       localProperties,
