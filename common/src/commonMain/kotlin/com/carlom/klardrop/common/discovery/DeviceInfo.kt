@@ -12,7 +12,7 @@ data class DeviceInfo(
 
 data class DiscoveryDevice(
   val deviceInfo: DeviceInfo,
-  val deviceConnections: Set<DeviceConnection> = emptySet()
+  val deviceConnections: List<DeviceConnection> = emptyList()
 ) {
 
   fun hasNearbyConnection(): Boolean {
@@ -35,16 +35,19 @@ data class DiscoveryDevice(
 sealed interface DeviceConnection {
 
   val deviceConnectionType: DeviceConnectionType
+  val address: String
+  val port: Int
 
   data class Nearby(
-    val address: String,
-    val port: Int
+    override val address: String,
+    override val port: Int
   ) : DeviceConnection {
     override val deviceConnectionType = DeviceConnectionType.NEARBY
   }
 
   data class Klardrop(
-    val address: String
+    override val address: String,
+    override val port: Int
   ) : DeviceConnection {
     override val deviceConnectionType = DeviceConnectionType.KLARDROP
   }

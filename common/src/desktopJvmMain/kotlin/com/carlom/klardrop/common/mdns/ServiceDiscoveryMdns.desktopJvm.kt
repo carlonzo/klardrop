@@ -27,7 +27,7 @@ actual class ServiceDiscoveryMdns() {
 
   actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
 
-    val services = listOf(serviceType, "${serviceType}local.")
+    val serviceTypeLocal = "${serviceType}local."
 
     return callbackFlow {
 
@@ -35,12 +35,10 @@ actual class ServiceDiscoveryMdns() {
 
       val listener = object : ServiceListener {
         override fun serviceAdded(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceAdded: $event")
-
         }
 
         override fun serviceRemoved(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceRemoved: $event")
+          log("ServiceDiscoveryMdns", "serviceRemoved: ${event.info}")
 
           scope.launch {
             send(ServiceDiscoveryEvent.ServiceLost(event.toServiceInfo()))
@@ -48,7 +46,12 @@ actual class ServiceDiscoveryMdns() {
         }
 
         override fun serviceResolved(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
+
+          if (event.info.inet4Addresses.isEmpty()){
+            return
+          } else {
+            log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
+          }
 
           scope.launch {
             send(ServiceDiscoveryEvent.ServiceFound(event.toServiceInfo()))
@@ -58,17 +61,12 @@ actual class ServiceDiscoveryMdns() {
       }
 
       jmdns.forEach { instances ->
-        services.forEach { service ->
-          instances.addServiceListener(service, listener)
-        }
+        instances.addServiceListener(serviceTypeLocal, listener)
       }
 
       awaitClose {
         jmdns.forEach { instances ->
-          services.forEach {
-            instances.removeServiceListener(it, listener)
-          }
-
+          instances.removeServiceListener(serviceTypeLocal, listener)
         }
       }
     }

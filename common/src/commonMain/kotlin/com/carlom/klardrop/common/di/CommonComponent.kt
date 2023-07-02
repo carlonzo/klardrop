@@ -58,13 +58,13 @@ class CommonComponent(
 
   private val discoveryModule by lazy {
     DiscoveryModule(
-      coroutines, currentDeviceProvider, internalPlatformDependency, clock
+      coroutines, currentDeviceProvider, internalPlatformDependency
     )
   }
 
   private val nearbyModule by lazy {
     NearbyModule(
-      coroutines, internalPlatformDependency, discoveryModule.serviceDiscoveryMdns(), currentDeviceProvider, visibleDevices(), fileManager
+      coroutines, internalPlatformDependency, currentDeviceProvider, fileManager
     )
   }
 
@@ -82,8 +82,6 @@ class CommonComponent(
   fun messenger() = communicationModule.messenger()
 
   fun platformFileSystem() = platformFileSystem
-
-  fun nearbyShare() = nearbyModule.nearbyShare()
 
   fun nearbyServer() = nearbyModule.nearbyServer()
 

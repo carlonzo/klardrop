@@ -20,7 +20,7 @@ class CurrentDeviceProvider(
     val properties = localPropertiesRepository.properties.first()
 
     val deviceId = properties.deviceId.ifEmpty {
-      val id = UUIDGenerator().generate().lowercase()
+      val id = cleanDeviceId(UUIDGenerator().generate())
       localPropertiesRepository.save(properties.copy(deviceId = id))
       id
     }
@@ -29,6 +29,23 @@ class CurrentDeviceProvider(
     val deviceType = internalPlatformDependency.deviceType()
 
     return CurrentDevice(deviceId, deviceName, deviceType)
+  }
+
+  /**
+   * Cleans the device ID by removing any non-letter and non-digit characters,
+   * and converts any uppercase letters to lowercase.
+   *
+   * @param deviceId The input device ID string to be cleaned.
+   * @return The cleaned device ID string.
+   */
+  private fun cleanDeviceId(deviceId: String): String {
+    return buildString {
+      deviceId.forEach {
+        if (it.isLetterOrDigit()) {
+          append(it.lowercase())
+        }
+      }
+    }
   }
 
 }

@@ -3,10 +3,8 @@ package com.carlom.klardrop.common.mdns
 import kotlinx.coroutines.flow.Flow
 
 expect class ServiceDiscoveryMdns {
-
   fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent>
   suspend fun registerService(registerServiceInfo: RegisterServiceInfo)
-
 }
 
 sealed interface ServiceDiscoveryEvent {

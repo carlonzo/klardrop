@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.mdns.NearbyModule
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.UtilsModule
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -20,12 +21,14 @@ class Klardrop(
   fun init() {
     commonComponent = CommonComponent(storageModule, utilsModule, internalPlatformDependency)
 
-    // start discovery
-//    commonComponent.discoveryNetwork().start()
-
     // start server
-//    commonComponent.server().startServer()
+    val discoveryNetwork = commonComponent.discoveryNetwork()
 
+    appScope.launch(commonComponent.coroutines().ioDispatcher) {
+      val serverPort = commonComponent.server().startServer().port
+
+      discoveryNetwork.startPublishKlardrop(serverPort)
+    }
 
     // start nearby share
     appScope.launch(commonComponent.coroutines().ioDispatcher) {
@@ -34,11 +37,13 @@ class Klardrop(
       commonComponent.nearbyServer().status
         .filter { it.isRunning }
         .collect {
-          commonComponent.nearbyShare().startPublishingService(it.port)
+          discoveryNetwork.startPublishNearbyShare(it.port)
         }
     }
 
-    commonComponent.nearbyShare().startDiscovery()
+    // start discovery jobs
+    discoveryNetwork.discoveryKlardropDevices()
+    discoveryNetwork.discoveryNearbyShareDevices()
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()

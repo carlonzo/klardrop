@@ -2,7 +2,6 @@ package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.router.MessagesRouter
-import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.KlardropProperties
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
@@ -16,9 +15,7 @@ import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
-internal const val SERVER_PORT = 65221
 
 class Server(
   localPropertiesRepository: LocalPropertiesRepository,
@@ -37,32 +34,38 @@ class Server(
     return true // always accept for now. should only accept if known? or just hold the connection if known?
   }
 
+
   @Suppress("ExtractKtorModule")
-  fun startServer() {
-    serverScope.launch {
+  /**
+   * Starts the server and returns the configuration of the engine connector.
+   *
+   * @return The configuration of the engine connector.
+   */
+  suspend fun startServer(): EngineConnectorConfig {
 
-      embeddedServer(CIO, port = SERVER_PORT) {
+    val server = embeddedServer(CIO, port = 0) {
 
-        install(WebSockets) {
+      install(WebSockets) {
 
-          pingPeriodMillis = 10_000
-          timeoutMillis = 10_000
+        pingPeriodMillis = 10_000
+        timeoutMillis = 10_000
 
-          extensions { install(FrameLoggerExtension) }
+        extensions { install(FrameLoggerExtension) }
+      }
+
+      routing {
+        webSocket("/connect") {
+          val remoteAddress = call.request.local.remoteAddress
+          log("Server", "New connection from: $remoteAddress")
+
+          onConnectionRequest(this, remoteAddress)
         }
-
-        routing {
-          webSocket("/connect") {
-            val remoteAddress = call.request.local.remoteAddress
-            log("Server", "New connection from: $remoteAddress")
-
-            onConnectionRequest(this, remoteAddress)
-          }
-        }
-
-      }.start(wait = false)
+      }
 
     }
+    server.start(wait = false)
+
+    return server.resolvedConnectors().first()
   }
 
   private suspend fun onConnectionRequest(wsSession: DefaultWebSocketServerSession, remoteAddress: String) {

@@ -5,10 +5,14 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import com.carlom.klardrop.common.utils.log
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 actual class ServiceDiscoveryMdns(private val context: Context) {
 
@@ -72,7 +76,7 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
   actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
 
-    suspendCancellableCoroutine<Unit> {
+    suspendCancellableCoroutine {
 
       val listener = object : NsdManager.RegistrationListener {
         override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
@@ -81,10 +85,12 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
         override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
           log("ServiceDiscoveryMdns", "onRegistrationFailed: $serviceInfo $errorCode")
+          it.resumeWithException(Exception("Registration failed with error code $errorCode"))
         }
 
         override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceUnregistered: $serviceInfo")
+          it.resume(Unit)
         }
 
         override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -113,7 +119,6 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
         lock.release()
         nsdManager.unregisterService(listener)
       }
-
     }
 
   }
