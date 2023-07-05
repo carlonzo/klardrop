@@ -151,7 +151,7 @@ private suspend fun ByteReadChannel.readNearbyFully(sink: Sink) {
     }
 
     val sizeBytes = ByteArray(4)
-    val sizeByte = channel.readFully(sizeBytes).let { sizeBytes.map { it.toUInt() and 255u } }
+    val sizeByte = channel.readFully(sizeBytes).let { sizeBytes.map { it.toUByte().toInt() } }
     val size = ((sizeByte[0] shl 24) or (sizeByte[1] shl 16) or (sizeByte[2] shl 8) or sizeByte[3])
 
     val packet = channel.readRemaining(size.toLong())

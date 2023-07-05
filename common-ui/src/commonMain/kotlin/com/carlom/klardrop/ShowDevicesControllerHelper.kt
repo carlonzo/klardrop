@@ -24,7 +24,9 @@ class ShowDevicesControllerHelper(
   val devicesFlow: Flow<Collection<DeviceUi>> = _devicesFlow.map { it.values }
   init {
     coroutineScope.launch {
-      visibleDevices.visibleDevices.map {
+      visibleDevices.visibleDevices
+        .onEach { log("VisibleDevices", "emitting: $it") }
+        .map {
         it.values.map { device ->
           val deviceInfo = device.deviceInfo
           DeviceUi(

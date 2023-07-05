@@ -1,15 +1,26 @@
 package com.carlom.klardrop.common.mdns
 
-import kotlinx.cinterop.*
+import com.carlom.klardrop.common.utils.log
+import kotlinx.cinterop.allocArrayOf
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.readBytes
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-
 import kotlinx.coroutines.suspendCancellableCoroutine
-import platform.Foundation.*
+import platform.Foundation.NSData
+import platform.Foundation.NSDefaultRunLoopMode
+import platform.Foundation.NSInputStream
+import platform.Foundation.NSMutableData
+import platform.Foundation.NSNetService
+import platform.Foundation.NSNetServiceBrowser
+import platform.Foundation.NSNetServiceBrowserDelegateProtocol
+import platform.Foundation.NSNetServiceDelegateProtocol
+import platform.Foundation.NSOutputStream
+import platform.Foundation.NSRunLoop.Companion.mainRunLoop
+import platform.Foundation.appendData
+import platform.Foundation.create
 import platform.darwin.NSObject
-import platform.posix.memcpy
 
 actual class ServiceDiscoveryMdns {
 
@@ -17,28 +28,36 @@ actual class ServiceDiscoveryMdns {
   private val browserDelegateReferencesHolder = mutableListOf<BonjourBrowserDelegate>()
   private val serviceReferencesHolder = mutableListOf<NSNetService>()
 
-  actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> = callbackFlow {
+
+  actual fun discoverServices(serviceType: String) = callbackFlow {
 
     val browser = NSNetServiceBrowser()
-    val delegate = BonjourBrowserDelegate(this)
+    val serviceDelegate = NetServiceDelegate(this)
+    val delegate = BonjourBrowserDelegate(this, serviceDelegate)
 
     browserReferencesHolder.add(browser)
     browserDelegateReferencesHolder.add(delegate)
 
     browser.delegate = delegate
     browser.includesPeerToPeer = true
-    browser.scheduleInRunLoop(NSRunLoop.currentRunLoop(), NSDefaultRunLoopMode)
 
-    browser.searchForServicesOfType(serviceType, inDomain = "local.")
+    browser.scheduleInRunLoop(mainRunLoop, NSDefaultRunLoopMode)
+
+    browser.searchForServicesOfType(type = serviceType, inDomain = "")
+
+    println("Bonjour discovery started for $serviceType")
+    log("ServiceDiscoveryMdns","Bonjour discovery started for $serviceType")
+
 
     awaitClose {
-      println("closing browser for $serviceType")
+      log("ServiceDiscoveryMdns","closing browser for $serviceType")
+      browser.removeFromRunLoop(mainRunLoop, NSDefaultRunLoopMode)
       browser.stop()
       browser.delegate = null
-      browser.removeFromRunLoop(NSRunLoop.currentRunLoop(), NSDefaultRunLoopMode)
-      browserReferencesHolder.removeAll { it === browser }
-      browserDelegateReferencesHolder.removeAll { it === delegate }
+      browserReferencesHolder.removeAll { ref -> ref === browser }
+      browserDelegateReferencesHolder.removeAll { ref -> ref === delegate }
     }
+
   }
 
   actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
@@ -56,85 +75,17 @@ actual class ServiceDiscoveryMdns {
       // Set the TXT record on the service
       service.setTXTRecordData(createTXTRecordData(registerServiceInfo.attributes))
       service.includesPeerToPeer = true
-      service.delegate = BonjourServiceDelegate()
 
       service.publish()
 
       it.invokeOnCancellation {
-        println("closing service publishing for ${registerServiceInfo.serviceName}")
+        log("ServiceDiscoveryMdns","closing service publishing for ${registerServiceInfo.serviceName}")
         service.stop()
         service.delegate = null
         serviceReferencesHolder.removeAll { ref -> ref === service }
       }
     }
 
-  }
-
-  private inner class BonjourBrowserDelegate(private val producerScope: ProducerScope<ServiceDiscoveryEvent>) : NSObject(),
-    NSNetServiceBrowserDelegateProtocol {
-
-    override fun netServiceBrowserWillSearch(browser: NSNetServiceBrowser) {
-      println("Bonjour discovery started")
-    }
-
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
-    override fun netServiceBrowser(browser: NSNetServiceBrowser, didRemoveService: NSNetService, moreComing: Boolean) {
-      println("netServiceBrowser remove service: $didRemoveService")
-
-      producerScope.trySend(ServiceDiscoveryEvent.ServiceLost(didRemoveService.toServiceInfo()))
-    }
-
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
-    override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindService: NSNetService, moreComing: Boolean) {
-      println("netServiceBrowser found service: $didFindService")
-
-      producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(didFindService.toServiceInfo()))
-    }
-
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
-    override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindDomain: String, moreComing: Boolean) {
-      println("Bonjour found domain: $didFindDomain")
-    }
-
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
-    override fun netServiceBrowser(browser: NSNetServiceBrowser, didRemoveDomain: String, moreComing: Boolean) {
-      println("Bonjour removed domain: $didRemoveDomain")
-    }
-
-    override fun netServiceBrowserDidStopSearch(browser: NSNetServiceBrowser) {
-      println("Bonjour discovery stopped")
-    }
-
-    override fun netServiceBrowser(
-      browser: NSNetServiceBrowser,
-      didNotSearch: Map<Any?, *>
-    ) {
-      println("Bonjour discovery error: ${didNotSearch}")
-    }
-  }
-
-  private class BonjourServiceDelegate : NSObject(), NSNetServiceDelegateProtocol {
-    override fun netServiceWillPublish(sender: NSNetService) {
-      println("Service publishing started $sender")
-    }
-
-    override fun netServiceDidPublish(sender: NSNetService) {
-      println("Service published $sender")
-    }
-
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
-    override fun netService(sender: NSNetService, didNotPublish: Map<Any?, *>) {
-      println("Service publishing failed didNotPublish $sender")
-    }
-
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
-    override fun netService(sender: NSNetService, didNotResolve: Map<Any?, *>) {
-      println("Service publishing failed didNotResolve $sender")
-    }
-
-    override fun netServiceDidStop(sender: NSNetService) {
-      println("Service publishing stopped $sender")
-    }
   }
 
   private fun createTXTRecordData(attributes: Map<String, String>): NSData {
@@ -161,18 +112,128 @@ actual class ServiceDiscoveryMdns {
     return bytes?.readBytes(length.toInt()) ?: ByteArray(0)
   }
 
+
   private fun NSNetService.toServiceInfo(): ServiceInfo {
 
     val txtRecord = this.TXTRecordData()?.toByteArray() ?: ByteArray(0)
     val attributes = txtByteToMap(txtRecord)
+
+    val addresses = (addresses ?: emptyList<NSData>())
+      .map { (it as NSData).toByteArray() }
+      .filter { it.size == 16 }
+      .onEach { log("ServiceDiscoveryMdns","resolving address: ${it}") }
+      .map { it.copyOfRange(4, 8).map { it.toUByte().toInt() }.joinToString(separator = ".") }
 
     return ServiceInfo(
       port = this.port.toInt(),
       serviceName = this.name,
       serviceType = this.type,
       attributes = attributes,
-      addresses = this.addresses?.map { it.toString() } ?: emptyList()
+      addresses = addresses
     )
   }
 
+  inner class NetServiceDelegate(private val producerScope: ProducerScope<ServiceDiscoveryEvent>) : NSObject(),
+    NSNetServiceDelegateProtocol {
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netService(sender: NSNetService, didNotPublish: Map<Any?, *>) {
+      log("ServiceDiscoveryMdns","netService didNotPublish $sender")
+    }
+
+    override fun netService(sender: NSNetService, didAcceptConnectionWithInputStream: NSInputStream, outputStream: NSOutputStream) {
+      log("ServiceDiscoveryMdns","netService didAcceptConnectionWithInputStream $sender")
+    }
+
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netService(sender: NSNetService, didNotResolve: Map<Any?, *>) {
+      log("ServiceDiscoveryMdns","netService didNotResolve $sender")
+    }
+
+    override fun netService(sender: NSNetService, didUpdateTXTRecordData: NSData) {
+      log("ServiceDiscoveryMdns","netService didUpdateTXTRecordData $sender: ${txtByteToMap(didUpdateTXTRecordData.toByteArray())}")
+    }
+
+    override fun netServiceDidPublish(sender: NSNetService) {
+      log("ServiceDiscoveryMdns","netServiceDidPublish $sender")
+    }
+
+    override fun netServiceDidResolveAddress(sender: NSNetService) {
+      log("ServiceDiscoveryMdns","netServiceDidResolveAddress ${sender.toServiceInfo()}")
+      producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(sender.toServiceInfo()))
+    }
+
+    override fun netServiceDidStop(sender: NSNetService) {
+      log("ServiceDiscoveryMdns","netServiceDidStop $sender")
+    }
+
+    override fun netServiceWillPublish(sender: NSNetService) {
+      log("ServiceDiscoveryMdns","netServiceWillPublish $sender")
+    }
+
+    override fun netServiceWillResolve(sender: NSNetService) {
+      log("ServiceDiscoveryMdns","netServiceWillResolve $sender")
+    }
+  }
+
+  inner class BonjourBrowserDelegate(
+    private val producerScope: ProducerScope<ServiceDiscoveryEvent>,
+    private val serviceDelegate: NetServiceDelegate
+  ) : NSObject(),
+    NSNetServiceBrowserDelegateProtocol {
+
+    override fun netServiceBrowserWillSearch(browser: NSNetServiceBrowser) {
+      log("ServiceDiscoveryMdns","Bonjour discovery started")
+    }
+
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindService: NSNetService, moreComing: Boolean) {
+      log("ServiceDiscoveryMdns","netServiceBrowser found service: $didFindService - (${didFindService.toServiceInfo()})")
+
+      if (didFindService.addresses.isNullOrEmpty()) {
+        log("ServiceDiscoveryMdns","netServiceBrowser resolving service: $didFindService")
+        didFindService.delegate = serviceDelegate
+        didFindService.resolveWithTimeout(10.0)
+      } else {
+        producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(didFindService.toServiceInfo()))
+      }
+
+
+    }
+
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindDomain: String, moreComing: Boolean) {
+      log("ServiceDiscoveryMdns","netServiceBrowser found didFindDomain: $didFindDomain")
+    }
+
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netServiceBrowser(
+      browser: NSNetServiceBrowser,
+      didRemoveService: NSNetService,
+      moreComing: Boolean
+    ) {
+      log("ServiceDiscoveryMdns","netServiceBrowser didRemoveService: $didRemoveService")
+      producerScope.trySend(ServiceDiscoveryEvent.ServiceLost(didRemoveService.toServiceInfo()))
+    }
+
+    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    override fun netServiceBrowser(
+      browser: NSNetServiceBrowser,
+      didRemoveDomain: String,
+      moreComing: Boolean
+    ) {
+      log("ServiceDiscoveryMdns","netServiceBrowser didRemoveDomain: $didRemoveDomain")
+    }
+
+    override fun netServiceBrowser(browser: NSNetServiceBrowser, didNotSearch: Map<Any?, *>) {
+      log("ServiceDiscoveryMdns","netServiceBrowser didNotSearch: $didNotSearch")
+    }
+
+    override fun netServiceBrowserDidStopSearch(browser: NSNetServiceBrowser) {
+      log("ServiceDiscoveryMdns","netServiceBrowserDidStopSearch")
+    }
+
+
+  }
+
 }
+

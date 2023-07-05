@@ -30,15 +30,13 @@ internal class VisibleDevicesImpl(
 
   private val visibleDevicesFlow = MutableStateFlow(emptyMap<String, DiscoveryDevice>())
 
-
   override val visibleDevices: Flow<Map<String, DiscoveryDevice>> = visibleDevicesFlow.asStateFlow()
-    .onEach { log("VisibleDevices flow. emitting: $it") }
 
   override suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection) {
 
     val isNew = addDevice(deviceInfo, deviceConnection)
 
-    log("VisibleDevices. new device: $deviceInfo isNew: $isNew connections: ${deviceConnection.deviceConnectionType}")
+    log("VisibleDevices", "new device: $deviceInfo isNew: $isNew connections: ${deviceConnection.deviceConnectionType}")
 
   }
 
@@ -98,11 +96,13 @@ internal class VisibleDevicesImpl(
       visibleDevicesFlow.update {
         val storedDiscoveryDevice = (it[deviceInfo.deviceId] ?: DiscoveryDevice(deviceInfo))
 
-        val newConnections = storedDiscoveryDevice.deviceConnections.toMutableList().also { it.add(deviceConnection) }
+        val newConnections = storedDiscoveryDevice.deviceConnections
+          // removes connections same connection type and address. Probably new connection with new port that did not expire yet from mdns
+          .filterNot { it.deviceConnectionType == deviceConnection.deviceConnectionType && it.address == deviceConnection.address }
+          .toMutableList().also { it.add(deviceConnection) }
 
         it.toMutableMap().apply {
 
-          log("VisibleDevices. updating device: $deviceInfo connections: $newConnections")
           put(
             deviceInfo.deviceId, storedDiscoveryDevice.copy(
               deviceConnections = newConnections

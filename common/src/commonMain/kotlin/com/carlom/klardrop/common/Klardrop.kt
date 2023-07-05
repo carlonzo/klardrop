@@ -27,7 +27,7 @@ class Klardrop(
     appScope.launch(commonComponent.coroutines().ioDispatcher) {
       val serverPort = commonComponent.server().startServer().port
 
-//      discoveryNetwork.startPublishKlardrop(serverPort)
+      discoveryNetwork.startPublishKlardrop(serverPort)
     }
 
     // start nearby share
@@ -42,7 +42,7 @@ class Klardrop(
     }
 
     // start discovery jobs
-//    discoveryNetwork.discoveryKlardropDevices()
+    discoveryNetwork.discoveryKlardropDevices()
     discoveryNetwork.discoveryNearbyShareDevices()
   }
 
