@@ -50,7 +50,7 @@ actual class PlatformFileSystem {
   }
 
   actual suspend fun moveToStorage(filePath: String, mimeType: String?) {
-    // no-op
+//    UIImageWriteToSavedPhotosAlbum(UIImage(filePath), null, null, null)
   }
 
 }
