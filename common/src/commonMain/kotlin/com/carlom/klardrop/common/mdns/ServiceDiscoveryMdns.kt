@@ -8,8 +8,10 @@ expect class ServiceDiscoveryMdns {
 }
 
 sealed interface ServiceDiscoveryEvent {
-  data class ServiceFound(val serviceInfo: ServiceInfo) : ServiceDiscoveryEvent
-  data class ServiceLost(val serviceInfo: ServiceInfo) : ServiceDiscoveryEvent
+  val serviceInfo: ServiceInfo
+
+  data class ServiceFound(override val serviceInfo: ServiceInfo) : ServiceDiscoveryEvent
+  data class ServiceLost(override val serviceInfo: ServiceInfo) : ServiceDiscoveryEvent
 }
 
 data class ServiceInfo(

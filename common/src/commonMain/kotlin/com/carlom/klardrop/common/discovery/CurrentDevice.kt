@@ -10,7 +10,13 @@ data class CurrentDevice(
   val deviceId: String,
   val deviceName: String,
   val deviceType: DeviceType,
-)
+){
+
+  /**
+   * Device id used during discovery
+   */
+  val shortDeviceId = deviceId.take(8)
+}
 
 class CurrentDeviceProvider(
   private val localPropertiesRepository: LocalPropertiesRepository,

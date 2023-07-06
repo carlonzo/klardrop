@@ -42,9 +42,17 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceFound: $serviceInfo")
 
-          val service = serviceInfo.toServiceInfo()
+          nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+            override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+              log("ServiceDiscoveryMdns", "onResolveFailed: $serviceInfo $errorCode")
+            }
 
-          trySend(ServiceDiscoveryEvent.ServiceFound(service))
+            override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+              log("ServiceDiscoveryMdns", "onServiceResolved: $serviceInfo")
+              trySend(ServiceDiscoveryEvent.ServiceFound(serviceInfo.toServiceInfo()))
+            }
+
+          })
         }
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
@@ -135,14 +143,14 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
   private fun NsdServiceInfo.toServiceInfo(): ServiceInfo {
     val attributes = this.attributes.mapValues { it.value.decodeToString() }
 
-    val addresses = this.host.hostAddress as String
+    val addresses = this.host.hostAddress
 
     return ServiceInfo(
       this.port,
       this.serviceName,
       this.serviceType,
       attributes,
-      listOf(addresses)
+      addresses?.let { listOf(it) } ?: emptyList()
     )
   }
 

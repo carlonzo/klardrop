@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -13,6 +14,8 @@ import java.net.NetworkInterface
 import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceListener
+import javax.jmdns.ServiceTypeListener
+import kotlin.reflect.jvm.internal.impl.descriptors.Visibilities.Private
 
 
 actual class ServiceDiscoveryMdns() {
@@ -33,40 +36,34 @@ actual class ServiceDiscoveryMdns() {
 
       val scope: CoroutineScope = this
 
-      val listener = object : ServiceListener {
-        override fun serviceAdded(event: ServiceEvent) {
-        }
-
-        override fun serviceRemoved(event: ServiceEvent) {
-          log("ServiceDiscoveryMdns", "serviceRemoved: ${event.info}")
-
-          scope.launch {
-            send(ServiceDiscoveryEvent.ServiceLost(event.toServiceInfo()))
-          }
-        }
-
-        override fun serviceResolved(event: ServiceEvent) {
-
-          if (event.info.inet4Addresses.isEmpty()){
-            return
-          } else {
-            log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
-          }
-
-          scope.launch {
-            send(ServiceDiscoveryEvent.ServiceFound(event.toServiceInfo()))
-          }
-        }
-
-      }
+      val listenersHolder = mutableListOf<ServiceListener>()
 
       jmdns.forEach { instances ->
+        val listener = createServiceListener(this)
         instances.addServiceListener(serviceTypeLocal, listener)
+
+        listenersHolder.add(listener)
+      }
+
+      jmdns.forEach {
+
+        it.addServiceTypeListener(object : ServiceTypeListener {
+          override fun serviceTypeAdded(event: ServiceEvent) {
+            println("Service type added: ${event}")
+          }
+
+          override fun subTypeForServiceTypeAdded(event: ServiceEvent) {
+            println("Sub type added: ${event}")
+          }
+        })
+
       }
 
       awaitClose {
         jmdns.forEach { instances ->
-          instances.removeServiceListener(serviceTypeLocal, listener)
+          listenersHolder.forEach { listener ->
+            instances.removeServiceListener(serviceTypeLocal, listener)
+          }
         }
       }
     }
@@ -121,34 +118,42 @@ actual class ServiceDiscoveryMdns() {
 
   }
 
-
-  /**
-   * Jmdns append a number at the end of the name if there are 2 services with the same name.
-   * This method remove the number at the end of the name
-   *
-   * From "Izc3Nzf8n14AAA (2)" to "Izc3Nzf8n14AAA"
-   */
-  private fun javax.jmdns.ServiceInfo.nameWithoutNumber(): String {
-    val name = this.name
-
-    return if (name.endsWith(")")) {
-      val index = name.lastIndexOf("(")
-      name.substring(0, index).trimEnd()
-    } else {
-      name
-    }
-  }
-
   private fun ServiceEvent.toServiceInfo(): ServiceInfo {
     val attributes = txtByteToMap(this.info.textBytes)
 
     return ServiceInfo(
       port = this.info.port,
-      serviceName = this.info.nameWithoutNumber(),
+      serviceName = this.info.name,
       serviceType = this.info.type,
       attributes = attributes,
       addresses = this.info.inet4Addresses.map { it.hostAddress }
     )
+  }
+
+  private fun createServiceListener( producerScope: ProducerScope<ServiceDiscoveryEvent>): ServiceListener{
+    return object : ServiceListener {
+      override fun serviceAdded(event: ServiceEvent) {
+      }
+
+      override fun serviceRemoved(event: ServiceEvent) {
+        log("ServiceDiscoveryMdns", "serviceRemoved: ${event.info}")
+
+        producerScope.trySend(ServiceDiscoveryEvent.ServiceLost(event.toServiceInfo()))
+      }
+
+      override fun serviceResolved(event: ServiceEvent) {
+
+        if (event.info.inet4Addresses.isEmpty()){
+          return
+        } else {
+          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
+        }
+
+        producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(event.toServiceInfo()))
+      }
+
+    }
+
   }
 
 }
