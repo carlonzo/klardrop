@@ -54,3 +54,4 @@ local.properties
 
 ### XCode ###
 iosApp/iosApp.xcworkspace/xcuserdata/carlo.xcuserdatad/UserInterfaceState.xcuserstate
+iosApp/Pods/Pods.xcodeproj/xcuserdata/carlo.xcuserdatad/xcschemes/xcschememanagement.plist
