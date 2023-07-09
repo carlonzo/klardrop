@@ -9,7 +9,7 @@ plugins {
 kotlin {
   targetHierarchy.default()
 
-  android()
+  androidTarget()
   jvm("desktopJvm") {
     compilations.all {
       kotlinOptions.jvmTarget = "17"
@@ -77,33 +77,33 @@ android {
 }
 
 
-// See https://youtrack.jetbrains.com/issue/KT-55751
-val myAttribute = Attribute.of("myOwnAttribute", String::class.java)
-
-// replace releaseFrameworkIosFat by the name of the first configuration that conflicts
-configurations.named("podReleaseFrameworkIosFat").configure {
-  attributes {
-    // put a unique attribute
-    attribute(myAttribute, "pod-release-fat")
-  }
-}
-
-configurations.named("podDebugFrameworkIosFat").configure {
-  attributes {
-    // put a unique attribute
-    attribute(myAttribute, "pod-debug-fat")
-  }
-}
-
-// replace debugFrameworkIosFat by the name of the second configuration that conflicts
-configurations.named("podDebugFrameworkIosArm64").configure {
-  attributes {
-    attribute(myAttribute, "pod-debug-ios-arm64")
-  }
-}
-
-configurations.named("podReleaseFrameworkIosArm64").configure {
-  attributes {
-    attribute(myAttribute, "pod-release-ios-arm64")
-  }
-}
+//// See https://youtrack.jetbrains.com/issue/KT-55751
+//val myAttribute = Attribute.of("myOwnAttribute", String::class.java)
+//
+//// replace releaseFrameworkIosFat by the name of the first configuration that conflicts
+//configurations.named("podReleaseFrameworkIosFat").configure {
+//  attributes {
+//    // put a unique attribute
+//    attribute(myAttribute, "pod-release-fat")
+//  }
+//}
+//
+//configurations.named("podDebugFrameworkIosFat").configure {
+//  attributes {
+//    // put a unique attribute
+//    attribute(myAttribute, "pod-debug-fat")
+//  }
+//}
+//
+//// replace debugFrameworkIosFat by the name of the second configuration that conflicts
+//configurations.named("podDebugFrameworkIosArm64").configure {
+//  attributes {
+//    attribute(myAttribute, "pod-debug-ios-arm64")
+//  }
+//}
+//
+//configurations.named("podReleaseFrameworkIosArm64").configure {
+//  attributes {
+//    attribute(myAttribute, "pod-release-ios-arm64")
+//  }
+//}

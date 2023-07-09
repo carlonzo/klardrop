@@ -68,6 +68,7 @@ kotlin {
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
+      languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
     }
   }
 }
