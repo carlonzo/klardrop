@@ -1,32 +1,22 @@
 package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.utils.log
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
-import java.net.Inet4Address
-import java.net.InetAddress
-import java.net.NetworkInterface
-import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceListener
 import javax.jmdns.ServiceTypeListener
-import kotlin.reflect.jvm.internal.impl.descriptors.Visibilities.Private
+import javax.jmdns.impl.JmmDNSImpl
 
 
 actual class ServiceDiscoveryMdns() {
 
-  private val jmdns by lazy {
-    val addresses = getAddresses()
-
-    addresses.map { address ->
-      JmDNS.create(address, address.hostName)
-    }
-  }
+  private val jmdns by lazy { JmmDNSImpl() }
 
   actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
 
@@ -34,87 +24,48 @@ actual class ServiceDiscoveryMdns() {
 
     return callbackFlow {
 
-      val scope: CoroutineScope = this
-
       val listenersHolder = mutableListOf<ServiceListener>()
 
-      jmdns.forEach { instances ->
-        val listener = createServiceListener(this)
-        instances.addServiceListener(serviceTypeLocal, listener)
+      val listener = createServiceListener(this)
+      jmdns.addServiceListener(serviceTypeLocal, listener)
 
-        listenersHolder.add(listener)
-      }
-
-      jmdns.forEach {
-
-        it.addServiceTypeListener(object : ServiceTypeListener {
-          override fun serviceTypeAdded(event: ServiceEvent) {
-            println("Service type added: ${event}")
-          }
-
-          override fun subTypeForServiceTypeAdded(event: ServiceEvent) {
-            println("Sub type added: ${event}")
-          }
-        })
-
-      }
+      listenersHolder.add(listener)
 
       awaitClose {
-        jmdns.forEach { instances ->
-          listenersHolder.forEach { listener ->
-            instances.removeServiceListener(serviceTypeLocal, listener)
-          }
+        listenersHolder.forEach { listener ->
+          jmdns.removeServiceListener(serviceTypeLocal, listener)
         }
       }
     }
-  }
-
-  private fun getAddresses(): List<InetAddress> {
-    val addresses = mutableListOf<InetAddress>()
-
-    NetworkInterface.getNetworkInterfaces().iterator().forEach { networkInterface ->
-      networkInterface.inetAddresses.iterator().forEach { inetAddress ->
-
-        if (!inetAddress.isLoopbackAddress && inetAddress is Inet4Address) {
-          addresses.add(inetAddress)
-        }
-      }
-
-    }
-
-    return addresses
+      .flowOn(Dispatchers.IO)
   }
 
   actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
 
     suspendCancellableCoroutine<Unit> {
 
-      val registrations = mutableListOf<Pair<JmDNS, javax.jmdns.ServiceInfo>>()
+      val registrations = mutableListOf<javax.jmdns.ServiceInfo>()
 
-      jmdns.forEach { instance ->
-        val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
-          registerServiceInfo.serviceType,
-          registerServiceInfo.serviceName,
-          registerServiceInfo.port,
-          0,
-          0,
-          registerServiceInfo.attributes
-        )
 
-        instance.registerService(jmdnsServiceInfo)
+      val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
+        registerServiceInfo.serviceType,
+        registerServiceInfo.serviceName,
+        registerServiceInfo.port,
+        0,
+        0,
+        registerServiceInfo.attributes
+      )
 
-        registrations.add(instance to jmdnsServiceInfo)
-      }
+      jmdns.registerService(jmdnsServiceInfo)
 
       log("ServiceDiscoveryMdns", "publishing service: $registerServiceInfo")
 
       it.invokeOnCancellation {
-        registrations.forEach { (jmdns, jmdnsServiceInfo) ->
+        registrations.forEach { jmdnsServiceInfo ->
           jmdns.unregisterService(jmdnsServiceInfo)
         }
       }
     }
-
 
   }
 
@@ -130,7 +81,7 @@ actual class ServiceDiscoveryMdns() {
     )
   }
 
-  private fun createServiceListener( producerScope: ProducerScope<ServiceDiscoveryEvent>): ServiceListener{
+  private fun createServiceListener(producerScope: ProducerScope<ServiceDiscoveryEvent>): ServiceListener {
     return object : ServiceListener {
       override fun serviceAdded(event: ServiceEvent) {
       }
@@ -143,7 +94,7 @@ actual class ServiceDiscoveryMdns() {
 
       override fun serviceResolved(event: ServiceEvent) {
 
-        if (event.info.inet4Addresses.isEmpty()){
+        if (event.info.inet4Addresses.isEmpty()) {
           return
         } else {
           log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")

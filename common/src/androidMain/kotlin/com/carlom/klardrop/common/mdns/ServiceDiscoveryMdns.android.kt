@@ -123,6 +123,8 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
         listener
       )
 
+      log("ServiceDiscoveryMdns", "Registering: $registerServiceInfo")
+
       it.invokeOnCancellation {
         lock.release()
         nsdManager.unregisterService(listener)
