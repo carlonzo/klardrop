@@ -69,7 +69,7 @@ internal class NearbyShareDiscoveryUtils {
   }
 
   private fun buildDeviceId(currentDevice: CurrentDevice): ByteArray {
-    val deviceId = currentDevice.deviceId
+    val deviceId = currentDevice.shortDeviceId
 
     return deviceId.take(4).encodeToByteArray()
   }

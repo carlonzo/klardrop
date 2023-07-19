@@ -9,7 +9,7 @@ EXTERNAL SOURCES:
     :path: "../common-ui"
 
 SPEC CHECKSUMS:
-  common_ui: 563be7f4e2c81c5e427fdd3b5537addbbbf3a1b9
+  common_ui: 8460408fcde58982a07ae786d425e07f37d60728
 
 PODFILE CHECKSUM: aef38a0bb67b5cebbbe6b43bdff9c502bf6d93c9
 

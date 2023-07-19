@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.router.MessagesRouter
+import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
@@ -26,17 +27,14 @@ class ClientImpl(
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,
-  private val localPropertiesRepository: LocalPropertiesRepository,
   private val serializer: MessageSerializer,
-  private val visibleDevices: VisibleDevices
+  private val visibleDevices: VisibleDevices,
+  private val currentDeviceProvider: CurrentDeviceProvider
 ) : Client {
 
   private val clientScope = CoroutineScope(coroutines.ioDispatcher)
   private val visibleDevicesFlow =
     visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
-
-  private val currentDeviceId =
-    localPropertiesRepository.properties.map { it.deviceId }.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = "")
 
 
   private val client by lazy {
@@ -81,7 +79,7 @@ class ClientImpl(
 
           log("Client", "Connecting to $deviceId with address $address port $port")
 
-          estabilishConnection(address, port, deviceId, connectionJob)
+          establishConnection(address, port, deviceId, connectionJob)
             .onSuccess {
               // if connected, return
               return@forEach
@@ -101,7 +99,7 @@ class ClientImpl(
 
   }
 
-  private suspend fun estabilishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) = runCatching {
+  private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) = runCatching {
 
     client.webSocket(
       method = HttpMethod.Get,
@@ -110,7 +108,8 @@ class ClientImpl(
       path = "/connect"
     ) {
       log("Client", "Connected to $address. Sending greetings")
-      val introEnvelope = HandshakeMessage(currentDeviceId.value)
+
+      val introEnvelope = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
 
       send(serializer.serialize(introEnvelope))
 

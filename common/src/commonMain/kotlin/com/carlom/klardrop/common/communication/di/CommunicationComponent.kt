@@ -1,11 +1,18 @@
 package com.carlom.klardrop.common.communication.di
 
 import com.carlom.klardrop.common.FileManager
-import com.carlom.klardrop.common.communication.*
+import com.carlom.klardrop.common.communication.ClientImpl
+import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
+import com.carlom.klardrop.common.communication.MessageSerializer
+import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.MessengerImpl
+import com.carlom.klardrop.common.communication.ReceivedMessagesBroadcast
+import com.carlom.klardrop.common.communication.Server
 import com.carlom.klardrop.common.communication.message.FileMessageHandler
 import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.router.MessagesRouterImpl
+import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
@@ -20,7 +27,8 @@ class CommunicationModule(
   private val protoBuf: ProtoBuf,
   private val clock: Clock,
   private val fileManager: FileManager,
-  private val nearbyClient: NearbyClient
+  private val nearbyClient: NearbyClient,
+  private val currentDeviceProvider: CurrentDeviceProvider
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -52,19 +60,19 @@ class CommunicationModule(
       connectionsPool,
       coroutines,
       messagesRouter,
-      localPropertiesRepository,
       serializer,
-      visibleDevices
+      visibleDevices,
+      currentDeviceProvider,
     )
   }
 
   private val server by lazy {
     Server(
-      localPropertiesRepository,
       connectionsPool,
       coroutines,
       messagesRouter,
-      serializer
+      serializer,
+      currentDeviceProvider
     )
   }
   private val messenger: Messenger by lazy {

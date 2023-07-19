@@ -52,7 +52,8 @@ class CommonComponent(
       protoBuf,
       clock,
       fileManager,
-      nearbyModule.nearbyClient()
+      nearbyModule.nearbyClient(),
+      currentDeviceProvider
     )
   }
 

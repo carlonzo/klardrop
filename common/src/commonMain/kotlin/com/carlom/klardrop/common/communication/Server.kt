@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.router.MessagesRouter
+import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.persistence.KlardropProperties
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
@@ -18,17 +19,12 @@ import kotlinx.coroutines.flow.stateIn
 
 
 class Server(
-  localPropertiesRepository: LocalPropertiesRepository,
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,
+  private val currentDeviceProvider: CurrentDeviceProvider
 ) {
-
-  private val serverScope = CoroutineScope(coroutines.ioDispatcher)
-
-  private val properties =
-    localPropertiesRepository.properties.stateIn(serverScope, started = SharingStarted.Eagerly, initialValue = KlardropProperties(""))
 
   private fun isAcceptedSender(deviceId: String, receiverAddress: String): Boolean {
     return true // always accept for now. should only accept if known? or just hold the connection if known?
@@ -65,9 +61,13 @@ class Server(
     }
     server.start(wait = false)
 
-    return server.resolvedConnectors().first()
-  }
+    val config = server.resolvedConnectors().first()
 
+    log("Server", "Server started on ${config.host}:${config.port}")
+
+    return config
+  }
+// 36645 n 36951
   private suspend fun onConnectionRequest(wsSession: DefaultWebSocketServerSession, remoteAddress: String) {
     val request = serializer.deserialize(wsSession.incoming.receive()) as HandshakeMessage
 
@@ -80,7 +80,8 @@ class Server(
       connectionsPool.updateConnection(request.deviceId, connectionMessenger)
 
       //    send back introduction
-      val intro = HandshakeMessage(deviceId = properties.value.deviceId)
+      val deviceId = currentDeviceProvider.get().shortDeviceId
+      val intro = HandshakeMessage(deviceId)
       log("Server", "Sending greetings back to ${request.deviceId} on $remoteAddress")
       wsSession.send(serializer.serialize(intro))
 

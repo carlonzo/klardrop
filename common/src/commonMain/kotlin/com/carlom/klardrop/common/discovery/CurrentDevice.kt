@@ -7,7 +7,7 @@ import com.carlom.klardrop.common.utils.UUIDGenerator
 import kotlinx.coroutines.flow.first
 
 data class CurrentDevice(
-  val deviceId: String,
+  private val deviceId: String,
   val deviceName: String,
   val deviceType: DeviceType,
 ){
