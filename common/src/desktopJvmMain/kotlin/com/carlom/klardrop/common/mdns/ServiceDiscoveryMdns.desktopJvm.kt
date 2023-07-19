@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceListener
-import javax.jmdns.ServiceTypeListener
 import javax.jmdns.impl.JmmDNSImpl
 
 

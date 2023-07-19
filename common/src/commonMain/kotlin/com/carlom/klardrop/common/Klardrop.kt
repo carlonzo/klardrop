@@ -19,6 +19,7 @@ class Klardrop(
   private val appScope by lazy { commonComponent.coroutines().appScope }
 
   fun init() {
+
     commonComponent = CommonComponent(storageModule, utilsModule, internalPlatformDependency)
 
     // start server

@@ -3,9 +3,9 @@ agp = "7.4.1"
 kotlin = "1.9.0-RC"
 coroutines = "1.7.1"
 serialization = "1.5.1"
-compose-plugin = "1.5.0-dev1084"
-compose-compiler = "1.4.8-beta"
-okio = "3.4.0"
+compose-plugin = "1.5.0-dev1094"
+compose-compiler = "1.4.8-beta" # https://maven.pkg.jetbrains.space/public/p/compose/dev/org/jetbrains/compose/compiler/compiler/
+okio = "3.3.0"
 ktor = "2.3.2"
 datastore = "1.1.0-alpha04"
 dagger = "2.46.1"
@@ -49,7 +49,7 @@ dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = 
 
 simplestorage = { module = "com.anggrayudi:storage", version = "1.5.5" }
 
-jmdns = { module = "org.jmdns:jmdns", version = "3.5.8" }
+jmdns = { module = "org.jmdns:jmdns", version = "3.5.9-SNAPSHOT" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.0.0"}
 
