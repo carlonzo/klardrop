@@ -3,12 +3,12 @@ agp = "7.4.1"
 kotlin = "1.9.0-RC"
 coroutines = "1.7.1"
 serialization = "1.5.1"
-compose-plugin = "1.5.0-dev1094"
+compose-plugin = "1.5.0-dev1109"
 compose-compiler = "1.4.8-beta" # https://maven.pkg.jetbrains.space/public/p/compose/dev/org/jetbrains/compose/compiler/compiler/
-okio = "3.3.0"
+okio = "3.4.0"
 ktor = "2.3.2"
 datastore = "1.1.0-alpha04"
-dagger = "2.46.1"
+dagger = "2.47"
 
 [libraries]
 kotlin-gp = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
