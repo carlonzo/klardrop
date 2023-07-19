@@ -3,13 +3,12 @@ package com.carlom.klardrop.common.discovery
 import com.carlom.klardrop.common.mdns.RegisterServiceInfo
 import com.carlom.klardrop.common.mdns.ServiceInfo
 import com.carlom.klardrop.common.utils.DeviceType
-import kotlin.io.encoding.Base64
 
 internal class KlardropDiscoveryUtils {
 
   fun provideRegisterServiceInfo(port: Int, currentDevice: CurrentDevice): RegisterServiceInfo {
 
-    val nameBytes = currentDevice.deviceId.take(8).encodeToByteArray()
+    val nameBytes = currentDevice.shortDeviceId.encodeToByteArray()
     val name = urlSafeBase64EncodedString(nameBytes)
 
     return RegisterServiceInfo(
@@ -30,19 +29,20 @@ internal class KlardropDiscoveryUtils {
 
     return DeviceInfo(
       name = deviceName,
-      deviceId = serviceName,
+      deviceId = getDeviceId(serviceInfo),
       deviceType = deviceType,
     )
   }
 
   fun isValidService(serviceInfo: ServiceInfo): Boolean {
-    return (serviceInfo.serviceType == KLARDROP_SERVICE_TYPE || serviceInfo.serviceType == KLARDROP_SERVICE_TYPE_LOCAL)
-        && serviceInfo.addresses.isNotEmpty() && serviceInfo.attributes.isNotEmpty()
+    return serviceInfo.addresses.isNotEmpty() && serviceInfo.attributes.isNotEmpty()
+  }
+
+  fun getDeviceId(serviceInfo: ServiceInfo): String {
+    return urlSafeBase64DecodeString(serviceInfo.serviceNameClean()).decodeToString()
   }
 
   companion object {
-    // 1f5d5f63a522 == sha256("klardrop").take(12)
-    const val KLARDROP_SERVICE_TYPE = "_0681dfce5269._tcp."
-    const val KLARDROP_SERVICE_TYPE_LOCAL ="${KLARDROP_SERVICE_TYPE}local."
+    const val KLARDROP_SERVICE_TYPE = "_klardrop._tcp."
   }
 }

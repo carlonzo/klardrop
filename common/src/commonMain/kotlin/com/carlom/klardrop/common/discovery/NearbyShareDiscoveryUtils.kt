@@ -14,7 +14,7 @@ internal class NearbyShareDiscoveryUtils {
 
     val nameBytes = byteArrayOf(
       0x23.toByte(), // PCP
-      *getDeviceId(currentDevice), // 4 bytes unique device id
+      *buildDeviceId(currentDevice), // 4 bytes unique device id
       0xFC.toByte(), 0x9F.toByte(), 0x5E.toByte(), // Service ID hash
       0.toByte(), 0.toByte(),
     )
@@ -30,7 +30,9 @@ internal class NearbyShareDiscoveryUtils {
       serviceType = NEARBY_SERVICE_TYPE,
       attributes = mapOf(
         "n" to urlSafeBase64EncodedString(endpointInfo),
-        "di" to urlSafeBase64EncodedString(currentDevice.deviceId.take(8)),
+
+        // attribute 'di' is not included in original nearbyshare protocol. Adding from klardrop to recognize the device
+        "di" to urlSafeBase64EncodedString(currentDevice.shortDeviceId),
       )
     )
   }
@@ -49,23 +51,24 @@ internal class NearbyShareDiscoveryUtils {
     val deviceNameLength = endpointInfoBytes[17]
     val deviceName = endpointInfoBytes.sliceArray(18 until 18 + deviceNameLength.toInt()).decodeToString()
 
-    // attribute 'di' is not included in original nearbyshare protocol. Adding from klardrop to recognize the device
-    val deviceId = attributes["di"] ?: serviceName
-
-
     return DeviceInfo(
       name = deviceName,
-      deviceId = deviceId,
+      deviceId = getDeviceId(serviceInfo),
       deviceType = deviceType,
     )
   }
 
-  fun isValidService(serviceInfo: ServiceInfo): Boolean {
-    return (serviceInfo.serviceType == NEARBY_SERVICE_TYPE || serviceInfo.serviceType == NEARBY_SERVICE_TYPE_LOCAL)
-        && serviceInfo.addresses.isNotEmpty() && serviceInfo.attributes.isNotEmpty()
+  fun getDeviceId(serviceInfo: ServiceInfo): String {
+    val encodedServiceId = serviceInfo.attributes["di"] ?: return serviceInfo.serviceNameClean()
+
+    return urlSafeBase64DecodeString(encodedServiceId).decodeToString()
   }
 
-  private fun getDeviceId(currentDevice: CurrentDevice): ByteArray {
+  fun isValidService(serviceInfo: ServiceInfo): Boolean {
+    return serviceInfo.addresses.isNotEmpty() && serviceInfo.attributes.isNotEmpty()
+  }
+
+  private fun buildDeviceId(currentDevice: CurrentDevice): ByteArray {
     val deviceId = currentDevice.deviceId
 
     return deviceId.take(4).encodeToByteArray()
@@ -86,7 +89,6 @@ internal class NearbyShareDiscoveryUtils {
 
   companion object {
     const val NEARBY_SERVICE_TYPE = "_FC9F5ED42C8A._tcp."
-    private const val NEARBY_SERVICE_TYPE_LOCAL = "${NEARBY_SERVICE_TYPE}local."
   }
 }
 
@@ -116,5 +118,22 @@ internal fun urlSafeBase64DecodeString(data: String): ByteArray {
     }
   }.joinToString(separator = "").let {
     Base64.decode(it.encodeToByteArray())
+  }
+}
+
+/**
+ * Jmdns append a number at the end of the name if there are 2 services with the same name.
+ * This method remove the number at the end of the name
+ *
+ * From "Izc3Nzf8n14AAA (2)" to "Izc3Nzf8n14AAA"
+ */
+fun ServiceInfo.serviceNameClean(): String {
+  val name = serviceName
+
+  return if (name.endsWith(")")) {
+    val index = name.lastIndexOf("(")
+    name.substring(0, index).trimEnd()
+  } else {
+    name
   }
 }

@@ -62,13 +62,22 @@ class DiscoveryNetwork internal constructor(
 
         log("DiscoveryNetwork", "New discovery event for NearbyShare: $it")
 
+        val deviceId = nearbyShareDiscoveryUtils.getDeviceId(it.serviceInfo)
+
+        if (deviceId == currentDevice.await().shortDeviceId) {
+          log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
+          return@collect
+        }
+
         when (it) {
 
           is ServiceDiscoveryEvent.ServiceFound -> if (nearbyShareDiscoveryUtils.isValidService(it.serviceInfo)) {
             onDiscoveredService(it.serviceInfo, DeviceConnectionType.NEARBY)
+          } else {
+            log("DiscoveryNetwork", "Invalid service found for Nearby: ${it.serviceInfo}")
           }
 
-          is ServiceDiscoveryEvent.ServiceLost -> onLostService(it.serviceInfo, DeviceConnectionType.NEARBY)
+          is ServiceDiscoveryEvent.ServiceLost -> onLostService(deviceId, it.serviceInfo, DeviceConnectionType.NEARBY)
 
         }
 
@@ -83,13 +92,22 @@ class DiscoveryNetwork internal constructor(
       serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE).collect {
         log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
 
+        val deviceId = klardropDiscoveryUtils.getDeviceId(it.serviceInfo)
+
+        if (deviceId == currentDevice.await().shortDeviceId) {
+          log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
+          return@collect
+        }
+
         when (it) {
 
           is ServiceDiscoveryEvent.ServiceFound -> if (klardropDiscoveryUtils.isValidService(it.serviceInfo)) {
             onDiscoveredService(it.serviceInfo, DeviceConnectionType.KLARDROP)
+          } else {
+            log("DiscoveryNetwork", "Invalid service found for Klardrop: ${it.serviceInfo}")
           }
 
-          is ServiceDiscoveryEvent.ServiceLost -> onLostService(it.serviceInfo, DeviceConnectionType.KLARDROP)
+          is ServiceDiscoveryEvent.ServiceLost -> onLostService(deviceId, it.serviceInfo, DeviceConnectionType.KLARDROP)
 
         }
 
@@ -106,7 +124,7 @@ class DiscoveryNetwork internal constructor(
         DeviceConnectionType.KLARDROP -> DeviceConnection.Klardrop(address, serviceInfo.port)
       }
 
-      val deviceInfo = when(connectionType){
+      val deviceInfo = when (connectionType) {
         DeviceConnectionType.NEARBY -> nearbyShareDiscoveryUtils.toDeviceInfo(serviceInfo)
         DeviceConnectionType.KLARDROP -> klardropDiscoveryUtils.toDeviceInfo(serviceInfo)
       }
@@ -115,17 +133,17 @@ class DiscoveryNetwork internal constructor(
     }
   }
 
-  private suspend fun onLostService(serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {
+  private suspend fun onLostService(deviceId: String, serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {
     if (serviceInfo.addresses.isNotEmpty()) {
       serviceInfo.addresses.forEach { address ->
         val deviceConnection = when (connectionType) {
           DeviceConnectionType.NEARBY -> DeviceConnection.Nearby(address, serviceInfo.port)
           DeviceConnectionType.KLARDROP -> DeviceConnection.Klardrop(address, serviceInfo.port)
         }
-        visibleDevices.onDeviceLost(serviceInfo.serviceName, deviceConnection)
+        visibleDevices.onDeviceLost(deviceId, deviceConnection)
       }
     } else {
-      visibleDevices.onDeviceLost(serviceInfo.serviceName)
+      visibleDevices.onDeviceLost(deviceId)
     }
   }
 
