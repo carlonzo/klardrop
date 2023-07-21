@@ -63,4 +63,4 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
 jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "compose-plugin" }
-squareup-wire = { id = "com.squareup.wire", version = "4.7.2" }
+squareup-wire = { id = "com.squareup.wire", version = "4.8.0" }
