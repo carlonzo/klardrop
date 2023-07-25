@@ -1,7 +1,7 @@
 [versions]
 agp = "7.4.1"
 kotlin = "1.9.0"
-coroutines = "1.7.1"
+coroutines = "1.7.3"
 serialization = "1.5.1"
 compose-plugin = "1.5.0-dev1109"
 compose-compiler = "1.5.0" # https://maven.pkg.jetbrains.space/public/p/compose/dev/org/jetbrains/compose/compiler/compiler/
