@@ -52,5 +52,7 @@
 		<string>_FC9F5ED42C8A._tcp.</string>
 		<string>_FC9F5ED42C8A._tcp</string>
 	</array>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 </dict>
 </plist>
