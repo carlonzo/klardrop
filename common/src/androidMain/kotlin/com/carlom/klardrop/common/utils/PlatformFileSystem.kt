@@ -108,7 +108,7 @@ actual class PlatformFileSystem(private val context: Context) {
   }
 
 
-  actual suspend fun moveToStorage(filePath: String, mimeType: String?) {
+  actual suspend fun moveToStorage(filePath: String, mimeType: String) {
     val file = File(filePath)
     val fd = FileDescription(file.name, "Klardrop", mimeType)
 

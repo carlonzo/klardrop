@@ -158,11 +158,10 @@ class NearbyClientConnectionHandler(
 
       request as FileMessage.SendRequest
 
-      val mimetype = request.message.mimeType?.lowercase()
+      val mimetype = request.message.mimeType.lowercase()
 
       val fileType: FileMetadata.Type =
-        if (mimetype == null) FileMetadata.Type.UNKNOWN
-        else if (mimetype.startsWith("image/")) FileMetadata.Type.IMAGE
+        if (mimetype.startsWith("image/")) FileMetadata.Type.IMAGE
         else if (mimetype.startsWith("video/")) FileMetadata.Type.VIDEO
         else if (mimetype.startsWith("audio/")) FileMetadata.Type.AUDIO
         else FileMetadata.Type.UNKNOWN

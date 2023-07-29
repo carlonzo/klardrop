@@ -11,11 +11,11 @@ class FileManagerImpl(
   private val platformFileSystem: PlatformFileSystem,
   private val internalPlatformDependencies: InternalPlatformDependencies
 ) : FileManager {
-  override fun prepareSaveFile(fileName: String, mimeType: String?): FileTransfer {
+  override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer {
     val tempStorage = internalPlatformDependencies.getTempStoragePath()
     val tempAvailableFilePath = getAvailableFilePath(tempStorage, fileName, CurrentFileSystem)
 
-    log("FileManagerImpl", "Preparing file transfer to $tempAvailableFilePath")
+    log("FileManagerImpl", "Preparing file transfer to $tempAvailableFilePath with mimeType $mimeType")
 
     return FileTransferImpl(tempAvailableFilePath, mimeType)
   }
@@ -26,7 +26,7 @@ class FileManagerImpl(
 
   inner class FileTransferImpl(
     private val destinationPath: Path,
-    private val mimeType: String?
+    private val mimeType: String
   ) : FileTransfer {
     override val bufferedSink: BufferedSink by lazy { platformFileSystem.getWriteStreamFromUri(destinationPath.toString()) }
 

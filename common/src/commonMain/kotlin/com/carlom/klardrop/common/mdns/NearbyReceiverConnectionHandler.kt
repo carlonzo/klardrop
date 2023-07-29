@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.getMimeTypeFromExtension
 import com.carlom.klardrop.common.utils.log
 import com.carlonzo.ukey2.Ukey2Handshake
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
@@ -300,7 +301,7 @@ class NearbyReceiverConnectionHandler(
 
       val fileTransfer = fileManager.prepareSaveFile(
         fileName = fileMetadata.name!!,
-        mimeType = fileMetadata.mime_type
+        mimeType = fileMetadata.mime_type ?: getMimeTypeFromExtension(fileMetadata.name)
       )
 
       filesToTransfer[fileMetadata.payload_id!!] = fileTransfer

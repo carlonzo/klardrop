@@ -7,7 +7,7 @@ import okio.FileSystem
 import okio.Path
 
 interface FileManager {
-  fun prepareSaveFile(fileName: String, mimeType: String? = null): FileTransfer
+  fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer
   fun getReadStreamFromUri(fileName: String): BufferedSource
 
 }

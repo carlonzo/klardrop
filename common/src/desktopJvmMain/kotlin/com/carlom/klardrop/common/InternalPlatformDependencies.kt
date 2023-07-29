@@ -17,7 +17,7 @@ actual class InternalPlatformDependencies {
   }
 
   actual fun getDeviceName(): String {
-    return readFromBash("hostname")
+    return readFromBash("hostname").removeSuffix(".local")
   }
 
   actual fun deviceType(): DeviceType {

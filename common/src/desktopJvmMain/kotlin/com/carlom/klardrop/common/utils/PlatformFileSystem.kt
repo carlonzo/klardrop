@@ -39,7 +39,7 @@ actual class PlatformFileSystem(
     uri.toFile.delete()
   }
 
-  actual suspend fun moveToStorage(filePath: String, mimeType: String?) {
+  actual suspend fun moveToStorage(filePath: String, mimeType: String) {
     val sourcePath = filePath.toPath()
     val destinationPath = getAvailableFilePath(platformDependencies.getStoragePath(), sourcePath.name, fileSystem)
 

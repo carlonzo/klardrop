@@ -22,7 +22,7 @@ import kotlin.time.Duration.Companion.seconds
 data class FileMessage(
   val fileName: String,
   val fileSize: Long,
-  val mimeType: String? = null
+  val mimeType: String
 ) : Message {
   override val type: MessageType = MessageType.FILE
   override val hasPayload: Boolean = true
@@ -52,6 +52,7 @@ class FileMessageHandler(
 
       val fileTransfer = fileManager.prepareSaveFile(
         fileName = message.fileName,
+        mimeType = message.mimeType
       )
 
       log("FileMessageHandler", "Prepared file transfer for $message")
@@ -124,7 +125,7 @@ class FileMessageHandler(
         fileManager.getReadStreamFromUri(path).use { readBuffer ->
           while (!readBuffer.exhausted()) {
 
-            readBuffer.fillBuffer(buffer, 1_00_000)
+            readBuffer.fillBuffer(buffer, 106496) // TODO 106496b = 104kb looks like this is the size of the content of the raw frame sent. need to work more on this
 
             // closing the Frame with fin so the receiver can receive the full frame and flush to disk
             val flush = (frameCount % 5 == 0 && frameCount > 0) || readBuffer.exhausted()
