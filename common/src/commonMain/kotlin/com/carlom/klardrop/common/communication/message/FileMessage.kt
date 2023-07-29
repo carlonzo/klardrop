@@ -64,7 +64,7 @@ class FileMessageHandler(
           while (totalBytesReceived < message.fileSize) {
 
             log("FileMessageHandler", "Waiting to receive new frame for $message")
-            val newFrame = withTimeout(10.seconds) {
+            val newFrame = withTimeout(5.seconds) {
               receiveChannel.receive()
             }
 
@@ -114,20 +114,20 @@ class FileMessageHandler(
       log("FileMessageHandler", "Sending file with path: $path")
 
 
-      fileManager.getReadStreamFromUri(path).use {
+      val buffer = Buffer()
+      var totalSent = 0L
+      var frameCount = 0
 
-        val buffer = Buffer()
-        var totalSent = 0L
-        var frameCount = 0
+      val start = clock.currentTimeMillis()
+      runCatching {
 
-        val start = clock.currentTimeMillis()
-        runCatching {
-          while (!it.exhausted()) {
+        fileManager.getReadStreamFromUri(path).use { readBuffer ->
+          while (!readBuffer.exhausted()) {
 
-            it.fillBuffer(buffer, 1_00_000)
+            readBuffer.fillBuffer(buffer, 1_00_000)
 
             // closing the Frame with fin so the receiver can receive the full frame and flush to disk
-            val flush = (frameCount % 5 == 0 && frameCount > 0) || it.exhausted()
+            val flush = (frameCount % 5 == 0 && frameCount > 0) || readBuffer.exhausted()
             val bufferSize = buffer.size
 
             webSocketSession.send(Frame.Binary(flush, buffer.readByteArray()))
@@ -143,20 +143,20 @@ class FileMessageHandler(
           }
 
           webSocketSession.flush()
-        }.onSuccess {
-          buffer.close()
-          log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
-        }.onFailure {
-          log("FileMessageHandler", "Error sending file", it)
-          webSocketSession.send(Frame.Binary(true, Empty))
-          webSocketSession.flush()
-          buffer.close()
-
-          throw it
         }
+      }.onSuccess {
+        log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
+      }.onFailure {
+        log("FileMessageHandler", "Error sending file", it)
+        webSocketSession.send(Frame.Binary(true, Empty))
+        webSocketSession.flush()
+        buffer.close()
+
+        throw it
       }
     }
   }
+
 
   private fun BufferedSource.fillBuffer(buffer: Buffer, size: Long) {
 

@@ -31,14 +31,14 @@ class FileManagerImpl(
     override val bufferedSink: BufferedSink by lazy { platformFileSystem.getWriteStreamFromUri(destinationPath.toString()) }
 
     override suspend fun onTransferCompleted() {
-      bufferedSink.flush()
+      // should have been closed already
       bufferedSink.close()
 
       platformFileSystem.moveToStorage(destinationPath.toString(), mimeType)
     }
 
     override suspend fun onTransferFailed() {
-      bufferedSink.flush()
+      // should have been closed already
       bufferedSink.close()
 
       platformFileSystem.delete(destinationPath.toString())
