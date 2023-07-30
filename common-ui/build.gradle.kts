@@ -58,7 +58,13 @@ kotlin {
       dependencies {
         implementation(compose.preview)
         implementation(compose.uiTooling)
+        implementation(deps.androidx.activity)
+        implementation(deps.androidx.activity.compose)
       }
+    }
+
+    all {
+      languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
     }
   }
 }
@@ -70,4 +76,5 @@ android {
     minSdk = 23
   }
 }
+
 
