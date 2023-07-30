@@ -13,7 +13,7 @@ import javax.jmdns.ServiceListener
 import javax.jmdns.impl.JmmDNSImpl
 
 
-actual class ServiceDiscoveryMdns() {
+actual class ServiceDiscoveryMdns {
 
   private val jmdns by lazy { JmmDNSImpl() }
 

@@ -34,7 +34,7 @@ class MessengerImpl(
 
     sendScope.launch {
 
-      flow.emit(MessengerSendProgress.Pending)
+      flow.emit(Pending)
 
       val device = visibleDevices.getDevice(deviceId)
 

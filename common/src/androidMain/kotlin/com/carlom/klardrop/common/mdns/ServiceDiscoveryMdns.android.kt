@@ -135,8 +135,8 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
   private fun acquireWifiLock(): WifiManager.MulticastLock {
     val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-    val lock = wifi.createMulticastLock("multicastLock");
-    lock.setReferenceCounted(true);
+    val lock = wifi.createMulticastLock("multicastLock")
+    lock.setReferenceCounted(true)
     lock.acquire()
 
     return lock

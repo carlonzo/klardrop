@@ -10,7 +10,7 @@ version = "1.0-SNAPSHOT"
 
 
 kotlin {
-  macosArm64(){
+  macosArm64 {
     binaries {
       executable {
       }

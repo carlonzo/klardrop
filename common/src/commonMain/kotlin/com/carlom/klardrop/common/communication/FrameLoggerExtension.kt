@@ -4,7 +4,7 @@ import com.carlom.klardrop.common.utils.log
 import io.ktor.util.*
 import io.ktor.websocket.*
 
-class FrameLoggerExtension() : WebSocketExtension<Unit> {
+class FrameLoggerExtension : WebSocketExtension<Unit> {
 
   override val factory: WebSocketExtensionFactory<Unit, out WebSocketExtension<Unit>>
     get() = FrameLoggerExtension

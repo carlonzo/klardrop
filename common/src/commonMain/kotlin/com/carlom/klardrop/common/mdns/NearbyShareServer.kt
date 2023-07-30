@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-class NearbyShareServer constructor(
+class NearbyShareServer(
   private val coroutines: Coroutines,
   private val nearbyReceiverConnectionHandler: NearbyReceiverConnectionHandler,
 ) {
