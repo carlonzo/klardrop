@@ -1,6 +1,7 @@
 package com.carlom.klardrop
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.awt.ComposeWindow
 import java.awt.FileDialog
 import java.io.File
@@ -10,8 +11,8 @@ actual class FilePicker(
   private val window: ComposeWindow
 ) {
 
-  private lateinit var onFilesPicked: (List<String>) -> Unit
-  actual fun openFilePicker() {
+  private lateinit var onFilesPicked: (DeviceUi, List<String>) -> Unit
+  actual fun openFilePicker(deviceUi: DeviceUi) {
     UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
 
     val dialog = FileDialog(window).apply {
@@ -22,6 +23,7 @@ actual class FilePicker(
     dialog.isVisible = true
 
     onFilesPicked(
+      deviceUi,
       dialog.files.map { File(dialog.directory).resolve(it).absolutePath }
     )
 
@@ -29,8 +31,17 @@ actual class FilePicker(
   }
 
   @Composable
-  actual fun registerPicker(onFilesPicked: (List<String>) -> Unit) {
-    this.onFilesPicked = onFilesPicked
+  actual fun registerPicker(onFilesPicked: (DeviceUi, List<String>) -> Unit) {
+    this@FilePicker.onFilesPicked = onFilesPicked
   }
 
+}
+
+actual class FilePickerFactory(private val window: ComposeWindow) {
+  @Composable
+  actual fun createPicker(): FilePicker {
+    return remember(window) {
+      FilePicker(window)
+    }
+  }
 }

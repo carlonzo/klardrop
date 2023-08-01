@@ -63,6 +63,9 @@ class ShowVisibleDevicesController(
 
   override fun onDeviceClick(deviceUi: DeviceUi) {
     log("ShowVisibleDevicesController", "on device click: ${deviceUi.deviceName}")
+    controllerScope.launch {
+      actionsFlow.emit(ActionUi.OpenFilePicker(deviceUi))
+    }
   }
 
   override fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend) {

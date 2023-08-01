@@ -1,6 +1,8 @@
 package com.carlom.klardrop
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.interop.LocalUIViewController
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -19,9 +21,12 @@ actual class FilePicker(
   private val rootController: UIViewController
 ) {
 
-  private lateinit var onFilesPicked: (List<String>) -> Unit
+  private lateinit var onFilesPicked: (DeviceUi, List<String>) -> Unit
 
-  private val filePickerDelegate = object : NSObject(), PHPickerViewControllerDelegateProtocol {
+  private class FilePickerDelegate(
+    private val deviceUi: DeviceUi,
+    private val onFilesPicked: (DeviceUi, List<String>) -> Unit
+  ) : NSObject(), PHPickerViewControllerDelegateProtocol {
     override fun picker(picker: PHPickerViewController, didFinishPicking: List<*>) {
 
       if (didFinishPicking.isEmpty()) {
@@ -76,25 +81,34 @@ actual class FilePicker(
       GlobalScope.launch(Dispatchers.Main) {
         loadingJobs.awaitAll()
         picker.dismissViewControllerAnimated(true, null)
-        onFilesPicked(loadingJobs.map { it.getCompleted() })
+        onFilesPicked(deviceUi, loadingJobs.map { it.getCompleted() })
       }
 
     }
   }
 
-  actual fun openFilePicker() {
+  actual fun openFilePicker(deviceUi: DeviceUi) {
     val configuration = PHPickerConfiguration()
 
     val filePickerController = PHPickerViewController(configuration = configuration)
 
     rootController.presentViewController(filePickerController, true) {
-      filePickerController.delegate = filePickerDelegate
+      filePickerController.delegate = FilePickerDelegate(deviceUi, onFilesPicked)
     }
   }
 
   @Composable
-  actual fun registerPicker(onFilesPicked: (List<String>) -> Unit) {
+  actual fun registerPicker(onFilesPicked: (DeviceUi, List<String>) -> Unit) {
     this.onFilesPicked = onFilesPicked
+
   }
 
+}
+
+actual class FilePickerFactory {
+  @Composable
+  actual fun createPicker(): FilePicker {
+    val uiViewController = LocalUIViewController.current
+    return remember { FilePicker(uiViewController) }
+  }
 }

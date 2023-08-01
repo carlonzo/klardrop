@@ -3,27 +3,44 @@ package com.carlom.klardrop
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.utils.log
 
+
+@Composable
+fun DeviceDiscovery(
+  deviceUi: DeviceUi, isLargeScreen: Boolean, onDeviceActionListener: OnDeviceActionListener
+) {
+  if (isLargeScreen) {
+    DeviceLarge(deviceUi, onDeviceActionListener)
+  } else {
+    DeviceSmall(deviceUi, onDeviceActionListener)
+  }
+}
+
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceActionListener) {
+internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceActionListener) {
 
   Column(
     modifier = Modifier
@@ -53,12 +70,58 @@ fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceActionListen
 }
 
 @Composable
-expect fun DeviceDiscovery(
-  deviceUi: DeviceUi, onDeviceActionListener: OnDeviceActionListener
-)
+internal fun DeviceLarge(
+  deviceUi: DeviceUi,
+  onDeviceActionListener: OnDeviceActionListener
+) {
+
+  Box(
+    modifier = Modifier.padding(16.dp)
+      .fillMaxWidth()
+      .clip(shape = RoundedCornerShape(24.dp))
+      .deviceAdditions(deviceUi, onDeviceActionListener)
+  ) {
+
+    Box {
+
+      Row(
+        modifier = Modifier.padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+
+        CircleDevice(deviceUi)
+
+        Spacer(modifier = Modifier.size(12.dp))
+
+        Column {
+          deviceUi.connectionTypes.forEach {
+            Text(
+              text = it.name,
+              color = Color.Black,
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.size(16.dp))
+
+        Text(
+          text = deviceUi.deviceName,
+          color = Color.Black,
+          maxLines = 2
+        )
+
+      }
+
+      DeviceContent(deviceUi, onDeviceActionListener)
+    }
+
+
+  }
+
+}
 
 @Composable
-fun CircleDevice(deviceUi: DeviceUi) {
+private fun CircleDevice(deviceUi: DeviceUi) {
   val isSending = deviceUi.activityState is ActivityState.Sending
   val targetCircleSize = if (isSending) 60.dp else 70.dp
 
@@ -80,6 +143,19 @@ fun CircleDevice(deviceUi: DeviceUi) {
   }
 
 }
+
+@Composable
+internal expect fun Modifier.deviceAdditions(
+  deviceUi: DeviceUi,
+  onDeviceActionListener: OnDeviceActionListener
+): Modifier
+
+@Composable
+internal expect fun BoxScope.DeviceContent(
+  deviceUi: DeviceUi,
+  onDeviceActionListener: OnDeviceActionListener
+)
+
 
 interface OnDeviceActionListener {
   fun onDeviceClick(deviceUi: DeviceUi) {
