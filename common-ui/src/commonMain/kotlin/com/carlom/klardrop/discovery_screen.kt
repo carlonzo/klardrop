@@ -2,6 +2,7 @@ package com.carlom.klardrop
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -24,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
@@ -38,7 +40,7 @@ fun DiscoveryDashboard(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
   uiDependencies: UiDependencies,
-  showVisibleDevicesController: ShowVisibleDevicesController
+  discoveryController: DiscoveryController
 ) {
 
   val scope = rememberCoroutineScope()
@@ -63,13 +65,13 @@ fun DiscoveryDashboard(
     sheetState = sheetState,
     content = {
 
-      val devices by showVisibleDevicesController.flow.collectAsState(emptyList())
+      val discoveryState by discoveryController.screenStateFlow.collectAsState()
 
       filePicker.registerPicker { deviceUi, paths ->
-        showVisibleDevicesController.onSendData(deviceUi, OnDataToSend.FilesList(paths))
+        discoveryController.onSendData(deviceUi, OnDataToSend.FilesList(paths))
       }
 
-      showVisibleDevicesController.actionsFlow.collectAsEffect {
+      discoveryController.actionsFlow.collectAsEffect {
         when (it) {
           is ActionUi.OnDeviceClicked -> {
 
@@ -83,12 +85,43 @@ fun DiscoveryDashboard(
         }
       }
 
-      DiscoveryDashboard(
-        modifier = modifier,
-        isLargeScreen = isLargeScreen,
-        devices = devices,
-        onDeviceActionListener = showVisibleDevicesController
-      )
+      Box {
+
+        DiscoveryDashboard(
+          modifier = modifier,
+          isLargeScreen = isLargeScreen,
+          devices = discoveryState.devices,
+          onDeviceActionListener = discoveryController
+        )
+
+        Column {
+
+          if (discoveryState.receivingMessages.isNotEmpty()) {
+
+            discoveryState.receivingMessages.values.forEach {
+
+              val text = when (it.status) {
+                ReceiveMessageStatus.Completed -> "Completed ${it.messages}"
+                is ReceiveMessageStatus.Failed -> "Failed ${it.messages}"
+                is ReceiveMessageStatus.PendingAuthorization -> "Pending Authorization ${it.messages}"
+                is ReceiveMessageStatus.ReceivedProgressReceive -> "Progress ${(it.status as ReceiveMessageStatus.ReceivedProgressReceive).messages}"
+                ReceiveMessageStatus.Started -> "Started ${it.messages}"
+              }
+
+              Text(
+                text = text
+              )
+
+
+            }
+
+          }
+
+        }
+
+
+      }
+
 
     })
 }

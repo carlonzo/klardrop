@@ -2,10 +2,10 @@ package com.carlom.klardrop.common.discovery
 
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
+import io.ktor.network.sockets.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 
@@ -15,12 +15,14 @@ interface VisibleDevices {
 
   suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection)
 
-  suspend fun isDeviceVisible(deviceId: String): Boolean
+  fun isDeviceVisible(deviceId: String): Boolean
 
-  suspend fun getDevice(deviceId: String): DiscoveryDevice?
+  fun getDevice(deviceId: String): DiscoveryDevice?
 
-  suspend fun onDeviceLost(deviceId: String)
-  suspend fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection)
+  fun onDeviceLost(deviceId: String)
+  fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection)
+
+  fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice?
 
 }
 
@@ -40,21 +42,21 @@ internal class VisibleDevicesImpl(
 
   }
 
-  override suspend fun isDeviceVisible(deviceId: String): Boolean {
+  override fun isDeviceVisible(deviceId: String): Boolean {
     return visibleDevicesFlow.value.containsKey(deviceId)
   }
 
-  override suspend fun getDevice(deviceId: String): DiscoveryDevice? {
+  override fun getDevice(deviceId: String): DiscoveryDevice? {
     return visibleDevicesFlow.value[deviceId]
   }
 
-  override suspend fun onDeviceLost(deviceId: String) {
+  override fun onDeviceLost(deviceId: String) {
     visibleDevicesFlow.update {
       it.toMutableMap().also { map -> map.remove(deviceId) }
     }
   }
 
-  override suspend fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection) {
+  override fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection) {
 
     if (deviceConnectionToRemove is DeviceConnection.Nearby && deviceConnectionToRemove.port == 0 && deviceConnectionToRemove.address.isEmpty()) {
       onDeviceLost(deviceId)
@@ -76,6 +78,12 @@ internal class VisibleDevicesImpl(
 
       }
     }
+  }
+
+  override fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice? {
+    val hostname = address.hostname
+
+    return visibleDevicesFlow.value.values.firstOrNull { device -> device.deviceConnections.any { it.address == hostname } }
   }
 
   /**

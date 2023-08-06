@@ -9,17 +9,25 @@ import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.transformWhile
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 // TODO should this be composable and get the dispose callback to cancel scope?
-class ShowVisibleDevicesController(
+class DiscoveryController(
   private val coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
   private val messenger: Messenger,
@@ -33,15 +41,31 @@ class ShowVisibleDevicesController(
     commonComponent.platformFileSystem()
   )
 
-  private val controllerScope = CoroutineScope(coroutines.mainDispatcher)
+  private val controllerScope = CoroutineScope(coroutines.mainDispatcher + SupervisorJob())
   private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices)
 
   val actionsFlow = MutableSharedFlow<ActionUi>()
-  val flow: Flow<Collection<DeviceUi>> = showDevicesHelper.devicesFlow
+  val screenStateFlow = MutableStateFlow<DiscoveryScreenState>(DiscoveryScreenState())
+
+  init {
+    controllerScope.launch {
+      messenger.receive().collect {
+        listenNewMessagesReceived(it)
+      }
+    }
+
+    controllerScope.launch {
+      showDevicesHelper.devicesFlow.collect {
+        screenStateFlow.update { state ->
+          state.copy(devices = it.toList())
+        }
+      }
+    }
+  }
 
   private fun sendText(deviceId: String, text: String) {
     coroutines.appScope.launch {
-      messenger.send(deviceId, TextMessage(text).toSimpleSendRequest())
+      messenger.send(deviceId, TextMessage(text = text).toSimpleSendRequest())
         .untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
     }
   }
@@ -62,7 +86,7 @@ class ShowVisibleDevicesController(
   }
 
   override fun onDeviceClick(deviceUi: DeviceUi) {
-    log("ShowVisibleDevicesController", "on device click: ${deviceUi.deviceName}")
+    log("DiscoveryController", "on device click: ${deviceUi.deviceName}")
     controllerScope.launch {
       actionsFlow.emit(ActionUi.OnDeviceClicked(deviceUi))
     }
@@ -77,9 +101,39 @@ class ShowVisibleDevicesController(
 
   }
 
+  private fun listenNewMessagesReceived(flow: Flow<ReceiveMessageUpdate>) {
+
+    val receiveId = Random.nextInt()
+
+    controllerScope.launch {
+
+      flow.transformWhile {
+        emit(it)
+
+        !it.status.isFinished()
+      }.collect { receiveMessageUpdate ->
+        screenStateFlow.update {
+          val messages = it.receivingMessages.toMutableMap()
+          messages[receiveId] = receiveMessageUpdate
+
+          it.copy(
+            receivingMessages = messages
+          )
+        }
+      }
+
+    }
+
+  }
+
   fun dispose() {
     controllerScope.cancel()
   }
+
+  data class DiscoveryScreenState(
+    val devices: List<DeviceUi> = emptyList(),
+    val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap()
+  )
 
 }
 

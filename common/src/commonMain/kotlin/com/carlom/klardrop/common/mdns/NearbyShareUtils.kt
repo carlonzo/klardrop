@@ -5,17 +5,25 @@ import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.log
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
-import com.google.location.nearby.connections.proto.*
+import com.google.location.nearby.connections.proto.KeepAliveFrame
+import com.google.location.nearby.connections.proto.OfflineFrame
+import com.google.location.nearby.connections.proto.OsInfo
+import com.google.location.nearby.connections.proto.PayloadTransferFrame
 import com.google.location.nearby.connections.proto.PayloadTransferFrame.PacketType.DATA
 import com.google.location.nearby.connections.proto.PayloadTransferFrame.PayloadHeader
 import com.google.location.nearby.connections.proto.PayloadTransferFrame.PayloadHeader.PayloadType.BYTES
+import com.google.location.nearby.connections.proto.V1Frame
 import com.squareup.wire.Message
 import com.squareup.wire.ProtoAdapter
 import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
-import okio.*
 import okio.Buffer
+import okio.BufferedSource
+import okio.ByteString
 import okio.ByteString.Companion.toByteString
+import okio.Sink
+import okio.buffer
+import okio.use
 import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -86,7 +94,7 @@ internal suspend fun D2DConnectionContext.receiveEncryptedOfflineMessage(
   val header = offlineFrame.v1?.payload_transfer?.payload_header
   require(header != null) { "Payload header not found: $offlineFrame" }
 
-  val msg =  if (header.type != BYTES) {
+  val msg = if (header.type != BYTES) {
     offlineFrame
   } else {
     val chunkBody = offlineFrame.v1.payload_transfer.payload_chunk?.body
@@ -128,7 +136,7 @@ private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
 
     val header = newOfflineFrame.v1.payload_transfer.payload_header
     require(header != null) { "Payload header not found" }
-    require(header.id == payloadId) { "Payload id mismatch" }
+    require(header.id == payloadId) { "Payload id mismatch header.id = ${header.id} payloadId = ${payloadId}" }
 
     val newBody = if (newChunk.body == null) {
       byteArrayOf()
@@ -199,9 +207,9 @@ internal suspend fun sendKeepAlive(writeChannel: ByteWriteChannel, nearbyConnect
 
 private fun deviceTypeId(currentDevice: CurrentDevice): Int {
   return when (currentDevice.deviceType) {
-    DeviceType.MOBILE -> 1
-    DeviceType.TABLET -> 2
-    DeviceType.DESKTOP -> 3
+    DeviceType.MOBILE -> com.google.security.cryptauth.lib.securegcm.DeviceType.ANDROID.value
+    DeviceType.DESKTOP -> com.google.security.cryptauth.lib.securegcm.DeviceType.OSX.value
+    DeviceType.UNKNOWN -> com.google.security.cryptauth.lib.securegcm.DeviceType.UNKNOWN.value
 //      else -> 0
   }
 }
@@ -242,7 +250,7 @@ internal suspend fun sendEncryptedWrappedPayload(
 
     val sizeStartRange = (chunkIndex * SANE_FRAME_LENGTH)
     val size = min(SANE_FRAME_LENGTH, totalSize - sizeStartRange)
-    val chunk =  payload.toByteString(sizeStartRange, size)
+    val chunk = payload.toByteString(sizeStartRange, size)
     println("Sending chunk $chunkIndex chunkBody from:sizeStartRange size: ${size} chunkSize: ${chunk.size} total size $totalSize")
 
     sendChunkWrappedPayload(
@@ -335,7 +343,7 @@ private suspend fun sendChunkWrappedPayload(
   payloadType: PayloadHeader.PayloadType,
   writeChannel: ByteWriteChannel,
   nearbyConnection: D2DConnectionContext
-){
+) {
 
   val payload = PayloadTransferFrame.PayloadChunk(
     offset = offset,

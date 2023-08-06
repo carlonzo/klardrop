@@ -15,7 +15,7 @@ class DiscoveryBridge {
   }
 
   fun DiscoveryDashboardController() = ComposeUIViewController {
-    val showVisibleDevicesController = ShowVisibleDevicesController(klardrop.commonComponent)
+    val discoveryController = DiscoveryController(klardrop.commonComponent)
     val uiDependencies = object : UiDependencies {
       override fun filePickerFactory(): FilePickerFactory {
         return FilePickerFactory()
@@ -24,7 +24,7 @@ class DiscoveryBridge {
     }
     DiscoveryDashboard(
       uiDependencies = uiDependencies,
-      showVisibleDevicesController = showVisibleDevicesController
+      discoveryController = discoveryController
     )
   }
 }

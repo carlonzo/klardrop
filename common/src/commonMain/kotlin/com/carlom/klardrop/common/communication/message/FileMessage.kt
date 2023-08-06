@@ -3,6 +3,8 @@ package com.carlom.klardrop.common.communication.message
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
+import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -10,6 +12,8 @@ import io.ktor.utils.io.core.ByteReadPacket.Companion.Empty
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.Serializable
@@ -44,11 +48,22 @@ class FileMessageHandler(
   private val coroutines: Coroutines
 ) : MessageHandler<FileMessage, FileMessage.SendRequest> {
 
-  override suspend fun handleIncoming(message: FileMessage, receiveChannel: ReceiveChannel<Frame>) {
+  override suspend fun handleIncoming(
+    message: FileMessage,
+    receiveChannel: ReceiveChannel<Frame>,
+    receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
+  ) {
     log("FileMessageHandler", "Receiving file $message")
 
     coroutines.ioDispatcher.invoke {
       log("FileMessageHandler", "Ready to receive file $message")
+
+      receiveFlow.update {
+        it.copy(
+          messages = listOf(message),
+          status = ReceiveMessageStatus.Started
+        )
+      }
 
       val fileTransfer = fileManager.prepareSaveFile(
         fileName = message.fileName,
@@ -61,6 +76,12 @@ class FileMessageHandler(
 
       runCatching {
         fileTransfer.bufferedSink.use {
+
+          receiveFlow.update {
+            it.copy(
+              status = ReceiveMessageStatus.ReceivedProgressReceive(listOf(message to 0))
+            )
+          }
 
           while (totalBytesReceived < message.fileSize) {
 
@@ -81,7 +102,15 @@ class FileMessageHandler(
             it.write(data)
 
             totalBytesReceived += data.size
-            log("FileMessageHandler", "Received file frame of ${data.size}")
+            val progressValue = ((totalBytesReceived * 100L) / message.fileSize).toInt()
+
+            log("FileMessageHandler", "Received total $totalBytesReceived / ${message.fileSize} :  Progress $progressValue %")
+
+            receiveFlow.update {
+              it.copy(
+                status = ReceiveMessageStatus.ReceivedProgressReceive(listOf(message to progressValue.coerceIn(0, 100)))
+              )
+            }
           }
 
           it.flush()
@@ -89,10 +118,20 @@ class FileMessageHandler(
       }.onSuccess {
         log("FileMessageHandler", "Received file with size: $totalBytesReceived")
         fileTransfer.onTransferCompleted()
-      }.onFailure {
-        log("FileMessageHandler", "Error while receiving file", it)
+        receiveFlow.update {
+          it.copy(
+            status = ReceiveMessageStatus.Completed
+          )
+        }
+      }.onFailure { throwable ->
+        log("FileMessageHandler", "Error while receiving file", throwable)
         fileTransfer.onTransferFailed()
-        throw it
+        receiveFlow.update {
+          it.copy(
+            status = ReceiveMessageStatus.Failed(throwable.message ?: "Unknown error")
+          )
+        }
+        throw throwable
       }
     }
 
@@ -125,7 +164,10 @@ class FileMessageHandler(
         fileManager.getReadStreamFromUri(path).use { readBuffer ->
           while (!readBuffer.exhausted()) {
 
-            readBuffer.fillBuffer(buffer, 106496) // TODO 106496b = 104kb looks like this is the size of the content of the raw frame sent. need to work more on this
+            readBuffer.fillBuffer(
+              buffer,
+              106496
+            ) // TODO 106496b = 104kb looks like this is the size of the content of the raw frame sent. need to work more on this
 
             // closing the Frame with fin so the receiver can receive the full frame and flush to disk
             val flush = (frameCount % 5 == 0 && frameCount > 0) || readBuffer.exhausted()

@@ -58,7 +58,7 @@ class ConnectionMessenger internal constructor(
     connection.session.close()
   }
 
-  fun isClosed(): Boolean{
+  fun isClosed(): Boolean {
     return connection.session.isClosed()
   }
 }

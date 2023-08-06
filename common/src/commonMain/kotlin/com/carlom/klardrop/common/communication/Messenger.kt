@@ -1,13 +1,19 @@
 package com.carlom.klardrop.common.communication
 
-import com.carlom.klardrop.common.communication.MessengerSendProgress.*
+import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
+import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
+import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
+import com.carlom.klardrop.common.receiver.MessageReceiver
+import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 
 /**
@@ -15,6 +21,8 @@ import kotlinx.coroutines.launch
  */
 interface Messenger {
   fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress>
+
+  fun receive(): Flow<Flow<ReceiveMessageUpdate>>
 }
 
 class MessengerImpl(
@@ -23,15 +31,16 @@ class MessengerImpl(
   private val client: Client,
   coroutines: Coroutines,
   private val nearbyClient: NearbyClient,
+  private val messageReceiver: MessageReceiver
 ) : Messenger {
 
-  private val sendScope = CoroutineScope(coroutines.ioDispatcher)
+  private val messengerScope = CoroutineScope(coroutines.ioDispatcher)
 
   override fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress> {
 
     val flow = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 1)
 
-    sendScope.launch {
+    messengerScope.launch {
 
       flow.emit(Pending)
 
@@ -59,6 +68,10 @@ class MessengerImpl(
     }
 
     return flow
+  }
+
+  override fun receive(): Flow<Flow<ReceiveMessageUpdate>> {
+    return messageReceiver.notifier
   }
 
   private suspend fun handleNearbyTransfer(
@@ -118,8 +131,10 @@ class MessengerImpl(
 fun Flow<MessengerSendProgress>.untilCompleted(): Flow<MessengerSendProgress> {
   return this
     // send a closed after completed or error. this is to close the collection
-    .flatMapConcat { if (it is Completed || it is Error) flowOf(it, Closed) else flowOf(it) }
-    .takeWhile { it !is Closed }
+    .transformWhile {
+      emit(it)
+      !it.isCompleted()
+    }
 }
 
 sealed interface MessengerSendProgress {
@@ -128,5 +143,6 @@ sealed interface MessengerSendProgress {
   object Completed : MessengerSendProgress
   data class Error(val message: String = "") : MessengerSendProgress
 
-  object Closed : MessengerSendProgress
+  fun isCompleted(): Boolean = this is Completed || this is Error
 }
+

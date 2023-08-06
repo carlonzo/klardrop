@@ -6,7 +6,6 @@ import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
-import com.carlom.klardrop.common.mdns.NearbyModule
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
@@ -52,7 +51,7 @@ class CommonComponent(
       protoBuf,
       clock,
       fileManager,
-      nearbyModule.nearbyClient(),
+      internalPlatformDependency,
       currentDeviceProvider
     )
   }
@@ -63,11 +62,6 @@ class CommonComponent(
     )
   }
 
-  private val nearbyModule by lazy {
-    NearbyModule(
-      coroutines, internalPlatformDependency, currentDeviceProvider, fileManager
-    )
-  }
 
   private val platformFileSystem: PlatformFileSystem
     get() = internalPlatformDependency.platformFileSystem()
@@ -84,6 +78,6 @@ class CommonComponent(
 
   fun platformFileSystem() = platformFileSystem
 
-  fun nearbyServer() = nearbyModule.nearbyServer()
+  fun nearbyServer() = communicationModule.nearbyServer()
 
 }

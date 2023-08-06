@@ -1,11 +1,15 @@
 package com.carlom.klardrop.common.mdns
 
+import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -13,10 +17,12 @@ import kotlinx.coroutines.launch
 
 class NearbyShareServer(
   private val coroutines: Coroutines,
-  private val nearbyReceiverConnectionHandler: NearbyReceiverConnectionHandler,
+  private val nearbyReceiverConnectionHandlerFactory: NearbyReceiverConnectionHandlerFactory,
+  private val visibleDevices: VisibleDevices,
+  private val messageReceiver: MessageReceiver
 ) {
 
-  private val nearbyShareScope = CoroutineScope(coroutines.ioDispatcher)
+  private val nearbyShareScope = CoroutineScope(coroutines.ioDispatcher + SupervisorJob())
 
   val status = MutableStateFlow(
     NearbyShareServerStatus(
@@ -40,7 +46,19 @@ class NearbyShareServer(
       val receive = serverSocket.accept()
       log("NearbyShareServer", "started receiving from: ${receive.remoteAddress}")
 
-      nearbyReceiverConnectionHandler.onConnection(receive)
+      val device = visibleDevices.findDeviceByAddress(receive.remoteAddress as InetSocketAddress)
+
+      val receiveFlow = messageReceiver.onReceiveMessage(device?.deviceInfo?.deviceId)
+
+      val exceptionHandler = CoroutineExceptionHandler { ctx, exception ->
+        log("NearbyShareServer", "Received exception on connection", exception)
+        receive.dispose()
+      }
+
+      nearbyShareScope.launch(exceptionHandler) {
+        nearbyReceiverConnectionHandlerFactory.get().onConnection(receive, receiveFlow)
+      }
+
     }
 
     log("NearbyShareServer", "Closing NearbyShareServer")

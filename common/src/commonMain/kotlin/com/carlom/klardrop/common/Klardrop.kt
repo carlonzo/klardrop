@@ -1,11 +1,8 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.di.CommonComponent
-import com.carlom.klardrop.common.mdns.NearbyModule
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.UtilsModule
-import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 

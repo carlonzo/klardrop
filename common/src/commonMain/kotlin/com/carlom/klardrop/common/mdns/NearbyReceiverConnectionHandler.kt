@@ -3,16 +3,33 @@ package com.carlom.klardrop.common.mdns
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.communication.message.FileMessage
+import com.carlom.klardrop.common.communication.message.Message
+import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.discovery.DeviceInfo
+import com.carlom.klardrop.common.discovery.toDeviceType
+import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
+import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.getMimeTypeFromExtension
 import com.carlom.klardrop.common.utils.log
 import com.carlonzo.ukey2.Ukey2Handshake
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
-import com.google.location.nearby.connections.proto.*
+import com.google.location.nearby.connections.proto.ConnectionResponseFrame
+import com.google.location.nearby.connections.proto.OfflineFrame
+import com.google.location.nearby.connections.proto.OsInfo
+import com.google.location.nearby.connections.proto.PayloadTransferFrame
+import com.google.location.nearby.connections.proto.V1Frame
 import com.google.security.cryptauth.lib.securegcm.DeviceType
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import okio.ByteString.Companion.toByteString
 import sharing.nearby.Frame
 import sharing.nearby.PairedKeyEncryptionFrame
@@ -28,12 +45,17 @@ class NearbyReceiverConnectionHandler(
   coroutines: Coroutines,
 ) {
 
-  private val filesToTransfer = mutableMapOf<Long, FileTransfer>()
+  private val messagesToReceive = mutableMapOf<Long, Message>()
+  private val receiveProgress = mutableMapOf<Long, Int>()
+  private lateinit var receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
+
   private val connectionScope = CoroutineScope(coroutines.ioDispatcher)
 
   private var keepAliveWhileWaitingJob: Job? = null
 
-  suspend fun onConnection(connection: Socket) {
+  suspend fun onConnection(connection: Socket, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>) {
+
+    this.receiveFlow = receiveFlow
 
     try {
       val readChannel = connection.openReadChannel()
@@ -56,6 +78,15 @@ class NearbyReceiverConnectionHandler(
 
       handleTransferSetup(readChannel, writeChannel, nearbyConnection)
 
+      // init messages to receive with 0 progress
+      with(receiveProgress) {
+        messagesToReceive.forEach { (id, _) ->
+          put(id, 0)
+        }
+      }
+
+      updateReceiveProgress()
+
       // create a job to keep alive while waiting for user to accept
       keepAliveWhileWaitingJob = connectionScope.launch {
 
@@ -73,11 +104,22 @@ class NearbyReceiverConnectionHandler(
       acceptTransfer(nearbyConnection, writeChannel)
 
       receiveTransfer(readChannel, writeChannel, nearbyConnection)
-
+    } catch (e: Exception) {
+      log("NearbyReceiverConnectionHandler", "Error on connection", e)
+      receiveFlow.update {
+        it.copy(status = ReceiveMessageStatus.Failed(e.message ?: "Unknown error"))
+      }
+      throw e
     } finally {
       connection.close()
+      log("NearbyReceiverConnectionHandler", "Connection closed")
     }
 
+    require(receiveProgress.values.all { it == 100 }) { "Not all messages received $receiveProgress $messagesToReceive" }
+
+    receiveFlow.update {
+      it.copy(status = ReceiveMessageStatus.Completed, messages = messagesToReceive.values.toList())
+    }
   }
 
   private suspend fun receiveTransfer(
@@ -86,8 +128,25 @@ class NearbyReceiverConnectionHandler(
     nearbyConnection: D2DConnectionContext
   ) {
 
+    val fileTransfers = buildMap {
+
+      messagesToReceive.forEach {
+        if (it.value is FileMessage) {
+          val fileMessage = it.value as FileMessage
+          val fileTransfer = fileManager.prepareSaveFile(fileMessage.fileName, fileMessage.mimeType)
+
+          put(it.key, fileTransfer)
+        }
+      }
+
+    }
+
+    fun areTransfersPending(): Boolean {
+      return receiveProgress.values.any { it < 100 }
+    }
+
     log("NearbyReceiverConnectionHandler", "Start receiving transfer")
-    while (true) {
+    while (areTransfersPending()) {
       // receive and wait until we get a filechunk
 
       val offlineFrame = nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
@@ -101,32 +160,57 @@ class NearbyReceiverConnectionHandler(
         val header = payload.payload_header
         require(header != null) { "Payload header not found" }
 
-        if (header.type == PayloadTransferFrame.PayloadHeader.PayloadType.FILE) {
+        val payloadChunk = payload.payload_chunk
+        require(payloadChunk != null) { "Payload chunk body not found" }
 
-          val payloadChunk = payload.payload_chunk
-          require(payloadChunk != null) { "Payload chunk body not found" }
+        val payloadId = header.id!!
+        val message = messagesToReceive[payloadId]
 
+        if (message is FileMessage) {
+          require(header.type == PayloadTransferFrame.PayloadHeader.PayloadType.FILE) { "Payload type is not file" }
+
+          val fileTransfer = fileTransfers[payloadId]!!
 
           if (payloadChunk.body == null || payloadChunk.body.size == 0) {
-            val fileTransfer = filesToTransfer[header.id]!!
+
             fileTransfer.onTransferCompleted()
             log("NearbyReceiverConnectionHandler", "File transfer completed")
-            break
+          } else {
+            processFileChunk(payload, fileTransfer)
           }
 
-          processFileChunk(payload)
+        } else if (message is TextMessage) {
+          require(header.type == PayloadTransferFrame.PayloadHeader.PayloadType.BYTES) { "Payload type is not bytes" }
+
+          messagesToReceive[payloadId] = message.copy(
+            text = message.text + payloadChunk.body!!.utf8()
+          )
+
+        } else {
+          log("NearbyReceiverConnectionHandler", "Unknown message with payloadId $payloadId")
+          continue
         }
+
+        // update progress
+
+        if (payloadChunk.body == null || payloadChunk.body.size == 0) {
+          receiveProgress[payloadId] = 100
+        } else {
+          val transferred = payloadChunk.offset!! + payloadChunk.body.size
+          val totalSize = header.total_size!!
+
+          receiveProgress[payloadId] = (transferred * 100L / totalSize).toInt().coerceIn(0, 100)
+        }
+
+        updateReceiveProgress()
       }
 
     }
 
-
+    log("NearbyReceiverConnectionHandler", "Transfer completed")
   }
 
-  private fun processFileChunk(payloadTransfer: PayloadTransferFrame) {
-    val fileTransfer = filesToTransfer[payloadTransfer.payload_header!!.id]
-    require(fileTransfer != null) { "File transfer not found" }
-
+  private fun processFileChunk(payloadTransfer: PayloadTransferFrame, fileTransfer: FileTransfer) {
     fileTransfer.bufferedSink.write(payloadTransfer.payload_chunk!!.body!!)
   }
 
@@ -158,7 +242,7 @@ class NearbyReceiverConnectionHandler(
     log("NearbyReceiverConnectionHandler", "handleTransferSetup completed")
   }
 
-  private fun processConnectionRequest(connectionRequest: OfflineFrame) {
+  private suspend fun processConnectionRequest(connectionRequest: OfflineFrame) {
     val endpointInfo =
       connectionRequest.v1?.connection_request?.endpoint_info?.toByteArray() ?: throw IllegalStateException("Endpoint info not found")
     require(endpointInfo.size > 17) { "Endpoint info is too short" }
@@ -166,6 +250,16 @@ class NearbyReceiverConnectionHandler(
     val deviceNameLength = endpointInfo[17].toInt()
     val deviceName = endpointInfo.copyOfRange(18, 18 + deviceNameLength).decodeToString()
     val deviceType = DeviceType.fromValue((endpointInfo[0].toInt() and 7) shr 1)
+
+    receiveFlow.update {
+      it.copy(
+        device = DeviceInfo(
+          deviceId = it.device?.deviceId ?: "",
+          name = deviceName,
+          deviceType = deviceType.toDeviceType()
+        )
+      )
+    }
 
     log("NearbyReceiverConnectionHandler", "Connection request from $deviceName ($deviceType)")
   }
@@ -281,7 +375,7 @@ class NearbyReceiverConnectionHandler(
     // -- does nothing
     // state: receivedPairedKeyResult
 
-    // useless read
+
     nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
       .let { offline ->
         val paylod = offline.v1?.payload_transfer?.payload_chunk!!
@@ -299,14 +393,46 @@ class NearbyReceiverConnectionHandler(
 
     frame.v1?.introduction?.file_metadata?.forEach { fileMetadata ->
 
-      val fileTransfer = fileManager.prepareSaveFile(
+//      val fileTransfer = fileManager.prepareSaveFile(
+//        fileName = fileMetadata.name!!,
+//        mimeType = fileMetadata.mime_type ?: getMimeTypeFromExtension(fileMetadata.name)
+//      )
+      messagesToReceive[fileMetadata.payload_id!!] = FileMessage(
         fileName = fileMetadata.name!!,
+        fileSize = fileMetadata.size!!,
         mimeType = fileMetadata.mime_type ?: getMimeTypeFromExtension(fileMetadata.name)
       )
 
-      filesToTransfer[fileMetadata.payload_id!!] = fileTransfer
-      log("NearbyReceiverConnectionHandler", "File transfer prepared: $fileMetadata")
     }
+
+    frame.v1?.introduction?.text_metadata?.forEach { textMetadata ->
+
+      messagesToReceive[textMetadata.payload_id!!] = TextMessage(
+        title = textMetadata.text_title!!,
+        text = ""
+      )
+
+    }
+
+    log("NearbyReceiverConnectionHandler", "Messages ready to be received: $messagesToReceive")
+
+  }
+
+  private suspend fun updateReceiveProgress() {
+
+    val messagesProgress = receiveProgress.map {
+      messagesToReceive[it.key]!! to it.value
+    }
+
+    receiveFlow.update {
+      it.copy(
+        status = ReceiveMessageStatus.ReceivedProgressReceive(
+          messagesProgress
+        )
+      )
+    }
+
+    println("emitted progress $messagesProgress")
 
   }
 

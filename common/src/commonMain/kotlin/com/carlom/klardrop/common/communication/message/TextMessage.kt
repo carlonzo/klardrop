@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class TextMessage(
+  val title: String = "",
   val text: String
 ) : Message {
 
@@ -11,4 +12,4 @@ data class TextMessage(
   override val hasPayload: Boolean = false
 }
 
-fun TextMessage.Companion.create(text: String) = TextMessage(text)
+fun TextMessage.Companion.create(title: String = "", text: String) = TextMessage(title, text)

@@ -21,7 +21,7 @@ fun KlardropApp(
   uiDependencies: UiDependencies
 ) {
 
-  val visibleDevicesController = remember { ShowVisibleDevicesController(klardrop.commonComponent) }
+  val visibleDevicesController = remember { DiscoveryController(klardrop.commonComponent) }
 
   Surface(
     modifier = Modifier.fillMaxSize()
@@ -42,12 +42,12 @@ fun KlardropApp(
               .fillMaxHeight(),
             isLargeScreen = isLargeScreen,
             uiDependencies = uiDependencies,
-            showVisibleDevicesController = visibleDevicesController
+            discoveryController = visibleDevicesController
           )
         }
       } else {
         DiscoveryDashboard(
-          showVisibleDevicesController = visibleDevicesController,
+          discoveryController = visibleDevicesController,
           isLargeScreen = isLargeScreen,
           uiDependencies = uiDependencies
         )

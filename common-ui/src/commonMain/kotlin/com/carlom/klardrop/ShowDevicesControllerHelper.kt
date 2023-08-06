@@ -7,10 +7,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
@@ -22,23 +20,25 @@ class ShowDevicesControllerHelper(
 
   private val _devicesFlow = MutableStateFlow<Map<String, DeviceUi>>(mapOf())
   val devicesFlow: Flow<Collection<DeviceUi>> = _devicesFlow.map { it.values }
+
   init {
     coroutineScope.launch {
       visibleDevices.visibleDevices
         .onEach { log("VisibleDevices", "emitting: $it") }
         .map {
-        it.values.map { device ->
-          val deviceInfo = device.deviceInfo
-          DeviceUi(
-            deviceId = deviceInfo.deviceId,
-            deviceName = deviceInfo.name,
-            deviceType = deviceInfo.deviceType,
-            connectionTypes = device.deviceConnections.map { it.deviceConnectionType },
-          )
-        }
-      }.collect { _devicesFlow.emit(it.associateBy { device -> device.deviceId }.toMutableMap()) }
+          it.values.map { device ->
+            val deviceInfo = device.deviceInfo
+            DeviceUi(
+              deviceId = deviceInfo.deviceId,
+              deviceName = deviceInfo.name,
+              deviceType = deviceInfo.deviceType,
+              connectionTypes = device.deviceConnections.map { it.deviceConnectionType },
+            )
+          }
+        }.collect { _devicesFlow.emit(it.associateBy { device -> device.deviceId }.toMutableMap()) }
     }
   }
+
   suspend fun collectProgress(flow: Flow<MessengerSendProgress>, deviceId: String) {
     flow.collect { progress ->
       _devicesFlow.update { devices ->
@@ -48,7 +48,6 @@ class ShowDevicesControllerHelper(
         val newDevices = devices.toMutableMap()
 
         val activityState = when (progress) {
-          MessengerSendProgress.Closed -> ActivityState.SentCompleted()
           MessengerSendProgress.Completed -> ActivityState.SentCompleted()
           is MessengerSendProgress.Error -> ActivityState.SentCompleted(error = true)
           is MessengerSendProgress.InProgress -> ActivityState.Sending(progress.percentage)

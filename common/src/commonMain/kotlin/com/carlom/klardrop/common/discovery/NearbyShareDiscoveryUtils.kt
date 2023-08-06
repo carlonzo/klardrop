@@ -4,7 +4,12 @@ import com.carlom.klardrop.common.mdns.RegisterServiceInfo
 import com.carlom.klardrop.common.mdns.ServiceInfo
 import com.carlom.klardrop.common.mdns.createEndpointInfo
 import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.log
+import com.google.security.cryptauth.lib.securegcm.DeviceType.ANDROID
+import com.google.security.cryptauth.lib.securegcm.DeviceType.BROWSER
+import com.google.security.cryptauth.lib.securegcm.DeviceType.CHROME
+import com.google.security.cryptauth.lib.securegcm.DeviceType.IOS
+import com.google.security.cryptauth.lib.securegcm.DeviceType.OSX
+import com.google.security.cryptauth.lib.securegcm.DeviceType.UNKNOWN
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -48,8 +53,17 @@ internal class NearbyShareDiscoveryUtils {
 
     val deviceTypeId = deviceInfoByte and 0b0000_1110
     val deviceType = deviceTypeFromId(deviceTypeId shr 1) // 0000 ddd0 (d == devicetype)
-    val deviceNameLength = endpointInfoBytes[17]
-    val deviceName = endpointInfoBytes.sliceArray(18 until 18 + deviceNameLength.toInt()).decodeToString()
+    val deviceNameLength = if (endpointInfoBytes.size > 18) {
+      endpointInfoBytes[17].toInt()
+    } else {
+      0
+    }
+
+    val deviceName = if (deviceNameLength > 0) {
+      endpointInfoBytes.sliceArray(18 until 18 + deviceNameLength).decodeToString()
+    } else {
+      "unknown device name"
+    }
 
     return DeviceInfo(
       name = deviceName,
@@ -75,20 +89,20 @@ internal class NearbyShareDiscoveryUtils {
   }
 
   private fun deviceTypeFromId(id: Int): DeviceType {
-    return when (id) {
-      1 -> DeviceType.MOBILE
-      2 -> DeviceType.TABLET
-      3 -> DeviceType.DESKTOP
-      else -> {
-        log("NearbyShare", "Unknown device type id: $id")
-        DeviceType.MOBILE
-      }
-    }
+    val ukey2DeviceType = com.google.security.cryptauth.lib.securegcm.DeviceType.fromValue(id)
+    return ukey2DeviceType.toDeviceType()
   }
-
 
   companion object {
     const val NEARBY_SERVICE_TYPE = "_FC9F5ED42C8A._tcp."
+  }
+}
+
+fun com.google.security.cryptauth.lib.securegcm.DeviceType?.toDeviceType(): DeviceType {
+  return when (this) {
+    ANDROID, IOS -> DeviceType.MOBILE
+    CHROME, BROWSER, OSX -> DeviceType.DESKTOP
+    null, UNKNOWN -> DeviceType.UNKNOWN
   }
 }
 
