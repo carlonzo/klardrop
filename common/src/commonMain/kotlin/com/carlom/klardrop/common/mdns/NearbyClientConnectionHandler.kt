@@ -164,7 +164,7 @@ class NearbyClientConnectionHandler(
           // transfer accepted. we can start
           break
         } else {
-          throw IllegalStateException("Connection refused $frame")
+          throw IllegalStateException("Transfer rejected from the receiver $frame")
         }
 
       }

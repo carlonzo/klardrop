@@ -61,7 +61,7 @@ class ShareToDeviceController(
   private fun sendText(deviceId: String, text: String) {
 
     coroutines.appScope.launch {
-      messenger.send(deviceId, TextMessage(text).toSimpleSendRequest())
+      messenger.send(deviceId, TextMessage(text = text).toSimpleSendRequest())
         .untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
     }
 

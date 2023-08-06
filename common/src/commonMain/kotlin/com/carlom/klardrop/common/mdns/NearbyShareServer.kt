@@ -48,9 +48,9 @@ class NearbyShareServer(
 
       val device = visibleDevices.findDeviceByAddress(receive.remoteAddress as InetSocketAddress)
 
-      val receiveFlow = messageReceiver.onReceiveMessage(device?.deviceInfo?.deviceId)
+      val receiveFlow = messageReceiver.onReceiveMessage(device?.deviceInfo?.deviceId ?: "")
 
-      val exceptionHandler = CoroutineExceptionHandler { ctx, exception ->
+      val exceptionHandler = CoroutineExceptionHandler { _, exception ->
         log("NearbyShareServer", "Received exception on connection", exception)
         receive.dispose()
       }

@@ -77,7 +77,7 @@ class CommunicationModule(
   }
 
   private val messageReceiver: MessageReceiver by lazy {
-    MessageReceiverImpl(coroutines)
+    MessageReceiverImpl(coroutines, visibleDevices)
   }
 
   private val messenger: Messenger by lazy {
