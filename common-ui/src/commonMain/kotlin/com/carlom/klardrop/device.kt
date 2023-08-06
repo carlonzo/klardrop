@@ -50,11 +50,7 @@ internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceAct
         onClick = {
           log("Device clicked ${deviceUi.deviceName}")
           onDeviceActionListener.onDeviceClick(deviceUi)
-//          onDeviceActionListener.onSendData(deviceUi, OnDataToSend.Text("Hello World"))
         },
-        onLongClick = {
-          onDeviceActionListener.openFilePicker(deviceUi)
-        }
       ),
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
@@ -112,7 +108,6 @@ internal fun DeviceLarge(
 
       }
 
-      DeviceContent(deviceUi, onDeviceActionListener)
     }
 
 
@@ -150,12 +145,6 @@ internal expect fun Modifier.deviceAdditions(
   onDeviceActionListener: OnDeviceActionListener
 ): Modifier
 
-@Composable
-internal expect fun BoxScope.DeviceContent(
-  deviceUi: DeviceUi,
-  onDeviceActionListener: OnDeviceActionListener
-)
-
 
 interface OnDeviceActionListener {
   fun onDeviceClick(deviceUi: DeviceUi) {
@@ -166,7 +155,4 @@ interface OnDeviceActionListener {
     throw IllegalStateException("Not implemented")
   }
 
-  fun openFilePicker(deviceUi: DeviceUi) {
-    throw IllegalStateException("Not implemented")
-  }
 }

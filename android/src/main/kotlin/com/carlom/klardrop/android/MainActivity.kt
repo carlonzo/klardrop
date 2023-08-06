@@ -8,14 +8,18 @@ import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.carlom.klardrop.ActionUi
 import com.carlom.klardrop.DiscoveryDashboard
+import com.carlom.klardrop.FilePickerFactory
+import com.carlom.klardrop.KlardropApp
 import com.carlom.klardrop.OnDataToSend
 import com.carlom.klardrop.ShowVisibleDevicesController
+import com.carlom.klardrop.UiDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
 import kotlinx.coroutines.launch
@@ -33,50 +37,36 @@ class MainActivity : AppCompatActivity() {
     super.onCreate(savedInstanceState)
     applicationComponent().inject(this)
 
-    showVisibleDevicesController = ShowVisibleDevicesController(klardrop.commonComponent)
+
 
     setContent {
 
-      AppTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
-          DiscoveryDashboard(
-            modifier = Modifier.fillMaxSize(),
-            showVisibleDevicesController = showVisibleDevicesController
-          )
-
-        }
-      }
-    }
-
-    lifecycleScope.launch {
-      repeatOnLifecycle(Lifecycle.State.CREATED) {
-        showVisibleDevicesController.actionsFlow.collect { action ->
-          actionUi = action
-          when (action) {
-            is ActionUi.OpenFilePicker -> pickMedia.launch(PickVisualMediaRequest(PickVisualMedia.ImageAndVideo))
+      val uiDependencies = remember {
+        object : UiDependencies {
+          override fun filePickerFactory(): FilePickerFactory {
+            return FilePickerFactory()
           }
 
         }
       }
-    }
-  }
+
+      AppTheme {
+
+        KlardropApp(
+          klardrop,
+          uiDependencies
+        )
+
+      }
 
 
-  private val pickMedia = this.registerForActivityResult(PickVisualMedia()) { uri ->
-    // Callback is invoked after the user selects a media item or closes the
-    // photo picker.
-    if (uri != null) {
-      showVisibleDevicesController.onSendData(
-        (actionUi as ActionUi.OpenFilePicker).deviceUi,
-        OnDataToSend.FilesList(listOf(uri.toString()))
-      )
-
-    } else {
-      Log.d("PhotoPicker", "No media selected")
     }
 
 
   }
+
+
+
 
   override fun onDestroy() {
     showVisibleDevicesController.dispose()

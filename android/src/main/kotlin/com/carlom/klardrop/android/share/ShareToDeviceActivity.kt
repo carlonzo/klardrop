@@ -59,7 +59,7 @@ class ShareToDeviceActivity : AppCompatActivity() {
             FlowRow {
               devices.forEach {
 
-                DeviceDiscovery(it, onDeviceActionListener)
+                DeviceDiscovery(it, isLargeScreen = false, onDeviceActionListener)
 
               }
             }

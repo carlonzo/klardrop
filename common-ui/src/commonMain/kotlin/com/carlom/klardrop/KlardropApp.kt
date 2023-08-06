@@ -60,4 +60,4 @@ fun KlardropApp(
 }
 
 private val BoxWithConstraintsScope.isLargeScreen: Boolean
-  get() = maxWidth > 500.dp
+  get() = maxWidth > 700.dp

@@ -9,7 +9,7 @@ expect class FilePicker {
   fun registerPicker(onFilesPicked: (DeviceUi, List<String>) -> Unit)
 }
 
-expect class FilePickerFactory{
+expect class FilePickerFactory {
   @Composable
   fun createPicker(): FilePicker
 }

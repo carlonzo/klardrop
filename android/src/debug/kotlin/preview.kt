@@ -18,6 +18,7 @@ fun PreviewDeviceDiscovery() {
       activityState = ActivityState.Idle,
       connectionTypes = listOf(DeviceConnection.DeviceConnectionType.KLARDROP, DeviceConnection.DeviceConnectionType.NEARBY)
     ),
+    isLargeScreen = false,
     onDeviceActionListener = object : OnDeviceActionListener {}
   )
 }

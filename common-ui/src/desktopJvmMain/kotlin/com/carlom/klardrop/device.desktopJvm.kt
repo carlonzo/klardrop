@@ -3,12 +3,8 @@ package com.carlom.klardrop
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.PointerMatcher
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.onClick
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,7 +15,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.onExternalDrag
-import androidx.compose.ui.unit.dp
 import java.net.URI
 import kotlin.io.path.pathString
 import kotlin.io.path.toPath
@@ -65,43 +60,4 @@ internal actual fun Modifier.deviceAdditions(
         }
       },
     )
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-internal actual fun BoxScope.DeviceContent(
-  deviceUi: DeviceUi,
-  onDeviceActionListener: OnDeviceActionListener
-) {
-
-  var showDropdown by remember { mutableStateOf(false) }
-
-//    .onClick(
-//      matcher = PointerMatcher.mouse(PointerButton.Secondary),
-//      onClick = { showDropdown = true }
-//    )
-
-  DropdownMenu(expanded = showDropdown, onDismissRequest = { showDropdown = false }) {
-
-    Text(
-      text = "Send text",
-      modifier = Modifier.padding(4.dp)
-        .onClick {
-          showDropdown = false
-          onDeviceActionListener.onSendData(deviceUi, OnDataToSend.Text("Hello from Klardrop!12341"))
-        }
-    )
-
-    Text(
-      text = "Send file",
-      modifier = Modifier.padding(4.dp)
-        .onClick {
-
-          showDropdown = false
-          onDeviceActionListener.openFilePicker(deviceUi)
-        }
-    )
-
-  }
-
 }

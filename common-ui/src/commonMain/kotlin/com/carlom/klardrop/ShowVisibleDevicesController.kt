@@ -64,7 +64,7 @@ class ShowVisibleDevicesController(
   override fun onDeviceClick(deviceUi: DeviceUi) {
     log("ShowVisibleDevicesController", "on device click: ${deviceUi.deviceName}")
     controllerScope.launch {
-      actionsFlow.emit(ActionUi.OpenFilePicker(deviceUi))
+      actionsFlow.emit(ActionUi.OnDeviceClicked(deviceUi))
     }
   }
 
@@ -77,14 +77,6 @@ class ShowVisibleDevicesController(
 
   }
 
-  override fun openFilePicker(deviceUi: DeviceUi) {
-
-    controllerScope.launch {
-      actionsFlow.emit(ActionUi.OpenFilePicker(deviceUi))
-    }
-
-  }
-
   fun dispose() {
     controllerScope.cancel()
   }
@@ -93,7 +85,7 @@ class ShowVisibleDevicesController(
 
 sealed interface ActionUi {
 
-  class OpenFilePicker(val deviceUi: DeviceUi) : ActionUi
+  class OnDeviceClicked(val deviceUi: DeviceUi) : ActionUi
 
 }
 
@@ -107,11 +99,7 @@ data class DeviceUi(
 
 sealed interface ActivityState {
 
-  object Idle : ActivityState {
-    override fun toString(): String {
-      return "Idle"
-    }
-  }
+  data object Idle : ActivityState
 
   data class SentCompleted(val error: Boolean = false) : ActivityState
 //  data class ReceiveCompleted(val error: Boolean = false) : ActivityState
