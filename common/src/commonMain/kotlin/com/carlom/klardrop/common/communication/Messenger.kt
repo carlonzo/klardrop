@@ -77,7 +77,7 @@ class MessengerImpl(
   private suspend fun handleNearbyTransfer(
     deviceId: String,
     messageRequest: SendMessageRequest,
-    flow: MutableSharedFlow<MessengerSendProgress>
+    sendFlow: MutableSharedFlow<MessengerSendProgress>
   ): Boolean {
 
     val device = visibleDevices.getDevice(deviceId) ?: throw IllegalStateException("Device $deviceId is not found!")
@@ -89,7 +89,7 @@ class MessengerImpl(
       log("Messenger", "Client sending message to $deviceId: ${it.address} ${it.port}")
 
       runCatching {
-        nearbyClient.send(it.address, it.port, listOf(messageRequest))
+        nearbyClient.send(it.address, it.port, listOf(messageRequest), sendFlow)
       }.onSuccess {
         return@forEach
       }.onFailure {

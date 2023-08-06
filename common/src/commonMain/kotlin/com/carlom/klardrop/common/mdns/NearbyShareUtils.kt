@@ -17,6 +17,8 @@ import com.squareup.wire.Message
 import com.squareup.wire.ProtoAdapter
 import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import okio.Buffer
 import okio.BufferedSource
 import okio.ByteString
@@ -277,6 +279,11 @@ internal suspend fun sendEncryptedWrappedPayload(
 
 }
 
+/**
+ * Send a chunk of data wrapped in a [OfflineFrame] to the [writeChannel]
+ *
+ * returns a Flow with percentage progress
+ */
 internal suspend fun sendEncryptedWrappedPayload(
   bufferedSource: BufferedSource,
   totalSize: Long,
@@ -284,7 +291,9 @@ internal suspend fun sendEncryptedWrappedPayload(
   nearbyConnection: D2DConnectionContext,
   payloadType: PayloadHeader.PayloadType = BYTES,
   payloadId: Long = Random.nextLong()
-) {
+): Flow<Int> = flow {
+
+  emit(0)
 
   val parts = ceil(totalSize.toFloat() / SANE_FRAME_LENGTH).roundToInt()
   val readBuffer = Buffer()
@@ -311,6 +320,8 @@ internal suspend fun sendEncryptedWrappedPayload(
     )
 
     sentOffset += chunkBody.size
+
+    emit((sentOffset / totalSize * 100L).toInt().coerceIn(0, 100))
   }
 
   // send last chuck
@@ -324,6 +335,7 @@ internal suspend fun sendEncryptedWrappedPayload(
     nearbyConnection = nearbyConnection
   )
 
+  emit(100)
 }
 
 private fun BufferedSource.fillBuffer(buffer: Buffer, size: Long) {

@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
@@ -11,18 +12,28 @@ import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.toByteArray
 import com.carlonzo.ukey2.Ukey2Handshake
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
-import com.google.location.nearby.connections.proto.*
+import com.google.location.nearby.connections.proto.ConnectionRequestFrame
 import com.google.location.nearby.connections.proto.ConnectionResponseFrame
+import com.google.location.nearby.connections.proto.MediumMetadata
+import com.google.location.nearby.connections.proto.OfflineFrame
+import com.google.location.nearby.connections.proto.OsInfo
+import com.google.location.nearby.connections.proto.PayloadTransferFrame
 import com.google.location.nearby.connections.proto.V1Frame
+import com.google.location.nearby.connections.proto.WifiLanUsableChannels
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import okio.ByteString.Companion.toByteString
 import okio.use
-import sharing.nearby.*
 import sharing.nearby.ConnectionResponseFrame.Status
+import sharing.nearby.FileMetadata
+import sharing.nearby.Frame
+import sharing.nearby.IntroductionFrame
 import sharing.nearby.PairedKeyEncryptionFrame
+import sharing.nearby.PairedKeyResultFrame
+import sharing.nearby.TextMetadata
 import sharing.nearby.V1Frame.FrameType
 import kotlin.random.Random
 
@@ -36,9 +47,11 @@ class NearbyClientConnectionHandler(
   // transfer requests id -> SendMessageRequest
   private val transfers = sendRequests.associateBy { Random.nextLong() }
 
-  suspend fun onConnection(connection: Socket) {
+  suspend fun onConnection(connection: Socket, sendFlow: MutableSharedFlow<MessengerSendProgress>) {
 
     log("NearbyClientConnectionHandler", "Starting connection")
+
+    sendFlow.emit(MessengerSendProgress.Pending)
 
     try {
       val readChannel = connection.openReadChannel()
@@ -54,18 +67,25 @@ class NearbyClientConnectionHandler(
 
       waitForTransferResponse(readChannel, writeChannel, nearbyConnection)
 
-      initiateTransfer(readChannel, writeChannel, nearbyConnection)
+      initiateTransfer(readChannel, writeChannel, nearbyConnection, sendFlow)
 
+    } catch (e: Exception) {
+      log("NearbyClientConnectionHandler", "Error sending $sendRequests", e)
+      sendFlow.emit(MessengerSendProgress.Error(e.message ?: "Unknown error"))
+      throw e
     } finally {
       connection.close()
     }
+
+    sendFlow.emit(MessengerSendProgress.Completed)
 
   }
 
   private suspend fun initiateTransfer(
     readChannel: ByteReadChannel,
     writeChannel: ByteWriteChannel,
-    nearbyConnection: D2DConnectionContext
+    nearbyConnection: D2DConnectionContext,
+    sendFlow: MutableSharedFlow<MessengerSendProgress>
   ) {
     log("initiateTransfer", "Initiating transfer")
 
@@ -83,7 +103,7 @@ class NearbyClientConnectionHandler(
 
         is SimpleSendMessageRequest -> {
           val textMessage = request.message as TextMessage
-          log("initiateTransfer", "Trasnfering text message: ${textMessage}")
+          log("initiateTransfer", "Transferring text message: $textMessage")
 
           sendEncryptedWrappedPayload(
             payload = textMessage.text.toByteArray(),
@@ -95,7 +115,7 @@ class NearbyClientConnectionHandler(
         }
 
         is FileMessage.SendRequest -> {
-          log("initiateTransfer", "Trasnfering file: ${request.message}")
+          log("initiateTransfer", "Transferring file: ${request.message}")
 
           fileManager.getReadStreamFromUri(request.pathFile).use { bufferedSource ->
 
@@ -106,10 +126,11 @@ class NearbyClientConnectionHandler(
               payloadId = id,
               writeChannel = writeChannel,
               nearbyConnection = nearbyConnection
-            )
+            ).collect { progress ->
+              sendFlow.emit(MessengerSendProgress.InProgress(progress))
+            }
 
           }
-
 
         }
       }

@@ -2,11 +2,13 @@ package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.utils.Coroutines
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import okio.IOException
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -18,7 +20,7 @@ class NearbyClient(
 ) {
 
   @Throws(IOException::class, CancellationException::class)
-  suspend fun send(host: String, port: Int, sendRequests: List<SendMessageRequest>) {
+  suspend fun send(host: String, port: Int, sendRequests: List<SendMessageRequest>, sendFlow: MutableSharedFlow<MessengerSendProgress>) {
 
     val serverSocket = runCatching {
       val selectorManager = SelectorManager(coroutines.ioDispatcher)
@@ -31,8 +33,13 @@ class NearbyClient(
 
 
     // client is stateful
-    NearbyClientConnectionHandler(currentDeviceProvider, internalPlatformDependencies, fileManager, sendRequests)
-      .onConnection(serverSocket)
+    try {
+      NearbyClientConnectionHandler(currentDeviceProvider, internalPlatformDependencies, fileManager, sendRequests)
+        .onConnection(serverSocket, sendFlow)
+    }finally {
+      serverSocket.close()
+    }
+
   }
 
 
