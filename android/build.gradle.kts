@@ -22,7 +22,7 @@ dependencies {
   kapt(deps.dagger.compiler)
 
   debugImplementation("androidx.compose.ui:ui-tooling:1.5.0")
-  implementation("androidx.compose.ui:ui-tooling-preview:1.4.3")
+  implementation("androidx.compose.ui:ui-tooling-preview:1.5.0")
 }
 
 android {
