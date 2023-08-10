@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
@@ -52,5 +53,9 @@ actual class InternalPlatformDependencies {
 
   private fun readFromBash(vararg command: String): String {
     return ProcessBuilder(*command).start().inputStream.use { it.bufferedReader().readText().trim() }
+  }
+
+  actual fun clipboardReaderWriter(): ClipboardReaderWriter {
+    return ClipboardReaderWriter()
   }
 }

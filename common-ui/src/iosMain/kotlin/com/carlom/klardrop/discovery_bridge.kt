@@ -22,7 +22,7 @@ class DiscoveryBridge {
       }
 
     }
-    DiscoveryDashboard(
+    DiscoveryScreen(
       uiDependencies = uiDependencies,
       discoveryController = discoveryController
     )

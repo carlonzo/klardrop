@@ -3,6 +3,7 @@ package com.carlom.klardrop.common
 import android.content.Context
 import android.os.Build
 import android.os.Environment
+import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
@@ -43,6 +44,10 @@ actual class InternalPlatformDependencies(private val context: Context) {
 
   actual fun osType(): OsType {
     return OsType.ANDROID
+  }
+
+  actual fun clipboardReaderWriter(): ClipboardReaderWriter {
+    return ClipboardReaderWriter(context)
   }
 
 }

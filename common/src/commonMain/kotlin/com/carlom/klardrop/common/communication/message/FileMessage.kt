@@ -79,7 +79,7 @@ class FileMessageHandler(
 
           receiveFlow.update {
             it.copy(
-              status = ReceiveMessageStatus.ReceivedProgressReceive(listOf(message to 0))
+              status = ReceiveMessageStatus.Progress(listOf(message to 0))
             )
           }
 
@@ -108,7 +108,7 @@ class FileMessageHandler(
 
             receiveFlow.update {
               it.copy(
-                status = ReceiveMessageStatus.ReceivedProgressReceive(listOf(message to progressValue.coerceIn(0, 100)))
+                status = ReceiveMessageStatus.Progress(listOf(message to progressValue.coerceIn(0, 100)))
               )
             }
           }

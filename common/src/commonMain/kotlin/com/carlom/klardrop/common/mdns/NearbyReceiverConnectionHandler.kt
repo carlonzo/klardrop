@@ -426,7 +426,7 @@ class NearbyReceiverConnectionHandler(
 
     receiveFlow.update {
       it.copy(
-        status = ReceiveMessageStatus.ReceivedProgressReceive(
+        status = ReceiveMessageStatus.Progress(
           messagesProgress
         )
       )

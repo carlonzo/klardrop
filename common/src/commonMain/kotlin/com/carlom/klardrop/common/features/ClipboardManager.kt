@@ -44,6 +44,10 @@ class ClipboardManager(
   fun write(text: String) {
     readerWriter.write(text)
   }
+
+  fun read(): String {
+    return readerWriter.read()
+  }
 }
 
 

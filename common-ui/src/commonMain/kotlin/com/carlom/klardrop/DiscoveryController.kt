@@ -9,6 +9,7 @@ import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
@@ -32,13 +33,15 @@ class DiscoveryController(
   private val visibleDevices: VisibleDevices,
   private val messenger: Messenger,
   private val platformFileSystem: PlatformFileSystem,
+  private val clipboardManager: ClipboardManager,
 ) : OnDeviceActionListener {
 
   constructor(commonComponent: CommonComponent) : this(
     commonComponent.coroutines(),
     commonComponent.visibleDevices(),
     commonComponent.messenger(),
-    commonComponent.platformFileSystem()
+    commonComponent.platformFileSystem(),
+    commonComponent.clipboardManager()
   )
 
   private val controllerScope = CoroutineScope(coroutines.mainDispatcher + SupervisorJob())
@@ -128,6 +131,18 @@ class DiscoveryController(
 
   fun dispose() {
     controllerScope.cancel()
+  }
+
+  fun removeReceivedMessage(receivedMessageId: Int) {
+    screenStateFlow.update {
+      it.copy(
+        receivingMessages = it.receivingMessages - receivedMessageId
+      )
+    }
+  }
+
+  fun readFromClipboard(): String {
+    return clipboardManager.read()
   }
 
   data class DiscoveryScreenState(

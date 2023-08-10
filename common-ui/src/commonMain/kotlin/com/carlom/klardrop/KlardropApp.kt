@@ -36,7 +36,7 @@ fun KlardropApp(
 
           Text("Hello in Klardrop")
 
-          DiscoveryDashboard(
+          DiscoveryScreen(
             modifier = Modifier
               .fillMaxWidth(fraction = 0.75f)
               .fillMaxHeight(),
@@ -46,7 +46,7 @@ fun KlardropApp(
           )
         }
       } else {
-        DiscoveryDashboard(
+        DiscoveryScreen(
           discoveryController = visibleDevicesController,
           isLargeScreen = isLargeScreen,
           uiDependencies = uiDependencies

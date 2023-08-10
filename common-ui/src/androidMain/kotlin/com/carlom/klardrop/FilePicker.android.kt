@@ -20,9 +20,10 @@ actual class FilePicker {
   actual fun registerPicker(onFilesPicked: (DeviceUi, List<String>) -> Unit) {
 
     getContent = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
+      if (it == null) return@rememberLauncherForActivityResult
+
       onFilesPicked(deviceUi, listOf(it.toString()))
     }
-
 
   }
 

@@ -1,31 +1,44 @@
 package com.carlom.klardrop
 
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.ModalBottomSheetLayout
+import androidx.compose.material.ModalBottomSheetState
 import androidx.compose.material.ModalBottomSheetValue
+import androidx.compose.material.TextButton
+import androidx.compose.material.TextField
 import androidx.compose.material.rememberModalBottomSheetState
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SheetState
-import androidx.compose.material3.SheetValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
@@ -34,9 +47,9 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
 @Composable
-fun DiscoveryDashboard(
+fun DiscoveryScreen(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
   uiDependencies: UiDependencies,
@@ -44,39 +57,31 @@ fun DiscoveryDashboard(
 ) {
 
   val scope = rememberCoroutineScope()
-  val scaffoldState =
-    rememberBottomSheetScaffoldState(bottomSheetState = SheetState(skipPartiallyExpanded = true, initialValue = SheetValue.Hidden))
   val filePicker = uiDependencies.filePickerFactory().createPicker() // TODO this is recreated on every recomposition
+  filePicker.registerPicker { deviceUi, paths ->
+    discoveryController.onSendData(deviceUi, OnDataToSend.FilesList(paths))
+  }
 
   var deviceUiClicked = remember<DeviceUi?> { null }
 
-  var sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
+  val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
   ModalBottomSheetLayout(
+    sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+    sheetBackgroundColor = MaterialTheme.colorScheme.surface,
+    sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
     sheetContent = {
-      Text("Share Text")
-      Text(
-        modifier = Modifier.clickable { filePicker.openFilePicker(deviceUiClicked!!) },
-        text = "Share Files"
-      )
-
-      Spacer(Modifier.height(40.dp))
+      ShareSheet(filePicker, discoveryController, sheetState) { deviceUiClicked!! }
     },
     sheetState = sheetState,
     content = {
 
       val discoveryState by discoveryController.screenStateFlow.collectAsState()
 
-      filePicker.registerPicker { deviceUi, paths ->
-        discoveryController.onSendData(deviceUi, OnDataToSend.FilesList(paths))
-      }
-
       discoveryController.actionsFlow.collectAsEffect {
         when (it) {
           is ActionUi.OnDeviceClicked -> {
 
-
-            println("event clicked $it")
             deviceUiClicked = it.deviceUi
             scope.launch {
               sheetState.show()
@@ -94,82 +99,25 @@ fun DiscoveryDashboard(
           onDeviceActionListener = discoveryController
         )
 
-        Column {
 
-          if (discoveryState.receivingMessages.isNotEmpty()) {
+        LazyColumn(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
 
-            discoveryState.receivingMessages.values.forEach {
-
-              val text = when (it.status) {
-                ReceiveMessageStatus.Completed -> "Completed ${it.messages}"
-                is ReceiveMessageStatus.Failed -> "Failed ${it.messages}"
-                is ReceiveMessageStatus.PendingAuthorization -> "Pending Authorization ${it.messages}"
-                is ReceiveMessageStatus.ReceivedProgressReceive -> "Progress ${(it.status as ReceiveMessageStatus.ReceivedProgressReceive).messages}"
-                ReceiveMessageStatus.Started -> "Started ${it.messages}"
-              }
-
-              Text(
-                text = text
-              )
-
-
-            }
-
+          items(
+            items = discoveryState.receivingMessages.toList(),
+            key = { it.first },
+          ) { item ->
+            ReceiveNotification(
+              Modifier.animateItemPlacement(tween()).align(Alignment.BottomCenter),
+              item.second
+            ) { discoveryController.removeReceivedMessage(item.first) }
           }
 
         }
 
-
       }
-
 
     })
 }
-
-
-//  BottomSheetScaffold(
-//
-//    scaffoldState = scaffoldState,
-//    sheetContent = {
-//
-//      Text("Share Text")
-//      Text(
-//        modifier = Modifier.clickable { filePicker.openFilePicker(deviceUiClicked!!) },
-//        text = "Share Files"
-//      )
-//
-//      Spacer(Modifier.height(40.dp))
-//    }
-//  ) {
-//
-//    val devices by showVisibleDevicesController.flow.collectAsState(emptyList())
-//
-//    filePicker.registerPicker { deviceUi, paths ->
-//      showVisibleDevicesController.onSendData(deviceUi, OnDataToSend.FilesList(paths))
-//    }
-//
-//    showVisibleDevicesController.actionsFlow.collectAsEffect {
-//      when (it) {
-//        is ActionUi.OnDeviceClicked -> {
-//
-//
-//          println("event clicked $it")
-//          deviceUiClicked = it.deviceUi
-//          scope.launch {
-//            scaffoldState.bottomSheetState.show()
-//          }
-//        }
-//      }
-//    }
-//
-//    DiscoveryDashboard(
-//      modifier = modifier,
-//      isLargeScreen = isLargeScreen,
-//      devices = devices,
-//      onDeviceActionListener = showVisibleDevicesController
-//    )
-//
-//  }
 
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -198,15 +146,82 @@ private fun DiscoveryDashboard(
   }
 }
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
-private fun ColumnScope.ShareSheet(deviceUi: DeviceUi?, filePicker: FilePicker) {
+private fun ColumnScope.ShareSheet(
+  filePicker: FilePicker,
+  discoveryController: DiscoveryController,
+  sheetState: ModalBottomSheetState,
+  deviceUiClicked: () -> DeviceUi
+) {
+  val scope = rememberCoroutineScope()
+  var shareText by remember { mutableStateOf(false) }
 
-  Text("Share Text")
-  Text(
-    modifier = Modifier.clickable { filePicker.openFilePicker(deviceUi!!) },
-    text = "Share Files"
-  )
+  suspend fun dismissSheet() {
+    sheetState.hide()
+    shareText = false
+  }
 
+  Column(
+    modifier = Modifier.padding(top = 24.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Top)
+  ) {
+
+
+    Text(
+      modifier = Modifier.clickable(enabled = !shareText) { shareText = true },
+      text = "Share Text"
+    )
+    var inputValue by remember { mutableStateOf(discoveryController.readFromClipboard()) }
+
+    LaunchedEffect(shareText) {
+      if (shareText) {
+        inputValue = discoveryController.readFromClipboard()
+      }
+    }
+
+    if (shareText) {
+
+      fun sendText(text: String) {
+        if (text.isNotEmpty()) {
+          discoveryController.onSendData(
+            deviceUiClicked(),
+            OnDataToSend.Text(text)
+          )
+        }
+        scope.launch { dismissSheet() }
+      }
+
+      Column {
+
+        TextField(
+          modifier = Modifier.fillMaxWidth(),
+          value = inputValue,
+          onValueChange = { inputValue = it },
+          keyboardActions = KeyboardActions(onDone = {
+            sendText(inputValue)
+          }),
+          keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done)
+        )
+        TextButton(onClick = {
+          sendText(inputValue)
+        }) {
+          Text("Send")
+        }
+      }
+    }
+
+    Text(
+      modifier = Modifier.clickable {
+        filePicker.openFilePicker(deviceUiClicked())
+        scope.launch { dismissSheet() }
+      },
+      text = "Share Files"
+    )
+  }
+
+
+  Spacer(Modifier.height(40.dp))
 }
 
 @Composable

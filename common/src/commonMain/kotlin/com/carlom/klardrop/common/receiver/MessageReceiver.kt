@@ -75,7 +75,7 @@ sealed interface ReceiveMessageStatus {
 
   data class PendingAuthorization(val acceptTransfer: (Boolean) -> Unit) : ReceiveMessageStatus
 
-  data class ReceivedProgressReceive(val messages: List<Pair<Message, Int>>) : ReceiveMessageStatus
+  data class Progress(val messages: List<Pair<Message, Int>>) : ReceiveMessageStatus
 
   data class Failed(val reason: String) : ReceiveMessageStatus
 

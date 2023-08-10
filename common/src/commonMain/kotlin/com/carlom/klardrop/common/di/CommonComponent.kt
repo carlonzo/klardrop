@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
+import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
@@ -62,6 +63,9 @@ class CommonComponent(
     )
   }
 
+  private val clipboardManager by lazy {
+    ClipboardManager(coroutines, internalPlatformDependency.clipboardReaderWriter())
+  }
 
   private val platformFileSystem: PlatformFileSystem
     get() = internalPlatformDependency.platformFileSystem()
@@ -79,5 +83,7 @@ class CommonComponent(
   fun platformFileSystem() = platformFileSystem
 
   fun nearbyServer() = communicationModule.nearbyServer()
+
+  fun clipboardManager() = clipboardManager
 
 }

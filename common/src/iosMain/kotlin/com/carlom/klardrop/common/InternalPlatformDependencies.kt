@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.persistence.CurrentFileSystem
 import com.carlom.klardrop.common.utils.DeviceType
@@ -58,4 +59,7 @@ actual class InternalPlatformDependencies {
     return OsType.APPLE
   }
 
+  actual fun clipboardReaderWriter(): ClipboardReaderWriter {
+    return ClipboardReaderWriter()
+  }
 }
