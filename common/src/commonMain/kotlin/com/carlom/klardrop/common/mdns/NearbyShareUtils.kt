@@ -3,7 +3,6 @@ package com.carlom.klardrop.common.mdns
 import com.carlom.klardrop.common.discovery.CurrentDevice
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
-import com.carlom.klardrop.common.utils.log
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
 import com.google.location.nearby.connections.proto.KeepAliveFrame
 import com.google.location.nearby.connections.proto.OfflineFrame
@@ -32,6 +31,12 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 
 private const val SANE_FRAME_LENGTH = 524424
+private const val LOG_DEBUG = true
+
+private fun log(tag: String, message: String) {
+  if (LOG_DEBUG)
+    com.carlom.klardrop.common.utils.log(tag, message)
+}
 
 internal fun createEndpointInfo(currentDevice: CurrentDevice): ByteArray {
   val deviceName = currentDevice.deviceName

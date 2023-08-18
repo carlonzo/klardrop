@@ -1,16 +1,20 @@
 package com.carlom.klardrop.common.discovery
 
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
+import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE_NAME
+import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE_TYPE
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.KLARDROP_SERVICE_TYPE
 import com.carlom.klardrop.common.discovery.NearbyShareDiscoveryUtils.Companion.NEARBY_SERVICE_TYPE
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryEvent
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.mdns.ServiceInfo
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 
 /**
@@ -89,29 +93,33 @@ class DiscoveryNetwork internal constructor(
   fun discoveryKlardropDevices() {
 
     discoveryScope.launch {
-      serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE).collect {
-        log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
-
-        val deviceId = klardropDiscoveryUtils.getDeviceId(it.serviceInfo)
-
-        if (deviceId == currentDevice.await().shortDeviceId) {
-          log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
-          return@collect
+      serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE)
+        .onStart {
+          emit(test_device)
         }
+        .collect {
+          log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
 
-        when (it) {
+          val deviceId = klardropDiscoveryUtils.getDeviceId(it.serviceInfo)
 
-          is ServiceDiscoveryEvent.ServiceFound -> if (klardropDiscoveryUtils.isValidService(it.serviceInfo)) {
-            onDiscoveredService(it.serviceInfo, DeviceConnectionType.KLARDROP)
-          } else {
-            log("DiscoveryNetwork", "Invalid service found for Klardrop: ${it.serviceInfo}")
+          if (deviceId == currentDevice.await().shortDeviceId) {
+            log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
+            return@collect
           }
 
-          is ServiceDiscoveryEvent.ServiceLost -> onLostService(deviceId, it.serviceInfo, DeviceConnectionType.KLARDROP)
+          when (it) {
+
+            is ServiceDiscoveryEvent.ServiceFound -> if (klardropDiscoveryUtils.isValidService(it.serviceInfo)) {
+              onDiscoveredService(it.serviceInfo, DeviceConnectionType.KLARDROP)
+            } else {
+              log("DiscoveryNetwork", "Invalid service found for Klardrop: ${it.serviceInfo}")
+            }
+
+            is ServiceDiscoveryEvent.ServiceLost -> onLostService(deviceId, it.serviceInfo, DeviceConnectionType.KLARDROP)
+
+          }
 
         }
-
-      }
     }
 
   }
@@ -133,7 +141,7 @@ class DiscoveryNetwork internal constructor(
     }
   }
 
-  private suspend fun onLostService(deviceId: String, serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {
+  private fun onLostService(deviceId: String, serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {
     if (serviceInfo.addresses.isNotEmpty()) {
       serviceInfo.addresses.forEach { address ->
         val deviceConnection = when (connectionType) {
@@ -147,5 +155,19 @@ class DiscoveryNetwork internal constructor(
     }
   }
 
+  companion object {
+    private val test_device = ServiceDiscoveryEvent.ServiceFound(
+      ServiceInfo(
+        port = 0,
+        serviceName = "Test_device",
+        serviceType = KLARDROP_SERVICE_TYPE,
+        attributes = mapOf(
+          ATTRIBUTE_DEVICE_NAME to urlSafeBase64EncodedString("Test device"),
+          ATTRIBUTE_DEVICE_TYPE to DeviceType.MOBILE.id.toInt().toString()
+        ),
+        addresses = listOf("192.168.1.1")
+      )
+    )
+  }
 }
 

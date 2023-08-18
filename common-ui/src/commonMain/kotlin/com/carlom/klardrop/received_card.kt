@@ -1,23 +1,19 @@
 package com.carlom.klardrop
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.Card
 import androidx.compose.material3.DismissValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismiss
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDismissState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -31,7 +27,7 @@ fun ReceiveNotification(
   modifier: Modifier = Modifier,
   receiveUpdate: ReceiveMessageUpdate,
   onDismissed: (ReceiveMessageUpdate) -> Unit = {},
-  ) {
+) {
 
   val dismissState = rememberDismissState(initialValue = DismissValue.Default, confirmValueChange = {
     if (it != DismissValue.Default) {
@@ -58,8 +54,9 @@ fun ReceiveNotification(
           .alpha(cardAlpha),
       ) {
 
-        Box(modifier = Modifier
-          .padding(8.dp)
+        Box(
+          modifier = Modifier
+            .padding(8.dp)
         ) {
           when (val status = receiveUpdate.status) {
             is ReceiveMessageStatus.Progress -> ReceiveNotificationProgress(receiveUpdate, status)

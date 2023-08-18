@@ -16,16 +16,16 @@ internal class KlardropDiscoveryUtils {
       serviceName = name,
       serviceType = KLARDROP_SERVICE_TYPE,
       attributes = mapOf(
-        "dn" to urlSafeBase64EncodedString(currentDevice.deviceName),
-        "dt" to currentDevice.deviceType.id.toInt().toString(),
+        ATTRIBUTE_DEVICE_NAME to urlSafeBase64EncodedString(currentDevice.deviceName),
+        ATTRIBUTE_DEVICE_TYPE to currentDevice.deviceType.id.toInt().toString(),
       )
     )
   }
 
   fun toDeviceInfo(serviceInfo: ServiceInfo): DeviceInfo = with(serviceInfo) {
 
-    val deviceName = urlSafeBase64DecodeString(attributes.getValue("dn")).decodeToString()
-    val deviceType = DeviceType.fromId(attributes.getValue("dt").toInt())
+    val deviceName = urlSafeBase64DecodeString(attributes.getValue(ATTRIBUTE_DEVICE_NAME)).decodeToString()
+    val deviceType = DeviceType.fromId(attributes.getValue(ATTRIBUTE_DEVICE_TYPE).toInt())
 
     return DeviceInfo(
       name = deviceName,
@@ -44,5 +44,7 @@ internal class KlardropDiscoveryUtils {
 
   companion object {
     const val KLARDROP_SERVICE_TYPE = "_klardrop._tcp."
+    internal const val ATTRIBUTE_DEVICE_NAME = "dn"
+    internal const val ATTRIBUTE_DEVICE_TYPE = "dt"
   }
 }

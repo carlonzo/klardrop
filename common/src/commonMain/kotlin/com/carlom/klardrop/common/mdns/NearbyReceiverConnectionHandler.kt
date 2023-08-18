@@ -37,7 +37,7 @@ import sharing.nearby.PairedKeyResultFrame
 import kotlin.random.Random
 
 /**
- *  This class handles the connection between two devices.
+ *  This class handles the nearby connection request.
  */
 class NearbyReceiverConnectionHandler(
   private val internalPlatformDependencies: InternalPlatformDependencies,
@@ -85,6 +85,12 @@ class NearbyReceiverConnectionHandler(
         }
       }
 
+      receiveFlow.update {
+        it.copy(
+          messages = messagesToReceive.values.toList()
+        )
+      }
+
       updateReceiveProgress()
 
       // create a job to keep alive while waiting for user to accept
@@ -118,7 +124,10 @@ class NearbyReceiverConnectionHandler(
     require(receiveProgress.values.all { it == 100 }) { "Not all messages received $receiveProgress $messagesToReceive" }
 
     receiveFlow.update {
-      it.copy(status = ReceiveMessageStatus.Completed, messages = messagesToReceive.values.toList())
+      it.copy(
+        status = ReceiveMessageStatus.Completed,
+        messages = messagesToReceive.values.toList()
+      )
     }
   }
 
@@ -141,8 +150,11 @@ class NearbyReceiverConnectionHandler(
 
     }
 
+    // keeping payload ids to track pending transfers to be completed
+    val pendingTransfers: MutableSet<Long> = messagesToReceive.keys.toMutableSet()
+
     fun areTransfersPending(): Boolean {
-      return receiveProgress.values.any { it < 100 }
+      return pendingTransfers.isNotEmpty()
     }
 
     log("NearbyReceiverConnectionHandler", "Start receiving transfer")
@@ -175,6 +187,7 @@ class NearbyReceiverConnectionHandler(
 
             fileTransfer.onTransferCompleted()
             log("NearbyReceiverConnectionHandler", "File transfer completed")
+            pendingTransfers.remove(payloadId)
           } else {
             processFileChunk(payload, fileTransfer)
           }
@@ -185,6 +198,11 @@ class NearbyReceiverConnectionHandler(
           messagesToReceive[payloadId] = message.copy(
             text = message.text + payloadChunk.body!!.utf8()
           )
+
+          if (payloadChunk.body.size == 0) {
+            log("NearbyReceiverConnectionHandler", "Text transfer completed")
+            pendingTransfers.remove(payloadId)
+          }
 
         } else {
           log("NearbyReceiverConnectionHandler", "Unknown message with payloadId $payloadId")
@@ -378,8 +396,8 @@ class NearbyReceiverConnectionHandler(
 
     nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
       .let { offline ->
-        val paylod = offline.v1?.payload_transfer?.payload_chunk!!
-        log("NearbyReceiverConnectionHandler", "Received key result: ${Frame.ADAPTER.decode(paylod.body!!)}}")
+        val payload = offline.v1?.payload_transfer?.payload_chunk!!
+        log("NearbyReceiverConnectionHandler", "Received key result: ${Frame.ADAPTER.decode(payload.body!!)}}")
       }
 
 
@@ -393,10 +411,6 @@ class NearbyReceiverConnectionHandler(
 
     frame.v1?.introduction?.file_metadata?.forEach { fileMetadata ->
 
-//      val fileTransfer = fileManager.prepareSaveFile(
-//        fileName = fileMetadata.name!!,
-//        mimeType = fileMetadata.mime_type ?: getMimeTypeFromExtension(fileMetadata.name)
-//      )
       messagesToReceive[fileMetadata.payload_id!!] = FileMessage(
         fileName = fileMetadata.name!!,
         fileSize = fileMetadata.size!!,
@@ -418,7 +432,7 @@ class NearbyReceiverConnectionHandler(
 
   }
 
-  private suspend fun updateReceiveProgress() {
+  private fun updateReceiveProgress() {
 
     val messagesProgress = receiveProgress.map {
       messagesToReceive[it.key]!! to it.value
