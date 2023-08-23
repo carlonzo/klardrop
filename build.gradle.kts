@@ -45,11 +45,11 @@ subprojects {
     }
   }
 
-  pluginManager.withPlugin("org.jetbrains.compose") {
-    configure<ComposeExtension> {
-      kotlinCompilerPlugin.set(deps.versions.compose.compiler)
-    }
-  }
+//  pluginManager.withPlugin("org.jetbrains.compose") {
+//    configure<ComposeExtension> {
+//      kotlinCompilerPlugin.set(deps.versions.compose.compiler)
+//    }
+//  }
 
   tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
     kotlinOptions {

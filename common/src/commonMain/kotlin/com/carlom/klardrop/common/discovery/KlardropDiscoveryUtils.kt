@@ -6,7 +6,7 @@ import com.carlom.klardrop.common.utils.DeviceType
 
 internal class KlardropDiscoveryUtils {
 
-  fun provideRegisterServiceInfo(port: Int, currentDevice: CurrentDevice): RegisterServiceInfo {
+  fun getRegisterServiceInfo(port: Int, currentDevice: CurrentDevice): RegisterServiceInfo {
 
     val nameBytes = currentDevice.shortDeviceId.encodeToByteArray()
     val name = urlSafeBase64EncodedString(nameBytes)

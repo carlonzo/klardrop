@@ -37,11 +37,12 @@ class DiscoveryNetwork internal constructor(
 
 
   fun startPublishNearbyShare(port: Int) {
+    println("startPublishNearbyShare $port")
 
     nearbySharePublishJob?.cancel()
     nearbySharePublishJob = discoveryScope.launch {
 
-      val registerServiceInfo = nearbyShareDiscoveryUtils.buildServiceInfo(port, currentDevice.await())
+      val registerServiceInfo = nearbyShareDiscoveryUtils.getRegisterServiceInfo(port, currentDevice.await())
 
       serviceDiscoveryMdns.registerService(registerServiceInfo)
     }
@@ -49,10 +50,12 @@ class DiscoveryNetwork internal constructor(
   }
 
   fun startPublishKlardrop(port: Int) {
+    println("startPublishKlardrop $port")
+
     klardropPublishJob?.cancel()
     klardropPublishJob = discoveryScope.launch {
 
-      val registerServiceInfo = klardropDiscoveryUtils.provideRegisterServiceInfo(port, currentDevice.await())
+      val registerServiceInfo = klardropDiscoveryUtils.getRegisterServiceInfo(port, currentDevice.await())
 
       serviceDiscoveryMdns.registerService(registerServiceInfo)
     }
@@ -64,12 +67,12 @@ class DiscoveryNetwork internal constructor(
     discoveryScope.launch {
       serviceDiscoveryMdns.discoverServices(NEARBY_SERVICE_TYPE).collect {
 
-        log("DiscoveryNetwork", "New discovery event for NearbyShare: $it")
+//        log("DiscoveryNetwork", "New discovery event for NearbyShare: $it")
 
         val deviceId = nearbyShareDiscoveryUtils.getDeviceId(it.serviceInfo)
 
         if (deviceId == currentDevice.await().shortDeviceId) {
-          log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
+//          log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
           return@collect
         }
 
@@ -98,12 +101,12 @@ class DiscoveryNetwork internal constructor(
           emit(test_device)
         }
         .collect {
-          log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
+//          log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
 
           val deviceId = klardropDiscoveryUtils.getDeviceId(it.serviceInfo)
 
           if (deviceId == currentDevice.await().shortDeviceId) {
-            log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
+//            log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
             return@collect
           }
 

@@ -26,7 +26,7 @@ dependencies {
 }
 
 android {
-  compileSdk = 33
+  compileSdk = 34
   defaultConfig {
     applicationId = "com.carlom.klardrop.android"
     minSdk = 23

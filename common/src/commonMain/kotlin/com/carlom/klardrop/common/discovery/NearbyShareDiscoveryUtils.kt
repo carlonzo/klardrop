@@ -15,7 +15,7 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 
 internal class NearbyShareDiscoveryUtils {
 
-  fun buildServiceInfo(port: Int, currentDevice: CurrentDevice): RegisterServiceInfo {
+  fun getRegisterServiceInfo(port: Int, currentDevice: CurrentDevice): RegisterServiceInfo {
 
     val nameBytes = byteArrayOf(
       0x23.toByte(), // PCP

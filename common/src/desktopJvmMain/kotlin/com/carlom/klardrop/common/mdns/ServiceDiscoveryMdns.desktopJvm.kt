@@ -8,14 +8,49 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.net.Inet4Address
+import java.net.NetworkInterface
+import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceListener
-import javax.jmdns.impl.JmmDNSImpl
 
 
 actual class ServiceDiscoveryMdns {
 
-  private val jmdns by lazy { JmmDNSImpl() }
+  private val jmdns by lazy {
+
+    val addresses = getAddresses()
+
+    addresses.map { address ->
+      JmDNS.create(address, address.hostAddress)
+    }
+
+  }
+
+  private fun getAddresses(): List<Inet4Address> {
+    val addresses = mutableListOf<Inet4Address>()
+
+    NetworkInterface.getNetworkInterfaces().iterator().forEach { networkInterface ->
+
+      if (networkInterface.isLoopback) {
+        return@forEach
+      }
+
+      if (!networkInterface.isUp) {
+        return@forEach
+      }
+
+      networkInterface.inetAddresses.iterator().forEach loop2@{ inetAddress ->
+
+        if (!inetAddress.isLoopbackAddress && inetAddress is Inet4Address) {
+          addresses.add(inetAddress)
+        }
+      }
+
+    }
+
+    return addresses
+  }
 
   actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
 
@@ -26,13 +61,13 @@ actual class ServiceDiscoveryMdns {
       val listenersHolder = mutableListOf<ServiceListener>()
 
       val listener = createServiceListener(this)
-      jmdns.addServiceListener(serviceTypeLocal, listener)
+      jmdns.forEach { instance -> instance.addServiceListener(serviceTypeLocal, listener) }
 
       listenersHolder.add(listener)
 
       awaitClose {
         listenersHolder.forEach { listener ->
-          jmdns.removeServiceListener(serviceTypeLocal, listener)
+          jmdns.forEach { instance -> instance.removeServiceListener(serviceTypeLocal, listener) }
         }
       }
     }
@@ -45,7 +80,6 @@ actual class ServiceDiscoveryMdns {
 
       val registrations = mutableListOf<javax.jmdns.ServiceInfo>()
 
-
       val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
         registerServiceInfo.serviceType,
         registerServiceInfo.serviceName,
@@ -55,13 +89,14 @@ actual class ServiceDiscoveryMdns {
         registerServiceInfo.attributes
       )
 
-      jmdns.registerService(jmdnsServiceInfo)
+      jmdns.forEach { instance -> instance.registerService(jmdnsServiceInfo) }
+      registrations.add(jmdnsServiceInfo)
 
       log("ServiceDiscoveryMdns", "publishing service: $registerServiceInfo")
 
       it.invokeOnCancellation {
         registrations.forEach { jmdnsServiceInfo ->
-          jmdns.unregisterService(jmdnsServiceInfo)
+          jmdns.forEach { instance -> instance.unregisterService(jmdnsServiceInfo) }
         }
       }
     }

@@ -77,8 +77,7 @@ fun DiscoveryScreen(
     content = {
 
       val discoveryState by discoveryController.screenStateFlow
-        .onEach { println("Received DiscoveryState: $it") }
-        .collectAsState(DiscoveryController.DiscoveryScreenState())
+        .collectAsState()
 
       discoveryController.actionsFlow.collectAsEffect {
         when (it) {

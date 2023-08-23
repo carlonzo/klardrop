@@ -1,10 +1,9 @@
 [versions]
 agp = "8.0.0"
-kotlin = "1.9.10"
+kotlin = "1.9.0"
 coroutines = "1.7.3"
 serialization = "1.6.0"
 compose-plugin = "1.5.0-rc04"
-compose-compiler = "1.5.0" # https://maven.pkg.jetbrains.space/public/p/compose/dev/org/jetbrains/compose/compiler/compiler/
 okio = "3.5.0"
 ktor = "2.3.3"
 datastore = "1.1.0-alpha04"
