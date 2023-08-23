@@ -2,7 +2,7 @@
 agp = "8.0.0"
 kotlin = "1.9.10"
 coroutines = "1.7.3"
-serialization = "1.5.1"
+serialization = "1.6.0"
 compose-plugin = "1.5.0-rc01"
 compose-compiler = "1.5.0" # https://maven.pkg.jetbrains.space/public/p/compose/dev/org/jetbrains/compose/compiler/compiler/
 okio = "3.5.0"
