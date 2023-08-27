@@ -211,17 +211,13 @@ internal suspend fun sendKeepAlive(writeChannel: ByteWriteChannel, nearbyConnect
 }
 
 private fun deviceTypeId(currentDevice: CurrentDevice): Int {
+  //    https://github.com/google/nearby/blob/0d83625766a0be92e713d592a3c8bcc7fd6d3307/internal/proto/metadata.proto#L69
+  // Device types: unknown=0, phone=1, tablet=2, laptop=3,4
+
   return when (currentDevice.deviceType) {
-    DeviceType.MOBILE -> {
-      when(currentDevice.osType){
-        OsType.ANDROID -> com.google.security.cryptauth.lib.securegcm.DeviceType.ANDROID.value
-        OsType.APPLE -> com.google.security.cryptauth.lib.securegcm.DeviceType.IOS.value
-       else -> com.google.security.cryptauth.lib.securegcm.DeviceType.UNKNOWN.value
-      }
-    }
-    DeviceType.DESKTOP -> com.google.security.cryptauth.lib.securegcm.DeviceType.OSX.value
-    DeviceType.UNKNOWN -> com.google.security.cryptauth.lib.securegcm.DeviceType.UNKNOWN.value
-//      else -> 0
+    DeviceType.MOBILE -> 1
+    DeviceType.DESKTOP -> 3
+    DeviceType.UNKNOWN -> 0
   }
 }
 

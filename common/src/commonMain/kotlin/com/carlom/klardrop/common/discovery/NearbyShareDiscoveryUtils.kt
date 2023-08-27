@@ -49,7 +49,6 @@ internal class NearbyShareDiscoveryUtils {
     val endpointInfoBytes = urlSafeBase64DecodeString(endpointInfo)
 
     // 1 byte: Version(3 bits)|Visibility(1 bit)|Device Type(3 bits)|Reserved(1 bits)
-    // Device types: unknown=0, phone=1, tablet=2, laptop=3
     val deviceInfoByte = endpointInfoBytes[0].toInt()
 
     val deviceTypeId = deviceInfoByte and 0b0000_1110
@@ -93,8 +92,15 @@ internal class NearbyShareDiscoveryUtils {
   }
 
   private fun deviceTypeFromId(id: Int): DeviceType {
-    val ukey2DeviceType = com.google.security.cryptauth.lib.securegcm.DeviceType.fromValue(id)
-    return ukey2DeviceType.toDeviceType()
+//    https://github.com/google/nearby/blob/0d83625766a0be92e713d592a3c8bcc7fd6d3307/internal/proto/metadata.proto#L69
+    // Device types: unknown=0, phone=1, tablet=2, laptop=3,4
+    return when (id) {
+      0 -> DeviceType.UNKNOWN
+      1 -> DeviceType.MOBILE
+      2 -> DeviceType.MOBILE
+      3,4,7 -> DeviceType.DESKTOP
+      else -> DeviceType.UNKNOWN
+    }
   }
 
   private fun osTypeFromId(id: Int): OsType {
