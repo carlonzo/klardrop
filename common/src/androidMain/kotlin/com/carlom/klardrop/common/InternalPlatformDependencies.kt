@@ -10,11 +10,12 @@ import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
 import okio.Path.Companion.toOkioPath
+import okio.Path.Companion.toPath
 
 actual class InternalPlatformDependencies(private val context: Context) {
 
-  actual fun getRootPath(): String {
-    return context.filesDir.absolutePath
+  actual fun getRootPath(): Path {
+    return context.filesDir.absolutePath.toPath()
   }
 
   actual fun getDeviceName(): String {

@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import com.carlom.klardrop.common.ApplicationInfo
+import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.KnownDevicesRepositoryImpl
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
@@ -16,7 +17,9 @@ import okio.Path.Companion.toPath
 import kotlin.random.Random
 
 class StorageModule(
-  private val applicationInfo: ApplicationInfo
+  private val applicationInfo: ApplicationInfo,
+  private val coroutines: Coroutines,
+  private val platformDependencies: InternalPlatformDependencies
 ) {
 
   private companion object {
@@ -34,17 +37,17 @@ class StorageModule(
     return PreferenceDataStoreFactory.createWithPath(produceFile = filePath)
   }
 
-  private fun storageFilePath(rootPath: () -> String, fileName: String): Path {
-    return rootPath().toPath().resolve(fileName.toPath())
+  private fun storageFilePath(rootPath: () -> Path, fileName: String): Path {
+    return rootPath().resolve(fileName.toPath())
   }
 
 
-  fun localPropertiesRepository(coroutines: Coroutines, rootPath: (() -> String)): LocalPropertiesRepository {
-    return LocalPropertiesRepositoryImpl(getPreferencesDatastore { storageFilePath(rootPath, propertiesFileName) }, coroutines)
+  fun localPropertiesRepository(): LocalPropertiesRepository {
+    return LocalPropertiesRepositoryImpl(getPreferencesDatastore { storageFilePath( { platformDependencies.getStoragePath() }, propertiesFileName) }, coroutines)
   }
 
-  fun knownDevicesRepository(coroutines: Coroutines, rootPath: () -> String): KnownDevicesRepository {
-    return KnownDevicesRepositoryImpl(getPreferencesDatastore { storageFilePath(rootPath, knownDevicesFileName) }, coroutines)
+  fun knownDevicesRepository(): KnownDevicesRepository {
+    return KnownDevicesRepositoryImpl(getPreferencesDatastore { storageFilePath({ platformDependencies.getStoragePath() }, knownDevicesFileName) }, coroutines)
   }
 
 }

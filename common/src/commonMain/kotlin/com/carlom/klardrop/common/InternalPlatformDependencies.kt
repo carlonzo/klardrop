@@ -8,7 +8,7 @@ import com.carlom.klardrop.common.utils.PlatformFileSystem
 import okio.Path
 
 expect class InternalPlatformDependencies {
-  fun getRootPath(): String
+  fun getRootPath(): Path
   fun getDeviceName(): String
   fun deviceType(): DeviceType
   fun getStoragePath(): Path

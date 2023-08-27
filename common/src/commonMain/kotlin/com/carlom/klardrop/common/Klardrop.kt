@@ -1,7 +1,6 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.di.CommonComponent
-import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.UtilsModule
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.flow.filter
@@ -9,7 +8,6 @@ import kotlinx.coroutines.launch
 
 class Klardrop(
   private val applicationInfo: ApplicationInfo = ApplicationInfo(),
-  private val storageModule: StorageModule = StorageModule(applicationInfo),
   private val utilsModule: UtilsModule = UtilsModule(),
   private val internalPlatformDependency: InternalPlatformDependencies
 ) {
@@ -22,7 +20,7 @@ class Klardrop(
 
     log("Starting Klardrop with ApplicationInfo: $applicationInfo")
 
-    commonComponent = CommonComponent(storageModule, utilsModule, internalPlatformDependency)
+    commonComponent = CommonComponent(applicationInfo, utilsModule, internalPlatformDependency)
 
     val discoveryNetwork = commonComponent.discoveryNetwork()
 

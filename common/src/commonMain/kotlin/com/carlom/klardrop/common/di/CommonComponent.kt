@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.di
 
+import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileManagerImpl
 import com.carlom.klardrop.common.InternalPlatformDependencies
@@ -17,21 +18,25 @@ import com.carlom.klardrop.common.utils.UtilsModule
 import kotlinx.serialization.protobuf.ProtoBuf
 
 class CommonComponent(
-  private val storageModule: StorageModule,
+  private val applicationInfo: ApplicationInfo,
   private val utilsModule: UtilsModule,
   private val internalPlatformDependency: InternalPlatformDependencies
 ) {
 
-  private val localProperties: LocalPropertiesRepository by lazy {
-    storageModule.localPropertiesRepository(
-      coroutines, internalPlatformDependency::getRootPath
+  private val storageModule: StorageModule by lazy {
+    StorageModule(
+      applicationInfo,
+      utilsModule.coroutines(),
+      internalPlatformDependency
     )
   }
 
+  private val localProperties: LocalPropertiesRepository by lazy {
+    storageModule.localPropertiesRepository()
+  }
+
   private val knownDevicesRepository: KnownDevicesRepository by lazy {
-    storageModule.knownDevicesRepository(
-      coroutines, internalPlatformDependency::getRootPath
-    )
+    storageModule.knownDevicesRepository()
   }
 
   private val coroutines: Coroutines by lazy { utilsModule.coroutines() }

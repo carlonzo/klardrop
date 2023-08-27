@@ -12,8 +12,21 @@ import platform.Foundation.*
 import platform.UIKit.UIDevice
 
 actual class InternalPlatformDependencies {
-  actual fun getRootPath(): String {
-    return NSHomeDirectory()
+
+  private val documentsDirectory: Path by lazy {
+    val directory = NSFileManager.defaultManager.URLForDirectory(
+      directory = NSDocumentDirectory,
+      inDomain = NSUserDomainMask,
+      appropriateForURL = null,
+      create = false,
+      error = null
+    )
+
+    requireNotNull(directory).path!!.toPath()
+  }
+
+  actual fun getRootPath(): Path {
+    return documentsDirectory
   }
 
   actual fun getDeviceName(): String {
@@ -25,16 +38,7 @@ actual class InternalPlatformDependencies {
   }
 
   actual fun getStoragePath(): Path {
-    val downloadDirectory = NSFileManager.defaultManager.URLForDirectory(
-      directory = NSDocumentDirectory,
-      inDomain = NSUserDomainMask,
-      appropriateForURL = null,
-      create = false,
-      error = null
-    )
-
-
-    val klardropStoragePath = requireNotNull(downloadDirectory).path?.toPath()!!.resolve("Klardrop")
+    val klardropStoragePath = documentsDirectory.resolve("Klardrop")
 
     if (!CurrentFileSystem.exists(klardropStoragePath)) {
       CurrentFileSystem.createDirectory(klardropStoragePath, mustCreate = true)
