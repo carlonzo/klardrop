@@ -2,7 +2,7 @@ package com.carlom.klardrop.common.discovery
 
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE_NAME
-import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE_TYPE
+import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.KLARDROP_SERVICE_TYPE
 import com.carlom.klardrop.common.discovery.NearbyShareDiscoveryUtils.Companion.NEARBY_SERVICE_TYPE
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryEvent
@@ -10,6 +10,7 @@ import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.mdns.ServiceInfo
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -131,8 +132,8 @@ class DiscoveryNetwork internal constructor(
     serviceInfo.addresses.forEach { address ->
 
       val deviceConnection = when (connectionType) {
-        DeviceConnectionType.NEARBY -> DeviceConnection.Nearby(address, serviceInfo.port)
-        DeviceConnectionType.KLARDROP -> DeviceConnection.Klardrop(address, serviceInfo.port)
+        DeviceConnectionType.NEARBY -> DeviceConnection.NearbyConnection(address, serviceInfo.port)
+        DeviceConnectionType.KLARDROP -> DeviceConnection.KlardropConnection(address, serviceInfo.port)
       }
 
       val deviceInfo = when (connectionType) {
@@ -148,8 +149,8 @@ class DiscoveryNetwork internal constructor(
     if (serviceInfo.addresses.isNotEmpty()) {
       serviceInfo.addresses.forEach { address ->
         val deviceConnection = when (connectionType) {
-          DeviceConnectionType.NEARBY -> DeviceConnection.Nearby(address, serviceInfo.port)
-          DeviceConnectionType.KLARDROP -> DeviceConnection.Klardrop(address, serviceInfo.port)
+          DeviceConnectionType.NEARBY -> DeviceConnection.NearbyConnection(address, serviceInfo.port)
+          DeviceConnectionType.KLARDROP -> DeviceConnection.KlardropConnection(address, serviceInfo.port)
         }
         visibleDevices.onDeviceLost(deviceId, deviceConnection)
       }
@@ -166,7 +167,7 @@ class DiscoveryNetwork internal constructor(
         serviceType = KLARDROP_SERVICE_TYPE,
         attributes = mapOf(
           ATTRIBUTE_DEVICE_NAME to urlSafeBase64EncodedString("Test device"),
-          ATTRIBUTE_DEVICE_TYPE to DeviceType.MOBILE.id.toInt().toString()
+          ATTRIBUTE_DEVICE to (DeviceType.MOBILE.id.toInt() shl 4).or(OsType.ANDROID.id.toInt()).toString()
         ),
         addresses = listOf("192.168.1.1")
       )

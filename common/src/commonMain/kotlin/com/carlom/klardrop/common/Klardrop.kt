@@ -3,11 +3,13 @@ package com.carlom.klardrop.common
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.UtilsModule
+import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
 class Klardrop(
-  private val storageModule: StorageModule = StorageModule(),
+  private val applicationInfo: ApplicationInfo = ApplicationInfo(),
+  private val storageModule: StorageModule = StorageModule(applicationInfo),
   private val utilsModule: UtilsModule = UtilsModule(),
   private val internalPlatformDependency: InternalPlatformDependencies
 ) {
@@ -16,27 +18,35 @@ class Klardrop(
   private val appScope by lazy { commonComponent.coroutines().appScope }
 
   fun init() {
+    if (::commonComponent.isInitialized) throw IllegalStateException("Klardrop already initialized")
+
+    log("Starting Klardrop with ApplicationInfo: $applicationInfo")
 
     commonComponent = CommonComponent(storageModule, utilsModule, internalPlatformDependency)
 
-    // start server
     val discoveryNetwork = commonComponent.discoveryNetwork()
 
-    appScope.launch(commonComponent.coroutines().ioDispatcher) {
-      val serverPort = commonComponent.server().startServer().port
+    // start server
 
-      discoveryNetwork.startPublishKlardrop(serverPort)
+    if (applicationInfo.enableKlardropServer) {
+      appScope.launch(commonComponent.coroutines().ioDispatcher) {
+        val serverPort = commonComponent.server().startServer().port
+
+        discoveryNetwork.startPublishKlardrop(serverPort)
+      }
     }
 
-    // start nearby share
-    appScope.launch(commonComponent.coroutines().ioDispatcher) {
-      commonComponent.nearbyServer().start()
+    if (applicationInfo.enableNearbyServer) {
+      // start nearby share
+      appScope.launch(commonComponent.coroutines().ioDispatcher) {
+        commonComponent.nearbyServer().start()
 
-      commonComponent.nearbyServer().status
-        .filter { it.isRunning }
-        .collect {
-          discoveryNetwork.startPublishNearbyShare(it.port)
-        }
+        commonComponent.nearbyServer().status
+          .filter { it.isRunning }
+          .collect {
+            discoveryNetwork.startPublishNearbyShare(it.port)
+          }
+      }
     }
 
     // start discovery jobs

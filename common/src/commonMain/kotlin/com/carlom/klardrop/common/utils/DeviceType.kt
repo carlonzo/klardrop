@@ -10,7 +10,7 @@ import kotlinx.serialization.encoding.Encoder
 
 @Serializable(with = DeviceTypesSerializer::class)
 enum class DeviceType(val id: Byte) {
-  MOBILE(1), DESKTOP(2), UNKNOWN(3);
+  MOBILE(1), DESKTOP(2), UNKNOWN(15);
 
   companion object {
     fun fromId(id: Byte): DeviceType {

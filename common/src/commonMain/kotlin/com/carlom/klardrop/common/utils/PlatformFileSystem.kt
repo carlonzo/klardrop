@@ -22,9 +22,9 @@ data class ResolvedFileData(
 )
 
 internal fun getMimeTypeFromExtension(extension: String?): String {
-  if (extension == null) return "application/octet-stream"
+  if (extension == null) return DEFAULT_MIME_TYPE
 
-  return mimeTypes[extension] ?: "application/octet-stream"
+  return mimeTypes[extension] ?: DEFAULT_MIME_TYPE
 }
 
 private val mimeTypes = mapOf(
@@ -74,3 +74,5 @@ private val mimeTypes = mapOf(
   "apk" to "application/vnd.android.package-archive"
 
 )
+
+internal const val DEFAULT_MIME_TYPE = "application/octet-stream"

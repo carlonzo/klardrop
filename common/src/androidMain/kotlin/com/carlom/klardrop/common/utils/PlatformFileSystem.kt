@@ -134,7 +134,4 @@ actual class PlatformFileSystem(private val context: Context) {
 
   }
 
-  private companion object {
-    const val DEFAULT_MIME_TYPE = "application/octet-stream"
-  }
 }

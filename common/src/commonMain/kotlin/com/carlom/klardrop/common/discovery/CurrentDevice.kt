@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.discovery
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.UUIDGenerator
 import kotlinx.coroutines.flow.first
 
@@ -10,6 +11,7 @@ data class CurrentDevice(
   private val deviceId: String,
   val deviceName: String,
   val deviceType: DeviceType,
+  val osType: OsType,
 ){
 
   /**
@@ -33,8 +35,9 @@ class CurrentDeviceProvider(
 
     val deviceName = internalPlatformDependency.getDeviceName()
     val deviceType = internalPlatformDependency.deviceType()
+    val osType = internalPlatformDependency.osType()
 
-    return CurrentDevice(deviceId, deviceName, deviceType)
+    return CurrentDevice(deviceId, deviceName, deviceType, osType)
   }
 
   /**

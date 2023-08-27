@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.discovery
 import com.carlom.klardrop.common.mdns.RegisterServiceInfo
 import com.carlom.klardrop.common.mdns.ServiceInfo
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.OsType
 
 internal class KlardropDiscoveryUtils {
 
@@ -11,13 +12,20 @@ internal class KlardropDiscoveryUtils {
     val nameBytes = currentDevice.shortDeviceId.encodeToByteArray()
     val name = urlSafeBase64EncodedString(nameBytes)
 
+    // dddd oooo  (d= devicetype, o=ostype)
+    val deviceType = currentDevice.deviceType.id.toInt().shl(4)
+    val osType = currentDevice.osType.id.toInt()
+    val deviceInfos = deviceType.or(osType)
+
+    require(deviceInfos < 0xFF) { "Device type and os type must be less than 255" }
+
     return RegisterServiceInfo(
       port = port,
       serviceName = name,
       serviceType = KLARDROP_SERVICE_TYPE,
       attributes = mapOf(
         ATTRIBUTE_DEVICE_NAME to urlSafeBase64EncodedString(currentDevice.deviceName),
-        ATTRIBUTE_DEVICE_TYPE to currentDevice.deviceType.id.toInt().toString(),
+        ATTRIBUTE_DEVICE to deviceInfos.toString(),
       )
     )
   }
@@ -25,12 +33,17 @@ internal class KlardropDiscoveryUtils {
   fun toDeviceInfo(serviceInfo: ServiceInfo): DeviceInfo = with(serviceInfo) {
 
     val deviceName = urlSafeBase64DecodeString(attributes.getValue(ATTRIBUTE_DEVICE_NAME)).decodeToString()
-    val deviceType = DeviceType.fromId(attributes.getValue(ATTRIBUTE_DEVICE_TYPE).toInt())
+    val deviceInfo = attributes.getValue(ATTRIBUTE_DEVICE).toInt()
+
+
+    val deviceType = DeviceType.fromId(deviceInfo.shr(4))
+    val osType = OsType.fromId(deviceInfo.and(0x0F))
 
     return DeviceInfo(
       name = deviceName,
       deviceId = getDeviceId(serviceInfo),
       deviceType = deviceType,
+      osType = osType
     )
   }
 
@@ -45,6 +58,6 @@ internal class KlardropDiscoveryUtils {
   companion object {
     const val KLARDROP_SERVICE_TYPE = "_klardrop._tcp."
     internal const val ATTRIBUTE_DEVICE_NAME = "dn"
-    internal const val ATTRIBUTE_DEVICE_TYPE = "dt"
+    internal const val ATTRIBUTE_DEVICE = "d"
   }
 }

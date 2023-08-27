@@ -58,7 +58,7 @@ internal class VisibleDevicesImpl(
 
   override fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection) {
 
-    if (deviceConnectionToRemove is DeviceConnection.Nearby && deviceConnectionToRemove.port == 0 && deviceConnectionToRemove.address.isEmpty()) {
+    if (deviceConnectionToRemove is DeviceConnection.NearbyConnection && deviceConnectionToRemove.port == 0 && deviceConnectionToRemove.address.isEmpty()) {
       onDeviceLost(deviceId)
       return
     }

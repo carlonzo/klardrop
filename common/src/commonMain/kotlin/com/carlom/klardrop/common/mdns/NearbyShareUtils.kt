@@ -212,7 +212,13 @@ internal suspend fun sendKeepAlive(writeChannel: ByteWriteChannel, nearbyConnect
 
 private fun deviceTypeId(currentDevice: CurrentDevice): Int {
   return when (currentDevice.deviceType) {
-    DeviceType.MOBILE -> com.google.security.cryptauth.lib.securegcm.DeviceType.ANDROID.value
+    DeviceType.MOBILE -> {
+      when(currentDevice.osType){
+        OsType.ANDROID -> com.google.security.cryptauth.lib.securegcm.DeviceType.ANDROID.value
+        OsType.APPLE -> com.google.security.cryptauth.lib.securegcm.DeviceType.IOS.value
+       else -> com.google.security.cryptauth.lib.securegcm.DeviceType.UNKNOWN.value
+      }
+    }
     DeviceType.DESKTOP -> com.google.security.cryptauth.lib.securegcm.DeviceType.OSX.value
     DeviceType.UNKNOWN -> com.google.security.cryptauth.lib.securegcm.DeviceType.UNKNOWN.value
 //      else -> 0

@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.mdns.RegisterServiceInfo
 import com.carlom.klardrop.common.mdns.ServiceInfo
 import com.carlom.klardrop.common.mdns.createEndpointInfo
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.OsType
 import com.google.security.cryptauth.lib.securegcm.DeviceType.ANDROID
 import com.google.security.cryptauth.lib.securegcm.DeviceType.BROWSER
 import com.google.security.cryptauth.lib.securegcm.DeviceType.CHROME
@@ -53,11 +54,13 @@ internal class NearbyShareDiscoveryUtils {
 
     val deviceTypeId = deviceInfoByte and 0b0000_1110
     val deviceType = deviceTypeFromId(deviceTypeId shr 1) // 0000 ddd0 (d == devicetype)
+    val osType = osTypeFromId(deviceTypeId shr 1) // 0000 ddd0 (d == devicetype)
     val deviceNameLength = if (endpointInfoBytes.size > 18) {
       endpointInfoBytes[17].toInt()
     } else {
       0
     }
+
 
     val deviceName = if (deviceNameLength > 0) {
       endpointInfoBytes.sliceArray(18 until 18 + deviceNameLength).decodeToString()
@@ -69,6 +72,7 @@ internal class NearbyShareDiscoveryUtils {
       name = deviceName,
       deviceId = getDeviceId(serviceInfo),
       deviceType = deviceType,
+      osType = osType
     )
   }
 
@@ -93,6 +97,11 @@ internal class NearbyShareDiscoveryUtils {
     return ukey2DeviceType.toDeviceType()
   }
 
+  private fun osTypeFromId(id: Int): OsType {
+    val ukey2DeviceType = com.google.security.cryptauth.lib.securegcm.DeviceType.fromValue(id)
+    return ukey2DeviceType.toOsType()
+  }
+
   companion object {
     const val NEARBY_SERVICE_TYPE = "_FC9F5ED42C8A._tcp."
   }
@@ -103,6 +112,14 @@ fun com.google.security.cryptauth.lib.securegcm.DeviceType?.toDeviceType(): Devi
     ANDROID, IOS -> DeviceType.MOBILE
     CHROME, BROWSER, OSX -> DeviceType.DESKTOP
     null, UNKNOWN -> DeviceType.UNKNOWN
+  }
+}
+
+fun com.google.security.cryptauth.lib.securegcm.DeviceType?.toOsType(): OsType {
+  return when (this) {
+    ANDROID, CHROME -> OsType.ANDROID
+    IOS, OSX -> OsType.APPLE
+    null, BROWSER, UNKNOWN -> OsType.UNKNOWN
   }
 }
 

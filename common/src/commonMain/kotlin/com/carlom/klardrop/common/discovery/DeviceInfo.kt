@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.discovery
 
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.OsType
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -8,6 +9,7 @@ data class DeviceInfo(
   val deviceId: String,
   val name: String,
   val deviceType: DeviceType,
+  val osType: OsType = OsType.UNKNOWN,
 )
 
 data class DiscoveryDevice(
@@ -23,12 +25,12 @@ data class DiscoveryDevice(
     return deviceConnections.any { it.deviceConnectionType == DeviceConnection.DeviceConnectionType.KLARDROP }
   }
 
-  fun getKlardropConnection(): List<DeviceConnection.Klardrop> {
-    return deviceConnections.filterIsInstance<DeviceConnection.Klardrop>()
+  fun getKlardropConnection(): List<DeviceConnection.KlardropConnection> {
+    return deviceConnections.filterIsInstance<DeviceConnection.KlardropConnection>()
   }
 
-  fun getNearbyConnection(): List<DeviceConnection.Nearby> {
-    return deviceConnections.filterIsInstance<DeviceConnection.Nearby>()
+  fun getNearbyConnection(): List<DeviceConnection.NearbyConnection> {
+    return deviceConnections.filterIsInstance<DeviceConnection.NearbyConnection>()
   }
 }
 
@@ -38,14 +40,14 @@ sealed interface DeviceConnection {
   val address: String
   val port: Int
 
-  data class Nearby(
+  data class NearbyConnection(
     override val address: String,
     override val port: Int
   ) : DeviceConnection {
     override val deviceConnectionType = DeviceConnectionType.NEARBY
   }
 
-  data class Klardrop(
+  data class KlardropConnection(
     override val address: String,
     override val port: Int
   ) : DeviceConnection {

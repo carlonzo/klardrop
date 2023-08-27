@@ -116,7 +116,7 @@ class VisibleDevicesImplTest {
   val device1 = DeviceInfo("1", "device1", DeviceType.MOBILE)
   val device2 = DeviceInfo("2", "device2", DeviceType.DESKTOP)
 
-  val connection1 = DeviceConnection.Nearby("1.1.1.1", 8080)
-  val connection2 = DeviceConnection.Klardrop("1.1.1.2", 8081)
+  val connection1 = DeviceConnection.NearbyConnection("1.1.1.1", 8080)
+  val connection2 = DeviceConnection.KlardropConnection("1.1.1.2", 8081)
 
 }

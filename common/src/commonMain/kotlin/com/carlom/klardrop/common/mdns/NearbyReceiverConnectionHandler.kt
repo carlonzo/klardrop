@@ -261,7 +261,7 @@ class NearbyReceiverConnectionHandler(
     log("NearbyReceiverConnectionHandler", "handleTransferSetup completed")
   }
 
-  private suspend fun processConnectionRequest(connectionRequest: OfflineFrame) {
+  private fun processConnectionRequest(connectionRequest: OfflineFrame) {
     val endpointInfo =
       connectionRequest.v1?.connection_request?.endpoint_info?.toByteArray() ?: throw IllegalStateException("Endpoint info not found")
     require(endpointInfo.size > 17) { "Endpoint info is too short" }
@@ -423,7 +423,7 @@ class NearbyReceiverConnectionHandler(
     frame.v1?.introduction?.text_metadata?.forEach { textMetadata ->
 
       messagesToReceive[textMetadata.payload_id!!] = TextMessage(
-        title = textMetadata.text_title!!,
+        title = textMetadata.text_title ?: "",
         text = ""
       )
 
