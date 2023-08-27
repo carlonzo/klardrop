@@ -38,8 +38,8 @@ internal class VisibleDevicesImpl(
 
     val isNew = addDevice(deviceInfo, deviceConnection)
 
-    log("VisibleDevices", "new device: $deviceInfo isNew: $isNew connections: ${deviceConnection.deviceConnectionType}")
-
+    if (isNew)
+      log("VisibleDevices", "new device: $deviceInfo isNew: $isNew connections: ${deviceConnection.deviceConnectionType}")
   }
 
   override fun isDeviceVisible(deviceId: String): Boolean {

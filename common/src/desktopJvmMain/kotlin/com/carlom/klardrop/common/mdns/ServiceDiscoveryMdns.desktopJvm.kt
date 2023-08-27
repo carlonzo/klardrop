@@ -78,19 +78,21 @@ actual class ServiceDiscoveryMdns {
 
     suspendCancellableCoroutine<Unit> {
 
-      val registrations = mutableListOf<javax.jmdns.ServiceInfo>()
+      val registrations = jmdns.map { instance ->
 
-      val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
-        registerServiceInfo.serviceType,
-        registerServiceInfo.serviceName,
-        registerServiceInfo.port,
-        0,
-        0,
-        registerServiceInfo.attributes
-      )
+        val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
+          registerServiceInfo.serviceType,
+          registerServiceInfo.serviceName,
+          registerServiceInfo.port,
+          0,
+          0,
+          registerServiceInfo.attributes
+        )
 
-      jmdns.forEach { instance -> instance.registerService(jmdnsServiceInfo) }
-      registrations.add(jmdnsServiceInfo)
+        instance.registerService(jmdnsServiceInfo)
+
+        jmdnsServiceInfo
+      }
 
       log("ServiceDiscoveryMdns", "publishing service: $registerServiceInfo")
 
@@ -121,7 +123,7 @@ actual class ServiceDiscoveryMdns {
       }
 
       override fun serviceRemoved(event: ServiceEvent) {
-        log("ServiceDiscoveryMdns", "serviceRemoved: ${event.info}")
+//        log("ServiceDiscoveryMdns", "serviceRemoved: ${event.info}")
 
         producerScope.trySend(ServiceDiscoveryEvent.ServiceLost(event.toServiceInfo()))
       }
@@ -131,7 +133,7 @@ actual class ServiceDiscoveryMdns {
         if (event.info.inet4Addresses.isEmpty()) {
           return
         } else {
-          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
+//          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
         }
 
         producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(event.toServiceInfo()))

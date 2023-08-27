@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.features
 
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -28,7 +29,7 @@ class ClipboardManager(
     val collectionJob = coroutines.appScope.launch {
 
       while (isActive) {
-        readerWriter.read().takeIf { it.isNotEmpty() }?.let {
+        read().takeIf { it.isNotEmpty() }?.let {
           send(it)
         }
 
@@ -46,7 +47,9 @@ class ClipboardManager(
   }
 
   fun read(): String {
-    return readerWriter.read()
+    return runCatching { readerWriter.read() }
+      .onFailure { log("ClipboardManager", "Cant read from clipboard", it) }
+      .getOrDefault("")
   }
 }
 

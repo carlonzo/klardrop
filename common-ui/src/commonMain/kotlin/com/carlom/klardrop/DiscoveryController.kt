@@ -10,6 +10,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
@@ -21,7 +22,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -30,11 +30,11 @@ import kotlin.random.Random
 // TODO should this be composable and get the dispose callback to cancel scope?
 class DiscoveryController(
   private val coroutines: Coroutines,
-  private val visibleDevices: VisibleDevices,
+  visibleDevices: VisibleDevices,
   private val messenger: Messenger,
   private val platformFileSystem: PlatformFileSystem,
   private val clipboardManager: ClipboardManager,
-) : OnDeviceActionListener {
+) : OnDeviceActionListener, ReceiveNotificationsCallbacks {
 
   constructor(commonComponent: CommonComponent) : this(
     commonComponent.coroutines(),
@@ -48,7 +48,7 @@ class DiscoveryController(
   private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices)
 
   val actionsFlow = MutableSharedFlow<ActionUi>()
-  val screenStateFlow = MutableStateFlow<DiscoveryScreenState>(DiscoveryScreenState())
+  val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 
   init {
     controllerScope.launch {
@@ -133,24 +133,42 @@ class DiscoveryController(
     controllerScope.cancel()
   }
 
-  fun removeReceivedMessage(receivedMessageId: Int) {
-    screenStateFlow.update {
-      it.copy(
-        receivingMessages = it.receivingMessages - receivedMessageId
-      )
-    }
-  }
-
   fun readFromClipboard(): String {
     return clipboardManager.read()
   }
 
-  data class DiscoveryScreenState(
-    val devices: List<DeviceUi> = emptyList(),
-    val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap()
-  )
+  override fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate) {
 
+    if (receiveUpdate.status is ReceiveMessageStatus.Completed) {
+
+      val firstMessage = receiveUpdate.messages.first()
+
+      if (firstMessage is TextMessage) {
+        val text = firstMessage.text
+        clipboardManager.write(text)
+      }
+
+    }
+
+  }
+
+  override fun onCardDismissed(receiveUpdate: ReceiveMessageUpdate) {
+    screenStateFlow.update {
+      val key = it.receivingMessages.entries.firstOrNull { entry -> entry.value == receiveUpdate }?.key
+
+      if (key == null) it
+      else it.copy(
+        receivingMessages = it.receivingMessages - key
+      )
+    }
+
+  }
 }
+
+data class DiscoveryScreenState(
+  val devices: List<DeviceUi> = emptyList(),
+  val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap()
+)
 
 sealed interface ActionUi {
 

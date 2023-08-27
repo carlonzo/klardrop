@@ -19,6 +19,7 @@ import com.google.location.nearby.connections.proto.ConnectionResponseFrame
 import com.google.location.nearby.connections.proto.OfflineFrame
 import com.google.location.nearby.connections.proto.OsInfo
 import com.google.location.nearby.connections.proto.PayloadTransferFrame
+import com.google.location.nearby.connections.proto.PayloadTransferFrame.PayloadHeader.PayloadType
 import com.google.location.nearby.connections.proto.V1Frame
 import com.google.security.cryptauth.lib.securegcm.DeviceType
 import io.ktor.network.sockets.*
@@ -179,7 +180,7 @@ class NearbyReceiverConnectionHandler(
         val message = messagesToReceive[payloadId]
 
         if (message is FileMessage) {
-          require(header.type == PayloadTransferFrame.PayloadHeader.PayloadType.FILE) { "Payload type is not file" }
+          require(header.type == PayloadType.FILE) { "Payload type is not file" }
 
           val fileTransfer = fileTransfers[payloadId]!!
 
@@ -193,13 +194,13 @@ class NearbyReceiverConnectionHandler(
           }
 
         } else if (message is TextMessage) {
-          require(header.type == PayloadTransferFrame.PayloadHeader.PayloadType.BYTES) { "Payload type is not bytes" }
+          require(header.type == PayloadType.BYTES) { "Payload type is not bytes" }
 
           messagesToReceive[payloadId] = message.copy(
             text = message.text + payloadChunk.body!!.utf8()
           )
 
-          if (payloadChunk.body.size == 0) {
+          if (payloadChunk.offset!! >= header.total_size!!) {
             log("NearbyReceiverConnectionHandler", "Text transfer completed")
             pendingTransfers.remove(payloadId)
           }
@@ -460,7 +461,7 @@ class NearbyReceiverConnectionHandler(
 
     val header = offlineFrame.v1?.payload_transfer?.payload_header
     require(header != null) { "Payload header not found" }
-    require(header.type == PayloadTransferFrame.PayloadHeader.PayloadType.BYTES) { "Payload type is not bytes" }
+    require(header.type == PayloadType.BYTES) { "Payload type is not bytes" }
 
     val bodyPayload = offlineFrame.v1.payload_transfer.payload_chunk?.body
     require(bodyPayload != null) { "Payload body not found" }

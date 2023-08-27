@@ -1,5 +1,6 @@
 package com.carlom.klardrop
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -26,12 +27,12 @@ import kotlin.math.absoluteValue
 fun ReceiveNotification(
   modifier: Modifier = Modifier,
   receiveUpdate: ReceiveMessageUpdate,
-  onDismissed: (ReceiveMessageUpdate) -> Unit = {},
+  callbacks: ReceiveNotificationsCallbacks
 ) {
 
   val dismissState = rememberDismissState(initialValue = DismissValue.Default, confirmValueChange = {
     if (it != DismissValue.Default) {
-      onDismissed(receiveUpdate)
+      callbacks.onCardDismissed(receiveUpdate)
     }
     true
   })
@@ -57,6 +58,7 @@ fun ReceiveNotification(
         Box(
           modifier = Modifier
             .padding(8.dp)
+            .clickable { callbacks.onReceivedCardClicked(receiveUpdate) }
         ) {
           when (val status = receiveUpdate.status) {
             is ReceiveMessageStatus.Progress -> ReceiveNotificationProgress(receiveUpdate, status)
@@ -131,3 +133,9 @@ private fun ReceiveNotificationCompleted(update: ReceiveMessageUpdate) {
 
   }
 }
+
+interface ReceiveNotificationsCallbacks {
+  fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate)
+  fun onCardDismissed(receiveUpdate: ReceiveMessageUpdate)
+}
+

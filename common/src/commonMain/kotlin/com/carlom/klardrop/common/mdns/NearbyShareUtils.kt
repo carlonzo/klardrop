@@ -143,7 +143,7 @@ private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
 
     val header = newOfflineFrame.v1.payload_transfer.payload_header
     require(header != null) { "Payload header not found" }
-    require(header.id == payloadId) { "Payload id mismatch header.id = ${header.id} payloadId = ${payloadId}" }
+    require(header.id == payloadId) { "Payload id mismatch header.id = ${header.id} payloadId = ${payloadId}. frame: $newOfflineFrame" }
 
     val newBody = if (newChunk.body == null) {
       byteArrayOf()
@@ -177,9 +177,7 @@ private suspend fun ByteReadChannel.readNearbyFully(sink: Sink) {
 internal suspend fun ByteReadChannel.readByteArray(): ByteArray {
   val buffer = Buffer()
   readNearbyFully(buffer)
-  val byteArray = buffer.readByteArray()
-  log("readByteArray", "read ${byteArray.size}")
-  return byteArray
+  return buffer.readByteArray()
 }
 
 /** from client */

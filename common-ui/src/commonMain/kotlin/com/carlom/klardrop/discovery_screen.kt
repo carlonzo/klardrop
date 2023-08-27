@@ -109,8 +109,9 @@ fun DiscoveryScreen(
           ) { item ->
             ReceiveNotification(
               Modifier.animateItemPlacement(tween()).align(Alignment.BottomCenter),
-              item.second
-            ) { discoveryController.removeReceivedMessage(item.first) }
+              item.second,
+              discoveryController
+            )
           }
 
         }
