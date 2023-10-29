@@ -40,6 +40,17 @@ compose.desktop {
       packageName = "klardrop"
       packageVersion = "1.0.0"
       modules("jdk.unsupported")
+
+      val icon = file("icon_launcher.png")
+      macOS{
+        iconFile.set(icon)
+      }
+      windows{
+        iconFile.set(icon)
+      }
+      linux{
+        iconFile.set(icon)
+      }
     }
     buildTypes.release.proguard {
       configurationFiles.from("rules.pro")
