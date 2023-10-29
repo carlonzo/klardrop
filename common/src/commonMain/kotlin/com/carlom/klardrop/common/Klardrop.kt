@@ -50,6 +50,7 @@ class Klardrop(
     // start discovery jobs
     discoveryNetwork.discoveryKlardropDevices()
     discoveryNetwork.discoveryNearbyShareDevices()
+    discoveryNetwork.discoverAirdrop()
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()

@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.utils
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import androidx.documentfile.provider.DocumentFile
@@ -13,6 +14,7 @@ import com.anggrayudi.storage.media.FileDescription
 import com.anggrayudi.storage.media.MediaFile
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okio.*
+import okio.Path.Companion.toOkioPath
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -132,6 +134,10 @@ actual class PlatformFileSystem(private val context: Context) {
       else -> log("PlatformFileSystem", "Created unknown file $result")
     }
 
+  }
+
+  actual fun getTempStoragePath(): Path {
+    return context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.toOkioPath() ?: context.filesDir.toOkioPath()
   }
 
 }

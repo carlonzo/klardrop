@@ -32,7 +32,7 @@ class ShowDevicesControllerHelper(
               deviceId = deviceInfo.deviceId,
               deviceName = deviceInfo.name,
               deviceType = deviceInfo.deviceType,
-              connectionTypes = device.deviceConnections.map { it.deviceConnectionType },
+              connectionTypes = device.deviceConnections.map { it.deviceConnectionType }.distinct(),
             )
           }
         }.collect { _devicesFlow.emit(it.associateBy { device -> device.deviceId }.toMutableMap()) }

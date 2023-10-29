@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.utils
 
 import okio.BufferedSink
 import okio.BufferedSource
+import okio.Path
 
 expect class PlatformFileSystem {
   fun getReadStreamFromUri(uri: String): BufferedSource
@@ -12,6 +13,7 @@ expect class PlatformFileSystem {
 
   fun delete(uri: String)
   suspend fun moveToStorage(filePath: String, mimeType: String)
+  fun getTempStoragePath(): Path
 
 }
 

@@ -12,7 +12,6 @@ expect class InternalPlatformDependencies {
   fun getDeviceName(): String
   fun deviceType(): DeviceType
   fun getStoragePath(): Path
-  fun getTempStoragePath(): Path
   fun platformFileSystem(): PlatformFileSystem
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun osType(): OsType

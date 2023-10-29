@@ -31,10 +31,6 @@ actual class InternalPlatformDependencies(private val context: Context) {
     return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).toOkioPath()
   }
 
-  actual fun getTempStoragePath(): Path {
-    return context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.toOkioPath() ?: context.filesDir.toOkioPath()
-  }
-
   actual fun platformFileSystem(): PlatformFileSystem {
     return PlatformFileSystem(context)
   }

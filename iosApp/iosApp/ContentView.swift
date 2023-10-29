@@ -7,7 +7,7 @@ struct ComposeView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
         
         
-        DiscoveryBridge().DiscoveryDashboardController()
+        DiscoveryBridge().RootKlardropApp()
         
     }
 

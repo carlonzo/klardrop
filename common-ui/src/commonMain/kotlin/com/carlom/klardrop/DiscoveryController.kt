@@ -76,7 +76,11 @@ class DiscoveryController(
   private fun sendFiles(deviceId: String, filesPaths: List<String>) {
     coroutines.appScope.launch {
       filesPaths.forEach { filePath ->
-        val fileData = platformFileSystem.getResolvedFileData(filePath)
+
+        val fileData = runCatching { platformFileSystem.getResolvedFileData(filePath) }
+          .onFailure { log("DiscoveryController", "Unable to resolve file at path $filePath. File cannot be sent!", it) }
+          .getOrNull() ?: return@forEach
+
         messenger.send(
           deviceId, FileMessage(
             fileData.fileName,

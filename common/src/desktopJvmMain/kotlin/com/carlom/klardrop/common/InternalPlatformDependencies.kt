@@ -30,10 +30,6 @@ actual class InternalPlatformDependencies {
     return "$homeFolder/Downloads/".toPath()
   }
 
-  actual fun getTempStoragePath(): Path {
-    return System.getenv("TMPDIR").toPath()
-  }
-
   actual fun platformFileSystem(): PlatformFileSystem {
     return PlatformFileSystem(this)
   }

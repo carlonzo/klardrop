@@ -8,11 +8,10 @@ import okio.BufferedSource
 import okio.Path
 
 class FileManagerImpl(
-  private val platformFileSystem: PlatformFileSystem,
-  private val internalPlatformDependencies: InternalPlatformDependencies
+  private val platformFileSystem: PlatformFileSystem
 ) : FileManager {
   override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer {
-    val tempStorage = internalPlatformDependencies.getTempStoragePath()
+    val tempStorage = platformFileSystem.getTempStoragePath()
     val tempAvailableFilePath = getAvailableFilePath(tempStorage, fileName, CurrentFileSystem)
 
     log("FileManagerImpl", "Preparing file transfer to $tempAvailableFilePath with mimeType $mimeType")

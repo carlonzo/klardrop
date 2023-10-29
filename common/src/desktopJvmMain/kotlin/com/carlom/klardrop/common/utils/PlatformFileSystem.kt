@@ -46,4 +46,7 @@ actual class PlatformFileSystem(
     fileSystem.atomicMove(sourcePath, destinationPath)
   }
 
+  actual fun getTempStoragePath(): Path {
+    return System.getenv("TMPDIR").toPath()
+  }
 }

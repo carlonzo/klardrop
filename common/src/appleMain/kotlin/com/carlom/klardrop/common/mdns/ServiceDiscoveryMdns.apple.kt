@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.utils.log
+import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.allocArrayOf
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.readBytes
@@ -45,7 +46,6 @@ actual class ServiceDiscoveryMdns {
 
     browser.searchForServicesOfType(type = serviceType, inDomain = "")
 
-    println("Bonjour discovery started for $serviceType")
     log("ServiceDiscoveryMdns","Bonjour discovery started for $serviceType")
 
 
@@ -101,6 +101,7 @@ actual class ServiceDiscoveryMdns {
     return txtRecordData.copy() as NSData
   }
 
+  @OptIn(BetaInteropApi::class)
   private fun ByteArray.toNSData(): NSData = memScoped {
     NSData.create(
       bytes = allocArrayOf(this@toNSData),
@@ -121,7 +122,6 @@ actual class ServiceDiscoveryMdns {
     val addresses = (addresses ?: emptyList<NSData>())
       .map { (it as NSData).toByteArray() }
       .filter { it.size == 16 }
-      .onEach { log("ServiceDiscoveryMdns","resolving address: ${it}") }
       .map { it.copyOfRange(4, 8).map { it.toUByte().toInt() }.joinToString(separator = ".") }
 
     return ServiceInfo(

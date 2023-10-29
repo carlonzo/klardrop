@@ -1,6 +1,10 @@
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import com.carlom.klardrop.FilePickerFactory
 import com.carlom.klardrop.KlardropApp
 import com.carlom.klardrop.UiDependencies
@@ -8,6 +12,8 @@ import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
+import org.jetbrains.skia.Image
+import java.io.FileInputStream
 
 fun main(args: Array<String>) {
 
@@ -33,12 +39,17 @@ fun main(args: Array<String>) {
 
   application {
 
+    val bytesImage = this::class.java.classLoader.getResourceAsStream("icon_launcher.png")!!.use { it.buffered().readAllBytes() }
+    val image = Image.makeFromEncoded(bytesImage).toComposeImageBitmap()
+    val windowState = rememberWindowState()
+
     Window(
       title = "Klardrop",
       onCloseRequest = ::exitApplication,
       resizable = true,
+      icon = BitmapPainter(image),
+      state = windowState
     ) {
-//      val state = rememberWindowState(width = 800.dp, height = 600.dp)
 
       val uiDependencies = remember(window) {
         object : UiDependencies {

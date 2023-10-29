@@ -47,10 +47,6 @@ actual class InternalPlatformDependencies {
     return klardropStoragePath
   }
 
-  actual fun getTempStoragePath(): Path {
-    return NSTemporaryDirectory().toPath()
-  }
-
   actual fun platformFileSystem(): PlatformFileSystem {
     return PlatformFileSystem(this)
   }

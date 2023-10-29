@@ -98,9 +98,6 @@ class DiscoveryNetwork internal constructor(
 
     discoveryScope.launch {
       serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE)
-        .onStart {
-          emit(test_device)
-        }
         .collect {
 //          log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
 
@@ -125,6 +122,20 @@ class DiscoveryNetwork internal constructor(
 
         }
     }
+
+  }
+
+  fun discoverAirdrop(){
+
+    discoveryScope.launch {
+
+      serviceDiscoveryMdns.discoverServices("_airdrop._tcp.local.")
+        .collect {
+          println("Discovered airdrop: $it")
+        }
+
+    }
+
 
   }
 

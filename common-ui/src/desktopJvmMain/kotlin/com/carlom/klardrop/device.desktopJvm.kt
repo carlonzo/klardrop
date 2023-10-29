@@ -1,9 +1,6 @@
 package com.carlom.klardrop
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.PointerMatcher
 import androidx.compose.foundation.background
-import androidx.compose.foundation.onClick
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -13,13 +10,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.DragData
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.onExternalDrag
 import java.net.URI
 import kotlin.io.path.pathString
 import kotlin.io.path.toPath
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal actual fun Modifier.deviceAdditions(
   deviceUi: DeviceUi,
@@ -32,11 +28,6 @@ internal actual fun Modifier.deviceAdditions(
     .background(
       if (dragging) MaterialTheme.colorScheme.tertiaryContainer
       else MaterialTheme.colorScheme.tertiary
-    ).onClick(
-      matcher = PointerMatcher.mouse(PointerButton.Primary),
-      onClick = {
-        onDeviceActionListener.onDeviceClick(deviceUi)
-      }
     ).onExternalDrag(
       onDragStart = { dragging = true },
       onDragExit = { dragging = false },

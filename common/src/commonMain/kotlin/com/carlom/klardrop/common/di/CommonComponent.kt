@@ -76,7 +76,7 @@ class CommonComponent(
     get() = internalPlatformDependency.platformFileSystem()
 
   private val fileManager: FileManager
-    get() = FileManagerImpl(platformFileSystem, internalPlatformDependency)
+    get() = FileManagerImpl(platformFileSystem)
 
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()

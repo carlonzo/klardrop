@@ -10,11 +10,13 @@ import kotlinx.cinterop.ptr
 import kotlinx.cinterop.value
 import okio.BufferedSink
 import okio.BufferedSource
+import okio.Path
 import okio.Path.Companion.toPath
 import okio.buffer
 import platform.Foundation.NSError
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSFileSize
+import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSURL
 import platform.Foundation.pathExtension
 import platform.UIKit.UIImage
@@ -32,27 +34,35 @@ actual class PlatformFileSystem(
 
   actual fun getResolvedFileData(uri: String): ResolvedFileData {
 
+    log("getResolvedFileData $uri")
+
     val nsFileManager = NSFileManager.defaultManager
     memScoped {
       val startError = alloc<ObjCObjectVar<NSError?>>()
 
-      val attributesFile = nsFileManager.attributesOfItemAtPath(uri, startError.ptr)!!
+      val attributesFile = nsFileManager.attributesOfItemAtPath(uri, startError.ptr)
+
+      log("attributesFile $attributesFile")
 
       val error = startError.value
       if (error != null) {
         throw IllegalArgumentException("Got error in getResolvedFileData $error")
       }
 
-      val fileSize = attributesFile[NSFileSize] as? Long ?: 0L
+      val fileSize = attributesFile?.get(NSFileSize) as? Long ?: 0L
+      log("fileSize $fileSize")
       val fileName = nsFileManager.displayNameAtPath(uri)
+      log("fileName $fileName")
       val fileURL = NSURL.fileURLWithPath(uri)
+      log("fileURL $fileURL")
       val mimeType = getMimeTypeFromExtension(fileURL.pathExtension)
+      log("mimeType $mimeType")
 
       return ResolvedFileData(
         fileName = fileName,
         mimeType = mimeType,
         fileSize = fileSize
-      )
+      ).also { log("ResolvedFileData $it") }
     }
 
   }
@@ -78,6 +88,10 @@ actual class PlatformFileSystem(
       UISaveVideoAtPathToSavedPhotosAlbum(destinationPath.toString(), null, null, null)
     }
 
+  }
+
+  actual fun getTempStoragePath(): Path {
+    return NSTemporaryDirectory().toPath()
   }
 
 }

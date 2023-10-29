@@ -2,12 +2,15 @@ package com.carlom.klardrop.common.features
 
 actual class ClipboardReaderWriter {
 
+//  private val pasteboard by lazy { UIPasteboard.generalPasteboard }
+
   actual fun read(): String {
-    TODO("Not yet implemented")
+//   return pasteboard.string ?: return ""
+    return ""
   }
 
   actual fun write(text: String) {
-    TODO("Not yet implemented")
+//    pasteboard.string = text
   }
 
 }
