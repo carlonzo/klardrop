@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
-
 plugins {
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.android.library)
@@ -7,11 +5,8 @@ plugins {
   alias(deps.plugins.squareup.wire)
 }
 
-@OptIn(ExperimentalKotlinGradlePluginApi::class)
 kotlin {
-  targetHierarchy.default()
-
-  android()
+  androidTarget()
   jvm("desktopJvm")
 //  macosArm64()
   iosArm64()
@@ -19,7 +14,7 @@ kotlin {
 
   sourceSets {
 
-    val commonMain by getting {
+    commonMain {
       dependencies {
 
         implementation(deps.kotlinx.coroutines.core)
@@ -39,7 +34,7 @@ kotlin {
       }
     }
 
-    val commonTest by getting {
+    commonTest {
       dependencies {
         implementation(kotlin("test"))
         implementation(deps.turbine)
@@ -54,21 +49,24 @@ kotlin {
       }
     }
 
-    val desktopJvmMain by getting{
+    val desktopJvmMain by getting {
       dependencies {
         implementation(deps.jmdns)
       }
     }
-    val desktopJvmTest by getting
-
-    val appleMain by getting
-    val appleTest by getting
-
 
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
       languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
+    }
+  }
+
+  targets.all {
+    compilations.all {
+      compilerOptions.configure {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+      }
     }
   }
 }

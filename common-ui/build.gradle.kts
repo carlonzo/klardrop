@@ -5,9 +5,7 @@ plugins {
   alias(deps.plugins.android.library)
 }
 
-@OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)
 kotlin {
-  targetHierarchy.default()
 
   androidTarget()
   jvm("desktopJvm") {
@@ -35,7 +33,7 @@ kotlin {
 
   sourceSets {
 
-    val commonMain by getting {
+    commonMain {
       dependencies {
         api(compose.runtime)
         api(compose.foundation)
@@ -66,6 +64,14 @@ kotlin {
 
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
+    }
+
+    targets.all {
+      compilations.all {
+        compilerOptions.configure {
+          freeCompilerArgs.add("-Xexpect-actual-classes")
+        }
+      }
     }
   }
 }
