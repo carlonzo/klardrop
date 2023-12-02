@@ -17,7 +17,7 @@ enum class MessageType(val id: Byte) {
 
   companion object {
     fun fromId(id: Byte): MessageType {
-      return values().first { it.id == id }
+      return MessageType.entries.first { it.id == id }
     }
   }
 

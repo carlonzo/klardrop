@@ -1,8 +1,8 @@
 import com.android.build.gradle.internal.dsl.BaseAppModuleExtension
 import org.jetbrains.compose.ComposeExtension
 
-group "com.carlom.klardrop"
-version "1.0-SNAPSHOT"
+group = "com.carlom.klardrop"
+version = "1.0-SNAPSHOT"
 
 plugins {
   alias(deps.plugins.kotlin.multiplatform) apply false

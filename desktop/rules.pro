@@ -1,2 +1,4 @@
 -dontwarn io.ktor.events.**
--dontwarn  org.slf4j.**
+-dontwarn org.slf4j.**
+-dontwarn com.squareup.wire.AndroidMessage
+-dontwarn com.squareup.wire.AndroidMessage$**
