@@ -20,9 +20,12 @@ actual class PlatformFileSystem(
   @Suppress("NewApi")
   actual fun getResolvedFileData(uri: String): ResolvedFileData {
     uri.toFile.let { file ->
+      val mimeType = Files.probeContentType(file.toPath())
+        ?: getMimeTypeFromExtension(file.extension)
+
       return ResolvedFileData(
         fileName = file.name,
-        mimeType = Files.probeContentType(file.toPath()),
+        mimeType = mimeType,
         fileSize = file.length()
       )
     }
