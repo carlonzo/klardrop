@@ -2,6 +2,7 @@ plugins {
   alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.kotlin.serialization)
+  alias(deps.plugins.sqldelight)
 }
 
 kotlin {
@@ -30,6 +31,7 @@ kotlin {
         implementation(deps.androidx.datastore.core.okio)
         implementation(deps.kotlinx.serialization.protobuf)
         implementation(deps.ukey2)
+        implementation(deps.sqldelight.coroutines.extensions)
         api("io.sentry:sentry-kotlin-multiplatform:0.7.1")
       }
     }
@@ -42,16 +44,20 @@ kotlin {
       }
     }
 
-    val androidMain by getting {
-      dependencies {
-        implementation(deps.kotlinx.coroutines.android)
-        implementation(deps.simplestorage)
-      }
+    androidMain.dependencies {
+      implementation(deps.kotlinx.coroutines.android)
+      implementation(deps.simplestorage)
+      implementation(deps.sqldelight.android.driver)
+    }
+
+    nativeMain.dependencies {
+      implementation(deps.sqldelight.native.driver)
     }
 
     val desktopJvmMain by getting {
       dependencies {
         implementation(deps.jmdns)
+        implementation(deps.sqldelight.jvm.driver)
       }
     }
 
@@ -76,4 +82,15 @@ kotlin {
 
 android {
   namespace = "com.klardrop.common"
+}
+
+sqldelight {
+  databases {
+    create("KlardropDatabase") {
+      packageName = "com.klardrop.common.persistence"
+      schemaOutputDirectory.set(file("src/commonMain/sqldelight/com/klardrop/common/persistence/databases"))
+      generateAsync.set(true)
+      verifyMigrations.set(true)
+    }
+  }
 }

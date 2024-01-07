@@ -44,6 +44,7 @@ kotlin {
         api(compose.ui)
 
         api(deps.kotlinx.coroutines.core)
+        api(deps.molecule.runtime)
 
         api(project(":klardrop-common"))
       }

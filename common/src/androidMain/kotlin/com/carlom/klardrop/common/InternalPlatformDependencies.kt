@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Environment
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
+import com.carlom.klardrop.common.persistence.DatabaseDriverFactory
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
@@ -45,6 +46,10 @@ actual class InternalPlatformDependencies(private val context: Context) {
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter(context)
+  }
+
+  actual fun databaseDriverFactory(): DatabaseDriverFactory {
+    return DatabaseDriverFactory(context)
   }
 
 }

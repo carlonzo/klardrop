@@ -1,0 +1,8 @@
+CREATE TABLE devices_db (
+  device_id TEXT PRIMARY KEY NOT NULL,
+  type INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  os INTEGER NOT NULL
+);
+
+CREATE INDEX device_id ON devices_db(device_id);

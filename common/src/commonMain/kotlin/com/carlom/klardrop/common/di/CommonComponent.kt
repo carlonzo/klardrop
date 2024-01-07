@@ -45,7 +45,8 @@ class CommonComponent(
   private val currentDeviceProvider by lazy {
     CurrentDeviceProvider(
       localProperties,
-      internalPlatformDependency
+      internalPlatformDependency,
+      coroutines
     )
   }
 
@@ -84,11 +85,9 @@ class CommonComponent(
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()
-
   fun platformFileSystem() = platformFileSystem
-
   fun nearbyServer() = communicationModule.nearbyServer()
-
   fun clipboardManager() = clipboardManager
+  fun currentDeviceProvider() = currentDeviceProvider
 
 }

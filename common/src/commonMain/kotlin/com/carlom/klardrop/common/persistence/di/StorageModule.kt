@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.persistence.di
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import app.cash.sqldelight.db.SqlDriver
 import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
@@ -43,11 +44,25 @@ class StorageModule(
 
 
   fun localPropertiesRepository(): LocalPropertiesRepository {
-    return LocalPropertiesRepositoryImpl(getPreferencesDatastore { storageFilePath( { platformDependencies.getStoragePath() }, propertiesFileName) }, coroutines)
+    return LocalPropertiesRepositoryImpl(getPreferencesDatastore {
+      storageFilePath(
+        { platformDependencies.getStoragePath() },
+        propertiesFileName
+      )
+    }, coroutines)
   }
 
   fun knownDevicesRepository(): KnownDevicesRepository {
-    return KnownDevicesRepositoryImpl(getPreferencesDatastore { storageFilePath({ platformDependencies.getStoragePath() }, knownDevicesFileName) }, coroutines)
+    return KnownDevicesRepositoryImpl(getPreferencesDatastore {
+      storageFilePath(
+        { platformDependencies.getStoragePath() },
+        knownDevicesFileName
+      )
+    }, coroutines)
+  }
+
+  fun sqlDriver(): SqlDriver {
+    return platformDependencies.databaseDriverFactory().createDriver()
   }
 
 }

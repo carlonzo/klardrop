@@ -1,0 +1,39 @@
+CREATE TABLE messages_db (
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  device_id TEXT NOT NULL,
+  message_type INTEGER NOT NULL,
+  timestamp INTEGER NOT NULL,
+  payload BLOB NOT NULL
+);
+
+CREATE INDEX message_id ON messages_db(id);
+
+select_by_device_id:
+    SELECT * FROM messages_db
+    WHERE device_id = :device_id
+    ORDER BY timestamp DESC
+    LIMIT :limit OFFSET :offset;
+
+selectByDeviceIdWithDeviceInfo:
+    SELECT messages_db.id,
+    messages_db.device_id,
+    messages_db.message_type,
+    messages_db.timestamp,
+    messages_db.payload,
+    devices_db.name AS device_name,
+    devices_db.os AS device_os,
+    devices_db.type AS device_type
+    FROM messages_db
+    JOIN devices_db ON messages_db.device_id = devices_db.device_id
+    WHERE messages_db.device_id = :device_id
+    ORDER BY messages_db.timestamp DESC
+    LIMIT :limit OFFSET :offset;
+
+insert_message:
+    INSERT OR FAIL INTO messages_db
+    (device_id, message_type, timestamp, payload)
+    VALUES (:device_id, :message_type, :timestamp, :payload);
+
+delete_message:
+    DELETE FROM messages_db
+    WHERE messages_db.id = :id;
