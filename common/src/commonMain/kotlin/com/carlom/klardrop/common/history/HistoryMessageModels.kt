@@ -5,21 +5,21 @@ import kotlinx.serialization.Serializable
 
 sealed interface HistoryMessagePayload {
 
-  val type: Long
+  val type: MessagePayloadType
 
   @Serializable
   data class TextMessagePayload(val content: String) : HistoryMessagePayload {
-    override val type: Long = TextMessagePayloadType
+    override val type: MessagePayloadType = MessagePayloadType.TextMessage
   }
 
   @Serializable
   data class FileMessagePayload(val fileName: String, val mimetype: String, val storagePath: String) : HistoryMessagePayload {
-    override val type: Long = FileMessagePayloadType
+    override val type: MessagePayloadType = MessagePayloadType.FileMessage
   }
 
-  companion object {
-    const val TextMessagePayloadType = 1L
-    const val FileMessagePayloadType = 2L
+  enum class MessagePayloadType(val id: Long) {
+    TextMessage(1L),
+    FileMessage(2L)
   }
 
 }

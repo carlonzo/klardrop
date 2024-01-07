@@ -6,7 +6,6 @@ import androidx.compose.runtime.getValue
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
-import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.history.HistoryDbDataSource
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
@@ -26,9 +25,9 @@ class MessageScreenPresenter(
     messenger = commonComponent.messenger()
   )
 
-  private fun getCombinedMessages(otherDeviceId: String) : Flow<List<ReceiveMessageUpdate>> {
+  private fun getCombinedMessages(otherDeviceId: String): Flow<List<ReceiveMessageUpdate>> {
 
-   val currentDeviceId = "abc1234" // TODO
+    val currentDeviceId = "abc1234" // TODO
 
     // TODO paging?
     val otherDeviceMessages = historyDbDataSource.getMessagesForDeviceAsFlow(otherDeviceId, limit = 10, offset = 0)
@@ -37,11 +36,16 @@ class MessageScreenPresenter(
     otherDeviceMessages.combine(currentDeviceMessages) { otherDeviceMessages, currentDeviceMessages ->
       (otherDeviceMessages + currentDeviceMessages).sortedBy { it.timestamp }
     }.map {
-      it.map { message -> ReceiveMessageUpdate(
-      device = message.device,
-        status = ReceiveMessageStatus.Completed,
-        messages =
-      ) }
+      it.map { message ->
+
+
+
+        ReceiveMessageUpdate(
+          device = message.device,
+          status = ReceiveMessageStatus.Completed,
+          messages = listOf(mess)
+        )
+      }
     }
 
   }
@@ -60,7 +64,6 @@ class MessageScreenPresenter(
   fun messages() {
     val receivedMessages by messenger.receive().collectAsState(emptyFlow())
 
-    receivedMessages.co
   }
 
   internal data class HeaderUIState(

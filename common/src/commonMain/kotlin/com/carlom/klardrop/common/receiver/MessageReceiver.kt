@@ -71,7 +71,7 @@ data class ReceiveMessageUpdate(
 
 sealed interface ReceiveMessageStatus {
 
-  object Started : ReceiveMessageStatus
+  data object Started : ReceiveMessageStatus
 
   data class PendingAuthorization(val acceptTransfer: (Boolean) -> Unit) : ReceiveMessageStatus
 
@@ -79,7 +79,7 @@ sealed interface ReceiveMessageStatus {
 
   data class Failed(val reason: String) : ReceiveMessageStatus
 
-  object Completed : ReceiveMessageStatus
+  data object Completed : ReceiveMessageStatus
 
   fun isFinished(): Boolean = this is Completed || this is Failed
 }
