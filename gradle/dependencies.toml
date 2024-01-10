@@ -1,23 +1,16 @@
 [versions]
 agp = "8.1.0"
-kotlin = "1.9.21"
+kotlin = "1.9.22"
 coroutines = "1.7.3"
 serialization = "1.6.2"
-compose-plugin = "1.5.11"
+compose-plugin = "1.6.0-dev1357"
 okio = "3.7.0"
 ktor = "2.3.7"
-datastore = "1.1.0-alpha07"
+datastore = "1.1.0-beta01"
 dagger = "2.50"
 androidx-activity = "1.8.2"
 
 [libraries]
-kotlin-gp = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
-kotlin-bom = { module = "org.jetbrains.kotlin:kotlin-bom", version.ref = "kotlin" }
-kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
-kotlin-test-common = { module = "org.jetbrains.kotlin:kotlin-test-common", version.ref = "kotlin" }
-kotlin-test-annotations = { module = "org.jetbrains.kotlin:kotlin-test-annotations-common", version.ref = "kotlin" }
-kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
-
 kotlinx-coroutines-bom = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-bom", version.ref = "coroutines" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
