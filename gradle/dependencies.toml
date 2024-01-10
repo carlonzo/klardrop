@@ -6,7 +6,7 @@ serialization = "1.6.2"
 compose-plugin = "1.5.11"
 okio = "3.7.0"
 ktor = "2.3.7"
-datastore = "1.1.0-alpha07"
+datastore = "1.1.0-beta01"
 dagger = "2.50"
 androidx-activity = "1.8.2"
 
