@@ -19,14 +19,14 @@ import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.receiver.ReceiveTransferUpdate
 import kotlin.math.absoluteValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReceiveNotification(
   modifier: Modifier = Modifier,
-  receiveUpdate: ReceiveMessageUpdate,
+  receiveUpdate: ReceiveTransferUpdate,
   callbacks: ReceiveNotificationsCallbacks
 ) {
 
@@ -81,7 +81,7 @@ fun ReceiveNotification(
 
 }
 
-private fun messageType(update: ReceiveMessageUpdate): String {
+private fun messageType(update: ReceiveTransferUpdate): String {
   return if (update.messages.first() is TextMessage) {
     if (update.messages.size == 1) "text"
     else "texts"
@@ -92,7 +92,7 @@ private fun messageType(update: ReceiveMessageUpdate): String {
 }
 
 @Composable
-private fun ReceiveNotificationProgress(update: ReceiveMessageUpdate, status: ReceiveMessageStatus.Progress) {
+private fun ReceiveNotificationProgress(update: ReceiveTransferUpdate, status: ReceiveMessageStatus.Progress) {
   Column {
     val hasSender = update.device?.name != null
 
@@ -110,7 +110,7 @@ private fun ReceiveNotificationProgress(update: ReceiveMessageUpdate, status: Re
 }
 
 @Composable
-private fun ReceiveNotificationCompleted(update: ReceiveMessageUpdate) {
+private fun ReceiveNotificationCompleted(update: ReceiveTransferUpdate) {
   Column {
     var header = "Received ${update.messages.size} ${messageType(update)}"
 
@@ -135,7 +135,7 @@ private fun ReceiveNotificationCompleted(update: ReceiveMessageUpdate) {
 }
 
 interface ReceiveNotificationsCallbacks {
-  fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate)
-  fun onCardDismissed(receiveUpdate: ReceiveMessageUpdate)
+  fun onReceivedCardClicked(receiveUpdate: ReceiveTransferUpdate)
+  fun onCardDismissed(receiveUpdate: ReceiveTransferUpdate)
 }
 

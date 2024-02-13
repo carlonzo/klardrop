@@ -17,27 +17,27 @@ import kotlinx.coroutines.launch
 /**
  * Internal manager used to communicate received messages between servers and Messenger
  */
-interface MessageReceiver {
+interface TransferReceiver {
 
-  fun onReceiveMessage(deviceId: String = ""): MutableStateFlow<ReceiveMessageUpdate>
+  fun onReceiveTransfer(deviceId: String = ""): MutableStateFlow<ReceiveTransferUpdate>
 
-  val notifier: Flow<Flow<ReceiveMessageUpdate>>
+  val notifier: Flow<Flow<ReceiveTransferUpdate>>
 
 }
 
 
-internal class MessageReceiverImpl(
+internal class TransferReceiverImpl(
   private val coroutines: Coroutines,
   private val visibleDevices: VisibleDevices
-) : MessageReceiver {
+) : TransferReceiver {
 
   private val receiverScope = coroutines.newScope(coroutines.ioDispatcher)
-  private val _notifier = MutableSharedFlow<StateFlow<ReceiveMessageUpdate>>()
+  private val _notifier = MutableSharedFlow<StateFlow<ReceiveTransferUpdate>>()
 
-  override val notifier: Flow<Flow<ReceiveMessageUpdate>>
+  override val notifier: Flow<Flow<ReceiveTransferUpdate>>
     get() = _notifier.asSharedFlow()
 
-  override fun onReceiveMessage(deviceId: String): MutableStateFlow<ReceiveMessageUpdate> {
+  override fun onReceiveTransfer(deviceId: String): MutableStateFlow<ReceiveTransferUpdate> {
 
     val device = visibleDevices.getDevice(deviceId)?.deviceInfo ?: DeviceInfo(
       deviceId = deviceId,
@@ -46,7 +46,7 @@ internal class MessageReceiverImpl(
     )
 
     val flow = MutableStateFlow(
-      ReceiveMessageUpdate(
+      ReceiveTransferUpdate(
         device = device,
         status = ReceiveMessageStatus.Started
       )
@@ -62,8 +62,8 @@ internal class MessageReceiverImpl(
 }
 
 
-data class ReceiveMessageUpdate(
-  val device: DeviceInfo? = null,
+data class ReceiveTransferUpdate(
+  val device: DeviceInfo,
   val messages: List<Message> = emptyList(),
 
   val status: ReceiveMessageStatus

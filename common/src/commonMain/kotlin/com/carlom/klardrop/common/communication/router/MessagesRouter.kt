@@ -4,7 +4,7 @@ import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
-import com.carlom.klardrop.common.receiver.MessageReceiver
+import com.carlom.klardrop.common.receiver.TransferReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -29,7 +29,7 @@ class MessagesRouterImpl(
   private val handlers: MessageHandlers,
   private val messageSerializer: MessageSerializer,
   private val coroutines: Coroutines,
-  private val messengeReceiver: MessageReceiver,
+  private val messengeReceiver: TransferReceiver,
 ) : MessagesRouter {
   override suspend fun onMessageIncoming(fromDeviceId: String, sendChannel: SendChannel<Frame>, receiveChannel: ReceiveChannel<Frame>) =
     coroutines.ioDispatcher {
@@ -38,7 +38,7 @@ class MessagesRouterImpl(
       val message = messageSerializer.deserialize(firstFrame)
       log("MessagesRouter", "Received message from $fromDeviceId: $message")
 
-      val receiveFlow = messengeReceiver.onReceiveMessage(fromDeviceId)
+      val receiveFlow = messengeReceiver.onReceiveTransfer(fromDeviceId)
 
 
       if (message.hasPayload) {

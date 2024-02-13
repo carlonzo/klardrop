@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.communication.message
 
 import com.carlom.klardrop.common.communication.MessengerSendProgress
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.receiver.ReceiveTransferUpdate
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -44,7 +44,7 @@ class SimpleSendMessageRequest(override val message: Message) : SendMessageReque
 
 interface MessageHandler<E : Message, R : SendMessageRequest> {
 
-  suspend fun handleIncoming(message: E, receiveChannel: ReceiveChannel<Frame>, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>)
+  suspend fun handleIncoming(message: E, receiveChannel: ReceiveChannel<Frame>, receiveFlow: MutableStateFlow<ReceiveTransferUpdate>)
   suspend fun handleOutgoing(request: R, webSocketSession: WebSocketSession, progressFlow: MutableSharedFlow<MessengerSendProgress>)
 
 }

@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.discovery.VisibleDevices
-import com.carlom.klardrop.common.receiver.MessageReceiver
+import com.carlom.klardrop.common.receiver.TransferReceiver
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.network.selector.*
@@ -19,7 +19,7 @@ class NearbyShareServer(
   private val coroutines: Coroutines,
   private val nearbyReceiverConnectionHandlerFactory: NearbyReceiverConnectionHandlerFactory,
   private val visibleDevices: VisibleDevices,
-  private val messageReceiver: MessageReceiver
+  private val transferReceiver: TransferReceiver
 ) {
 
   private val nearbyShareScope = coroutines.newScope(coroutines.ioDispatcher + SupervisorJob())
@@ -48,7 +48,7 @@ class NearbyShareServer(
 
       val device = visibleDevices.findDeviceByAddress(receive.remoteAddress as InetSocketAddress)
 
-      val receiveFlow = messageReceiver.onReceiveMessage(device?.deviceInfo?.deviceId ?: "")
+      val receiveFlow = transferReceiver.onReceiveTransfer(device?.deviceInfo?.deviceId ?: "")
 
       val exceptionHandler = CoroutineExceptionHandler { _, exception ->
         log("NearbyShareServer", "Received exception on connection", exception)

@@ -6,8 +6,8 @@ import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
-import com.carlom.klardrop.common.receiver.MessageReceiver
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.receiver.TransferReceiver
+import com.carlom.klardrop.common.receiver.ReceiveTransferUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
@@ -21,8 +21,7 @@ import kotlinx.coroutines.launch
  */
 interface Messenger {
   fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress>
-
-  fun receive(): Flow<Flow<ReceiveMessageUpdate>>
+  fun receive(): Flow<Flow<ReceiveTransferUpdate>>
 }
 
 class MessengerImpl(
@@ -31,7 +30,7 @@ class MessengerImpl(
   private val client: Client,
   coroutines: Coroutines,
   private val nearbyClient: NearbyClient,
-  private val messageReceiver: MessageReceiver
+  private val transferReceiver: TransferReceiver
 ) : Messenger {
 
   private val messengerScope = coroutines.newScope(coroutines.ioDispatcher)
@@ -63,15 +62,16 @@ class MessengerImpl(
         return@launch
       }
 
-      if (transferCompleted)
+      if (transferCompleted) {
         flow.emit(Completed)
+      }
     }
 
     return flow
   }
 
-  override fun receive(): Flow<Flow<ReceiveMessageUpdate>> {
-    return messageReceiver.notifier
+  override fun receive(): Flow<Flow<ReceiveTransferUpdate>> {
+    return transferReceiver.notifier
   }
 
   private suspend fun handleNearbyTransfer(
@@ -92,9 +92,8 @@ class MessengerImpl(
         nearbyClient.send(it.address, it.port, listOf(messageRequest), sendFlow)
       }.onSuccess {
         return@forEach
-      }.onFailure {
-
-        throw it
+      }.onFailure { failure ->
+        throw failure
       }
 
     }

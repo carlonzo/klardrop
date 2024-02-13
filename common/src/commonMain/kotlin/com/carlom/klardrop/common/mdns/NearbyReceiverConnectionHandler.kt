@@ -9,7 +9,7 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.toDeviceType
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.receiver.ReceiveTransferUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.getMimeTypeFromExtension
 import com.carlom.klardrop.common.utils.log
@@ -48,13 +48,13 @@ class NearbyReceiverConnectionHandler(
 
   private val messagesToReceive = mutableMapOf<Long, Message>()
   private val receiveProgress = mutableMapOf<Long, Int>()
-  private lateinit var receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
+  private lateinit var receiveFlow: MutableStateFlow<ReceiveTransferUpdate>
 
   private val connectionScope = coroutines.newScope(coroutines.ioDispatcher)
 
   private var keepAliveWhileWaitingJob: Job? = null
 
-  suspend fun onConnection(connection: Socket, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>) {
+  suspend fun onConnection(connection: Socket, receiveFlow: MutableStateFlow<ReceiveTransferUpdate>) {
 
     this.receiveFlow = receiveFlow
 

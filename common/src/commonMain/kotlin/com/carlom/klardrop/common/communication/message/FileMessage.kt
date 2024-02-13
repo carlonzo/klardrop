@@ -4,7 +4,7 @@ import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.receiver.ReceiveTransferUpdate
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -51,7 +51,7 @@ class FileMessageHandler(
   override suspend fun handleIncoming(
     message: FileMessage,
     receiveChannel: ReceiveChannel<Frame>,
-    receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
+    receiveFlow: MutableStateFlow<ReceiveTransferUpdate>
   ) {
     log("FileMessageHandler", "Receiving file $message")
 

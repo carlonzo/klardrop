@@ -25,6 +25,10 @@ data class CurrentDevice(
    * Device id used during discovery
    */
   val shortDeviceId = deviceId.take(8)
+
+  fun asDeviceInfo(): DeviceInfo {
+    return DeviceInfo(deviceId, deviceName, deviceType, osType)
+  }
 }
 
 @OptIn(ExperimentalUuidApi::class)

@@ -3,61 +3,70 @@ package com.carlom.klardrop.common.history
 import app.cash.sqldelight.async.coroutines.awaitAsList
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
-import app.cash.sqldelight.db.SqlDriver
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.utils.Coroutines
-import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.OsType
 import com.klardrop.common.persistence.KlardropDatabase
-import com.klardrop.common.persistence.SelectByDeviceIdWithDeviceInfo
+import com.klardrop.common.persistence.Messages_db
+
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.invoke
 import kotlinx.serialization.protobuf.ProtoBuf
 
 internal class HistoryDbDataSourceImpl(
-  private val sqlDriver: SqlDriver,
   private val coroutines: Coroutines,
-  private val protoBuf: ProtoBuf
+  private val protoBuf: ProtoBuf,
+  klardropDatabase: Lazy<KlardropDatabase>
 ) : HistoryDbDataSource {
 
-  private val database by lazy { KlardropDatabase(sqlDriver) }
-  private val messagesQueries by lazy { database.messagesQueries }
+  private val messagesQueries by lazy { klardropDatabase.value.messagesQueries }
 
-  override suspend fun getMessagesForDevice(deviceId: String, limit: Long, offset: Long): List<HistoryMessage> = coroutines.ioDispatcher {
-    val dbMessages = messagesQueries.selectByDeviceIdWithDeviceInfo(deviceId, limit, offset).awaitAsList()
+  override suspend fun getMessagesFromDevice(senderDeviceInfo: DeviceInfo, limit: Long, offset: Long): List<HistoryMessage> =
+    coroutines.ioDispatcher {
+      val dbMessages = messagesQueries.select_by_sender_device_id(senderDeviceInfo.deviceId, limit, offset).awaitAsList()
 
-    dbMessages.map { dbMessage -> dbMessage.toHistoryMessage() }
+      dbMessages.map { dbMessage -> dbMessage.toHistoryMessage(senderDeviceInfo) }
+    }
+
+  override suspend fun getMessagesToDevice(receiverDeviceInfo: DeviceInfo, limit: Long, offset: Long): List<HistoryMessage> {
+    val dbMessages = messagesQueries.select_by_receiver_device_id(receiverDeviceInfo.deviceId, limit, offset).awaitAsList()
+
+    return dbMessages.map { dbMessage -> dbMessage.toHistoryMessage(receiverDeviceInfo) }
   }
 
-  override fun getMessagesForDeviceAsFlow(deviceId: String, limit: Long, offset: Long): Flow<List<HistoryMessage>> {
-    return messagesQueries.selectByDeviceIdWithDeviceInfo(deviceId, limit, offset).asFlow()
-      .mapToList(coroutines.ioDispatcher)
-      .map {
-        it.map { dbMessage -> dbMessage.toHistoryMessage() }
-      }
+  override fun getMessagesFromDeviceAsFlow(senderDeviceInfo: DeviceInfo, limit: Long, offset: Long): Flow<List<HistoryMessage>> {
+    return messagesQueries.select_by_sender_device_id(senderDeviceInfo.deviceId, limit, offset)
+      .asFlow().mapToList(coroutines.ioDispatcher)
+      .map { messagesList -> messagesList.map { it.toHistoryMessage(senderDeviceInfo) } }
   }
 
-  override suspend fun insertMessage(deviceId: String, timestamp: Long, payload: HistoryMessagePayload) = coroutines.ioDispatcher {
+  override fun getMessagesToDeviceAsFlow(receiverDeviceInfo: DeviceInfo, limit: Long, offset: Long): Flow<List<HistoryMessage>> {
+    return messagesQueries.select_by_receiver_device_id(receiverDeviceInfo.deviceId, limit, offset)
+      .asFlow().mapToList(coroutines.ioDispatcher)
+      .map { messagesList -> messagesList.map { it.toHistoryMessage(receiverDeviceInfo) } }
+  }
+
+  override suspend fun insertMessage(senderDeviceId: String, receiverDeviceId: String, timestamp: Long, payload: HistoryMessagePayload) {
     val byteArrayPayload = serializePayload(payload)
 
-    messagesQueries.insert_message(device_id = deviceId, message_type = payload.type, timestamp = timestamp, payload = byteArrayPayload)
+    messagesQueries.insert_message(
+      sender_device_id = senderDeviceId,
+      receiver_device_id = receiverDeviceId,
+      message_type = payload.type.id,
+      timestamp = timestamp,
+      payload = byteArrayPayload
+    )
   }
 
   override suspend fun deleteMessage(messageId: Long) = coroutines.ioDispatcher {
     messagesQueries.delete_message(messageId)
   }
 
-  private fun SelectByDeviceIdWithDeviceInfo.toHistoryMessage(): HistoryMessage {
+  private fun Messages_db.toHistoryMessage(deviceInfo: DeviceInfo): HistoryMessage {
     val payload = payload.toHistoryMessagePayload(message_type)
     return HistoryMessage(
       id = id,
-      device = DeviceInfo(
-        deviceId = device_id,
-        name = device_name,
-        deviceType = DeviceType.fromId(device_type.toByte()),
-        osType = OsType.fromId(device_os.toByte())
-      ),
+      device = deviceInfo,
       timestamp = timestamp,
       payload = payload
     )
@@ -78,13 +87,13 @@ internal class HistoryDbDataSourceImpl(
   }
 
   private fun ByteArray.toHistoryMessagePayload(type: Long): HistoryMessagePayload {
-
-    val serializer = when (type) {
-      HistoryMessagePayload.TextMessagePayloadType -> HistoryMessagePayload.TextMessagePayload.serializer()
-      HistoryMessagePayload.FileMessagePayloadType -> HistoryMessagePayload.FileMessagePayload.serializer()
-      else -> throw IllegalArgumentException("Unknown type $type")
+    val serializer = when (HistoryMessagePayload.MessagePayloadType.fromId(type)) {
+      HistoryMessagePayload.MessagePayloadType.TextMessage -> HistoryMessagePayload.TextMessagePayload.serializer()
+      HistoryMessagePayload.MessagePayloadType.FileMessage -> HistoryMessagePayload.FileMessagePayload.serializer()
     }
 
     return protoBuf.decodeFromByteArray(serializer, this)
   }
+
+
 }

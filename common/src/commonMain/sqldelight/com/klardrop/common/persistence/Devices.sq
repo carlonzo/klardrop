@@ -6,3 +6,8 @@ CREATE TABLE devices_db (
 );
 
 CREATE INDEX device_id ON devices_db(device_id);
+
+select_device:
+    SELECT * FROM devices_db
+    WHERE device_id = :device_id
+    LIMIT 1;

@@ -11,7 +11,7 @@ import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.receiver.ReceiveTransferUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
@@ -108,7 +108,7 @@ class DiscoveryController(
 
   }
 
-  private fun listenNewMessagesReceived(flow: Flow<ReceiveMessageUpdate>) {
+  private fun listenNewMessagesReceived(flow: Flow<ReceiveTransferUpdate>) {
 
     val receiveId = Random.nextInt()
 
@@ -141,7 +141,7 @@ class DiscoveryController(
     return clipboardManager.read()
   }
 
-  override fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate) {
+  override fun onReceivedCardClicked(receiveUpdate: ReceiveTransferUpdate) {
 
     if (receiveUpdate.status is ReceiveMessageStatus.Completed) {
 
@@ -156,7 +156,7 @@ class DiscoveryController(
 
   }
 
-  override fun onCardDismissed(receiveUpdate: ReceiveMessageUpdate) {
+  override fun onCardDismissed(receiveUpdate: ReceiveTransferUpdate) {
     screenStateFlow.update {
       val key = it.receivingMessages.entries.firstOrNull { entry -> entry.value == receiveUpdate }?.key
 
@@ -171,7 +171,7 @@ class DiscoveryController(
 
 data class DiscoveryScreenState(
   val devices: List<DeviceUi> = emptyList(),
-  val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap()
+  val receivingMessages: Map<Int, ReceiveTransferUpdate> = emptyMap()
 )
 
 sealed interface ActionUi {

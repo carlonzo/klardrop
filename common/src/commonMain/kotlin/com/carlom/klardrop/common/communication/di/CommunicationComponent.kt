@@ -18,8 +18,8 @@ import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
 import com.carlom.klardrop.common.mdns.NearbyShareServer
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
-import com.carlom.klardrop.common.receiver.MessageReceiver
-import com.carlom.klardrop.common.receiver.MessageReceiverImpl
+import com.carlom.klardrop.common.receiver.TransferReceiver
+import com.carlom.klardrop.common.receiver.TransferReceiverImpl
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -51,7 +51,7 @@ class CommunicationModule(
       messageHandlers,
       serializer,
       coroutines,
-      messageReceiver
+      transferReceiver
     )
   }
 
@@ -76,8 +76,8 @@ class CommunicationModule(
     )
   }
 
-  private val messageReceiver: MessageReceiver by lazy {
-    MessageReceiverImpl(coroutines, visibleDevices)
+  private val transferReceiver: TransferReceiver by lazy {
+    TransferReceiverImpl(coroutines, visibleDevices)
   }
 
   private val messenger: Messenger by lazy {
@@ -87,7 +87,7 @@ class CommunicationModule(
       client(),
       coroutines,
       nearbyClient,
-      messageReceiver
+      transferReceiver
     )
   }
 
@@ -96,7 +96,7 @@ class CommunicationModule(
       coroutines,
       NearbyReceiverConnectionHandlerFactory(internalPlatformDependencies, fileManager, coroutines),
       visibleDevices,
-      messageReceiver,
+      transferReceiver,
     )
   }
 
@@ -118,5 +118,5 @@ class CommunicationModule(
   fun server() = server
   fun messenger() = messenger
 
-  fun messageReceiver() = messageReceiver
+  fun messageReceiver() = transferReceiver
 }

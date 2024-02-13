@@ -9,7 +9,7 @@ import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.receiver.ReceiveTransferUpdate
 import com.carlom.klardrop.common.utils.DeviceType.MOBILE
 
 @Preview
@@ -50,7 +50,7 @@ fun DeviceLargePreview() {
 @Composable
 fun ReceivedCardPreviewProgress() {
   ReceiveNotification(
-    receiveUpdate = ReceiveMessageUpdate(
+    receiveUpdate = ReceiveTransferUpdate(
       device = DeviceInfo(
         deviceId = "123",
         name = "Carlo's phone",
@@ -72,7 +72,7 @@ fun ReceivedCardPreviewProgress() {
 @Composable
 fun ReceivedCardPreviewReceived() {
   ReceiveNotification(
-    receiveUpdate = ReceiveMessageUpdate(
+    receiveUpdate = ReceiveTransferUpdate(
       device = DeviceInfo(
         deviceId = "123",
         name = "Carlo's phone",
@@ -86,10 +86,10 @@ fun ReceivedCardPreviewReceived() {
 }
 
 private val noopCallback = object : ReceiveNotificationsCallbacks {
-  override fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate) {
+  override fun onReceivedCardClicked(receiveUpdate: ReceiveTransferUpdate) {
 
   }
 
-  override fun onCardDismissed(receiveUpdate: ReceiveMessageUpdate) {
+  override fun onCardDismissed(receiveUpdate: ReceiveTransferUpdate) {
   }
 }
