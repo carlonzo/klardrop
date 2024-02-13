@@ -25,6 +25,6 @@ jobs:
           distribution: 'zulu'
           java-package: jdk
       - name: Gradle Build Action
-        uses: gradle/gradle-build-action@v3.0.0
+        uses: gradle/gradle-build-action@v3.1.0
         with:
           arguments: build
