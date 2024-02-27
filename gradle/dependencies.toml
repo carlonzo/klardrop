@@ -7,7 +7,7 @@ compose-plugin = "1.6.0-dev1357"
 okio = "3.7.0"
 ktor = "2.3.8"
 datastore = "1.1.0-beta01"
-dagger = "2.50"
+dagger = "2.51"
 androidx-activity = "1.8.2"
 
 [libraries]
