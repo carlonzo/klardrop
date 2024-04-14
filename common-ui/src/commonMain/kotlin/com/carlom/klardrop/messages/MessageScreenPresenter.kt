@@ -44,14 +44,12 @@ class MessageScreenPresenter(
 
 
   /*
-   * 1. listen for messages from DB
-   * 2. listen for pager
-   * 3. listen for messages from Messenger
-   *
+   * 1. listen for old messages from pager from DB
+   * 3. listen for new messages from Messenger
    */
 
 
-  private fun flatMessengerReceiver() = flow<>{
+  private fun flatMessengerReceiver() = flow<> {
 
 
     fun CoroutineScope.listenNewMessagesReceived(flow: Flow<ReceiveTransferUpdate>) {
