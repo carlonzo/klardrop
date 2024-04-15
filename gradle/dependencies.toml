@@ -1,9 +1,9 @@
 [versions]
-agp = "8.1.0"
-kotlin = "1.9.22"
+agp = "8.2.0"
+kotlin = "1.9.23"
 coroutines = "1.8.0"
 serialization = "1.6.3"
-compose-plugin = "1.6.0-dev1357"
+compose-plugin = "1.6.2"
 okio = "3.9.0"
 ktor = "2.3.10"
 datastore = "1.1.0-rc01"
@@ -58,4 +58,4 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
 jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "compose-plugin" }
-squareup-wire = { id = "com.squareup.wire", version = "4.9.3" }
+squareup-wire = { id = "com.squareup.wire", version = "4.9.9" }

@@ -167,7 +167,7 @@ class NearbyReceiverConnectionHandler(
 
         log("NearbyReceiverConnectionHandler", "Payload transfer received ${offlineFrame.v1}")
 
-        val payload = offlineFrame.v1.payload_transfer
+        val payload = offlineFrame.v1?.payload_transfer
         require(payload != null) { "Payload not found" }
 
         val header = payload.payload_header
@@ -175,6 +175,8 @@ class NearbyReceiverConnectionHandler(
 
         val payloadChunk = payload.payload_chunk
         require(payloadChunk != null) { "Payload chunk body not found" }
+
+        val payloadBody = payloadChunk.body
 
         val payloadId = header.id!!
         val message = messagesToReceive[payloadId]
@@ -184,7 +186,7 @@ class NearbyReceiverConnectionHandler(
 
           val fileTransfer = fileTransfers[payloadId]!!
 
-          if (payloadChunk.body == null || payloadChunk.body.size == 0) {
+          if (payloadBody == null || payloadBody.size == 0) {
 
             fileTransfer.onTransferCompleted()
             log("NearbyReceiverConnectionHandler", "File transfer completed")
@@ -212,10 +214,10 @@ class NearbyReceiverConnectionHandler(
 
         // update progress
 
-        if (payloadChunk.body == null || payloadChunk.body.size == 0) {
+        if (payloadBody == null || payloadBody.size == 0) {
           receiveProgress[payloadId] = 100
         } else {
-          val transferred = payloadChunk.offset!! + payloadChunk.body.size
+          val transferred = payloadChunk.offset!! + payloadBody.size
           val totalSize = header.total_size!!
 
           receiveProgress[payloadId] = (transferred * 100L / totalSize).toInt().coerceIn(0, 100)
@@ -459,11 +461,14 @@ class NearbyReceiverConnectionHandler(
     val offlineFrame = nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
     println("receiveTransferSetupFrame $offlineFrame")
 
-    val header = offlineFrame.v1?.payload_transfer?.payload_header
+    val payloadTransfer = offlineFrame.v1?.payload_transfer
+    require(payloadTransfer != null) { "Payload transfer not found" }
+
+    val header = payloadTransfer.payload_header
     require(header != null) { "Payload header not found" }
     require(header.type == PayloadType.BYTES) { "Payload type is not bytes" }
 
-    val bodyPayload = offlineFrame.v1.payload_transfer.payload_chunk?.body
+    val bodyPayload = payloadTransfer.payload_chunk?.body
     require(bodyPayload != null) { "Payload body not found" }
     return Frame.ADAPTER.decode(bodyPayload.toByteArray())
   }

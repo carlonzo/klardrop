@@ -160,7 +160,7 @@ class NearbyClientConnectionHandler(
 
       if (frameType == FrameType.RESPONSE) {
 
-        if (frame.v1.connection_response?.status == Status.ACCEPT) {
+        if (frame.v1?.connection_response?.status == Status.ACCEPT) {
           // transfer accepted. we can start
           break
         } else {

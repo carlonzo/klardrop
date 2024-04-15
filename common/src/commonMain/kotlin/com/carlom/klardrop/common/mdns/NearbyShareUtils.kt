@@ -80,31 +80,34 @@ internal suspend fun D2DConnectionContext.receiveEncryptedOfflineMessage(
 ): OfflineFrame {
   // todo recursive read buffer for byes payload
   val offlineFrame = decodeMessageFromPeer(readChannel.readByteArray()).let { OfflineFrame.ADAPTER.decode(it) }
+  val offlineFrameContent = offlineFrame.v1
+
+  require(offlineFrameContent != null) { "OfflineFrame content not found: $offlineFrame" }
 
   // if message received here was a keep alive, reply and read again if is not and ack
-  if (offlineFrame.v1?.type == V1Frame.FrameType.KEEP_ALIVE) {
-    log("NearbyReceiverConnectionHandler", "Received keep alive with ack: ${offlineFrame.v1.keep_alive?.ack}")
+  if (offlineFrameContent.type == V1Frame.FrameType.KEEP_ALIVE) {
+    log("NearbyReceiverConnectionHandler", "Received keep alive with ack: ${offlineFrameContent.keep_alive?.ack}")
 
-    if (offlineFrame.v1.keep_alive?.ack == false) {
+    if (offlineFrameContent.keep_alive?.ack == false) {
       replyKeepAlive(writeChannel, this)
     }
 
     return receiveEncryptedOfflineMessage(readChannel, writeChannel)
   }
 
-  if (offlineFrame.v1?.type == V1Frame.FrameType.DISCONNECTION) {
+  if (offlineFrameContent.type == V1Frame.FrameType.DISCONNECTION) {
     log("NearbyReceiverConnectionHandler", "Received disconnection. Replying")
 
     throw IllegalStateException("Client sent disconnection message")
   }
 
-  val header = offlineFrame.v1?.payload_transfer?.payload_header
+  val header = offlineFrameContent.payload_transfer?.payload_header
   require(header != null) { "Payload header not found: $offlineFrame" }
 
   val msg = if (header.type != BYTES) {
     offlineFrame
   } else {
-    val chunkBody = offlineFrame.v1.payload_transfer.payload_chunk?.body
+    val chunkBody = offlineFrameContent.payload_transfer?.payload_chunk?.body
     require(chunkBody != null) { "Payload chunk not found" }
     recursiveReadOfflineFrame(readChannel, offlineFrame, header.id, chunkBody.toByteArray())
   }
@@ -121,15 +124,21 @@ private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
   buffer: ByteArray = byteArrayOf()
 ): OfflineFrame {
 
-  val chunk = offlineFrame.v1?.payload_transfer?.payload_chunk
+  val offlineFrameContent = offlineFrame.v1
+  require(offlineFrameContent != null) { "OfflineFrame content not found: $offlineFrame" }
+
+  val payload = offlineFrameContent.payload_transfer
+  require(payload != null) { "Payload transfer not found" }
+
+  val chunk = payload.payload_chunk
   require(chunk != null) { "Payload chunk not found" }
 
   if (chunk.flags!! and 1 == 1) {
     log("recursiveReadOfflineFrame", "last chunk found")
 
     return offlineFrame.copy(
-      v1 = offlineFrame.v1.copy(
-        payload_transfer = offlineFrame.v1.payload_transfer.copy(
+      v1 = offlineFrameContent.copy(
+        payload_transfer = payload.copy(
           payload_chunk = chunk.copy(body = (buffer).toByteString())
         )
       )
@@ -141,15 +150,10 @@ private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
     val newChunk = newOfflineFrame.v1?.payload_transfer?.payload_chunk
     require(newChunk != null) { "Payload chunk not found" }
 
-    val header = newOfflineFrame.v1.payload_transfer.payload_header
-    require(header != null) { "Payload header not found" }
-    require(header.id == payloadId) { "Payload id mismatch header.id = ${header.id} payloadId = ${payloadId}. frame: $newOfflineFrame" }
+    val header = payload.payload_header
+    require(header?.id == payloadId) { "Payload id mismatch header.id = ${header?.id} payloadId = ${payloadId}. frame: $newOfflineFrame" }
 
-    val newBody = if (newChunk.body == null) {
-      byteArrayOf()
-    } else {
-      newChunk.body.toByteArray()
-    }
+    val newBody = newChunk.body?.toByteArray() ?: byteArrayOf()
 
     return recursiveReadOfflineFrame(readChannel, newOfflineFrame, payloadId, buffer + newBody)
   }

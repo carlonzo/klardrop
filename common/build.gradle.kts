@@ -1,8 +1,7 @@
 plugins {
-  alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.android.library)
+  alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.kotlin.serialization)
-  alias(deps.plugins.squareup.wire)
 }
 
 kotlin {
@@ -16,7 +15,7 @@ kotlin {
 
     commonMain {
       dependencies {
-
+        implementation(project(":protos")) // wire plugin + applyDefaultHierarchyTemplate does not work
         implementation(deps.kotlinx.coroutines.core)
 
         implementation(deps.ktor.network)
@@ -73,13 +72,4 @@ kotlin {
 
 android {
   namespace = "com.klardrop.common"
-  compileSdk = 33
-  defaultConfig {
-    minSdk = 23
-  }
-}
-
-wire {
-  kotlin {
-  }
 }

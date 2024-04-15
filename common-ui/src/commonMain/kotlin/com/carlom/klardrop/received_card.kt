@@ -7,11 +7,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
-import androidx.compose.material3.DismissValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SwipeToDismiss
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberDismissState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -30,24 +30,24 @@ fun ReceiveNotification(
   callbacks: ReceiveNotificationsCallbacks
 ) {
 
-  val dismissState = rememberDismissState(initialValue = DismissValue.Default, confirmValueChange = {
-    if (it != DismissValue.Default) {
+  val dismissState = rememberSwipeToDismissBoxState(initialValue = SwipeToDismissBoxValue.Settled, confirmValueChange = {
+    if (it != SwipeToDismissBoxValue.Settled) {
       callbacks.onCardDismissed(receiveUpdate)
     }
     true
   })
 
-  val cardAlpha = if (dismissState.targetValue != DismissValue.Default) {
+  val cardAlpha = if (dismissState.targetValue != SwipeToDismissBoxValue.Settled) {
     (dismissState.progress - 1).absoluteValue
   } else {
     1f
   }
 
-  SwipeToDismiss(
+  SwipeToDismissBox(
     modifier = modifier,
     state = dismissState,
-    background = {},
-    dismissContent = {
+    backgroundContent = {},
+    content = {
       Card(
         modifier = Modifier
           .heightIn(min = 80.dp)
