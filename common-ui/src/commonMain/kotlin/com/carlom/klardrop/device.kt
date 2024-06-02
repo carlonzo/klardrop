@@ -128,7 +128,11 @@ private fun CircleDevice(deviceUi: DeviceUi) {
   Box(modifier = Modifier.size(circleSize)) {
     if (isSending) {
       val progress = (deviceUi.activityState as ActivityState.Sending).progressPercentage / 100.0f
-      CircularProgressIndicator(progress, modifier = Modifier.size(circleSize), color = Color.Blue)
+      CircularProgressIndicator(
+        progress = { progress },
+        modifier = Modifier.size(circleSize),
+        color = Color.Blue,
+      )
     }
 
     Canvas(
