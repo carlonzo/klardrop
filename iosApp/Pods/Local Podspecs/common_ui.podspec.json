@@ -13,6 +13,9 @@
   "platforms": {
     "ios": "14.1"
   },
+  "xcconfig": {
+    "ENABLE_USER_SCRIPT_SANDBOXING": "NO"
+  },
   "pod_target_xcconfig": {
     "KOTLIN_PROJECT_PATH": ":common-ui",
     "PRODUCT_MODULE_NAME": "common_ui"

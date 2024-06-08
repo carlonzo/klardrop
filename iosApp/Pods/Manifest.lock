@@ -9,8 +9,8 @@ EXTERNAL SOURCES:
     :path: "../common-ui"
 
 SPEC CHECKSUMS:
-  common_ui: 0f559efae826112c8b66a42e35f36bf690e733ff
+  common_ui: ddcc21a0aaf66919add9f33762c7ea251e031d64
 
 PODFILE CHECKSUM: aef38a0bb67b5cebbbe6b43bdff9c502bf6d93c9
 
-COCOAPODS: 1.15.2
+COCOAPODS: 1.11.3

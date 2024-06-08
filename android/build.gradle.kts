@@ -2,6 +2,7 @@ plugins {
   alias(deps.plugins.kotlin.android)
   alias(deps.plugins.android.application)
   alias(deps.plugins.jetbrains.compose)
+  alias(deps.plugins.compose.compiler)
   kotlin("kapt")
 }
 

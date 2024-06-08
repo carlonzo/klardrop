@@ -3,6 +3,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 plugins {
   alias(deps.plugins.kotlin.multiplatform)
 //  alias(deps.plugins.jetbrains.compose)
+//  alias(deps.plugins.compose.compiler)
 }
 
 group = "com.carlom.klardrop"
