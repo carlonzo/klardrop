@@ -24,7 +24,7 @@ kotlin {
 
     val macosArm64Main by getting {
       dependencies {
-//        implementation(project(":common"))
+//        implementation(project(":klardrop-common"))
 
 //        implementation(deps.kotlinx.coroutines.core)
       }
