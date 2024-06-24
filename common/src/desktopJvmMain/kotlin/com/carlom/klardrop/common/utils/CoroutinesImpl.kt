@@ -7,12 +7,12 @@ import kotlinx.coroutines.Dispatchers
 actual class CoroutinesImpl actual constructor() : Coroutines {
 
   private val scope by lazy { CoroutineScope(mainDispatcher) }
-  override val appScope: CoroutineScope
+  actual override val appScope: CoroutineScope
     get() = scope
-  override val ioDispatcher: CoroutineDispatcher
+  actual override val ioDispatcher: CoroutineDispatcher
     get() = Dispatchers.IO
-  override val mainDispatcher: CoroutineDispatcher
+  actual override val mainDispatcher: CoroutineDispatcher
     get() = Dispatchers.IO.limitedParallelism(1)
-  override val cpuDispatcher: CoroutineDispatcher
+  actual override val cpuDispatcher: CoroutineDispatcher
     get() = Dispatchers.Default
 }

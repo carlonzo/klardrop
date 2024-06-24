@@ -58,13 +58,16 @@ kotlin {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
       languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
+      languageSettings.optIn("kotlinx.cinterop.BetaInteropApi")
     }
   }
 
-  targets.all {
-    compilations.all {
-      compilerOptions.configure {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
+  targets.configureEach {
+    compilations.configureEach {
+      compileTaskProvider.configure {
+        compilerOptions{
+          freeCompilerArgs.add("-Xexpect-actual-classes")
+        }
       }
     }
   }

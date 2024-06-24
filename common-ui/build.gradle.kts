@@ -28,7 +28,7 @@ kotlin {
     framework {
       baseName = "common_ui"
       isStatic = true
-      export(project(":common"))
+      export(project(":klardrop-common"))
     }
   }
 
@@ -44,7 +44,7 @@ kotlin {
 
         api(deps.kotlinx.coroutines.core)
 
-        api(project(":common"))
+        api(project(":klardrop-common"))
       }
     }
 
@@ -57,7 +57,7 @@ kotlin {
     val androidMain by getting {
       dependencies {
         implementation(compose.preview)
-        implementation(compose.uiTooling)
+        compileOnly(compose.uiTooling)
         implementation(deps.androidx.activity)
         implementation(deps.androidx.activity.compose)
       }
@@ -67,10 +67,12 @@ kotlin {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
     }
 
-    targets.all {
-      compilations.all {
-        compilerOptions.configure {
-          freeCompilerArgs.add("-Xexpect-actual-classes")
+    targets.configureEach {
+      compilations.configureEach {
+        compileTaskProvider.configure {
+          compilerOptions{
+            freeCompilerArgs.add("-Xexpect-actual-classes")
+          }
         }
       }
     }
