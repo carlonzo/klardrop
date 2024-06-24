@@ -13,16 +13,16 @@ repositories {
 }
 
 dependencies {
-  implementation(project(":common"))
+  implementation(project(":klardrop-common"))
   implementation(project(":common-ui"))
   implementation(deps.androidx.activity.compose)
-  implementation("androidx.appcompat:appcompat:1.6.1")
-  implementation("androidx.core:core-ktx:1.13.1")
+  implementation(deps.androidx.appcompat)
+  implementation(deps.androidx.core)
   implementation(deps.dagger)
   kapt(deps.dagger.compiler)
 
-  debugImplementation("androidx.compose.ui:ui-tooling:1.6.7")
-  implementation("androidx.compose.ui:ui-tooling-preview:1.6.7")
+  debugImplementation(compose.uiTooling)
+  implementation(compose.preview)
 }
 
 android {
