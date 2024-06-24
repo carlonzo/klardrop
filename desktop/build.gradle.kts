@@ -3,6 +3,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 plugins {
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.jetbrains.compose)
+  alias(deps.plugins.compose.compiler)
 }
 
 group = "com.carlom.klardrop"
@@ -42,13 +43,13 @@ compose.desktop {
       modules("jdk.unsupported")
 
       val icon = file("icon_launcher.png")
-      macOS{
+      macOS {
         iconFile.set(icon)
       }
-      windows{
+      windows {
         iconFile.set(icon)
       }
-      linux{
+      linux {
         iconFile.set(icon)
       }
     }

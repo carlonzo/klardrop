@@ -12,6 +12,7 @@ plugins {
   alias(deps.plugins.android.application) apply false
   alias(deps.plugins.android.library) apply false
   alias(deps.plugins.jetbrains.compose) apply false
+  alias(deps.plugins.compose.compiler) apply false
   alias(deps.plugins.kotlin.serialization) apply false
 }
 

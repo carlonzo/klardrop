@@ -2,6 +2,7 @@ plugins {
   alias(deps.plugins.kotlin.multiplatform)
   kotlin("native.cocoapods")
   alias(deps.plugins.jetbrains.compose)
+  alias(deps.plugins.compose.compiler)
   alias(deps.plugins.android.library)
 }
 
