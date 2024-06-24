@@ -12,4 +12,10 @@ interface Coroutines {
   val cpuDispatcher: CoroutineDispatcher
 }
 
-expect class CoroutinesImpl() : Coroutines
+expect class CoroutinesImpl() : Coroutines {
+  override val appScope: CoroutineScope
+
+  override val ioDispatcher: CoroutineDispatcher
+  override val mainDispatcher: CoroutineDispatcher
+  override val cpuDispatcher: CoroutineDispatcher
+}

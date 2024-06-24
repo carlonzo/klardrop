@@ -28,7 +28,7 @@ kotlin {
     framework {
       baseName = "common_ui"
       isStatic = true
-      export(project(":common"))
+      export(project(":klardrop-common"))
     }
   }
 
@@ -44,7 +44,7 @@ kotlin {
 
         api(deps.kotlinx.coroutines.core)
 
-        api(project(":common"))
+        api(project(":klardrop-common"))
       }
     }
 

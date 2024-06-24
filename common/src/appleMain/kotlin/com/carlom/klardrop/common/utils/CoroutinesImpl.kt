@@ -8,6 +8,7 @@ import kotlinx.coroutines.IO
 actual class CoroutinesImpl actual constructor() : Coroutines {
 
   private val scope by lazy { CoroutineScope(mainDispatcher) }
+  
   actual override val appScope: CoroutineScope
     get() = scope
   actual override val ioDispatcher: CoroutineDispatcher
