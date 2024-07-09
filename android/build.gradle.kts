@@ -6,8 +6,8 @@ plugins {
   kotlin("kapt")
 }
 
-group "com.carlom.klardrop"
-version "1.0-SNAPSHOT"
+group = "com.carlom.klardrop"
+version = "1.0-SNAPSHOT"
 
 repositories {
   mavenCentral()

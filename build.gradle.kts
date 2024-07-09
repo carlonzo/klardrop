@@ -1,6 +1,8 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.dsl.LibraryExtension
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 group = "com.carlom.klardrop"
@@ -29,6 +31,7 @@ allprojects {
 subprojects {
 
   val javaVersion = JavaVersion.VERSION_17
+  val javaTarget = JvmTarget.fromTarget(javaVersion.toString())
 
   withAndroidPlugin {
     compileOptions {
@@ -49,9 +52,7 @@ subprojects {
 //  }
 
   tasks.withType<KotlinJvmCompile>().configureEach {
-    kotlinOptions {
-      jvmTarget = javaVersion.toString()
-    }
+    compilerOptions.jvmTarget = javaTarget
   }
 
   tasks.withType<JavaCompile>().configureEach {

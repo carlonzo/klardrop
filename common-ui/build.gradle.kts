@@ -10,6 +10,7 @@ kotlin {
 
   androidTarget()
   jvm("desktopJvm") {
+
     compilations.all {
       kotlinOptions.jvmTarget = "17"
     }
@@ -69,8 +70,10 @@ kotlin {
 
     targets.all {
       compilations.all {
-        compilerOptions.configure {
-          freeCompilerArgs.add("-Xexpect-actual-classes")
+        compileTaskProvider.configure{
+          compilerOptions {
+            freeCompilerArgs.add("-Xexpect-actual-classes")
+          }
         }
       }
     }
