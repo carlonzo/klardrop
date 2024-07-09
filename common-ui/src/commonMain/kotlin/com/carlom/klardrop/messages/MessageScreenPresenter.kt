@@ -122,6 +122,24 @@ class MessageScreenPresenter(
     )
   }
 
+  //  From sonnet
+//   fun getMessagesFlow(): Flow<List<HistoryMessage>> {
+//     return messenger.receive()
+//         .flatMapLatest { receiveFlow ->
+//             receiveFlow.flattenMerge()
+//         }
+//         .flattenMerge(
+//             historyDbDataSource.getMessagesFromDeviceAsFlow(deviceId)
+//                 .flatMapLatest { Flow.just(it) }
+//         )
+//         .flattenMerge(
+//             historyDbDataSource.getMessagesToDeviceAsFlow(deviceId)
+//                 .flatMapLatest { Flow.just(it) }
+//         )
+//         .map { updates ->
+//             updates.sortedByDescending { it.timestamp }
+//         }
+// }
 
 
 
