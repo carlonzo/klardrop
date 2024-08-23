@@ -21,7 +21,7 @@ class Klardrop(
 
     log("Starting Klardrop with ApplicationInfo: $applicationInfo")
 
-    InitSentry.init()
+    InitSentry.init(applicationInfo)
 
     commonComponent = CommonComponent(applicationInfo, utilsModule, internalPlatformDependency)
 

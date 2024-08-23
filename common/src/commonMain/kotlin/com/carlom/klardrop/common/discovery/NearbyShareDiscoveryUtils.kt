@@ -131,14 +131,16 @@ fun com.google.security.cryptauth.lib.securegcm.DeviceType?.toOsType(): OsType {
 
 @OptIn(ExperimentalEncodingApi::class)
 internal fun urlSafeBase64EncodedString(data: ByteArray): String {
-  return Base64.encode(data).map {
-    when (it) {
-      '+' -> '-'
-      '/' -> '_'
-      '=' -> ""
-      else -> it
-    }
-  }.joinToString(separator = "")
+  return Base64.UrlSafe.encode(data)
+//    .map {
+//    when (it) {
+//      '+' -> '-'
+//      '/' -> '_'
+//      '=' -> ""
+//      else -> it
+//    }
+//  }
+//    .joinToString(separator = "")
 }
 
 internal fun urlSafeBase64EncodedString(data: String): String {
@@ -147,15 +149,16 @@ internal fun urlSafeBase64EncodedString(data: String): String {
 
 @OptIn(ExperimentalEncodingApi::class)
 internal fun urlSafeBase64DecodeString(data: String): ByteArray {
-  return data.map {
-    when (it) {
-      '-' -> '+'
-      '_' -> '/'
-      else -> it
-    }
-  }.joinToString(separator = "").let {
-    Base64.decode(it.encodeToByteArray())
-  }
+  return Base64.UrlSafe.decode(data)
+//  return data.map {
+//    when (it) {
+//      '-' -> '+'
+//      '_' -> '/'
+//      else -> it
+//    }
+//  }.joinToString(separator = "").let {
+//    Base64.UrlSafe.decode(it.encodeToByteArray())
+//  }
 }
 
 /**
