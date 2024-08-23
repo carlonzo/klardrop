@@ -44,7 +44,7 @@ class DiscoveryController(
     commonComponent.clipboardManager()
   )
 
-  private val controllerScope = CoroutineScope(coroutines.mainDispatcher + SupervisorJob())
+  private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
   private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices)
 
   val actionsFlow = MutableSharedFlow<ActionUi>()

@@ -30,7 +30,7 @@ class ClientImpl(
   private val currentDeviceProvider: CurrentDeviceProvider
 ) : Client {
 
-  private val clientScope = CoroutineScope(coroutines.ioDispatcher)
+  private val clientScope = coroutines.newScope(coroutines.ioDispatcher)
   private val visibleDevicesFlow =
     visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
 

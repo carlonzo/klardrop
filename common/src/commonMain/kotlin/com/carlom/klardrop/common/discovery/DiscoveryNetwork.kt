@@ -30,7 +30,7 @@ class DiscoveryNetwork internal constructor(
   private val currentDeviceProvider: CurrentDeviceProvider
 ) {
 
-  private val discoveryScope = CoroutineScope(coroutines.ioDispatcher)
+  private val discoveryScope = coroutines.newScope(coroutines.ioDispatcher)
   private val currentDevice = discoveryScope.async(coroutines.ioDispatcher) { currentDeviceProvider.get() }
 
   private var nearbySharePublishJob: Job? = null

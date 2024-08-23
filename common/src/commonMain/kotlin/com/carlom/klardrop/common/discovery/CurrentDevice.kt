@@ -4,8 +4,9 @@ import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
-import com.carlom.klardrop.common.utils.UUIDGenerator
 import kotlinx.coroutines.flow.first
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 data class CurrentDevice(
   private val deviceId: String,
@@ -20,6 +21,7 @@ data class CurrentDevice(
   val shortDeviceId = deviceId.take(8)
 }
 
+@OptIn(ExperimentalUuidApi::class)
 class CurrentDeviceProvider(
   private val localPropertiesRepository: LocalPropertiesRepository,
   private val internalPlatformDependency: InternalPlatformDependencies
@@ -28,7 +30,7 @@ class CurrentDeviceProvider(
     val properties = localPropertiesRepository.properties.first()
 
     val deviceId = properties.deviceId.ifEmpty {
-      val id = cleanDeviceId(UUIDGenerator().generate())
+      val id = cleanDeviceId(Uuid.random().toString())
       localPropertiesRepository.save(properties.copy(deviceId = id))
       id
     }

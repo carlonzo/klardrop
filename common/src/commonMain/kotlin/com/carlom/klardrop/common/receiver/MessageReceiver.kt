@@ -31,7 +31,7 @@ internal class MessageReceiverImpl(
   private val visibleDevices: VisibleDevices
 ) : MessageReceiver {
 
-  private val receiverScope = CoroutineScope(coroutines.ioDispatcher)
+  private val receiverScope = coroutines.newScope(coroutines.ioDispatcher)
   private val _notifier = MutableSharedFlow<StateFlow<ReceiveMessageUpdate>>()
 
   override val notifier: Flow<Flow<ReceiveMessageUpdate>>

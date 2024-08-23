@@ -50,7 +50,7 @@ class NearbyReceiverConnectionHandler(
   private val receiveProgress = mutableMapOf<Long, Int>()
   private lateinit var receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
 
-  private val connectionScope = CoroutineScope(coroutines.ioDispatcher)
+  private val connectionScope = coroutines.newScope(coroutines.ioDispatcher)
 
   private var keepAliveWhileWaitingJob: Job? = null
 

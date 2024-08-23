@@ -22,7 +22,7 @@ class NearbyShareServer(
   private val messageReceiver: MessageReceiver
 ) {
 
-  private val nearbyShareScope = CoroutineScope(coroutines.ioDispatcher + SupervisorJob())
+  private val nearbyShareScope = coroutines.newScope(coroutines.ioDispatcher + SupervisorJob())
 
   val status = MutableStateFlow(
     NearbyShareServerStatus(

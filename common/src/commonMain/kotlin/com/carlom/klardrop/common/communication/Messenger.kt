@@ -34,7 +34,7 @@ class MessengerImpl(
   private val messageReceiver: MessageReceiver
 ) : Messenger {
 
-  private val messengerScope = CoroutineScope(coroutines.ioDispatcher)
+  private val messengerScope = coroutines.newScope(coroutines.ioDispatcher)
 
   override fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress> {
 

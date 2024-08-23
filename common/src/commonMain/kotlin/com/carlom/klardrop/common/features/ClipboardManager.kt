@@ -22,7 +22,7 @@ class ClipboardManager(
   private val readerWriter: ClipboardReaderWriter
 ) {
 
-  private val clipboardScope = CoroutineScope(coroutines.ioDispatcher)
+  private val clipboardScope = coroutines.newScope(coroutines.ioDispatcher)
 
   val flow = callbackFlow {
 

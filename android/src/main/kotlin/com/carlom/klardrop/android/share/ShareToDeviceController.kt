@@ -34,7 +34,7 @@ class ShareToDeviceController(
     platformFileSystem = commonComponent.platformFileSystem()
   )
 
-  private val controllerScope = CoroutineScope(coroutines.mainDispatcher)
+  private val controllerScope = coroutines.newScope(coroutines.mainDispatcher)
   private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices)
 
   private var onDataToSend: OnDataToSend? = null
