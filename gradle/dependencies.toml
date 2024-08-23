@@ -56,4 +56,4 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "compose-plugin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
-squareup-wire = { id = "com.squareup.wire", version = "4.9.9" }
+squareup-wire = { id = "com.squareup.wire", version = "5.0.0" }
