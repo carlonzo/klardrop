@@ -51,6 +51,16 @@ subprojects {
 //    }
 //  }
 
+  // pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
+  //   configure<KotlinMultiplatformExtension> {
+  //     @OptIn(ExperimentalKotlinGradlePluginApi::class)
+  //     compilerOptions{
+  //       languageVersion.set(KotlinVersion.KOTLIN_2_0)
+  //       apiVersion.set(KotlinVersion.KOTLIN_2_0)
+  //     }
+  //   }
+  // }
+
   tasks.withType<KotlinJvmCompile>().configureEach {
     compilerOptions.jvmTarget = javaTarget
   }

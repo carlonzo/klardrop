@@ -8,6 +8,8 @@ import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.history.DevicesDbDataSource
+import com.carlom.klardrop.common.history.HistoryDbDataSource
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
@@ -79,6 +81,12 @@ class CommonComponent(
   private val fileManager: FileManager
     get() = FileManagerImpl(platformFileSystem)
 
+  fun historyDbDataSource(): HistoryDbDataSource{
+    TODO()
+  }
+  fun devicesDbDataSource(): DevicesDbDataSource{
+    TODO()
+  }
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
   fun server() = communicationModule.server()

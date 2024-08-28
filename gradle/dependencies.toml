@@ -9,7 +9,7 @@ ktor = "2.3.12"
 datastore = "1.1.1"
 dagger = "2.52"
 androidx-activity = "1.9.1"
-sqldelight = "2.0.1"
+sqldelight = "2.0.2"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.utils.log
 import kotlinx.cinterop.BetaInteropApi
+import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.cinterop.allocArrayOf
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.readBytes
@@ -135,7 +136,7 @@ actual class ServiceDiscoveryMdns {
 
   inner class NetServiceDelegate(private val producerScope: ProducerScope<ServiceDiscoveryEvent>) : NSObject(),
     NSNetServiceDelegateProtocol {
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    @ObjCSignatureOverride
     override fun netService(sender: NSNetService, didNotPublish: Map<Any?, *>) {
       log("ServiceDiscoveryMdns","netService didNotPublish $sender")
     }
@@ -144,7 +145,7 @@ actual class ServiceDiscoveryMdns {
       log("ServiceDiscoveryMdns","netService didAcceptConnectionWithInputStream $sender")
     }
 
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    @ObjCSignatureOverride
     override fun netService(sender: NSNetService, didNotResolve: Map<Any?, *>) {
       log("ServiceDiscoveryMdns","netService didNotResolve $sender")
     }
@@ -185,7 +186,7 @@ actual class ServiceDiscoveryMdns {
       log("ServiceDiscoveryMdns","Bonjour discovery started")
     }
 
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    @ObjCSignatureOverride
     override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindService: NSNetService, moreComing: Boolean) {
       log("ServiceDiscoveryMdns","netServiceBrowser found service: $didFindService - (${didFindService.toServiceInfo()})")
 
@@ -200,12 +201,12 @@ actual class ServiceDiscoveryMdns {
 
     }
 
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    @ObjCSignatureOverride
     override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindDomain: String, moreComing: Boolean) {
       log("ServiceDiscoveryMdns","netServiceBrowser found didFindDomain: $didFindDomain")
     }
 
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    @ObjCSignatureOverride
     override fun netServiceBrowser(
       browser: NSNetServiceBrowser,
       didRemoveService: NSNetService,
@@ -215,7 +216,7 @@ actual class ServiceDiscoveryMdns {
       producerScope.trySend(ServiceDiscoveryEvent.ServiceLost(didRemoveService.toServiceInfo()))
     }
 
-    @Suppress("CONFLICTING_OVERLOADS", "PARAMETER_NAME_CHANGED_ON_OVERRIDE")
+    @ObjCSignatureOverride
     override fun netServiceBrowser(
       browser: NSNetServiceBrowser,
       didRemoveDomain: String,
