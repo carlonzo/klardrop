@@ -26,6 +26,13 @@ kotlin {
     ios.deploymentTarget = "14.1"
     podfile = project.file("../iosApp/Podfile")
     name = "common_ui"
+
+    pod("Sentry") {
+      version = "~> 8.25"
+      linkOnly = true
+      extraOpts += listOf("-compiler-option", "-fmodules")
+    }
+
     framework {
       baseName = "common_ui"
       isStatic = true
