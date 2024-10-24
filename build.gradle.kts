@@ -39,17 +39,11 @@ subprojects {
       targetCompatibility = javaVersion
     }
 
-    compileSdk = 33
+    compileSdk = 35
     defaultConfig {
       minSdk = 23
     }
   }
-
-//  pluginManager.withPlugin("org.jetbrains.compose") {
-//    configure<ComposeExtension> {
-//      kotlinCompilerPlugin.set(deps.versions.compose.compiler)
-//    }
-//  }
 
   tasks.withType<KotlinJvmCompile>().configureEach {
     compilerOptions.jvmTarget = javaTarget
@@ -62,7 +56,7 @@ subprojects {
 
 }
 
-fun Project.withAndroidPlugin(configureBlock: CommonExtension<*, *, *, *, *>.() -> Unit) {
+fun Project.withAndroidPlugin(configureBlock: CommonExtension<*, *, *, *, *, *>.() -> Unit) {
   pluginManager.withPlugin("com.android.application") {
     configure<ApplicationExtension> { configureBlock() }
   }
