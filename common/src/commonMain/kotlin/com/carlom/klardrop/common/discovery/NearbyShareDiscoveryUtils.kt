@@ -149,7 +149,7 @@ internal fun urlSafeBase64EncodedString(data: String): String {
 
 @OptIn(ExperimentalEncodingApi::class)
 internal fun urlSafeBase64DecodeString(data: String): ByteArray {
-  return Base64.UrlSafe.decode(data)
+  return Base64.UrlSafe.withPadding(Base64.PaddingOption.PRESENT_OPTIONAL).decode(data)
 //  return data.map {
 //    when (it) {
 //      '-' -> '+'
