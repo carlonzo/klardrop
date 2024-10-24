@@ -42,7 +42,7 @@ simplestorage = { module = "com.anggrayudi:storage", version = "1.5.6" }
 
 jmdns = { module = "org.jmdns:jmdns", version = "3.5.12" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
-turbine = { module = "app.cash.turbine:turbine", version = "1.1.0"}
+turbine = { module = "app.cash.turbine:turbine", version = "1.2.0"}
 
 
 [plugins]
