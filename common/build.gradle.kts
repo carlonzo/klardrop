@@ -30,7 +30,7 @@ kotlin {
         implementation(deps.androidx.datastore.core.okio)
         implementation(deps.kotlinx.serialization.protobuf)
         implementation(deps.ukey2)
-        api("io.sentry:sentry-kotlin-multiplatform:0.7.1")
+        api("io.sentry:sentry-kotlin-multiplatform:0.10.0")
       }
     }
 
