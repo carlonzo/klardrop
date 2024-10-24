@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.seconds
 
 interface Client {
   suspend fun connectTo(deviceId: String)
@@ -38,7 +39,7 @@ class ClientImpl(
   private val client by lazy {
     HttpClient(CIO) {
       install(WebSockets) {
-        pingInterval = 20_000
+        pingInterval = 20.seconds
 
 
         extensions { install(FrameLoggerExtension) }

@@ -61,7 +61,7 @@ class Server(
     }
     server.start(wait = false)
 
-    val config = server.resolvedConnectors().first()
+    val config = server.engineConfig.connectors.first()
 
     log("Server", "Server started on ${config.host}:${config.port}")
 

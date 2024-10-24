@@ -8,7 +8,6 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import io.ktor.utils.io.core.ByteReadPacket.Companion.Empty
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -16,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.withTimeout
+import kotlinx.io.Source
 import kotlinx.serialization.Serializable
 import okio.Buffer
 import okio.BufferedSource
@@ -191,7 +191,7 @@ class FileMessageHandler(
         log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
       }.onFailure {
         log("FileMessageHandler", "Error sending file", it)
-        webSocketSession.send(Frame.Binary(true, Empty))
+        webSocketSession.send(Frame.Binary(true, ByteArray(0)))
         webSocketSession.flush()
         buffer.close()
 
