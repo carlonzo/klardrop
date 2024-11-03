@@ -54,7 +54,7 @@ class NearbyClientConnectionHandler(
 
     try {
       val readChannel = connection.openReadChannel()
-      val writeChannel = connection.openWriteChannel(autoFlush = true)
+      val writeChannel = connection.openWriteChannel(autoFlush = false)
 
       sendConnectionRequest(writeChannel)
       val nearbyConnection = createConnection(readChannel, writeChannel)

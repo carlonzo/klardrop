@@ -60,7 +60,7 @@ class NearbyReceiverConnectionHandler(
 
     try {
       val readChannel = connection.openReadChannel()
-      val writeChannel = connection.openWriteChannel(autoFlush = true)
+      val writeChannel = connection.openWriteChannel(autoFlush = false)
 
       // connection request
       val connectionRequest = readChannel.readByteArray().let { OfflineFrame.ADAPTER.decode(it) }

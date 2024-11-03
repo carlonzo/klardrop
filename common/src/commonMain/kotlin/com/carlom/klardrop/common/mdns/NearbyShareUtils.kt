@@ -69,7 +69,6 @@ internal suspend fun ByteWriteChannel.writeFullyNearby(message: ByteArray) {
     size.toByte()
   )
 
-
   writeByteArray(sizeByteArray)
   writeFully(message)
   flush()
