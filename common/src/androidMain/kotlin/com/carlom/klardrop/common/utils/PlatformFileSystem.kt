@@ -7,18 +7,22 @@ import android.os.Environment
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import androidx.documentfile.provider.DocumentFile
-import com.anggrayudi.storage.callback.FileCallback
+import com.anggrayudi.storage.callback.SingleFileConflictCallback
 import com.anggrayudi.storage.file.CreateMode
 import com.anggrayudi.storage.file.moveFileToDownloadMedia
 import com.anggrayudi.storage.media.FileDescription
 import com.anggrayudi.storage.media.MediaFile
-import kotlinx.coroutines.suspendCancellableCoroutine
-import okio.*
+import com.anggrayudi.storage.result.SingleFileResult
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.first
+import okio.BufferedSink
+import okio.BufferedSource
+import okio.Path
 import okio.Path.Companion.toOkioPath
+import okio.buffer
+import okio.sink
+import okio.source
 import java.io.File
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.io.use
 
 actual class PlatformFileSystem(private val context: Context) {
   @SuppressLint("Recycle")
@@ -116,19 +120,14 @@ actual class PlatformFileSystem(private val context: Context) {
 
     val source = DocumentFile.fromFile(file)
 
-    val result = suspendCancellableCoroutine {
-      source.moveFileToDownloadMedia(context, fd, object : FileCallback() {
-        override fun onCompleted(result: Any) {
-          it.resume(result)
-        }
+    val fileMoveResult = source.moveFileToDownloadMedia(context = context,
+      fileDescription = fd,
+      mode = CreateMode.CREATE_NEW,
+      onConflict = object : SingleFileConflictCallback<DocumentFile>() {}
+    ).filterIsInstance<SingleFileResult.Completed>()
+      .first()
 
-        override fun onFailed(errorCode: ErrorCode) {
-          it.resumeWithException(RuntimeException("Failed to move file to storage: $errorCode"))
-        }
-      }, CreateMode.CREATE_NEW)
-    }
-
-    when (result) {
+    when (val result = fileMoveResult.result) {
       is MediaFile -> log("PlatformFileSystem", "Created Media in Mediastore uri ${result.uri}")
       is DocumentFile -> log("PlatformFileSystem", "Created Document uri ${result.uri}")
       else -> log("PlatformFileSystem", "Created unknown file $result")
