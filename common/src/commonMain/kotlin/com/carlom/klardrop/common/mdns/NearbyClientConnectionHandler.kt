@@ -116,10 +116,10 @@ class NearbyClientConnectionHandler(
         is FileMessage.FileSendRequest -> {
           log("initiateTransfer", "Transferring file: ${request.message}")
 
-          fileManager.getReadStreamFromUri(request.pathFile).use { bufferedSource ->
+          fileManager.getReadStreamFromUri(request.pathFile).use { source ->
 
             sendEncryptedWrappedPayload(
-              bufferedSource = bufferedSource,
+              bufferedSource = source,
               totalSize = request.message.fileSize,
               payloadType = PayloadTransferFrame.PayloadHeader.PayloadType.FILE,
               payloadId = id,

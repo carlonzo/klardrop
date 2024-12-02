@@ -1,14 +1,14 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.log
+import kotlinx.io.RawSource
 import okio.BufferedSink
-import okio.BufferedSource
 import okio.FileSystem
 import okio.Path
 
 interface FileManager {
   fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer
-  fun getReadStreamFromUri(fileName: String): BufferedSource
+  fun getReadStreamFromUri(fileName: String): RawSource
 
 }
 

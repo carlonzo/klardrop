@@ -15,29 +15,30 @@ import com.anggrayudi.storage.media.MediaFile
 import com.anggrayudi.storage.result.SingleFileResult
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
-import okio.BufferedSink
-import okio.BufferedSource
-import okio.Path
-import okio.Path.Companion.toOkioPath
-import okio.buffer
-import okio.sink
-import okio.source
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.io.RawSink
+import kotlinx.io.RawSource
+import kotlinx.io.asSink
+import kotlinx.io.asSource
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import java.io.File
 
 actual class PlatformFileSystem(private val context: Context) {
   @SuppressLint("Recycle")
-  actual fun getReadStreamFromUri(uri: String): BufferedSource {
+  actual fun getReadStreamFromUri(uri: String): RawSource {
     return when (uri.substringBefore(":")) {
 
       "content" -> {
         val contentResolver = context.contentResolver
         val inputStream = contentResolver.openInputStream(Uri.parse(uri))
-        inputStream!!.source().buffer()
+
+        inputStream!!.asSource()
       }
 
       else -> {
         val path = uri.substringAfter("file://")
-        File(path).source().buffer()
+        SystemFileSystem.source(Path(path))
       }
     }
   }
@@ -80,7 +81,7 @@ actual class PlatformFileSystem(private val context: Context) {
   }
 
   @SuppressLint("Recycle")
-  actual fun getWriteStreamFromUri(uri: String): BufferedSink {
+  actual fun getWriteStreamFromUri(uri: String): RawSink {
 
     return when (uri.substringBefore(":")) {
 
@@ -88,12 +89,12 @@ actual class PlatformFileSystem(private val context: Context) {
         val contentResolver = context.contentResolver
 
         val outputStream = contentResolver.openOutputStream(Uri.parse(uri)) ?: throw IllegalArgumentException("Cannot write to uri $uri ")
-        outputStream.sink().buffer()
+        outputStream.asSink()
       }
 
       else -> {
         val path = uri.substringAfter("file://")
-        File(path).sink(append = false).buffer()
+        SystemFileSystem.sink(Path(path), append = false)
       }
     }
   }
@@ -136,7 +137,10 @@ actual class PlatformFileSystem(private val context: Context) {
   }
 
   actual fun getTempStoragePath(): Path {
-    return context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.toOkioPath() ?: context.filesDir.toOkioPath()
+    return context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.asPath() ?: context.filesDir.asPath()
   }
 
+  private fun File.asPath(): Path{
+    return Path(absolutePath)
+  }
 }

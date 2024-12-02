@@ -1,13 +1,13 @@
 package com.carlom.klardrop.common.utils
 
-import okio.BufferedSink
-import okio.BufferedSource
-import okio.Path
+import kotlinx.io.RawSink
+import kotlinx.io.RawSource
+import kotlinx.io.files.Path
 
 expect class PlatformFileSystem {
-  fun getReadStreamFromUri(uri: String): BufferedSource
+  fun getReadStreamFromUri(uri: String): RawSource
 
-  fun getWriteStreamFromUri(uri: String): BufferedSink
+  fun getWriteStreamFromUri(uri: String): RawSink
 
   fun getResolvedFileData(uri: String): ResolvedFileData
 
