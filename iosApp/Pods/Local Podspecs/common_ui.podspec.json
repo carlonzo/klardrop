@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "Sentry": [
-      "~> 8.25"
+      "8.38.0"
     ]
   },
   "xcconfig": {

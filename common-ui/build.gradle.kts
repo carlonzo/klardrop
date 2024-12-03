@@ -28,7 +28,7 @@ kotlin {
     name = "common_ui"
 
     pod("Sentry") {
-      version = "~> 8.25"
+      version = "8.38.0"
       linkOnly = true
       extraOpts += listOf("-compiler-option", "-fmodules")
     }
@@ -89,10 +89,8 @@ kotlin {
 
 android {
   namespace = "com.klardrop.common.ui"
-  compileSdk = 33
+  compileSdk = 35
   defaultConfig {
     minSdk = 23
   }
 }
-
-
