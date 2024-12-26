@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.mdns
 
+import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.FileManager
-import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
@@ -39,7 +39,6 @@ import kotlin.random.Random
 
 class NearbyClientConnectionHandler(
   private val currentDeviceProvider: CurrentDeviceProvider,
-  private val internalPlatformDependencies: InternalPlatformDependencies,
   private val fileManager: FileManager,
   private val sendRequests: List<SendMessageRequest>,
 ) {
@@ -114,7 +113,7 @@ class NearbyClientConnectionHandler(
           )
         }
 
-        is FileMessage.SendRequest -> {
+        is FileMessage.FileSendRequest -> {
           log("initiateTransfer", "Transferring file: ${request.message}")
 
           fileManager.getReadStreamFromUri(request.pathFile).use { bufferedSource ->
@@ -175,9 +174,9 @@ class NearbyClientConnectionHandler(
 
   private suspend fun handleTransferSetup(writeChannel: ByteWriteChannel, nearbyConnection: D2DConnectionContext) {
 
-    val fileMetadatas = transfers.filterValues { it is FileMessage.SendRequest }.map { (id, request) ->
+    val fileMetadatas = transfers.filterValues { it is FileMessage.FileSendRequest }.map { (id, request) ->
 
-      request as FileMessage.SendRequest
+      request as FileMessage.FileSendRequest
 
       val mimetype = request.message.mimeType.lowercase()
 
@@ -295,30 +294,30 @@ class NearbyClientConnectionHandler(
   private suspend fun createConnection(readChannel: ByteReadChannel, writeChannel: ByteWriteChannel): D2DConnectionContext {
     val client = Ukey2Handshake.forInitiator(Ukey2Handshake.HandshakeCipher.P256_SHA512)
 
-    log("// Message 1 (Client Init)")
+    log("Ukey2Handshake","Message 1 (Client Init)")
     // Message 1 (Client Init)
     var handshakeMessage = client.getNextHandshakeMessage()
     writeChannel.writeFullyNearby(handshakeMessage)
 
-    log("// Message 2 (Server Init)")
+    log("Ukey2Handshake","Message 2 (Server Init)")
     // Message 2 (Server Init)
     handshakeMessage = readChannel.readByteArray()
     client.parseHandshakeMessage(handshakeMessage)
 
-    log("// Message 3 (Client Finish)")
+    log("Ukey2Handshake","Message 3 (Client Finish)")
     // Message 3 (Client Finish)
     handshakeMessage = client.getNextHandshakeMessage()
     writeChannel.writeFullyNearby(handshakeMessage)
 
-    log("getVerificationString")
+    log("Ukey2Handshake","getVerificationString")
     // Get the auth string
     val clientAuthString = client.getVerificationString(32)
 
-    log("verifyHandshake")
+    log("Ukey2Handshake","verifyHandshake")
     // accept the handshake
     client.verifyHandshake()
 
-    log("send CONNECTION_RESPONSE")
+    log("Ukey2Handshake","send CONNECTION_RESPONSE")
     //send connection response
     // V1Frame{type=CONNECTION_RESPONSE, connection_response=ConnectionResponseFrame{status=0, response=ACCEPT, os_info=OsInfo{type=ANDROID}, multiplex_socket_bitmask=0}}
     OfflineFrame(
@@ -328,7 +327,7 @@ class NearbyClientConnectionHandler(
         connection_response = ConnectionResponseFrame(
           status = 0,
           response = ConnectionResponseFrame.ResponseStatus.ACCEPT,
-          os_info = OsInfo(internalPlatformDependencies.osType().toOsInfo()),
+          os_info = OsInfo(CommonPlatformDependencies.osType().toOsInfo()),
           multiplex_socket_bitmask = 0
         )
       )

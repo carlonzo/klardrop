@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.discovery
 
-import TestCoroutines
 import app.cash.turbine.test
+import TestCoroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test

@@ -18,16 +18,7 @@ actual class InternalPlatformDependencies(private val context: Context) {
     return context.filesDir.absolutePath.toPath()
   }
 
-  actual fun getDeviceName(): String {
-    return Build.MODEL
-  }
-
-  actual fun deviceType(): DeviceType {
-    return DeviceType.MOBILE
-  }
-
   actual fun getStoragePath(): Path {
-
     return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).toOkioPath()
   }
 
@@ -37,10 +28,6 @@ actual class InternalPlatformDependencies(private val context: Context) {
 
   actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns(context)
-  }
-
-  actual fun osType(): OsType {
-    return OsType.ANDROID
   }
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {

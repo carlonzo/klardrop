@@ -15,7 +15,6 @@ import kotlin.coroutines.cancellation.CancellationException
 class NearbyClient(
   private val coroutines: Coroutines,
   private val currentDeviceProvider: CurrentDeviceProvider,
-  private val internalPlatformDependencies: InternalPlatformDependencies,
   private val fileManager: FileManager,
 ) {
 
@@ -26,7 +25,7 @@ class NearbyClient(
       val selectorManager = SelectorManager(coroutines.ioDispatcher)
 
       val socketAddress = InetSocketAddress(host, port)
-       aSocket(selectorManager).tcp().connect(remoteAddress = socketAddress)
+      aSocket(selectorManager).tcp().connect(remoteAddress = socketAddress)
     }.onFailure {
       throw IOException("Failed to connect to $host:$port", it)
     }.getOrThrow()
@@ -34,9 +33,9 @@ class NearbyClient(
 
     // client is stateful
     try {
-      NearbyClientConnectionHandler(currentDeviceProvider, internalPlatformDependencies, fileManager, sendRequests)
+      NearbyClientConnectionHandler(currentDeviceProvider, fileManager, sendRequests)
         .onConnection(serverSocket, sendFlow)
-    }finally {
+    } finally {
       serverSocket.close()
     }
 

@@ -31,7 +31,6 @@ class CommunicationModule(
   private val protoBuf: ProtoBuf,
   private val clock: Clock,
   private val fileManager: FileManager,
-  private val internalPlatformDependencies: InternalPlatformDependencies,
   private val currentDeviceProvider: CurrentDeviceProvider
 ) {
 
@@ -94,7 +93,7 @@ class CommunicationModule(
   private val nearbyServer by lazy {
     NearbyShareServer(
       coroutines,
-      NearbyReceiverConnectionHandlerFactory(internalPlatformDependencies, fileManager, coroutines),
+      NearbyReceiverConnectionHandlerFactory(fileManager, coroutines),
       visibleDevices,
       messageReceiver,
     )
@@ -104,7 +103,6 @@ class CommunicationModule(
     NearbyClient(
       coroutines,
       currentDeviceProvider,
-      internalPlatformDependencies,
       fileManager,
     )
   }

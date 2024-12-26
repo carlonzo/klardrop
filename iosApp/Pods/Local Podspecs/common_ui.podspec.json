@@ -13,11 +13,6 @@
   "platforms": {
     "ios": "14.1"
   },
-  "dependencies": {
-    "Sentry": [
-      "8.38.0"
-    ]
-  },
   "xcconfig": {
     "ENABLE_USER_SCRIPT_SANDBOXING": "NO"
   },

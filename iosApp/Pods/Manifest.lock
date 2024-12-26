@@ -1,24 +1,15 @@
 PODS:
-  - common_ui (1.0.0):
-    - Sentry (~> 8.25)
-  - Sentry (8.36.0):
-    - Sentry/Core (= 8.36.0)
-  - Sentry/Core (8.36.0)
+  - common_ui (1.0.0)
 
 DEPENDENCIES:
   - common_ui (from `../common-ui`)
-
-SPEC REPOS:
-  trunk:
-    - Sentry
 
 EXTERNAL SOURCES:
   common_ui:
     :path: "../common-ui"
 
 SPEC CHECKSUMS:
-  common_ui: 483734e51cc7696df5d36aed98b5740b0e58dd95
-  Sentry: f8374b5415bc38dfb5645941b3ae31230fbeae57
+  common_ui: ddcc21a0aaf66919add9f33762c7ea251e031d64
 
 PODFILE CHECKSUM: aef38a0bb67b5cebbbe6b43bdff9c502bf6d93c9
 

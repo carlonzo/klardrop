@@ -102,7 +102,6 @@ actual class ServiceDiscoveryMdns {
     return txtRecordData.copy() as NSData
   }
 
-  @OptIn(BetaInteropApi::class)
   private fun ByteArray.toNSData(): NSData = memScoped {
     NSData.create(
       bytes = allocArrayOf(this@toNSData),

@@ -25,7 +25,6 @@ interface MessageReceiver {
 
 }
 
-
 internal class MessageReceiverImpl(
   private val coroutines: Coroutines,
   private val visibleDevices: VisibleDevices
@@ -61,7 +60,6 @@ internal class MessageReceiverImpl(
 
 }
 
-
 data class ReceiveMessageUpdate(
   val device: DeviceInfo? = null,
   val messages: List<Message> = emptyList(),
@@ -71,7 +69,7 @@ data class ReceiveMessageUpdate(
 
 sealed interface ReceiveMessageStatus {
 
-  object Started : ReceiveMessageStatus
+  data object Started : ReceiveMessageStatus
 
   data class PendingAuthorization(val acceptTransfer: (Boolean) -> Unit) : ReceiveMessageStatus
 
@@ -79,7 +77,7 @@ sealed interface ReceiveMessageStatus {
 
   data class Failed(val reason: String) : ReceiveMessageStatus
 
-  object Completed : ReceiveMessageStatus
+  data object Completed : ReceiveMessageStatus
 
   fun isFinished(): Boolean = this is Completed || this is Failed
 }

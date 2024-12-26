@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.mdns
 
+import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.InternalPlatformDependencies
@@ -41,7 +42,6 @@ import kotlin.random.Random
  *  This class handles the nearby connection request.
  */
 class NearbyReceiverConnectionHandler(
-  private val internalPlatformDependencies: InternalPlatformDependencies,
   private val fileManager: FileManager,
   coroutines: Coroutines,
 ) {
@@ -335,7 +335,7 @@ class NearbyReceiverConnectionHandler(
           response = ConnectionResponseFrame.ResponseStatus.ACCEPT,
           status = 0,
           os_info = OsInfo(
-            type = internalPlatformDependencies.osType().toOsInfo()
+            type = CommonPlatformDependencies.osType().toOsInfo()
           )
         )
       )

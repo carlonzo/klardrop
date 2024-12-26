@@ -9,11 +9,17 @@ import okio.Path
 
 expect class InternalPlatformDependencies {
   fun getRootPath(): Path
-  fun getDeviceName(): String
-  fun deviceType(): DeviceType
+
+
   fun getStoragePath(): Path
   fun platformFileSystem(): PlatformFileSystem
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
-  fun osType(): OsType
+
   fun clipboardReaderWriter(): ClipboardReaderWriter
+}
+
+expect object CommonPlatformDependencies {
+  fun osType(): OsType
+  fun deviceType(): DeviceType
+  fun getDeviceName(): String
 }

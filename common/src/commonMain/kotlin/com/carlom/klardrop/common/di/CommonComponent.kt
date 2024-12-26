@@ -44,8 +44,7 @@ class CommonComponent(
   private val protoBuf = ProtoBuf
   private val currentDeviceProvider by lazy {
     CurrentDeviceProvider(
-      localProperties,
-      internalPlatformDependency
+      localProperties
     )
   }
 
@@ -57,7 +56,6 @@ class CommonComponent(
       protoBuf,
       clock,
       fileManager,
-      internalPlatformDependency,
       currentDeviceProvider
     )
   }

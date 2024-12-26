@@ -1,6 +1,6 @@
 package com.carlom.klardrop.common.discovery
 
-import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
@@ -23,8 +23,7 @@ data class CurrentDevice(
 
 @OptIn(ExperimentalUuidApi::class)
 class CurrentDeviceProvider(
-  private val localPropertiesRepository: LocalPropertiesRepository,
-  private val internalPlatformDependency: InternalPlatformDependencies
+  private val localPropertiesRepository: LocalPropertiesRepository
 ) {
   suspend fun get(): CurrentDevice {
     val properties = localPropertiesRepository.properties.first()
@@ -35,9 +34,9 @@ class CurrentDeviceProvider(
       id
     }
 
-    val deviceName = internalPlatformDependency.getDeviceName()
-    val deviceType = internalPlatformDependency.deviceType()
-    val osType = internalPlatformDependency.osType()
+    val deviceName = CommonPlatformDependencies.getDeviceName()
+    val deviceType = CommonPlatformDependencies.deviceType()
+    val osType = CommonPlatformDependencies.osType()
 
     return CurrentDevice(deviceId, deviceName, deviceType, osType)
   }

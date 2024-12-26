@@ -262,7 +262,7 @@ internal suspend fun sendEncryptedWrappedPayload(
     val sizeStartRange = (chunkIndex * SANE_FRAME_LENGTH)
     val size = min(SANE_FRAME_LENGTH, totalSize - sizeStartRange)
     val chunk = payload.toByteString(sizeStartRange, size)
-    println("Sending chunk $chunkIndex chunkBody from:sizeStartRange size: ${size} chunkSize: ${chunk.size} total size $totalSize")
+    println("Sending chunk $chunkIndex chunkBody from:sizeStartRange size: $size chunkSize: ${chunk.size} total size $totalSize")
 
     sendChunkWrappedPayload(
       totalSize = totalSizeLong,

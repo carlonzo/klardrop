@@ -31,14 +31,14 @@ data class FileMessage(
   override val type: MessageType = MessageType.FILE
   override val hasPayload: Boolean = true
 
-  class SendRequest(
+  class FileSendRequest(
     override val message: FileMessage,
     val pathFile: String
   ) : SendMessageRequest
 }
 
-fun FileMessage.toSendRequest(filePath: String): FileMessage.SendRequest {
-  return FileMessage.SendRequest(this, filePath)
+fun FileMessage.toSendRequest(filePath: String): FileMessage.FileSendRequest {
+  return FileMessage.FileSendRequest(this, filePath)
 }
 
 class FileMessageHandler(
@@ -46,7 +46,7 @@ class FileMessageHandler(
   private val fileManager: FileManager,
   private val clock: Clock,
   private val coroutines: Coroutines
-) : MessageHandler<FileMessage, FileMessage.SendRequest> {
+) : MessageHandler<FileMessage, FileMessage.FileSendRequest> {
 
   override suspend fun handleIncoming(
     message: FileMessage,
@@ -138,7 +138,7 @@ class FileMessageHandler(
   }
 
   override suspend fun handleOutgoing(
-    request: FileMessage.SendRequest,
+    request: FileMessage.FileSendRequest,
     webSocketSession: WebSocketSession,
     progressFlow: MutableSharedFlow<MessengerSendProgress>
   ) {

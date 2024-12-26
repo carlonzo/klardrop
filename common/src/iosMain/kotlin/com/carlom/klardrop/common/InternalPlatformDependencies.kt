@@ -29,14 +29,6 @@ actual class InternalPlatformDependencies {
     return documentsDirectory
   }
 
-  actual fun getDeviceName(): String {
-    return UIDevice.currentDevice.name
-  }
-
-  actual fun deviceType(): DeviceType {
-    return DeviceType.MOBILE
-  }
-
   actual fun getStoragePath(): Path {
     val klardropStoragePath = documentsDirectory.resolve("Klardrop")
 
@@ -53,10 +45,6 @@ actual class InternalPlatformDependencies {
 
   actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns()
-  }
-
-  actual fun osType(): OsType {
-    return OsType.APPLE
   }
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {

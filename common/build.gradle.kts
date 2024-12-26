@@ -11,6 +11,8 @@ kotlin {
   iosArm64()
   iosSimulatorArm64()
 
+  applyDefaultHierarchyTemplate()
+
   sourceSets {
 
     commonMain {
@@ -40,6 +42,8 @@ kotlin {
         implementation(deps.turbine)
         implementation(deps.kotlinx.coroutines.test)
       }
+
+      kotlin.srcDir("src/integrationCommonTest/kotlin")
     }
 
     val androidMain by getting {
@@ -54,6 +58,8 @@ kotlin {
         implementation(deps.jmdns)
       }
     }
+
+
 
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")

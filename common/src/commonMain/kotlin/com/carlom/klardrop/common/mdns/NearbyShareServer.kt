@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -63,7 +64,13 @@ class NearbyShareServer(
 
     log("NearbyShareServer", "Closing NearbyShareServer")
     serverSocket.close()
+    selectorManager.close()
     status.update { it.copy(isRunning = false, port = 0) }
+
+  }
+
+  fun cancel() {
+    nearbyShareScope.cancel()
   }
 
 }

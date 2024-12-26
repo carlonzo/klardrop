@@ -47,7 +47,6 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 
-@OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun DiscoveryScreen(
   modifier: Modifier = Modifier,
@@ -108,7 +107,7 @@ fun DiscoveryScreen(
             key = { it.first },
           ) { item ->
             ReceiveNotification(
-              Modifier.animateItemPlacement(tween()).align(Alignment.BottomCenter),
+              Modifier.animateItem(placementSpec = tween()).align(Alignment.BottomCenter),
               item.second,
               discoveryController
             )
@@ -148,7 +147,6 @@ private fun DiscoveryDashboard(
   }
 }
 
-@OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun ColumnScope.ShareSheet(
   filePicker: FilePicker,
