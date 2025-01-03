@@ -232,7 +232,7 @@ class NearbyReceiverConnectionHandler(
   }
 
   private fun processFileChunk(payloadTransfer: PayloadTransferFrame, fileTransfer: FileTransfer) {
-    fileTransfer.bufferedSink.write(payloadTransfer.payload_chunk!!.body!!)
+    fileTransfer.bufferedSink.write(payloadTransfer.payload_chunk!!.body!!.toByteArray())
   }
 
   private suspend fun acceptTransfer(nearbyConnection: D2DConnectionContext, writeChannel: ByteWriteChannel) {

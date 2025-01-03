@@ -2,54 +2,58 @@ package com.carlom.klardrop.common.utils
 
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.getAvailableFilePath
-import com.carlom.klardrop.common.persistence.CurrentFileSystem
-import okio.*
-import okio.Path.Companion.toPath
+import kotlinx.io.Sink
+import kotlinx.io.Source
+import kotlinx.io.buffered
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import java.io.File
 import java.nio.file.Files
 
 actual class PlatformFileSystem(
   private val platformDependencies: InternalPlatformDependencies
 ) {
-  private val fileSystem = CurrentFileSystem
 
-  actual fun getReadStreamFromUri(uri: String): BufferedSource {
-    return uri.toFile.inputStream().source().buffer()
+  actual fun getReadStreamFromUri(uri: String): Source {
+    return getReadStreamFromUri(Path(uri))
+  }
+
+  actual fun getReadStreamFromUri(path: Path): Source {
+    return SystemFileSystem.source(path).buffered()
   }
 
   @Suppress("NewApi")
   actual fun getResolvedFileData(uri: String): ResolvedFileData {
-    uri.toFile.let { file ->
-      val mimeType = Files.probeContentType(file.toPath())
-        ?: getMimeTypeFromExtension(file.extension)
+    val file = File(uri)
 
-      return ResolvedFileData(
-        fileName = file.name,
-        mimeType = mimeType,
-        fileSize = file.length()
-      )
-    }
+    val mimeType = Files.probeContentType(file.toPath())
+      ?: getMimeTypeFromExtension(file.extension)
+
+    return ResolvedFileData(
+      fileName = file.name,
+      mimeType = mimeType,
+      fileSize = file.length()
+    )
+
   }
 
-  private val String.toFile: File
-    get() = toPath(normalize = true).toFile()
-
-  actual fun getWriteStreamFromUri(uri: String): BufferedSink {
-    return uri.toFile.outputStream().sink().buffer()
+  actual fun getWriteStreamFromUri(uri: String): Sink {
+    return SystemFileSystem.sink(Path(uri)).buffered()
   }
 
   actual fun delete(uri: String) {
-    uri.toFile.delete()
+    SystemFileSystem.delete(Path(uri))
   }
 
   actual suspend fun moveToStorage(filePath: String, mimeType: String) {
-    val sourcePath = filePath.toPath()
-    val destinationPath = getAvailableFilePath(platformDependencies.getStoragePath(), sourcePath.name, fileSystem)
+    val sourcePath = Path(filePath)
+    val destinationPath = getAvailableFilePath(platformDependencies.getDownloadStoragePath(), sourcePath.name, SystemFileSystem)
 
-    fileSystem.atomicMove(sourcePath, destinationPath)
+    SystemFileSystem.atomicMove(sourcePath, destinationPath)
   }
 
   actual fun getTempStoragePath(): Path {
-    return System.getenv("TMPDIR").toPath()
+    return Path(System.getenv("TMPDIR"))
   }
+
 }

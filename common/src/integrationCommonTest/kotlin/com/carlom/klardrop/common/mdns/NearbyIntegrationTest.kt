@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.io.Source
 import okio.BufferedSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -93,7 +94,7 @@ private class FakeFileManager : FileManager {
     error("not implemented")
   }
 
-  override fun getReadStreamFromUri(fileName: String): BufferedSource {
+  override fun getReadStreamFromUri(fileName: String): Source {
     error("not implemented")
   }
 

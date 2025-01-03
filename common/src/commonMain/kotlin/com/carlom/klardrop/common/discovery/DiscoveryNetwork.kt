@@ -1,8 +1,8 @@
 package com.carlom.klardrop.common.discovery
 
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
-import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE_NAME
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE
+import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE_NAME
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.KLARDROP_SERVICE_TYPE
 import com.carlom.klardrop.common.discovery.NearbyShareDiscoveryUtils.Companion.NEARBY_SERVICE_TYPE
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryEvent
@@ -12,17 +12,19 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.log
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 /**
  * Service that keeps emitting pings to announce availability and discover new devices or update info of the known ones
  */
 class DiscoveryNetwork internal constructor(
-  private val coroutines: Coroutines,
+  coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
   private val serviceDiscoveryMdns: ServiceDiscoveryMdns,
   private val nearbyShareDiscoveryUtils: NearbyShareDiscoveryUtils,
@@ -30,7 +32,7 @@ class DiscoveryNetwork internal constructor(
   private val currentDeviceProvider: CurrentDeviceProvider
 ) {
 
-  private val discoveryScope = coroutines.newScope(coroutines.ioDispatcher)
+  private val discoveryScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
   private val currentDevice = discoveryScope.async(coroutines.ioDispatcher) { currentDeviceProvider.get() }
 
   private var nearbySharePublishJob: Job? = null
@@ -38,7 +40,7 @@ class DiscoveryNetwork internal constructor(
 
 
   fun startPublishNearbyShare(port: Int) {
-    println("startPublishNearbyShare $port")
+    log("DiscoveryNetwork", "startPublishNearbyShare $port")
 
     nearbySharePublishJob?.cancel()
     nearbySharePublishJob = discoveryScope.launch {
@@ -51,7 +53,7 @@ class DiscoveryNetwork internal constructor(
   }
 
   fun startPublishKlardrop(port: Int) {
-    println("startPublishKlardrop $port")
+    log("DiscoveryNetwork", "startPublishKlardrop $port")
 
     klardropPublishJob?.cancel()
     klardropPublishJob = discoveryScope.launch {
@@ -65,8 +67,9 @@ class DiscoveryNetwork internal constructor(
 
   fun discoveryNearbyShareDevices() {
 
-    discoveryScope.launch {
-      serviceDiscoveryMdns.discoverServices(NEARBY_SERVICE_TYPE).collect {
+    serviceDiscoveryMdns.discoverServices(NEARBY_SERVICE_TYPE)
+      .onCompletion { log("DiscoveryNetwork", "Discovery completed for Nearby discovery") }
+      .onEach {
 
 //        log("DiscoveryNetwork", "New discovery event for NearbyShare: $it")
 
@@ -74,7 +77,7 @@ class DiscoveryNetwork internal constructor(
 
         if (deviceId == currentDevice.await().shortDeviceId) {
 //          log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
-          return@collect
+          return@onEach
         }
 
         when (it) {
@@ -90,42 +93,41 @@ class DiscoveryNetwork internal constructor(
         }
 
       }
-    }
+      .launchIn(discoveryScope)
 
   }
 
   fun discoveryKlardropDevices() {
 
-    discoveryScope.launch {
-      serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE)
-        .collect {
-//          log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
+    serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE)
+      .onCompletion { log("DiscoveryNetwork", "Discovery completed for Klardrop discovery") }
+      .onEach {
+        log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
 
-          val deviceId = klardropDiscoveryUtils.getDeviceId(it.serviceInfo)
+        val deviceId = klardropDiscoveryUtils.getDeviceId(it.serviceInfo)
 
-          if (deviceId == currentDevice.await().shortDeviceId) {
+        if (deviceId == currentDevice.await().shortDeviceId) {
 //            log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
-            return@collect
+          return@onEach
+        }
+
+        when (it) {
+
+          is ServiceDiscoveryEvent.ServiceFound -> if (klardropDiscoveryUtils.isValidService(it.serviceInfo)) {
+            onDiscoveredService(it.serviceInfo, DeviceConnectionType.KLARDROP)
+          } else {
+            log("DiscoveryNetwork", "Invalid service found for Klardrop: ${it.serviceInfo}")
           }
 
-          when (it) {
-
-            is ServiceDiscoveryEvent.ServiceFound -> if (klardropDiscoveryUtils.isValidService(it.serviceInfo)) {
-              onDiscoveredService(it.serviceInfo, DeviceConnectionType.KLARDROP)
-            } else {
-              log("DiscoveryNetwork", "Invalid service found for Klardrop: ${it.serviceInfo}")
-            }
-
-            is ServiceDiscoveryEvent.ServiceLost -> onLostService(deviceId, it.serviceInfo, DeviceConnectionType.KLARDROP)
-
-          }
+          is ServiceDiscoveryEvent.ServiceLost -> onLostService(deviceId, it.serviceInfo, DeviceConnectionType.KLARDROP)
 
         }
-    }
+
+      }.launchIn(discoveryScope)
 
   }
 
-  fun discoverAirdrop(){
+  fun discoverAirdrop() {
 
     discoveryScope.launch {
 

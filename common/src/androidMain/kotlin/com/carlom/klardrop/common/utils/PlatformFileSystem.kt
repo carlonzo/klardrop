@@ -15,38 +15,44 @@ import com.anggrayudi.storage.media.MediaFile
 import com.anggrayudi.storage.result.SingleFileResult
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.io.RawSink
-import kotlinx.io.RawSource
+import kotlinx.io.Sink
+import kotlinx.io.Source
 import kotlinx.io.asSink
 import kotlinx.io.asSource
+import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import java.io.File
 
 actual class PlatformFileSystem(private val context: Context) {
   @SuppressLint("Recycle")
-  actual fun getReadStreamFromUri(uri: String): RawSource {
-    return when (uri.substringBefore(":")) {
+  actual fun getReadStreamFromUri(uri: String): Source {
+    return when (uri.substringBefore("://")) {
 
       "content" -> {
         val contentResolver = context.contentResolver
         val inputStream = contentResolver.openInputStream(Uri.parse(uri))
 
-        inputStream!!.asSource()
+        inputStream!!.asSource().buffered()
       }
 
-      else -> {
+      "file" -> {
         val path = uri.substringAfter("file://")
-        SystemFileSystem.source(Path(path))
+        SystemFileSystem.source(Path(path)).buffered()
       }
+
+      else -> error("Unsupported uri $uri")
     }
+  }
+
+  actual fun getReadStreamFromUri(path: Path): Source {
+    return SystemFileSystem.source(path).buffered()
   }
 
   actual fun getResolvedFileData(uri: String): ResolvedFileData {
     val androidUri = Uri.parse(uri)
 
-    return when (uri.substringBefore(":")) {
+    return when (uri.substringBefore("://")) {
 
       "content" -> {
         val contentResolver = context.contentResolver
@@ -67,7 +73,7 @@ actual class PlatformFileSystem(private val context: Context) {
         }
       }
 
-      else -> {
+      "file" -> {
         val path = uri.substringAfter("file://")
         File(path).let { file ->
           return ResolvedFileData(
@@ -77,11 +83,13 @@ actual class PlatformFileSystem(private val context: Context) {
           )
         }
       }
+
+      else -> error("Unsupported uri $uri")
     }
   }
 
   @SuppressLint("Recycle")
-  actual fun getWriteStreamFromUri(uri: String): RawSink {
+  actual fun getWriteStreamFromUri(uri: String): Sink {
 
     return when (uri.substringBefore(":")) {
 
@@ -89,28 +97,30 @@ actual class PlatformFileSystem(private val context: Context) {
         val contentResolver = context.contentResolver
 
         val outputStream = contentResolver.openOutputStream(Uri.parse(uri)) ?: throw IllegalArgumentException("Cannot write to uri $uri ")
-        outputStream.asSink()
+        outputStream.asSink().buffered()
       }
 
       else -> {
         val path = uri.substringAfter("file://")
-        SystemFileSystem.sink(Path(path), append = false)
+        SystemFileSystem.sink(Path(path), append = false).buffered()
       }
     }
   }
 
   actual fun delete(uri: String) {
-    when (uri.substringBefore(":")) {
+    when (uri.substringBefore("://")) {
 
       "content" -> {
         val contentResolver = context.contentResolver
         contentResolver.delete(Uri.parse(uri), null, null)
       }
 
-      else -> {
+      "file" -> {
         val path = uri.substringAfter("file://")
         File(path).delete()
       }
+
+      else -> error("Unsupported uri $uri")
     }
   }
 
@@ -140,7 +150,7 @@ actual class PlatformFileSystem(private val context: Context) {
     return context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.asPath() ?: context.filesDir.asPath()
   }
 
-  private fun File.asPath(): Path{
+  private fun File.asPath(): Path {
     return Path(absolutePath)
   }
 }

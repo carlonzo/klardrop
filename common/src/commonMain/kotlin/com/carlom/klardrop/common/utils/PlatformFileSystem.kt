@@ -1,18 +1,22 @@
 package com.carlom.klardrop.common.utils
 
-import kotlinx.io.RawSink
-import kotlinx.io.RawSource
+import kotlinx.io.Sink
+import kotlinx.io.Source
 import kotlinx.io.files.Path
 
 expect class PlatformFileSystem {
-  fun getReadStreamFromUri(uri: String): RawSource
+  fun getReadStreamFromUri(uri: String): Source
 
-  fun getWriteStreamFromUri(uri: String): RawSink
+  fun getReadStreamFromUri(path: Path): Source
+
+  fun getWriteStreamFromUri(uri: String): Sink
 
   fun getResolvedFileData(uri: String): ResolvedFileData
 
   fun delete(uri: String)
+
   suspend fun moveToStorage(filePath: String, mimeType: String)
+
   fun getTempStoragePath(): Path
 
 }

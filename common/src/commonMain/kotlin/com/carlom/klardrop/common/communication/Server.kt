@@ -32,12 +32,13 @@ class Server(
 
 
   @Suppress("ExtractKtorModule")
-  /**
-   * Starts the server and returns the configuration of the engine connector.
-   *
-   * @return The configuration of the engine connector.
-   */
-  suspend fun startServer(): EngineConnectorConfig {
+  suspend
+      /**
+       * Starts the server and returns the configuration of the engine connector.
+       *
+       * @return The configuration of the engine connector.
+       */
+  fun startServer(): EngineConnectorConfig {
 
     val server = embeddedServer(CIO, port = 0) {
 
@@ -61,13 +62,14 @@ class Server(
     }
     server.start(wait = false)
 
-    val config = server.engineConfig.connectors.first()
+    val config = server.engine.resolvedConnectors().first()
 
     log("Server", "Server started on ${config.host}:${config.port}")
 
     return config
   }
-// 36645 n 36951
+
+  // 36645 n 36951
   private suspend fun onConnectionRequest(wsSession: DefaultWebSocketServerSession, remoteAddress: String) {
     val request = serializer.deserialize(wsSession.incoming.receive()) as HandshakeMessage
 

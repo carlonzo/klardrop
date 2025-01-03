@@ -1,6 +1,8 @@
 package com.carlom.klardrop.common.persistence
 
-import okio.FileSystem
+import kotlinx.io.files.FileSystem
+import kotlinx.io.files.SystemFileSystem
 
-actual val CurrentFileSystem: FileSystem
-  get() = FileSystem.SYSTEM
+
+val CurrentFileSystem: FileSystem
+  get() = SystemFileSystem

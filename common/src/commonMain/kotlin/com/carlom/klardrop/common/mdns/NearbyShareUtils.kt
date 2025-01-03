@@ -15,12 +15,15 @@ import com.google.location.nearby.connections.proto.V1Frame
 import com.squareup.wire.Message
 import com.squareup.wire.ProtoAdapter
 import io.ktor.utils.io.*
+import io.ktor.utils.io.core.BytePacketBuilder
+import io.ktor.utils.io.core.writeFully
 import io.ktor.utils.io.core.writePacket
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.io.Buffer
 import kotlinx.io.RawSource
 import kotlinx.io.Sink
+import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.bytestring.ByteString
 import kotlinx.io.readByteArray
@@ -123,7 +126,7 @@ private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
   readChannel: ByteReadChannel,
   offlineFrame: OfflineFrame,
   payloadId: Long?,
-  buffer: ByteArray = byteArrayOf()
+  buffer: ByteArray
 ): OfflineFrame {
 
   val offlineFrameContent = offlineFrame.v1
@@ -162,35 +165,27 @@ private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
 
 }
 
-private suspend fun ByteReadChannel.readNearbyFully(sink: Sink) {
+internal suspend fun ByteReadChannel.readByteArray(): ByteArray {
   val channel = this
 
-  log("readNearbyFully", "start reading ")
+  log("readByteArray", "start reading")
 
   if (channel.isClosedForRead) {
     throw IllegalStateException("Channel is closed")
   }
 
-  log("readNearbyFully", "reading size")
   // first 4 bytes for the size
   val sizeBytes = ByteArray(4)
   val sizeByte = channel.readFully(sizeBytes).let { sizeBytes.map { it.toUByte().toInt() } }
   val size = ((sizeByte[0] shl 24) or (sizeByte[1] shl 16) or (sizeByte[2] shl 8) or sizeByte[3])
 
-  log("readNearbyFully", "have size of $size")
+  log("readByteArray", "have size of $size")
 
   // now read upstream
-  val packet = channel.readRemaining(size.toLong())
+  val payload = ByteArray(size)
+  channel.readFully(payload)
 
-  log("readNearbyFully", "received source $packet.")
-  sink.writePacket(packet)
-
-}
-
-internal suspend fun ByteReadChannel.readByteArray(): ByteArray {
-  val buffer = Buffer()
-  readNearbyFully(buffer)
-  return buffer.readByteArray()
+  return payload
 }
 
 /** from client */
@@ -302,8 +297,8 @@ internal suspend fun sendEncryptedWrappedPayload(
  *
  * returns a Flow with percentage progress
  */
-internal suspend fun sendEncryptedWrappedPayload(
-  source: RawSource,
+internal fun sendEncryptedWrappedPayload(
+  source: Source,
   totalSize: Long,
   writeChannel: ByteWriteChannel,
   nearbyConnection: D2DConnectionContext,

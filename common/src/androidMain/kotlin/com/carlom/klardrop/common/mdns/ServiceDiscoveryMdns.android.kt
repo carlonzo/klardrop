@@ -4,12 +4,16 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Build
+import android.os.ext.SdkExtensions
+import androidx.annotation.RequiresExtension
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -21,6 +25,8 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
   actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
 
     return callbackFlow {
+
+      val producer = this
 
       val listener = object : NsdManager.DiscoveryListener {
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
@@ -49,7 +55,9 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
               log("ServiceDiscoveryMdns", "onServiceResolved: $serviceInfo")
-              trySend(ServiceDiscoveryEvent.ServiceFound(serviceInfo.toServiceInfo()))
+              producer.launch {
+                send(ServiceDiscoveryEvent.ServiceFound(serviceInfo.toServiceInfo()))
+              }
             }
 
           })
@@ -135,7 +143,7 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
   private fun acquireWifiLock(): WifiManager.MulticastLock {
     val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-    val lock = wifi.createMulticastLock("multicastLock")
+    val lock = wifi.createMulticastLock("klardrop-multicast-lock")
     lock.setReferenceCounted(true)
     lock.acquire()
 
@@ -145,14 +153,19 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
   private fun NsdServiceInfo.toServiceInfo(): ServiceInfo {
     val attributes = this.attributes.mapValues { it.value.decodeToString() }
 
-    val addresses = this.host.hostAddress
+    val addresses: List<String> =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.TIRAMISU) >= 7) {
+        this.hostAddresses.mapNotNull { it.hostAddress }
+      } else {
+        this.host?.hostAddress?.let { listOf(it) } ?: emptyList()
+      }
 
     return ServiceInfo(
       this.port,
       this.serviceName,
       this.serviceType,
       attributes,
-      addresses?.let { listOf(it) } ?: emptyList()
+      addresses
     )
   }
 

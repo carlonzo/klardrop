@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.transformWhile
@@ -34,7 +35,7 @@ class MessengerImpl(
   private val messageReceiver: MessageReceiver
 ) : Messenger {
 
-  private val messengerScope = coroutines.newScope(coroutines.ioDispatcher)
+  private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
 
   override fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress> {
 

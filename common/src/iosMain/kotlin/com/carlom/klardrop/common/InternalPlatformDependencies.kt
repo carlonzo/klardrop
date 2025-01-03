@@ -2,14 +2,10 @@ package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
-import com.carlom.klardrop.common.persistence.CurrentFileSystem
-import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
-import okio.Path
-import okio.Path.Companion.toPath
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import platform.Foundation.*
-import platform.UIKit.UIDevice
 
 actual class InternalPlatformDependencies {
 
@@ -22,18 +18,26 @@ actual class InternalPlatformDependencies {
       error = null
     )
 
-    requireNotNull(directory).path!!.toPath()
+    Path(requireNotNull(directory?.path))
   }
 
-  actual fun getRootPath(): Path {
-    return documentsDirectory
+  private val appDirectory : Path by lazy {
+    val directory = NSFileManager.defaultManager.URLForDirectory(
+      directory = NSApplicationSupportDirectory,
+      inDomain = NSUserDomainMask,
+      appropriateForURL = null,
+      create = false,
+      error = null
+    )
+
+    Path(requireNotNull(directory?.path))
   }
 
-  actual fun getStoragePath(): Path {
-    val klardropStoragePath = documentsDirectory.resolve("Klardrop")
+  actual fun getDownloadStoragePath(): Path {
+    val klardropStoragePath = Path(documentsDirectory, "Klardrop")
 
-    if (!CurrentFileSystem.exists(klardropStoragePath)) {
-      CurrentFileSystem.createDirectory(klardropStoragePath, mustCreate = true)
+    if (!SystemFileSystem.exists(klardropStoragePath)) {
+      SystemFileSystem.createDirectories(klardropStoragePath, mustCreate = true)
     }
 
     return klardropStoragePath
@@ -49,5 +53,9 @@ actual class InternalPlatformDependencies {
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter()
+  }
+
+  actual fun getPrivateAppStoragePath(): Path {
+    return appDirectory
   }
 }

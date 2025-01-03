@@ -11,7 +11,7 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.websocket.*
 import io.ktor.http.*
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -31,7 +31,7 @@ class ClientImpl(
   private val currentDeviceProvider: CurrentDeviceProvider
 ) : Client {
 
-  private val clientScope = coroutines.newScope(coroutines.ioDispatcher)
+  private val clientScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
   private val visibleDevicesFlow =
     visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
 
@@ -98,42 +98,43 @@ class ClientImpl(
 
   }
 
-  private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) = runCatching {
+  private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) =
+    runCatching {
 
-    client.webSocket(
-      method = HttpMethod.Get,
-      host = address,
-      port = port,
-      path = "/connect"
-    ) {
-      log("Client", "Connected to $address. Sending greetings")
+      client.webSocket(
+        method = HttpMethod.Get,
+        host = address,
+        port = port,
+        path = "/connect"
+      ) {
+        log("Client", "Connected to $address. Sending greetings")
 
-      val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+        val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
 
-      send(serializer.serialize(handshakeMessage))
+        send(serializer.serialize(handshakeMessage))
 
-      log("Client", "Waiting for response greetings from $deviceId")
-      val serverHandshakeMessage = serializer.deserialize(incoming.receive()) as HandshakeMessage
+        log("Client", "Waiting for response greetings from $deviceId")
+        val serverHandshakeMessage = serializer.deserialize(incoming.receive()) as HandshakeMessage
 
-      if (serverHandshakeMessage.deviceId == deviceId) {
-        val connection = Connection(this, deviceId)
-        val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
+        if (serverHandshakeMessage.deviceId == deviceId) {
+          val connection = Connection(this, deviceId)
+          val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
 
-        connectionsPool.updateConnection(deviceId, connectionMessenger)
-        log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
+          connectionsPool.updateConnection(deviceId, connectionMessenger)
+          log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
 
-        connectionJob.complete(true)
+          connectionJob.complete(true)
 
-        connectionMessenger.acceptIncomingMessages()
+          connectionMessenger.acceptIncomingMessages()
 
-        // suspends so the connection is kept alive
-        log("Client", "closing reason: ${closeReason.await()}")
-      } else {
-        connectionJob.complete(false)
-        log("Client", "cant connect. Device $deviceId found is wrong: ${handshakeMessage.deviceId}")
+          // suspends so the connection is kept alive
+          log("Client", "closing reason: ${closeReason.await()}")
+        } else {
+          connectionJob.complete(false)
+          log("Client", "cant connect. Device $deviceId found is wrong: ${handshakeMessage.deviceId}")
+        }
+
       }
 
     }
-
-  }
 }

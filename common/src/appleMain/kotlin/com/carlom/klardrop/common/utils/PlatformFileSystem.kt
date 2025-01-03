@@ -2,23 +2,22 @@ package com.carlom.klardrop.common.utils
 
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.getAvailableFilePath
-import com.carlom.klardrop.common.persistence.CurrentFileSystem
 import kotlinx.cinterop.ObjCObjectVar
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.value
-import okio.BufferedSink
-import okio.BufferedSource
-import okio.Path
+import kotlinx.io.Sink
+import kotlinx.io.Source
+import kotlinx.io.buffered
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import okio.Path.Companion.toPath
-import okio.buffer
 import platform.Foundation.NSError
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSFileSize
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSURL
-import platform.Foundation.pathExtension
 import platform.UIKit.UIImage
 import platform.UIKit.UIImageWriteToSavedPhotosAlbum
 import platform.UIKit.UISaveVideoAtPathToSavedPhotosAlbum
@@ -26,10 +25,14 @@ import platform.UIKit.UISaveVideoAtPathToSavedPhotosAlbum
 actual class PlatformFileSystem(
   private val platformDependencies: InternalPlatformDependencies
 ) {
-  private val fileSystem = CurrentFileSystem
+  private val fileSystem = SystemFileSystem
 
-  actual fun getReadStreamFromUri(uri: String): BufferedSource {
-    return fileSystem.source(uri.toPath()).buffer()
+  actual fun getReadStreamFromUri(uri: String): Source {
+    return getReadStreamFromUri(Path(uri))
+  }
+
+  actual fun getReadStreamFromUri(path: Path): Source {
+    return fileSystem.source(path).buffered()
   }
 
   actual fun getResolvedFileData(uri: String): ResolvedFileData {
@@ -67,8 +70,8 @@ actual class PlatformFileSystem(
 
   }
 
-  actual fun getWriteStreamFromUri(uri: String): BufferedSink {
-    return CurrentFileSystem.sink(uri.toPath(), mustCreate = true).buffer()
+  actual fun getWriteStreamFromUri(uri: String): Sink {
+    return SystemFileSystem.sink(Path(uri)).buffered()
   }
 
   actual fun delete(uri: String) {
@@ -77,7 +80,7 @@ actual class PlatformFileSystem(
 
   actual suspend fun moveToStorage(filePath: String, mimeType: String) {
     val sourcePath = filePath.toPath()
-    val destinationPath = getAvailableFilePath(platformDependencies.getStoragePath(), sourcePath.name, fileSystem)
+    val destinationPath = getAvailableFilePath(platformDependencies.getDownloadStoragePath(), sourcePath.name, fileSystem)
     log("iOS-PlatformFileSystem", "moveToStorage $filePath destination $destinationPath  $mimeType")
 
     fileSystem.atomicMove(sourcePath, destinationPath)
