@@ -59,8 +59,6 @@ kotlin {
       }
     }
 
-
-
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
@@ -70,7 +68,7 @@ kotlin {
 
   targets.all {
     compilations.all {
-      compileTaskProvider.configure{
+      compileTaskProvider.configure {
         compilerOptions {
           freeCompilerArgs.add("-Xexpect-actual-classes")
         }

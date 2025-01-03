@@ -8,7 +8,6 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import io.ktor.utils.io.core.ByteReadPacket.Companion.Empty
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -16,10 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.withTimeout
+import kotlinx.io.Buffer
 import kotlinx.serialization.Serializable
-import okio.Buffer
-import okio.BufferedSource
-import okio.use
 import kotlin.time.Duration.Companion.seconds
 
 @Serializable
@@ -164,16 +161,16 @@ class FileMessageHandler(
         fileManager.getReadStreamFromUri(path).use { readBuffer ->
           while (!readBuffer.exhausted()) {
 
-            readBuffer.fillBuffer(
+            readBuffer.readAtMostTo(
               buffer,
               106496
-            ) // TODO 106496b = 104kb looks like this is the size of the content of the raw frame sent. need to work more on this
+            )
 
             // closing the Frame with fin so the receiver can receive the full frame and flush to disk
             val flush = (frameCount % 5 == 0 && frameCount > 0) || readBuffer.exhausted()
             val bufferSize = buffer.size
 
-            webSocketSession.send(Frame.Binary(flush, buffer.readByteArray()))
+            webSocketSession.send(Frame.Binary(flush, buffer))
 
             if (flush) {
               webSocketSession.flush()
@@ -191,22 +188,13 @@ class FileMessageHandler(
         log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
       }.onFailure {
         log("FileMessageHandler", "Error sending file", it)
-        webSocketSession.send(Frame.Binary(true, Empty))
+        webSocketSession.send(Frame.Binary(true, ByteArray(0)))
         webSocketSession.flush()
         buffer.close()
 
         throw it
       }
     }
-  }
-
-
-  private fun BufferedSource.fillBuffer(buffer: Buffer, size: Long) {
-
-    do {
-      val read = read(buffer, size)
-    } while (read != -1L && buffer.size < size)
-
   }
 
   private suspend fun updateSentProgress(progress: MutableSharedFlow<MessengerSendProgress>, sent: Long, total: Long) {

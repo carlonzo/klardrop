@@ -3,7 +3,6 @@ package com.carlom.klardrop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.interop.LocalUIViewController
-import com.carlom.klardrop.common.persistence.CurrentFileSystem
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -12,8 +11,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import okio.Path.Companion.toPath
-import okio.use
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
 import platform.PhotosUI.PHPickerConfiguration
@@ -66,12 +66,12 @@ actual class FilePicker(
             } else {
               loading.completeExceptionally(RuntimeException("Error loading image: $error"))
             }
-            println("image url: $url - ${url.toString().toPath()} ${CurrentFileSystem.exists(url.toString().toPath())}")
+            println("image url: $url - ${url.toString().toPath()} ${SystemFileSystem.exists(Path(url.toString()))}")
             println("image error: $error")
 
             val fileName = url.toString().toPath().name
 
-            val tmpFile = platformFileSystem.getTempStoragePath().resolve(fileName)
+            val tmpFile = Path(platformFileSystem.getTempStoragePath(), fileName)
 
             log("FilePicker", "Storing temp file from $url to $tmpFile")
             NSFileManager.defaultManager.copyItemAtPath(url.toString(), tmpFile.toString(), null)
@@ -107,26 +107,21 @@ actual class FilePicker(
 
         loadingJobs.awaitAll()
 
-        val paths = loadingJobs.map { it.getCompleted() }
+        val paths = loadingJobs.map { it.getCompleted() }.map { Path(it) }
 
-       val newPaths = paths.map {
-          log("FilePicker", "loading images async $it ")
+        val newPaths = paths.map {
+          log("FilePicker", "loading images async $it exists? ${SystemFileSystem.exists(it)}")
 
-         it.toPath().also {
-           log("exists ${CurrentFileSystem.exists(it)}")
-
-         }
-
-          val fileName = it.toPath().name
+          val fileName = it.name
 
           val readStreamFromUri = platformFileSystem.getReadStreamFromUri(it)
 
-          val tmpFile = platformFileSystem.getTempStoragePath().resolve(fileName)
+          val tmpFile = Path(platformFileSystem.getTempStoragePath(), fileName)
 
           log("FilePicker", "Storing temp file in $tmpFile")
 
           platformFileSystem.getWriteStreamFromUri(tmpFile.toString()).use { sink ->
-            sink.writeAll(readStreamFromUri)
+            readStreamFromUri.transferTo(sink)
           }
 
           tmpFile

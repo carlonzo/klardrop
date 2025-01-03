@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,11 +27,11 @@ interface MessageReceiver {
 }
 
 internal class MessageReceiverImpl(
-  private val coroutines: Coroutines,
+  coroutines: Coroutines,
   private val visibleDevices: VisibleDevices
 ) : MessageReceiver {
 
-  private val receiverScope = coroutines.newScope(coroutines.ioDispatcher)
+  private val receiverScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
   private val _notifier = MutableSharedFlow<StateFlow<ReceiveMessageUpdate>>()
 
   override val notifier: Flow<Flow<ReceiveMessageUpdate>>

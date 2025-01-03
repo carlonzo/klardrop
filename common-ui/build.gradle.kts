@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
   alias(deps.plugins.kotlin.multiplatform)
   kotlin("native.cocoapods")
@@ -10,9 +12,8 @@ kotlin {
 
   androidTarget()
   jvm("desktopJvm") {
-
-    compilations.all {
-      kotlinOptions.jvmTarget = "17"
+    compilerOptions {
+      jvmTarget = JvmTarget.JVM_17
     }
   }
   iosArm64()

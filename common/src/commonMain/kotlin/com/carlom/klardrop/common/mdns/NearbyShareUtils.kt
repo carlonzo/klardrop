@@ -15,16 +15,21 @@ import com.google.location.nearby.connections.proto.V1Frame
 import com.squareup.wire.Message
 import com.squareup.wire.ProtoAdapter
 import io.ktor.utils.io.*
-import io.ktor.utils.io.core.*
+import io.ktor.utils.io.core.BytePacketBuilder
+import io.ktor.utils.io.core.writeFully
+import io.ktor.utils.io.core.writePacket
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import okio.Buffer
+import kotlinx.io.Buffer
+import kotlinx.io.RawSource
+import kotlinx.io.Sink
+import kotlinx.io.Source
+import kotlinx.io.buffered
+import kotlinx.io.bytestring.ByteString
+import kotlinx.io.readByteArray
+import kotlinx.io.readByteString
 import okio.BufferedSource
-import okio.ByteString
 import okio.ByteString.Companion.toByteString
-import okio.Sink
-import okio.buffer
-import okio.use
 import kotlin.math.ceil
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -69,7 +74,7 @@ internal suspend fun ByteWriteChannel.writeFullyNearby(message: ByteArray) {
     size.toByte()
   )
 
-  writeAvailable(sizeByteArray)
+  writeByteArray(sizeByteArray)
   writeFully(message)
   flush()
 }
@@ -121,7 +126,7 @@ private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
   readChannel: ByteReadChannel,
   offlineFrame: OfflineFrame,
   payloadId: Long?,
-  buffer: ByteArray = byteArrayOf()
+  buffer: ByteArray
 ): OfflineFrame {
 
   val offlineFrameContent = offlineFrame.v1
@@ -160,28 +165,27 @@ private suspend fun D2DConnectionContext.recursiveReadOfflineFrame(
 
 }
 
-private suspend fun ByteReadChannel.readNearbyFully(sink: Sink) {
-
-  val channel = this
-  sink.buffer().use { buffer ->
-
-    if (channel.isClosedForRead) {
-      throw IllegalStateException("Channel is closed")
-    }
-
-    val sizeBytes = ByteArray(4)
-    val sizeByte = channel.readFully(sizeBytes).let { sizeBytes.map { it.toUByte().toInt() } }
-    val size = ((sizeByte[0] shl 24) or (sizeByte[1] shl 16) or (sizeByte[2] shl 8) or sizeByte[3])
-
-    val packet = channel.readRemaining(size.toLong())
-    buffer.write(packet.readBytes())
-  }
-}
-
 internal suspend fun ByteReadChannel.readByteArray(): ByteArray {
-  val buffer = Buffer()
-  readNearbyFully(buffer)
-  return buffer.readByteArray()
+  val channel = this
+
+  log("readByteArray", "start reading")
+
+  if (channel.isClosedForRead) {
+    throw IllegalStateException("Channel is closed")
+  }
+
+  // first 4 bytes for the size
+  val sizeBytes = ByteArray(4)
+  val sizeByte = channel.readFully(sizeBytes).let { sizeBytes.map { it.toUByte().toInt() } }
+  val size = ((sizeByte[0] shl 24) or (sizeByte[1] shl 16) or (sizeByte[2] shl 8) or sizeByte[3])
+
+  log("readByteArray", "have size of $size")
+
+  // now read upstream
+  val payload = ByteArray(size)
+  channel.readFully(payload)
+
+  return payload
 }
 
 /** from client */
@@ -293,8 +297,8 @@ internal suspend fun sendEncryptedWrappedPayload(
  *
  * returns a Flow with percentage progress
  */
-internal suspend fun sendEncryptedWrappedPayload(
-  bufferedSource: BufferedSource,
+internal fun sendEncryptedWrappedPayload(
+  source: Source,
   totalSize: Long,
   writeChannel: ByteWriteChannel,
   nearbyConnection: D2DConnectionContext,
@@ -313,7 +317,7 @@ internal suspend fun sendEncryptedWrappedPayload(
     val sizeStartRange = (chunkIndex * SANE_FRAME_LENGTH)
     val size = min(SANE_FRAME_LENGTH, totalSize.toInt() - sizeStartRange)
 
-    bufferedSource.fillBuffer(readBuffer, size.toLong())
+    source.buffered().readTo(readBuffer, size.toLong())
 
     val chunkBody = readBuffer.readByteString()
     println("Sending chunk $chunkIndex range $sizeStartRange chunkBody ${chunkBody.size} total size $totalSize")
@@ -322,7 +326,7 @@ internal suspend fun sendEncryptedWrappedPayload(
       totalSize = totalSize,
       payloadId = payloadId,
       offset = sentOffset,
-      bodyChunk = chunkBody,
+      bodyChunk = chunkBody.toOkioByteString(),
       payloadType = payloadType,
       writeChannel = writeChannel,
       nearbyConnection = nearbyConnection
@@ -347,20 +351,19 @@ internal suspend fun sendEncryptedWrappedPayload(
   emit(100)
 }
 
-private fun BufferedSource.fillBuffer(buffer: Buffer, size: Long) {
+private fun ByteString?.toOkioByteString(): okio.ByteString? {
+  if (this == null) {
+    return null
+  }
 
-  do {
-    val read = read(buffer, size)
-  } while (read != -1L && buffer.size < size)
-
+  return okio.ByteString.of(*toByteArray())
 }
-
 
 private suspend fun sendChunkWrappedPayload(
   totalSize: Long,
   payloadId: Long,
   offset: Long,
-  bodyChunk: ByteString?,
+  bodyChunk: okio.ByteString?,
   payloadType: PayloadHeader.PayloadType,
   writeChannel: ByteWriteChannel,
   nearbyConnection: D2DConnectionContext

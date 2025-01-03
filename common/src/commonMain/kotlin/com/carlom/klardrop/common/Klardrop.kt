@@ -40,9 +40,11 @@ class Klardrop(
     if (applicationInfo.enableNearbyServer) {
       // start nearby share
       appScope.launch(commonComponent.coroutines().ioDispatcher) {
-        commonComponent.nearbyServer().start()
+        val nearbyServer = commonComponent.nearbyServer()
 
-        commonComponent.nearbyServer().status
+        nearbyServer.start()
+
+        nearbyServer.status
           .filter { it.isRunning }
           .collect {
             discoveryNetwork.startPublishNearbyShare(it.port)

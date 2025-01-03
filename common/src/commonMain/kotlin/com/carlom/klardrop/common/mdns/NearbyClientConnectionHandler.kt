@@ -54,7 +54,7 @@ class NearbyClientConnectionHandler(
 
     try {
       val readChannel = connection.openReadChannel()
-      val writeChannel = connection.openWriteChannel(autoFlush = true)
+      val writeChannel = connection.openWriteChannel(autoFlush = false)
 
       sendConnectionRequest(writeChannel)
       val nearbyConnection = createConnection(readChannel, writeChannel)
@@ -116,10 +116,10 @@ class NearbyClientConnectionHandler(
         is FileMessage.FileSendRequest -> {
           log("initiateTransfer", "Transferring file: ${request.message}")
 
-          fileManager.getReadStreamFromUri(request.pathFile).use { bufferedSource ->
+          fileManager.getReadStreamFromUri(request.pathFile).use { source ->
 
             sendEncryptedWrappedPayload(
-              bufferedSource = bufferedSource,
+              source = source,
               totalSize = request.message.fileSize,
               payloadType = PayloadTransferFrame.PayloadHeader.PayloadType.FILE,
               payloadId = id,
@@ -294,30 +294,30 @@ class NearbyClientConnectionHandler(
   private suspend fun createConnection(readChannel: ByteReadChannel, writeChannel: ByteWriteChannel): D2DConnectionContext {
     val client = Ukey2Handshake.forInitiator(Ukey2Handshake.HandshakeCipher.P256_SHA512)
 
-    log("Ukey2Handshake","Message 1 (Client Init)")
+    log("Ukey2Handshake", "Message 1 (Client Init)")
     // Message 1 (Client Init)
     var handshakeMessage = client.getNextHandshakeMessage()
     writeChannel.writeFullyNearby(handshakeMessage)
 
-    log("Ukey2Handshake","Message 2 (Server Init)")
+    log("Ukey2Handshake", "Message 2 (Server Init)")
     // Message 2 (Server Init)
     handshakeMessage = readChannel.readByteArray()
     client.parseHandshakeMessage(handshakeMessage)
 
-    log("Ukey2Handshake","Message 3 (Client Finish)")
+    log("Ukey2Handshake", "Message 3 (Client Finish)")
     // Message 3 (Client Finish)
     handshakeMessage = client.getNextHandshakeMessage()
     writeChannel.writeFullyNearby(handshakeMessage)
 
-    log("Ukey2Handshake","getVerificationString")
+    log("Ukey2Handshake", "getVerificationString")
     // Get the auth string
     val clientAuthString = client.getVerificationString(32)
 
-    log("Ukey2Handshake","verifyHandshake")
+    log("Ukey2Handshake", "verifyHandshake")
     // accept the handshake
     client.verifyHandshake()
 
-    log("Ukey2Handshake","send CONNECTION_RESPONSE")
+    log("Ukey2Handshake", "send CONNECTION_RESPONSE")
     //send connection response
     // V1Frame{type=CONNECTION_RESPONSE, connection_response=ConnectionResponseFrame{status=0, response=ACCEPT, os_info=OsInfo{type=ANDROID}, multiplex_socket_bitmask=0}}
     OfflineFrame(
