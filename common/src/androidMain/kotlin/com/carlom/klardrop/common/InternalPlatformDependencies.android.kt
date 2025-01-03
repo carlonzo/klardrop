@@ -14,6 +14,6 @@ actual object CommonPlatformDependencies {
   }
 
   actual fun getDeviceName(): String {
-    return Build.MODEL
+    return Build.MODEL ?: "Unknown model"
   }
 }

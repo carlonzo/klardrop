@@ -12,7 +12,6 @@ import kotlinx.io.Source
 import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
-import okio.Path.Companion.toPath
 import platform.Foundation.NSError
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSFileSize
@@ -79,7 +78,7 @@ actual class PlatformFileSystem(
   }
 
   actual suspend fun moveToStorage(filePath: String, mimeType: String) {
-    val sourcePath = filePath.toPath()
+    val sourcePath = Path(filePath)
     val destinationPath = getAvailableFilePath(platformDependencies.getDownloadStoragePath(), sourcePath.name, fileSystem)
     log("iOS-PlatformFileSystem", "moveToStorage $filePath destination $destinationPath  $mimeType")
 
@@ -94,7 +93,7 @@ actual class PlatformFileSystem(
   }
 
   actual fun getTempStoragePath(): Path {
-    return NSTemporaryDirectory().toPath()
+    return Path(NSTemporaryDirectory())
   }
 
 }

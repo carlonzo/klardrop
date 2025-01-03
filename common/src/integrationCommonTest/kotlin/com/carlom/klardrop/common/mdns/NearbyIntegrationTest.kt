@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.mdns
 import FakeLocalPropertiesRepository
 import TestCoroutines
 import app.cash.turbine.Event
+import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.turbineScope
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
@@ -69,9 +70,9 @@ class NearbyIntegrationTest {
 
       // receiver statuses
       val receiverChannel = receiverChannelDelayed.await()
-      val receiverStatuses: List<Event<ReceiveMessageUpdate>> = receiverChannel.cancelAndConsumeRemainingEvents()
 
-      val completedUpdate = (receiverStatuses.last() as Event.Item).value
+      val completedUpdate = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
+
       assertIs<ReceiveMessageStatus.Completed>(completedUpdate.status)
       assertEquals(1, completedUpdate.messages.size)
       assertEquals((textMessage.message as TextMessage).text, (completedUpdate.messages.first() as TextMessage).text)
@@ -83,6 +84,15 @@ class NearbyIntegrationTest {
     shareServer.cancel()
   }
 
+  private suspend fun <T> ReceiveTurbine<T>.awaitFor(block: ((T)-> Boolean)): T{
+    var item: T?
+
+    do {
+      item = awaitItem()
+    } while (!block(item!!))
+
+    return item
+  }
 
   private fun textSendRequest(text: String = "marion is cute"): SendMessageRequest {
     return SimpleSendMessageRequest(TextMessage("This is a title", text = text))

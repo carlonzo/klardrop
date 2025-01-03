@@ -14,7 +14,6 @@ import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import okio.Path.Companion.toPath
-import okio.use
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSURL
 import platform.PhotosUI.PHPickerConfiguration
@@ -72,7 +71,7 @@ actual class FilePicker(
 
             val fileName = url.toString().toPath().name
 
-            val tmpFile = platformFileSystem.getTempStoragePath().resolve(fileName)
+            val tmpFile = Path(platformFileSystem.getTempStoragePath(), fileName)
 
             log("FilePicker", "Storing temp file from $url to $tmpFile")
             NSFileManager.defaultManager.copyItemAtPath(url.toString(), tmpFile.toString(), null)
@@ -117,12 +116,12 @@ actual class FilePicker(
 
           val readStreamFromUri = platformFileSystem.getReadStreamFromUri(it)
 
-          val tmpFile = platformFileSystem.getTempStoragePath().resolve(fileName)
+          val tmpFile = Path(platformFileSystem.getTempStoragePath(), fileName)
 
           log("FilePicker", "Storing temp file in $tmpFile")
 
           platformFileSystem.getWriteStreamFromUri(tmpFile.toString()).use { sink ->
-            sink.writeAll(readStreamFromUri)
+            readStreamFromUri.transferTo(sink)
           }
 
           tmpFile
