@@ -14,6 +14,6 @@ actual object CommonPlatformDependencies {
   }
 
   actual fun getDeviceName(): String {
-    return Build.MODEL ?: "Unknown model"
+    return Build.MODEL ?: "Unknown model" // is null during tests. it should not be null
   }
 }

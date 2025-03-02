@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import kotlinx.io.Source
 import okio.BufferedSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -58,7 +57,8 @@ class NearbyIntegrationTest {
 
     turbineScope {
       val senderChannel = sendProgressFlow.testIn(this)
-      val receiverChannelDelayed = backgroundScope.async { messageReceiver.notifier.first().testIn(this@turbineScope) }
+      val notifierScope = coroutines.newScope()
+      val receiverChannelDelayed = notifierScope.async { messageReceiver.notifier.first().testIn(this@turbineScope) }
 
       val textMessage = textSendRequest()
 
@@ -70,6 +70,7 @@ class NearbyIntegrationTest {
 
       // receiver statuses
       val receiverChannel = receiverChannelDelayed.await()
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
 
       val completedUpdate = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
 

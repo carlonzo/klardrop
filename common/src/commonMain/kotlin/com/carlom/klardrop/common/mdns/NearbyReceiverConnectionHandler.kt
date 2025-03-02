@@ -25,6 +25,7 @@ import com.google.location.nearby.connections.proto.V1Frame
 import com.google.security.cryptauth.lib.securegcm.DeviceType
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
+import kotlinx.coroutines.CompletableJob
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -32,6 +33,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okio.ByteString.Companion.toByteString
 import sharing.nearby.Frame
 import sharing.nearby.PairedKeyEncryptionFrame
@@ -51,8 +54,6 @@ class NearbyReceiverConnectionHandler(
   private lateinit var receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
 
   private val connectionScope = coroutines.newScope(coroutines.ioDispatcher)
-
-  private var keepAliveWhileWaitingJob: Job? = null
 
   suspend fun onConnection(connection: Socket, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>) {
 
@@ -95,10 +96,13 @@ class NearbyReceiverConnectionHandler(
       updateReceiveProgress()
 
       // create a job to keep alive while waiting for user to accept
-      keepAliveWhileWaitingJob = connectionScope.launch {
+      val mutexKeepAlive = Mutex()
+      val keepAliveWhileWaitingJob = connectionScope.launch {
 
         while (isActive) {
-          nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
+          mutexKeepAlive.withLock {
+            nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
+          }
         }
 
       }
@@ -107,7 +111,10 @@ class NearbyReceiverConnectionHandler(
       delay(500)
 
       // just accept directly
-      keepAliveWhileWaitingJob?.cancel()
+      keepAliveWhileWaitingJob.cancel()
+      // await the keepalive job is completed
+      mutexKeepAlive.withLock {  }
+
       acceptTransfer(nearbyConnection, writeChannel)
 
       receiveTransfer(readChannel, writeChannel, nearbyConnection)

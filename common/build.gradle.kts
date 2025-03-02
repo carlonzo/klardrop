@@ -2,6 +2,7 @@ plugins {
   alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.kotlin.serialization)
+//  id("io.sentry.kotlin.multiplatform.gradle")
 }
 
 kotlin {

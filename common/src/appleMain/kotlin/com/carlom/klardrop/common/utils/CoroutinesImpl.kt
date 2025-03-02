@@ -1,6 +1,5 @@
 package com.carlom.klardrop.common.utils
 
-import io.sentry.kotlin.multiplatform.Sentry
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope

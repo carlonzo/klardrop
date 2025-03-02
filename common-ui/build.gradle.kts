@@ -2,10 +2,10 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
   alias(deps.plugins.kotlin.multiplatform)
-  kotlin("native.cocoapods")
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
   alias(deps.plugins.android.library)
+//  id("io.sentry.kotlin.multiplatform.gradle")
 }
 
 kotlin {
@@ -16,24 +16,18 @@ kotlin {
       jvmTarget = JvmTarget.JVM_17
     }
   }
-  iosArm64()
-  iosSimulatorArm64()
-//  macosArm64()
-
-  cocoapods {
-    version = "1.0.0"
-    summary = "Some description for the Shared Module"
-    homepage = "Link to the Shared Module homepage"
-    ios.deploymentTarget = "14.1"
-    podfile = project.file("../iosApp/Podfile")
-    name = "common_ui"
-
-    framework {
+  listOf(
+    iosArm64(),
+    iosSimulatorArm64()
+  ).forEach {
+    it.binaries.framework {
       baseName = "common_ui"
-      isStatic = true
+      isStatic = false
       export(project(":klardrop-common"))
     }
   }
+
+//  macosArm64()
 
   sourceSets {
 
@@ -72,7 +66,7 @@ kotlin {
 
     targets.all {
       compilations.all {
-        compileTaskProvider.configure{
+        compileTaskProvider.configure {
           compilerOptions {
             freeCompilerArgs.add("-Xexpect-actual-classes")
           }

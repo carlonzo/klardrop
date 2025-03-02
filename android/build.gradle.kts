@@ -4,6 +4,7 @@ plugins {
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
   kotlin("kapt")
+//  id("io.sentry.android.gradle") version "4.0.0"
 }
 
 group = "com.carlom.klardrop"

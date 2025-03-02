@@ -1,7 +1,6 @@
 package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.FileManager
-import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider

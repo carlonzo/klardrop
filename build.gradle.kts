@@ -16,14 +16,13 @@ plugins {
   alias(deps.plugins.jetbrains.compose) apply false
   alias(deps.plugins.compose.compiler) apply false
   alias(deps.plugins.kotlin.serialization) apply false
+//  id("io.sentry.kotlin.multiplatform.gradle") version "0.10.0" apply false
 }
 
 allprojects {
   repositories {
     google()
     mavenCentral()
-    maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
-    maven("https://s01.oss.sonatype.org/content/repositories/snapshots/") // sonatype snapshots
     mavenLocal()
   }
 }
