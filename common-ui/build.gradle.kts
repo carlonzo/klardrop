@@ -5,7 +5,6 @@ plugins {
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
   alias(deps.plugins.android.library)
-//  id("io.sentry.kotlin.multiplatform.gradle")
 }
 
 kotlin {

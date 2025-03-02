@@ -2,7 +2,7 @@ plugins {
   alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.kotlin.serialization)
-//  id("io.sentry.kotlin.multiplatform.gradle")
+
 }
 
 kotlin {
@@ -29,11 +29,14 @@ kotlin {
         implementation(deps.ktor.client.cio)
         implementation(deps.ktor.serialization.protobuf)
 
+        implementation(deps.kotlinx.io.core)
+        implementation(deps.kotlinx.io.okio)
+
         implementation(deps.androidx.datastore.core)
         implementation(deps.androidx.datastore.core.okio)
         implementation(deps.kotlinx.serialization.protobuf)
         implementation(deps.ukey2)
-        api("io.sentry:sentry-kotlin-multiplatform:0.10.0")
+//        implementation("io.sentry:sentry-kotlin-multiplatform:0.10.0")
       }
     }
 

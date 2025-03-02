@@ -2,7 +2,6 @@ package com.carlom.klardrop.common.mdns
 
 import FakeLocalPropertiesRepository
 import TestCoroutines
-import app.cash.turbine.Event
 import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.turbineScope
 import com.carlom.klardrop.common.FileManager
@@ -18,7 +17,6 @@ import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.receiver.MessageReceiverImpl
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import io.ktor.network.sockets.InetSocketAddress
@@ -26,9 +24,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import okio.BufferedSource
+import kotlinx.io.Source
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs

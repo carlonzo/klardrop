@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import com.carlom.klardrop.android.di.ApplicationComponent
 import com.carlom.klardrop.android.di.DaggerApplicationComponent
-import io.sentry.kotlin.multiplatform.Sentry
 
 class KlarDropApplication : Application(), ApplicationComponentProvider {
 

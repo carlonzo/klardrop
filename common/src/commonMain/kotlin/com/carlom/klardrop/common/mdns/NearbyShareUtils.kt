@@ -14,21 +14,18 @@ import com.google.location.nearby.connections.proto.PayloadTransferFrame.Payload
 import com.google.location.nearby.connections.proto.V1Frame
 import com.squareup.wire.Message
 import com.squareup.wire.ProtoAdapter
-import io.ktor.utils.io.*
-import io.ktor.utils.io.core.BytePacketBuilder
-import io.ktor.utils.io.core.writeFully
-import io.ktor.utils.io.core.writePacket
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.readFully
+import io.ktor.utils.io.writeByteArray
+import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.io.Buffer
-import kotlinx.io.RawSource
-import kotlinx.io.Sink
 import kotlinx.io.Source
 import kotlinx.io.buffered
-import kotlinx.io.bytestring.ByteString
-import kotlinx.io.readByteArray
+import kotlinx.io.okio.toOkioByteString
 import kotlinx.io.readByteString
-import okio.BufferedSource
 import okio.ByteString.Companion.toByteString
 import kotlin.math.ceil
 import kotlin.math.min
@@ -349,14 +346,6 @@ internal fun sendEncryptedWrappedPayload(
   )
 
   emit(100)
-}
-
-private fun ByteString?.toOkioByteString(): okio.ByteString? {
-  if (this == null) {
-    return null
-  }
-
-  return okio.ByteString.of(*toByteArray())
 }
 
 private suspend fun sendChunkWrappedPayload(
