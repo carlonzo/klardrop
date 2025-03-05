@@ -5,6 +5,8 @@ plugins {
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
   alias(deps.plugins.android.library)
+  alias(deps.plugins.sentry.multiplatform)
+  kotlin("native.cocoapods")
 }
 
 kotlin {
@@ -18,15 +20,38 @@ kotlin {
   listOf(
     iosArm64(),
     iosSimulatorArm64()
-  ).forEach {
-    it.binaries.framework {
+  )
+//    .forEach {
+//    it.binaries.framework {
+//      baseName = "common_ui"
+//      isStatic = true
+//      export(project(":klardrop-common"))
+//    }
+//  }
+
+//  macosArm64()
+
+  cocoapods {
+    version = rootProject.version.toString()
+
+    // rest of configuration
+    homepage = "https://github.com/carlonzo/klardrop"
+    summary = "Shared Module for Klardrop"
+    ios.deploymentTarget = "14.1"
+    podfile = project.file("../iosApp/Podfile")
+
+    pod("Sentry") {
+      // Check the version compatibility table for the correct version
+      version = "8.44.0"
+      linkOnly = true
+      extraOpts += listOf("-compiler-option", "-fmodules")
+    }
+
+    framework {
       baseName = "common_ui"
-      isStatic = false
       export(project(":klardrop-common"))
     }
   }
-
-//  macosArm64()
 
   sourceSets {
 

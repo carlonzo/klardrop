@@ -16,7 +16,7 @@ plugins {
   alias(deps.plugins.jetbrains.compose) apply false
   alias(deps.plugins.compose.compiler) apply false
   alias(deps.plugins.kotlin.serialization) apply false
-//  id("io.sentry.kotlin.multiplatform.gradle") version "0.10.0" apply false
+  alias(deps.plugins.sentry.multiplatform) apply false
 }
 
 allprojects {

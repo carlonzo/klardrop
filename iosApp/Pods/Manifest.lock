@@ -1,16 +1,26 @@
 PODS:
-  - common_ui (1.0.0)
+  - common_ui (1.0-SNAPSHOT):
+    - Sentry (= 8.44.0)
+  - Sentry (8.44.0):
+    - Sentry/Core (= 8.44.0)
+  - Sentry/Core (8.44.0)
 
 DEPENDENCIES:
   - common_ui (from `../common-ui`)
+  - Sentry
+
+SPEC REPOS:
+  trunk:
+    - Sentry
 
 EXTERNAL SOURCES:
   common_ui:
     :path: "../common-ui"
 
 SPEC CHECKSUMS:
-  common_ui: ddcc21a0aaf66919add9f33762c7ea251e031d64
+  common_ui: 5de70f74c11dd06ff47d761e9f8bfe74ee374283
+  Sentry: 0f9bc9adfc0b960e7f3bb5ec67e9a3d8193f3bdb
 
-PODFILE CHECKSUM: aef38a0bb67b5cebbbe6b43bdff9c502bf6d93c9
+PODFILE CHECKSUM: 9523cf08d525aadaeb6bcf86a0a4e6aca5e4bc10
 
 COCOAPODS: 1.16.2

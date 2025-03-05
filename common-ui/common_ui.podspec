@@ -1,15 +1,15 @@
 Pod::Spec.new do |spec|
     spec.name                     = 'common_ui'
-    spec.version                  = '1.0.0'
-    spec.homepage                 = 'Link to the Shared Module homepage'
+    spec.version                  = '1.0-SNAPSHOT'
+    spec.homepage                 = 'https://github.com/carlonzo/klardrop'
     spec.source                   = { :http=> ''}
     spec.authors                  = ''
     spec.license                  = ''
-    spec.summary                  = 'Some description for the Shared Module'
+    spec.summary                  = 'Shared Module for Klardrop'
     spec.vendored_frameworks      = 'build/cocoapods/framework/common_ui.framework'
     spec.libraries                = 'c++'
     spec.ios.deployment_target    = '14.1'
-                
+    spec.dependency 'Sentry', '8.44.0'
                 
     if !Dir.exist?('build/cocoapods/framework/common_ui.framework') || Dir.empty?('build/cocoapods/framework/common_ui.framework')
         raise "

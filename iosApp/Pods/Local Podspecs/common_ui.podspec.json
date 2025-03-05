@@ -1,17 +1,22 @@
 {
   "name": "common_ui",
-  "version": "1.0.0",
-  "homepage": "Link to the Shared Module homepage",
+  "version": "1.0-SNAPSHOT",
+  "homepage": "https://github.com/carlonzo/klardrop",
   "source": {
     "http": ""
   },
   "authors": "",
   "license": "",
-  "summary": "Some description for the Shared Module",
+  "summary": "Shared Module for Klardrop",
   "vendored_frameworks": "build/cocoapods/framework/common_ui.framework",
   "libraries": "c++",
   "platforms": {
     "ios": "14.1"
+  },
+  "dependencies": {
+    "Sentry": [
+      "8.44.0"
+    ]
   },
   "xcconfig": {
     "ENABLE_USER_SCRIPT_SANDBOXING": "NO"

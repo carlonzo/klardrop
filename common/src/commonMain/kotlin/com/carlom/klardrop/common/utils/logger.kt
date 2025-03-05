@@ -1,29 +1,30 @@
 package com.carlom.klardrop.common.utils
 
-//import io.sentry.kotlin.multiplatform.Sentry
+import io.sentry.kotlin.multiplatform.Sentry
 
 fun log(message: String) {
-  println("[Klardrop]: $message")
-//  Sentry.captureMessage(message)
+  nativeLogger("Klardrop", message)
+  Sentry.captureMessage(message)
 }
 
 fun log(message: String, throwable: Throwable) {
-  println("[Klardrop]: $message")
-  throwable.printStackTrace()
+  nativeLoggerException("Klardrop", message, throwable)
 
-//  Sentry.captureMessage(message)
-//  Sentry.captureException(throwable)
+  Sentry.captureMessage(message)
+  Sentry.captureException(throwable)
 }
 
 fun log(tag: String, message: String, throwable: Throwable) {
-  println("[Klardrop]: [$tag]: $message")
-  throwable.printStackTrace()
+  nativeLoggerException(tag, message, throwable)
 
-//  Sentry.captureMessage("[$tag]: $message")
-//  Sentry.captureException(throwable)
+  Sentry.captureMessage("[$tag]: $message")
+  Sentry.captureException(throwable)
 }
 
 fun log(tag: String, message: String) {
-  println("[Klardrop]: [$tag]: $message")
-//  Sentry.captureMessage("[$tag]: $message")
+  nativeLogger(tag, message)
+  Sentry.captureMessage("[$tag]: $message")
 }
+
+expect fun nativeLogger(tag: String, message: String)
+expect fun nativeLoggerException(tag: String, message: String, throwable: Throwable)
