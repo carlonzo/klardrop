@@ -2,8 +2,12 @@ package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
+import io.github.vinceglb.filekit.PlatformFile
+import kotlinx.io.RawSink
+import kotlinx.io.RawSource
 import kotlinx.io.Sink
 import kotlinx.io.Source
+import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 
@@ -20,28 +24,22 @@ class FileManagerImpl(
     return FileTransferImpl(tempAvailableFilePath, mimeType)
   }
 
-  override fun getReadStreamFromUri(fileName: String): Source {
-    return platformFileSystem.getReadStreamFromUri(fileName)
+  override fun getReadStreamFrom(file: PlatformFile): RawSource {
+    return platformFileSystem.getReadStreamFrom(file)
   }
 
   inner class FileTransferImpl(
     private val destinationPath: Path,
     private val mimeType: String
   ) : FileTransfer {
-    override val bufferedSink: Sink by lazy { platformFileSystem.getWriteStreamFromUri(destinationPath.toString()) }
+    override val bufferedSink: Sink by lazy { platformFileSystem.getWriteStreamTo(destinationPath).buffered() }
 
     override suspend fun onTransferCompleted() {
-      // should have been closed already
-      bufferedSink.close()
-
-      platformFileSystem.moveToStorage(destinationPath.toString(), mimeType)
+      platformFileSystem.moveToStorage(destinationPath, mimeType)
     }
 
     override suspend fun onTransferFailed() {
-      // should have been closed already
-      bufferedSink.close()
-
-      platformFileSystem.delete(destinationPath.toString())
+      platformFileSystem.delete(destinationPath)
     }
 
   }

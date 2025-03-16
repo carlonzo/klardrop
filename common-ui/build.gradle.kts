@@ -65,6 +65,8 @@ kotlin {
 
         api(deps.kotlinx.coroutines.core)
 
+        api(deps.filekit.dialogs.compose)
+
         api(project(":klardrop-common"))
       }
     }

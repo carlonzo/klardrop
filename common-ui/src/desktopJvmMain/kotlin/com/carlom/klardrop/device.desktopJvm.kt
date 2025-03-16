@@ -18,6 +18,7 @@ import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draganddrop.dragData
 import androidx.compose.ui.onExternalDrag
+import io.github.vinceglb.filekit.PlatformFile
 import java.net.URI
 import kotlin.io.path.pathString
 import kotlin.io.path.toPath
@@ -42,18 +43,16 @@ internal actual fun Modifier.deviceAdditions(
       }
 
       override fun onDrop(event: DragAndDropEvent): Boolean {
-        val dragData = event.dragData()
-
-        when (dragData) {
+        when (val dragData = event.dragData()) {
           is DragData.FilesList -> {
-            val filePaths = dragData.readFiles().map { URI.create(it).toPath().pathString }
-            println("onDrop $filePaths")
+            val filePaths = dragData.readFiles()
+              .map { URI.create(it).toPath().pathString }
+              .map { PlatformFile(it) }
 
             onDeviceActionListener.onSendData(deviceUi, OnDataToSend.FilesList(filePaths))
           }
 
           is DragData.Text -> {
-            println("onDrop ${dragData.readText()}")
             onDeviceActionListener.onSendData(deviceUi, OnDataToSend.Text(dragData.readText()))
           }
         }

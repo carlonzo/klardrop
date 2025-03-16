@@ -1,15 +1,15 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.utils.log
+import io.github.vinceglb.filekit.PlatformFile
+import kotlinx.io.RawSource
 import kotlinx.io.Sink
-import kotlinx.io.Source
 import kotlinx.io.files.FileSystem
 import kotlinx.io.files.Path
 
 interface FileManager {
   fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer
-  fun getReadStreamFromUri(fileName: String): Source
-
+  fun getReadStreamFrom(file: PlatformFile): RawSource
 }
 
 interface FileTransfer {

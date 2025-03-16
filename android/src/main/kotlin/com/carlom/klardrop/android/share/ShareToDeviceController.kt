@@ -15,6 +15,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
+import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
@@ -53,7 +54,7 @@ class ShareToDeviceController(
     val data = onDataToSend ?: throw IllegalStateException("onDataToSend is null")
 
     when (data) {
-      is FilesList -> sendFiles(deviceUi.deviceId, data.filesPath)
+      is FilesList -> sendFiles(deviceUi.deviceId, data.files)
       is Text -> sendText(deviceUi.deviceId, data.text)
     }
   }
@@ -65,19 +66,18 @@ class ShareToDeviceController(
         .untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
     }
 
-
   }
 
-  private fun sendFiles(deviceId: String, filesPaths: List<String>) {
+  private fun sendFiles(deviceId: String, files: List<PlatformFile>) {
     coroutines.appScope.launch {
-      filesPaths.forEach { filePath ->
-        val fileData = platformFileSystem.getResolvedFileData(filePath)
+      files.forEach { file ->
+        val fileData = platformFileSystem.getResolvedFileData(file)
         messenger.send(
           deviceId, FileMessage(
             fileData.fileName,
             fileData.fileSize,
             fileData.mimeType
-          ).toSendRequest(filePath)
+          ).toSendRequest(file)
         ).untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
       }
     }

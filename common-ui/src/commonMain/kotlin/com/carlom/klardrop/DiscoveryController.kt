@@ -1,5 +1,6 @@
 package com.carlom.klardrop
 
+import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -14,8 +15,15 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
+import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.name
+import io.github.vinceglb.filekit.path
+import io.github.vinceglb.filekit.readBytes
+import io.github.vinceglb.filekit.size
+import io.github.vinceglb.filekit.toKotlinxIoPath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -73,12 +81,12 @@ class DiscoveryController(
     }
   }
 
-  private fun sendFiles(deviceId: String, filesPaths: List<String>) {
+  private fun sendFiles(deviceId: String, files: List<PlatformFile>) {
     coroutines.appScope.launch {
-      filesPaths.forEach { filePath ->
+      files.forEach { file ->
 
-        val fileData = runCatching { platformFileSystem.getResolvedFileData(filePath) }
-          .onFailure { log("DiscoveryController", "Unable to resolve file at path $filePath. File cannot be sent!", it) }
+        val fileData = runCatching { platformFileSystem.getResolvedFileData(file) }
+          .onFailure { log("DiscoveryController", "Unable to resolve file at path $file. File cannot be sent!", it) }
           .getOrNull() ?: return@forEach
 
         messenger.send(
@@ -86,7 +94,7 @@ class DiscoveryController(
             fileData.fileName,
             fileData.fileSize,
             fileData.mimeType
-          ).toSendRequest(filePath)
+          ).toSendRequest(file)
         ).untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
       }
     }
@@ -102,7 +110,7 @@ class DiscoveryController(
   override fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend) {
 
     when (onDataToSend) {
-      is OnDataToSend.FilesList -> sendFiles(deviceUi.deviceId, onDataToSend.filesPath)
+      is OnDataToSend.FilesList -> sendFiles(deviceUi.deviceId, onDataToSend.files)
       is OnDataToSend.Text -> sendText(deviceUi.deviceId, onDataToSend.text)
     }
 

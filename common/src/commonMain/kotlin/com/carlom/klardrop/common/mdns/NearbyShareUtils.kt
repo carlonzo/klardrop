@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.mdns
 import com.carlom.klardrop.common.discovery.CurrentDevice
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
+import com.carlom.klardrop.common.utils.log
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
 import com.google.location.nearby.connections.proto.KeepAliveFrame
 import com.google.location.nearby.connections.proto.OfflineFrame
@@ -314,10 +315,15 @@ internal fun sendEncryptedWrappedPayload(
     val sizeStartRange = (chunkIndex * SANE_FRAME_LENGTH)
     val size = min(SANE_FRAME_LENGTH, totalSize.toInt() - sizeStartRange)
 
-    source.buffered().readTo(readBuffer, size.toLong())
+    runCatching {
+      source.readTo(readBuffer, size.toLong())
+    }.onFailure {
+      log("NearbyShareUtils","sendEncryptedWrappedPayload: error reading source", it)
+      throw it
+    }
 
     val chunkBody = readBuffer.readByteString()
-    println("Sending chunk $chunkIndex range $sizeStartRange chunkBody ${chunkBody.size} total size $totalSize")
+    log("NearbyShareUtils","sendEncryptedWrappedPayload: Sending chunk $chunkIndex range $sizeStartRange chunkBody ${chunkBody.size} total size $totalSize")
 
     sendChunkWrappedPayload(
       totalSize = totalSize,

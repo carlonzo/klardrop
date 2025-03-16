@@ -4,23 +4,21 @@ import android.app.Application
 import android.content.Context
 import com.carlom.klardrop.android.di.ApplicationComponent
 import com.carlom.klardrop.android.di.DaggerApplicationComponent
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.dialogs.init
 
 class KlarDropApplication : Application(), ApplicationComponentProvider {
 
-  private lateinit var compoenent: ApplicationComponent
+  private lateinit var component: ApplicationComponent
   override val applicationComponent: ApplicationComponent
-    get() = compoenent
+    get() = component
 
   override fun onCreate() {
     super.onCreate()
 
-
-
-    compoenent = DaggerApplicationComponent.factory().create(this)
-
-    compoenent.klardrop().init()
+    component = DaggerApplicationComponent.factory().create(this)
+    component.klardrop().init()
   }
-
 
 }
 

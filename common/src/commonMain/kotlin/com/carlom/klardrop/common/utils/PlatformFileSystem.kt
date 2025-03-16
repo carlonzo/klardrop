@@ -1,25 +1,98 @@
 package com.carlom.klardrop.common.utils
 
+import com.carlom.klardrop.common.CommonPlatformDependencies
+import com.carlom.klardrop.common.InternalPlatformDependencies
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.atomicMove
+import io.github.vinceglb.filekit.cacheDir
+import io.github.vinceglb.filekit.delete
+import io.github.vinceglb.filekit.extension
+import io.github.vinceglb.filekit.filesDir
+import io.github.vinceglb.filekit.name
+import io.github.vinceglb.filekit.projectDir
+import io.github.vinceglb.filekit.saveImageToGallery
+import io.github.vinceglb.filekit.size
+import io.github.vinceglb.filekit.source
+import io.github.vinceglb.filekit.toKotlinxIoPath
+import kotlinx.coroutines.withContext
+import kotlinx.io.RawSink
+import kotlinx.io.RawSource
 import kotlinx.io.Sink
-import kotlinx.io.Source
 import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
+import kotlinx.io.files.sink
 
-expect class PlatformFileSystem {
-  fun getReadStreamFromUri(uri: String): Source
+interface PlatformFileSystem {
+  fun getReadStreamFrom(platformFile: PlatformFile): RawSource
 
-  fun getReadStreamFromUri(path: Path): Source
+  fun getWriteStreamTo(path: Path): RawSink
 
-  fun getWriteStreamFromUri(uri: String): Sink
+  fun getResolvedFileData(platformFile: PlatformFile): ResolvedFileData
 
-  fun getResolvedFileData(uri: String): ResolvedFileData
+  suspend fun delete(path: Path)
 
-  fun delete(uri: String)
-
-  suspend fun moveToStorage(filePath: String, mimeType: String)
+  suspend fun moveToStorage(path: Path, mimeType: String)
 
   fun getTempStoragePath(): Path
 
+  fun getInternalStoragePath(): Path
 }
+
+internal class PlatformFileSystemImpl(
+  private val platformDependencies: InternalPlatformDependencies,
+  private val coroutines: Coroutines
+) : PlatformFileSystem {
+
+  override fun getReadStreamFrom(platformFile: PlatformFile): RawSource{
+    return platformFile.source()
+  }
+
+  override fun getWriteStreamTo(path: Path): RawSink {
+    return SystemFileSystem.sink(path, append = false)
+  }
+
+  override fun getResolvedFileData(platformFile: PlatformFile): ResolvedFileData {
+    return ResolvedFileData(
+      fileName = platformFile.name,
+      mimeType = platformFile.mimeType(),
+      fileSize = platformFile.size()
+    )
+  }
+
+  override suspend fun delete(path: Path) {
+    PlatformFile(path).delete()
+  }
+
+  override suspend fun moveToStorage(path: Path, mimeType: String) {
+    val platformFile = PlatformFile(path)
+
+    val deviceType = CommonPlatformDependencies.deviceType()
+
+    if (deviceType != DeviceType.DESKTOP && mimeType.startsWith("image/") || mimeType.startsWith("video/")) {
+      FileKit.saveImageToGallery(platformFile)
+    } else {
+      withContext(coroutines.ioDispatcher) {
+        val storagePath = platformDependencies.getDownloadStoragePath()
+        val destinationPath = Path(storagePath, path.name)
+
+        SystemFileSystem.atomicMove(path, destinationPath)
+      }
+    }
+
+  }
+
+  override fun getTempStoragePath(): Path {
+    return FileKit.cacheDir.toKotlinxIoPath()
+  }
+
+  override fun getInternalStoragePath(): Path {
+    return FileKit.filesDir.toKotlinxIoPath()
+  }
+
+}
+
+internal expect fun PlatformFile.mimeType(): String
 
 data class ResolvedFileData(
   val fileName: String,
@@ -27,10 +100,17 @@ data class ResolvedFileData(
   val fileSize: Long
 )
 
+internal fun PlatformFile.mimeTypeFromExtension(): String{
+  return getMimeTypeFromExtension(extension)
+}
+
 internal fun getMimeTypeFromExtension(extension: String?): String {
   if (extension == null) return DEFAULT_MIME_TYPE
 
-  return mimeTypes[extension] ?: DEFAULT_MIME_TYPE
+  return mimeTypes[extension] ?: run {
+    log("PlatformFileSystemImpl", "Unknown mime type for extension $extension", IllegalArgumentException("Unknown mime type for extension $extension"))
+    DEFAULT_MIME_TYPE
+  }
 }
 
 private val mimeTypes = mapOf(

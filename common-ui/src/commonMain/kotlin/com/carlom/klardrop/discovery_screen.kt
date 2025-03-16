@@ -1,7 +1,6 @@
 package com.carlom.klardrop
 
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.ModalBottomSheetLayout
 import androidx.compose.material.ModalBottomSheetState
 import androidx.compose.material.ModalBottomSheetValue
@@ -39,6 +37,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.common.CommonPlatformDependencies
+import com.carlom.klardrop.common.utils.DeviceType
+import io.github.vinceglb.filekit.dialogs.FileKitMode
+import io.github.vinceglb.filekit.dialogs.FileKitType
+import io.github.vinceglb.filekit.dialogs.compose.PickerResultLauncher
+import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
@@ -51,17 +55,25 @@ import kotlin.coroutines.EmptyCoroutineContext
 fun DiscoveryScreen(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
-  uiDependencies: UiDependencies,
   discoveryController: DiscoveryController
 ) {
 
+  var deviceUiClicked = remember<DeviceUi?> { null }
   val scope = rememberCoroutineScope()
-  val filePicker = uiDependencies.filePickerFactory().createPicker() // TODO this is recreated on every recomposition
-  filePicker.registerPicker { deviceUi, paths ->
-    discoveryController.onSendData(deviceUi, OnDataToSend.FilesList(paths))
+
+  val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
+    if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
+
+    val deviceSelected = requireNotNull(deviceUiClicked)
+    discoveryController.onSendData(deviceSelected, OnDataToSend.FilesList(files))
   }
 
-  var deviceUiClicked = remember<DeviceUi?> { null }
+  val picturesPickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple(), type = FileKitType.ImageAndVideo) { files ->
+    if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
+
+    val deviceSelected = requireNotNull(deviceUiClicked)
+    discoveryController.onSendData(deviceSelected, OnDataToSend.FilesList(files))
+  }
 
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
@@ -70,7 +82,7 @@ fun DiscoveryScreen(
     sheetBackgroundColor = MaterialTheme.colorScheme.surface,
     sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
     sheetContent = {
-      ShareSheet(filePicker, discoveryController, sheetState) { deviceUiClicked!! }
+      ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
     },
     sheetState = sheetState,
     content = {
@@ -149,7 +161,8 @@ private fun DiscoveryDashboard(
 
 @Composable
 private fun ColumnScope.ShareSheet(
-  filePicker: FilePicker,
+  filePickerFiles: PickerResultLauncher,
+  filePickerPictures: PickerResultLauncher,
   discoveryController: DiscoveryController,
   sheetState: ModalBottomSheetState,
   deviceUiClicked: () -> DeviceUi
@@ -213,11 +226,21 @@ private fun ColumnScope.ShareSheet(
 
     Text(
       modifier = Modifier.clickable {
-        filePicker.openFilePicker(deviceUiClicked())
-        scope.launch { dismissSheet() }
+        filePickerFiles.launch()
+
       },
       text = "Share Files"
     )
+
+    if (CommonPlatformDependencies.deviceType() == DeviceType.MOBILE) {
+      Text(
+        modifier = Modifier.clickable {
+          filePickerPictures.launch()
+
+        },
+        text = "Share Pictures Or Videos"
+      )
+    }
   }
 
 
