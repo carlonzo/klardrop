@@ -13,8 +13,8 @@ internal class KlardropDiscoveryUtils {
     val name = urlSafeBase64EncodedString(nameBytes)
 
     // dddd oooo  (d= devicetype, o=ostype)
-    val deviceType = currentDevice.deviceType.id.toInt().shl(4)
-    val osType = currentDevice.osType.id.toInt()
+    val deviceType = currentDevice.deviceType.nearbyId.toInt().shl(4)
+    val osType = currentDevice.osType.nearbyId.toInt()
     val deviceInfos = deviceType.or(osType)
 
     require(deviceInfos < 0xFF) { "Device type and os type must be less than 255" }

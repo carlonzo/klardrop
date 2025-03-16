@@ -1,7 +1,6 @@
 package com.carlom.klardrop.common.communication.di
 
 import com.carlom.klardrop.common.FileManager
-import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.ClientImpl
 import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
 import com.carlom.klardrop.common.communication.MessageSerializer

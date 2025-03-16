@@ -4,11 +4,12 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.remember
-import com.carlom.klardrop.FilePickerFactory
 import com.carlom.klardrop.KlardropApp
 import com.carlom.klardrop.UiDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.dialogs.init
 import javax.inject.Inject
 
 class MainActivity : AppCompatActivity() {
@@ -20,15 +21,12 @@ class MainActivity : AppCompatActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     applicationComponent().inject(this)
+    FileKit.init(this)
 
     setContent {
 
       val uiDependencies = remember {
         object : UiDependencies {
-          override fun filePickerFactory(): FilePickerFactory {
-            return FilePickerFactory()
-          }
-
         }
       }
 

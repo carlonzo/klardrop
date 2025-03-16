@@ -180,7 +180,7 @@ class DiscoveryNetwork internal constructor(
         serviceType = KLARDROP_SERVICE_TYPE,
         attributes = mapOf(
           ATTRIBUTE_DEVICE_NAME to urlSafeBase64EncodedString("Test device"),
-          ATTRIBUTE_DEVICE to (DeviceType.MOBILE.id.toInt() shl 4).or(OsType.ANDROID.id.toInt()).toString()
+          ATTRIBUTE_DEVICE to (DeviceType.MOBILE.nearbyId.toInt() shl 4).or(OsType.ANDROID.nearbyId.toInt()).toString()
         ),
         addresses = listOf("192.168.1.1")
       )

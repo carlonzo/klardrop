@@ -2,20 +2,16 @@ package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
-import com.carlom.klardrop.common.utils.PlatformFileSystem
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.downloadDir
+import io.github.vinceglb.filekit.toKotlinxIoPath
 import kotlinx.io.files.Path
 
 
 actual class InternalPlatformDependencies {
 
-  private val homeFolder = (System.getenv("HOME"))
-
   actual fun getDownloadStoragePath(): Path {
-    return Path("$homeFolder/Downloads/")
-  }
-
-  actual fun platformFileSystem(): PlatformFileSystem {
-    return PlatformFileSystem(this)
+    return FileKit.downloadDir.toKotlinxIoPath()
   }
 
   actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
@@ -26,7 +22,4 @@ actual class InternalPlatformDependencies {
     return ClipboardReaderWriter()
   }
 
-  actual fun getPrivateAppStoragePath(): Path {
-    return Path("$homeFolder/.klardrop/")
-  }
 }

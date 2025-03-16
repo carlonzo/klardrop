@@ -36,6 +36,7 @@ kotlin {
         implementation(deps.kotlinx.serialization.protobuf)
         implementation(deps.ukey2)
         implementation(deps.sentry.kotlin.multiplatform)
+        implementation(deps.filekit.core)
       }
     }
 
@@ -83,4 +84,8 @@ kotlin {
 
 android {
   namespace = "com.klardrop.common"
+
+  testOptions {
+    unitTests.isReturnDefaultValues = true
+  }
 }

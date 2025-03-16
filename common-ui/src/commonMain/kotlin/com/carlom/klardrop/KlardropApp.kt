@@ -41,15 +41,13 @@ fun KlardropApp(
               .fillMaxWidth(fraction = 0.75f)
               .fillMaxHeight(),
             isLargeScreen = isLargeScreen,
-            uiDependencies = uiDependencies,
             discoveryController = visibleDevicesController
           )
         }
       } else {
         DiscoveryScreen(
-          discoveryController = visibleDevicesController,
           isLargeScreen = isLargeScreen,
-          uiDependencies = uiDependencies
+          discoveryController = visibleDevicesController
         )
       }
 

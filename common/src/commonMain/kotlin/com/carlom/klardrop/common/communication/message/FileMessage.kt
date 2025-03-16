@@ -8,6 +8,14 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
+import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.exists
+import io.github.vinceglb.filekit.readBytes
+import io.github.vinceglb.filekit.size
+import io.ktor.util.cio.use
+import io.ktor.utils.io.asByteWriteChannel
+import io.ktor.utils.io.write
+import io.ktor.utils.io.writeByteArray
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -16,7 +24,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.Buffer
+import kotlinx.io.buffered
 import kotlinx.serialization.Serializable
+import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
 
 @Serializable
@@ -28,14 +38,14 @@ data class FileMessage(
   override val type: MessageType = MessageType.FILE
   override val hasPayload: Boolean = true
 
-  class FileSendRequest(
+  data class FileSendRequest(
     override val message: FileMessage,
-    val pathFile: String
+    val file: PlatformFile
   ) : SendMessageRequest
 }
 
-fun FileMessage.toSendRequest(filePath: String): FileMessage.FileSendRequest {
-  return FileMessage.FileSendRequest(this, filePath)
+fun FileMessage.toSendRequest(file: PlatformFile): FileMessage.FileSendRequest {
+  return FileMessage.FileSendRequest(this, file)
 }
 
 class FileMessageHandler(
@@ -52,7 +62,7 @@ class FileMessageHandler(
   ) {
     log("FileMessageHandler", "Receiving file $message")
 
-    coroutines.ioDispatcher.invoke {
+    coroutines.ioDispatcher {
       log("FileMessageHandler", "Ready to receive file $message")
 
       receiveFlow.update {
@@ -109,8 +119,6 @@ class FileMessageHandler(
               )
             }
           }
-
-          it.flush()
         }
       }.onSuccess {
         log("FileMessageHandler", "Received file with size: $totalBytesReceived")
@@ -146,10 +154,13 @@ class FileMessageHandler(
       val initialMessage = serializer.serialize(request.message)
       webSocketSession.send(initialMessage)
 
-      val path = request.pathFile
+      val sourceFile = request.file
 
-      log("FileMessageHandler", "Sending file with path: $path")
+      log("FileMessageHandler", "Sending file with path: $sourceFile")
 
+      // Constants for optimal performance
+      val chunkSize: Long = min(64 * 1024, webSocketSession.maxFrameSize) // 64KB chunks - good balance for WebSocket frames
+      val flushInterval = 10 // Flush every 10 frames (640KB)
 
       val buffer = Buffer()
       var totalSent = 0L
@@ -158,22 +169,29 @@ class FileMessageHandler(
       val start = clock.currentTimeMillis()
       runCatching {
 
-        fileManager.getReadStreamFromUri(path).use { readBuffer ->
+        fileManager.getReadStreamFrom(sourceFile).buffered().use { readBuffer ->
           while (!readBuffer.exhausted()) {
+            buffer.clear()
 
-            readBuffer.readAtMostTo(
-              buffer,
-              106496
-            )
+            kotlin.runCatching {
+              readBuffer.readAtMostTo(buffer, chunkSize)
+            }.onFailure {
+              log("FileMessageHandler", "Error while reading file", it)
+              throw it
+            }
+
 
             // closing the Frame with fin so the receiver can receive the full frame and flush to disk
-            val flush = (frameCount % 5 == 0 && frameCount > 0) || readBuffer.exhausted()
             val bufferSize = buffer.size
+            val isLastChunk = readBuffer.exhausted()
 
-            webSocketSession.send(Frame.Binary(flush, buffer))
+            // Determine when to set fin=true (for complete frames) and when to flush
+            val shouldFlush = isLastChunk || frameCount % flushInterval == 0
 
-            if (flush) {
-              webSocketSession.flush()
+            webSocketSession.send(Frame.Binary(shouldFlush, buffer))
+
+            if (shouldFlush) {
+              webSocketSession.maxFrameSize
             }
 
             totalSent += bufferSize
@@ -183,14 +201,16 @@ class FileMessageHandler(
           }
 
           webSocketSession.flush()
+          buffer.close()
         }
       }.onSuccess {
-        log("FileMessageHandler", "File ${request.pathFile} sent successfully in ${clock.currentTimeMillis() - start} ms")
+        log("FileMessageHandler", "File ${request.file} sent successfully in ${clock.currentTimeMillis() - start} ms")
       }.onFailure {
         log("FileMessageHandler", "Error sending file", it)
-        webSocketSession.send(Frame.Binary(true, ByteArray(0)))
-        webSocketSession.flush()
+//        webSocketSession.flush()
         buffer.close()
+
+        log("FileMessageHandler", "After error exists? ${request.file.exists()} ${request.file.size()} ${request.file.readBytes().size}")
 
         throw it
       }
@@ -200,7 +220,7 @@ class FileMessageHandler(
   private suspend fun updateSentProgress(progress: MutableSharedFlow<MessengerSendProgress>, sent: Long, total: Long) {
     val progressValue = (sent * 100) / total
     progress.emit(MessengerSendProgress.InProgress(progressValue.toInt()))
-    log("FileMessageHandler", "Sending update progress: $progressValue")
+    log("FileMessageHandler", "Sending update progress: $progressValue% - $sent / $total")
   }
 
 

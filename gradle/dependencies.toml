@@ -11,6 +11,7 @@ dagger = "2.55"
 androidx-activity = "1.10.1"
 kotlinx-io = "0.7.0"
 sentry-multiplatform = "0.11.0"
+filekit = "0.10.0-beta01"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -49,6 +50,8 @@ jmdns = { module = "org.jmdns:jmdns", version = "3.6.0" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.0"}
 sentry-kotlin-multiplatform = { module = "io.sentry:sentry-kotlin-multiplatform", version.ref = "sentry-multiplatform" }
+filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekit" }
+filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -63,4 +66,5 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 
 squareup-wire = { id = "com.squareup.wire", version = "5.3.0" }
 sentry-multiplatform = { id = "io.sentry.kotlin.multiplatform.gradle", version.ref = "sentry-multiplatform" }
+sentry-android = { id = "io.sentry.android.gradle", version = "5.3.0" }
 

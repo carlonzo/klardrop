@@ -4,14 +4,15 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import com.carlom.klardrop.common.ApplicationInfo
-import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.KnownDevicesRepositoryImpl
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepositoryImpl
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.nextString
 import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import okio.FileSystem.Companion.SYSTEM_TEMPORARY_DIRECTORY
 import okio.Path.Companion.toPath
 import kotlin.random.Random
@@ -19,7 +20,7 @@ import kotlin.random.Random
 class StorageModule(
   private val applicationInfo: ApplicationInfo,
   private val coroutines: Coroutines,
-  private val platformDependencies: InternalPlatformDependencies
+  private val platformFileSystem: PlatformFileSystem
 ) {
 
   private companion object {
@@ -44,7 +45,7 @@ class StorageModule(
   fun localPropertiesRepository(): LocalPropertiesRepository {
     return LocalPropertiesRepositoryImpl(
       getPreferencesDatastore {
-        storageFilePath({ platformDependencies.getPrivateAppStoragePath() }, propertiesFileName)
+        storageFilePath({ platformFileSystem.getInternalStoragePath() }, propertiesFileName)
       }, coroutines
     )
   }
@@ -52,7 +53,7 @@ class StorageModule(
   fun knownDevicesRepository(): KnownDevicesRepository {
     return KnownDevicesRepositoryImpl(getPreferencesDatastore {
       storageFilePath(
-        { platformDependencies.getPrivateAppStoragePath() },
+        { platformFileSystem.getInternalStoragePath() },
         knownDevicesFileName
       )
     }, coroutines)

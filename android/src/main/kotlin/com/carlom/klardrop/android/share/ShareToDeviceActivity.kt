@@ -25,6 +25,7 @@ import com.carlom.klardrop.android.applicationComponent
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.theme.AppTheme
+import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.mapNotNull
@@ -81,10 +82,12 @@ class ShareToDeviceActivity : AppCompatActivity() {
           handleSendFile(intent) // Handle single image being sent
         }
       }
+
       Intent.ACTION_SEND_MULTIPLE -> {
         log("ShareToDeviceActivity", "Handling multiple files $intent")
         handleSendMultipleFiles(intent)
       }
+
       else -> {
         // Handle other intents, such as being started from the home screen
         log("ShareToDeviceActivity", "Unhandled intent: $intent")
@@ -121,13 +124,16 @@ class ShareToDeviceActivity : AppCompatActivity() {
 
   private fun handleSendFile(intent: Intent) {
     (intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri)?.let {
-      shareToDeviceController.initializeItemToShare(OnDataToSend.FilesList(listOf(it.toString())))
+      shareToDeviceController.initializeItemToShare(OnDataToSend.FilesList(listOf(PlatformFile(it))))
     }
   }
 
   private fun handleSendMultipleFiles(intent: Intent) {
     intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM)?.let {
-      shareToDeviceController.initializeItemToShare(OnDataToSend.FilesList(it.toList().map { it.toString() }))
+      shareToDeviceController.initializeItemToShare(OnDataToSend.FilesList(it.toList().map {
+        it as Uri
+        PlatformFile(it)
+      }))
     }
   }
 

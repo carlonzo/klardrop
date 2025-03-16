@@ -9,17 +9,17 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
 @Serializable(with = DeviceTypesSerializer::class)
-enum class DeviceType(val id: Byte) {
+enum class DeviceType(val nearbyId: Byte) {
   MOBILE(1), DESKTOP(2), UNKNOWN(15);
 
   companion object {
     fun fromId(id: Byte): DeviceType {
-      return DeviceType.values().first { it.id == id }
+      return entries.first { it.nearbyId == id }
     }
 
     fun fromId(id: Int): DeviceType {
       val b = id.toByte()
-      return DeviceType.values().first { it.id == b }
+      return entries.first { it.nearbyId == b }
     }
   }
 }
@@ -32,7 +32,7 @@ internal class DeviceTypesSerializer : KSerializer<DeviceType> {
   }
 
   override fun serialize(encoder: Encoder, value: DeviceType) {
-    encoder.encodeByte(value.id)
+    encoder.encodeByte(value.nearbyId)
   }
 
 }

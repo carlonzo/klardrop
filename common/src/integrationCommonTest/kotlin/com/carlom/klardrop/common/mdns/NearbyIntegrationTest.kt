@@ -19,6 +19,7 @@ import com.carlom.klardrop.common.receiver.MessageReceiverImpl
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
+import io.github.vinceglb.filekit.PlatformFile
 import io.ktor.network.sockets.InetSocketAddress
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -102,7 +103,7 @@ private class FakeFileManager : FileManager {
     error("not implemented")
   }
 
-  override fun getReadStreamFromUri(fileName: String): Source {
+  override fun getReadStreamFrom(file: PlatformFile): Source {
     error("not implemented")
   }
 

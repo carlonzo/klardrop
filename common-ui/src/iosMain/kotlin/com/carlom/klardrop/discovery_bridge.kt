@@ -17,12 +17,7 @@ class DiscoveryBridge {
 
   fun RootKlardropApp() = ComposeUIViewController {
 
-    val uiDependencies = object : UiDependencies {
-      override fun filePickerFactory(): FilePickerFactory {
-        return FilePickerFactory(klardrop.commonComponent.platformFileSystem())
-      }
-
-    }
+    val uiDependencies = object : UiDependencies {}
 
     AppTheme {
       KlardropApp(

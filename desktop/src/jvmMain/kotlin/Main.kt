@@ -2,13 +2,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import com.carlom.klardrop.FilePickerFactory
 import com.carlom.klardrop.KlardropApp
 import com.carlom.klardrop.UiDependencies
 import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
+import io.github.vinceglb.filekit.FileKit
 
 fun main(args: Array<String>) {
 
@@ -32,6 +32,8 @@ fun main(args: Array<String>) {
   )
   k.init()
 
+  FileKit.init("klardrop")
+
   application {
 
     val windowState = rememberWindowState()
@@ -44,12 +46,7 @@ fun main(args: Array<String>) {
     ) {
 
       val uiDependencies = remember(window) {
-        object : UiDependencies {
-          override fun filePickerFactory(): FilePickerFactory {
-            return FilePickerFactory(window)
-          }
-
-        }
+        object : UiDependencies {}
       }
 
       AppTheme {

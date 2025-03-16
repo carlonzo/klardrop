@@ -20,13 +20,14 @@ import com.google.location.nearby.connections.proto.OsInfo
 import com.google.location.nearby.connections.proto.PayloadTransferFrame
 import com.google.location.nearby.connections.proto.V1Frame
 import com.google.location.nearby.connections.proto.WifiLanUsableChannels
+import io.github.vinceglb.filekit.readBytes
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.io.buffered
 import okio.ByteString.Companion.toByteString
-import okio.use
 import sharing.nearby.ConnectionResponseFrame.Status
 import sharing.nearby.FileMetadata
 import sharing.nearby.Frame
@@ -48,7 +49,7 @@ class NearbyClientConnectionHandler(
 
   suspend fun onConnection(connection: Socket, sendFlow: MutableSharedFlow<MessengerSendProgress>) {
 
-    log("NearbyClientConnectionHandler", "Starting connection")
+    log("NearbyClientConnectionHandler", "Starting connection to transfer $sendRequests using Nearby protocol")
 
     sendFlow.emit(MessengerSendProgress.Pending)
 
@@ -116,7 +117,7 @@ class NearbyClientConnectionHandler(
         is FileMessage.FileSendRequest -> {
           log("initiateTransfer", "Transferring file: ${request.message}")
 
-          fileManager.getReadStreamFromUri(request.pathFile).use { source ->
+          fileManager.getReadStreamFrom(request.file).buffered().use { source ->
 
             sendEncryptedWrappedPayload(
               source = source,

@@ -14,20 +14,21 @@ import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
+import com.carlom.klardrop.common.utils.PlatformFileSystemImpl
 import com.carlom.klardrop.common.utils.UtilsModule
 import kotlinx.serialization.protobuf.ProtoBuf
 
 class CommonComponent(
   private val applicationInfo: ApplicationInfo,
   private val utilsModule: UtilsModule,
-  private val internalPlatformDependency: InternalPlatformDependencies
+  private val internalPlatformDependency: InternalPlatformDependencies,
 ) {
 
   private val storageModule: StorageModule by lazy {
     StorageModule(
       applicationInfo,
-      utilsModule.coroutines(),
-      internalPlatformDependency
+      coroutines,
+      platformFileSystem
     )
   }
 
@@ -42,11 +43,8 @@ class CommonComponent(
   private val coroutines: Coroutines by lazy { utilsModule.coroutines() }
   private val clock: Clock by lazy { utilsModule.clock() }
   private val protoBuf = ProtoBuf
-  private val currentDeviceProvider by lazy {
-    CurrentDeviceProvider(
-      localProperties
-    )
-  }
+  private val currentDeviceProvider by lazy { CurrentDeviceProvider(localProperties) }
+  private val platformFileSystem: PlatformFileSystem by lazy { PlatformFileSystemImpl(internalPlatformDependency, coroutines) }
 
   private val communicationModule by lazy {
     CommunicationModule(
@@ -69,9 +67,6 @@ class CommonComponent(
   private val clipboardManager by lazy {
     ClipboardManager(coroutines, internalPlatformDependency.clipboardReaderWriter())
   }
-
-  private val platformFileSystem: PlatformFileSystem
-    get() = internalPlatformDependency.platformFileSystem()
 
   private val fileManager: FileManager
     get() = FileManagerImpl(platformFileSystem)
