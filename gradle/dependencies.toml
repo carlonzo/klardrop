@@ -46,7 +46,7 @@ dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = 
 
 simplestorage = { module = "com.anggrayudi:storage", version = "2.0.0" }
 
-jmdns = { module = "org.jmdns:jmdns", version = "3.6.0" }
+jmdns = { module = "org.jmdns:jmdns", version = "3.6.1" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.0"}
 sentry-kotlin-multiplatform = { module = "io.sentry:sentry-kotlin-multiplatform", version.ref = "sentry-multiplatform" }
