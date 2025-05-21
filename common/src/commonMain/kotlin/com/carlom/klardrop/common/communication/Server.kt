@@ -3,19 +3,16 @@ package com.carlom.klardrop.common.communication
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
-import com.carlom.klardrop.common.persistence.KlardropProperties
-import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import io.ktor.server.application.*
-import io.ktor.server.cio.*
-import io.ktor.server.engine.*
-import io.ktor.server.routing.*
-import io.ktor.server.websocket.*
-import io.ktor.websocket.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
+import io.ktor.network.selector.*
+import io.ktor.network.sockets.*
+import io.ktor.utils.io.*
+import io.ktor.utils.io.errors.IOException // For specific IO error handling
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.ClosedReceiveChannelException // For specific channel closed errors
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 
 
 class Server(
@@ -30,70 +27,133 @@ class Server(
     return true // always accept for now. should only accept if known? or just hold the connection if known?
   }
 
+  /**
+   * Starts the TCP server and returns the host and port it's listening on.
+   *
+   * @return A Pair containing the host (String) and port (Int).
+   */
+  suspend fun startServer(): Pair<String, Int> {
+    val selectorManager = SelectorManager(Dispatchers.IO)
+    val serverSocket = aSocket(selectorManager).tcp()
+      .bind("0.0.0.0", 0) // Bind to all interfaces, OS assigns port
 
-  @Suppress("ExtractKtorModule")
-  suspend
-      /**
-       * Starts the server and returns the configuration of the engine connector.
-       *
-       * @return The configuration of the engine connector.
-       */
-  fun startServer(): EngineConnectorConfig {
+    val localAddress = serverSocket.localAddress as InetSocketAddress
+    val host = localAddress.hostname
+    val port = localAddress.port
 
-    val server = embeddedServer(CIO, port = 0) {
+    log("Server", "Server starting on $host:$port")
 
-      install(WebSockets) {
-
-        pingPeriodMillis = 10_000
-        timeoutMillis = 10_000
-
-        extensions { install(FrameLoggerExtension) }
-      }
-
-      routing {
-        webSocket("/connect") {
-          val remoteAddress = call.request.local.remoteAddress
+    coroutines.ioScope.launch {
+      try {
+        while (isActive) {
+          log("Server", "Waiting for incoming connections...")
+          val clientSocket = serverSocket.accept()
+          val remoteAddress = clientSocket.remoteAddress.toString()
           log("Server", "New connection from: $remoteAddress")
-
-          onConnectionRequest(this, remoteAddress)
+          // Launch a new coroutine for each client to handle connection request
+          // This prevents blocking the accept loop
+          launch {
+            onConnectionRequest(clientSocket, remoteAddress)
+          }
         }
+      } catch (e: Exception) {
+        if (e is io.ktor.network.sockets.SocketClosedException || e is kotlinx.coroutines.CancellationException) {
+          log("Server", "Server socket closed or coroutine cancelled, stopping accept loop.")
+        } else {
+          log("Server", "Error in server accept loop: ${e.message}", e)
+        }
+      } finally {
+        if (!serverSocket.isClosed) {
+          serverSocket.close()
+        }
+        selectorManager.close() // Close selectorManager when server stops
+        log("Server", "Server stopped.")
       }
-
     }
-    server.start(wait = false)
 
-    val config = server.engine.resolvedConnectors().first()
-
-    log("Server", "Server started on ${config.host}:${config.port}")
-
-    return config
+    log("Server", "Server started and listening on $host:$port")
+    return Pair(host, port)
   }
 
-  // 36645 n 36951
-  private suspend fun onConnectionRequest(wsSession: DefaultWebSocketServerSession, remoteAddress: String) {
-    val request = serializer.deserialize(wsSession.incoming.receive()) as HandshakeMessage
+  private suspend fun onConnectionRequest(socket: Socket, remoteAddress: String) {
+    val input = socket.openReadChannel()
+    val output = socket.openWriteChannel(autoFlush = true) // autoFlush is important
 
-    log("Server", "Connection request from: $remoteAddress - ${request.deviceId}")
+    try {
+      // Receive Handshake
+      log("Server", "Awaiting handshake from $remoteAddress")
+      val requestLength = input.readInt()
+      if (requestLength <= 0 || requestLength > 1024 * 1024) { // Basic sanity check for length
+          log("Server", "Invalid handshake length $requestLength from $remoteAddress. Closing.")
+          socket.close()
+          return
+      }
+      val requestBytes = ByteArray(requestLength)
+      input.readFully(requestBytes, 0, requestLength)
 
-    if (isAcceptedSender(request.deviceId, remoteAddress)) {
-      val connection = Connection(wsSession, request.deviceId)
-      val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
+      val receivedMessage = serializer.deserialize(requestBytes)
 
-      connectionsPool.updateConnection(request.deviceId, connectionMessenger)
+      if (receivedMessage !is HandshakeMessage) {
+        log("Server", "Received non-Handshake message during handshake from $remoteAddress. Type: ${receivedMessage.type}. Closing.")
+        socket.close()
+        return
+      }
+      val request = receivedMessage // Smart cast
+      log("Server", "Handshake received from: $remoteAddress - ${request.deviceId}")
 
-      //    send back introduction
-      val deviceId = currentDeviceProvider.get().shortDeviceId
-      val intro = HandshakeMessage(deviceId)
-      log("Server", "Sending greetings back to ${request.deviceId} on $remoteAddress")
-      wsSession.send(serializer.serialize(intro))
+      if (isAcceptedSender(request.deviceId, remoteAddress)) {
+        // Send Handshake Response
+        val currentDeviceId = currentDeviceProvider.get().shortDeviceId
+        val handshakeResponse = HandshakeMessage(currentDeviceId)
+        val serializedResponse = serializer.serialize(handshakeResponse)
 
-      log("Server", "Connection accepted from: $remoteAddress")
+        output.writeInt(serializedResponse.size)
+        output.writeFully(serializedResponse)
+        // output.flush() // autoFlush=true should handle this, but explicit flush can be added if needed.
 
-      connectionMessenger.acceptIncomingMessages()
-    } else {
-      log("Server", "Connection rejected from: $remoteAddress")
-      wsSession.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "Connection rejected"))
+        log("Server", "Sent handshake response to ${request.deviceId} on $remoteAddress. Connection accepted.")
+
+        // Instantiate Connection and ConnectionMessenger, then start listening
+        val connection = Connection(socket, request.deviceId)
+        val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
+        connectionsPool.updateConnection(request.deviceId, connectionMessenger)
+
+        log("Server", "Handing off connection for ${request.deviceId} to ConnectionMessenger.")
+        // This is a suspending call and will keep the coroutine alive, processing messages.
+        connectionMessenger.acceptIncomingMessages() 
+
+        log("Server", "Connection for ${request.deviceId} on $remoteAddress finished or closed by messenger.")
+
+      } else {
+        log("Server", "Connection rejected for ${request.deviceId} from $remoteAddress.")
+        socket.close()
+      }
+    } catch (e: ClosedReceiveChannelException) {
+      log("Server", "Connection closed by peer $remoteAddress during handshake or early communication: ${e.message}", e)
+      if (!socket.isClosed) socket.close()
+    } catch (e: IOException) {
+      log("Server", "IO error during handshake/communication with $remoteAddress: ${e.message}", e)
+      if (!socket.isClosed) socket.close()
+    } catch (e: SerializationException) { // Assuming MessageSerializer throws this or a custom one
+        log("Server", "Serialization/Deserialization error with $remoteAddress: ${e.message}", e)
+        if (!socket.isClosed) socket.close()
+    } catch (e: Exception) {
+      log("Server", "Unexpected error during connection request from $remoteAddress: ${e.message}", e)
+      if (!socket.isClosed) socket.close()
+    } finally {
+      // If acceptIncomingMessages() finishes (e.g. connection closed), this block will execute.
+      // We need to ensure the socket is closed if it hasn't been already by one of the error handlers
+      // or by ConnectionMessenger itself.
+      if (!socket.isClosed && !connectionsPool.isAvailable(socket.remoteAddress.toString())) { // A bit tricky to get deviceId here if handshake failed early
+         // log("Server", "Ensuring socket for $remoteAddress is closed in finally block.")
+         // socket.close() // Potentially redundant if ConnectionMessenger closes it, but can be a safeguard.
+      }
     }
+    // If acceptIncomingMessages is running, the socket is managed by ConnectionMessenger.
+    // If handshake failed, socket is closed in catch blocks.
   }
-
 }
+
+// Helper for MessageSerializer if it throws a specific exception.
+// For now, using a generic Exception in the catch block for serialization.
+class SerializationException(message: String, cause: Throwable? = null) : Exception(message, cause)

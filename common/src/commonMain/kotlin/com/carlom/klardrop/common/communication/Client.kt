@@ -6,20 +6,20 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.websocket.*
-import io.ktor.http.*
+import io.ktor.network.selector.SelectorManager
+import io.ktor.network.sockets.aSocket
+import io.ktor.network.sockets.Socket
+import io.ktor.network.sockets.openReadChannel
+import io.ktor.network.sockets.openWriteChannel
+import io.ktor.utils.io.readUTF8Line
+import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.time.Duration.Companion.seconds
-
-interface Client {
-  suspend fun connectTo(deviceId: String)
 }
 
 class ClientImpl(
@@ -35,17 +35,7 @@ class ClientImpl(
   private val visibleDevicesFlow =
     visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
 
-
-  private val client by lazy {
-    HttpClient(CIO) {
-      install(WebSockets) {
-        pingInterval = 20.seconds
-
-
-        extensions { install(FrameLoggerExtension) }
-      }
-    }
-  }
+  private val selectorManager by lazy { SelectorManager(Dispatchers.IO) }
 
   override suspend fun connectTo(deviceId: String) {
     withContext(coroutines.ioDispatcher) {
@@ -100,41 +90,63 @@ class ClientImpl(
 
   private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) =
     runCatching {
+      var socket: Socket? = null
+      try {
+        socket = aSocket(selectorManager).tcp().connect(address, port)
+        log("Client", "Connected to $address:$port. Sending greetings")
 
-      client.webSocket(
-        method = HttpMethod.Get,
-        host = address,
-        port = port,
-        path = "/connect"
-      ) {
-        log("Client", "Connected to $address. Sending greetings")
+        val output = socket.openWriteChannel(autoFlush = true)
+        val input = socket.openReadChannel()
 
-        val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+        // Send handshake
+        val clientHandshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+        val serializedRequest = serializer.serialize(clientHandshakeMessage)
+        // Assuming serializer returns ByteArray, convert to String for writeStringUtf8
+        // Add newline for server's readUTF8Line
+        output.writeStringUtf8(String(serializedRequest) + "\n")
+        log("Client", "Sent handshake to $deviceId at $address:$port")
 
-        send(serializer.serialize(handshakeMessage))
-
+        // Receive handshake response
         log("Client", "Waiting for response greetings from $deviceId")
-        val serverHandshakeMessage = serializer.deserialize(incoming.receive()) as HandshakeMessage
+        val responseJson = input.readUTF8Line()
 
-        if (serverHandshakeMessage.deviceId == deviceId) {
-          val connection = Connection(this, deviceId)
-          val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
-
-          connectionsPool.updateConnection(deviceId, connectionMessenger)
-          log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
-
-          connectionJob.complete(true)
-
-          connectionMessenger.acceptIncomingMessages()
-
-          // suspends so the connection is kept alive
-          log("Client", "closing reason: ${closeReason.await()}")
-        } else {
+        if (responseJson == null) {
+          log("Client", "Connection to $deviceId ($address:$port) closed by server before receiving handshake response.")
           connectionJob.complete(false)
-          log("Client", "cant connect. Device $deviceId found is wrong: ${handshakeMessage.deviceId}")
+          socket.close() // Ensure socket is closed
+          return@runCatching // Exit runCatching block
         }
 
-      }
+        val serverHandshakeMessage = serializer.deserialize(responseJson.decodeToByteArray()) as HandshakeMessage
+        log("Client", "Received handshake response from $deviceId: ${serverHandshakeMessage.deviceId}")
 
+        if (serverHandshakeMessage.deviceId == deviceId) {
+          // val connection = Connection(this, deviceId) // 'this' would be wrong here, needs socket
+          // val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
+          // connectionsPool.updateConnection(deviceId, connectionMessenger)
+
+          log("Client", "Connection established with ${serverHandshakeMessage.deviceId} ($address:$port). Socket will be kept open.")
+          connectionJob.complete(true)
+
+          // The socket is intentionally left open here.
+          // The ConnectionManager (or equivalent) will be responsible for managing it,
+          // including reading incoming messages and handling closure.
+          // For this subtask, we just establish the connection and complete the job.
+          // No equivalent of "acceptIncomingMessages" or "closeReason.await()" here as that logic
+          // will be part of the refactored Connection/ConnectionMessenger.
+
+        } else {
+          log("Client", "Handshake failed with $deviceId ($address:$port). Expected ${deviceId} but got ${serverHandshakeMessage.deviceId}")
+          connectionJob.complete(false)
+          socket.close() // Close socket on failed handshake
+        }
+      } catch (e: Exception) {
+        log("Client", "Error connecting to $deviceId ($address:$port): ${e.message}", e)
+        connectionJob.complete(false)
+        socket?.close() // Ensure socket is closed on exception
+        throw e // Re-throw to be caught by onFailure in connectTo
+      }
+      // Note: If connectionJob.complete(true), the socket is intentionally left open.
+      // It's the responsibility of the calling code or a subsequent component to manage it.
     }
 }

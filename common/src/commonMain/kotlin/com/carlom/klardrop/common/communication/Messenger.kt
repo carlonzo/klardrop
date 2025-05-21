@@ -29,7 +29,7 @@ interface Messenger {
 class MessengerImpl(
   private val visibleDevices: VisibleDevices,
   private val connectionsPool: ConnectionsPool,
-  private val client: Client,
+  private val client: ClientImpl, // Changed from Client to ClientImpl
   coroutines: Coroutines,
   private val nearbyClient: NearbyClient,
   private val messageReceiver: MessageReceiver
