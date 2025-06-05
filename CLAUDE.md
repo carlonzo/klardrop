@@ -76,4 +76,6 @@ Each platform provides implementations for:
 
 ## Common Development Commands
 
-Please provide the gradle commands for building, testing, and linting as they are not included in the existing documentation.
+- Compile sources for common and jvm platform: run the `:desktop:compileKotlinJvm` gradle task.
+- Run unit tests for common and jvm platform: run the `desktopJvmTest` gradle task.
+- To Run the desktop application: run the `:desktop:run` gradle task.

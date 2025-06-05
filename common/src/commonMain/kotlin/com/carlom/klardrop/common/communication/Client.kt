@@ -6,17 +6,16 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.websocket.*
-import io.ktor.http.*
+import io.ktor.network.selector.*
+import io.ktor.network.sockets.*
+import io.ktor.utils.io.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.time.Duration.Companion.seconds
 
 interface Client {
   suspend fun connectTo(deviceId: String)
@@ -35,17 +34,7 @@ class ClientImpl(
   private val visibleDevicesFlow =
     visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
 
-
-  private val client by lazy {
-    HttpClient(CIO) {
-      install(WebSockets) {
-        pingInterval = 20.seconds
-
-
-        extensions { install(FrameLoggerExtension) }
-      }
-    }
-  }
+  private val selectorManager = SelectorManager(Dispatchers.Default)
 
   override suspend fun connectTo(deviceId: String) {
     withContext(coroutines.ioDispatcher) {
@@ -101,39 +90,55 @@ class ClientImpl(
   private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) =
     runCatching {
 
-      client.webSocket(
-        method = HttpMethod.Get,
-        host = address,
-        port = port,
-        path = "/connect"
-      ) {
-        log("Client", "Connected to $address. Sending greetings")
+      val socket = aSocket(selectorManager).tcp().connect(address, port)
+      log("Client", "Connected to $address:$port. Sending greetings")
 
-        val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+      val readChannel = socket.openReadChannel()
+      val writeChannel = socket.openWriteChannel(autoFlush = true)
 
-        send(serializer.serialize(handshakeMessage))
+      val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+      val handshakeBytes = serializer.serialize(handshakeMessage)
+      
+      // Send message with length prefix
+      val lengthBytes = ByteArray(4)
+      lengthBytes[0] = (handshakeBytes.size shr 24).toByte()
+      lengthBytes[1] = (handshakeBytes.size shr 16).toByte()
+      lengthBytes[2] = (handshakeBytes.size shr 8).toByte()
+      lengthBytes[3] = handshakeBytes.size.toByte()
+      
+      writeChannel.writeFully(lengthBytes)
+      writeChannel.writeFully(handshakeBytes)
 
-        log("Client", "Waiting for response greetings from $deviceId")
-        val serverHandshakeMessage = serializer.deserialize(incoming.receive()) as HandshakeMessage
+      log("Client", "Waiting for response greetings from $deviceId")
+      
+      // Read response message length
+      val responseLengthBytes = ByteArray(4)
+      readChannel.readFully(responseLengthBytes)
+      val responseLength = (responseLengthBytes[0].toInt() and 0xFF shl 24) or
+                         (responseLengthBytes[1].toInt() and 0xFF shl 16) or 
+                         (responseLengthBytes[2].toInt() and 0xFF shl 8) or
+                         (responseLengthBytes[3].toInt() and 0xFF)
 
-        if (serverHandshakeMessage.deviceId == deviceId) {
-          val connection = Connection(this, deviceId)
-          val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
+      // Read the actual response message
+      val responseBytes = ByteArray(responseLength)
+      readChannel.readFully(responseBytes)
+      
+      val serverHandshakeMessage = serializer.deserialize(responseBytes) as HandshakeMessage
 
-          connectionsPool.updateConnection(deviceId, connectionMessenger)
-          log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
+      if (serverHandshakeMessage.deviceId == deviceId) {
+        val connection = Connection(socket, deviceId)
+        val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
 
-          connectionJob.complete(true)
+        connectionsPool.updateConnection(deviceId, connectionMessenger)
+        log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
 
-          connectionMessenger.acceptIncomingMessages()
+        connectionJob.complete(true)
 
-          // suspends so the connection is kept alive
-          log("Client", "closing reason: ${closeReason.await()}")
-        } else {
-          connectionJob.complete(false)
-          log("Client", "cant connect. Device $deviceId found is wrong: ${handshakeMessage.deviceId}")
-        }
-
+        connectionMessenger.acceptIncomingMessages()
+      } else {
+        connectionJob.complete(false)
+        log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
+        socket.close()
       }
 
     }

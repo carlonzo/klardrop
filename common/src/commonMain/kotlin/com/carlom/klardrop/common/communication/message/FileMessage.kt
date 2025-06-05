@@ -13,11 +13,7 @@ import io.github.vinceglb.filekit.exists
 import io.github.vinceglb.filekit.readBytes
 import io.github.vinceglb.filekit.size
 import io.ktor.util.cio.use
-import io.ktor.utils.io.asByteWriteChannel
-import io.ktor.utils.io.write
-import io.ktor.utils.io.writeByteArray
-import io.ktor.websocket.*
-import kotlinx.coroutines.channels.ReceiveChannel
+import io.ktor.utils.io.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -58,7 +54,7 @@ class FileMessageHandler(
 
   override suspend fun handleIncoming(
     message: FileMessage,
-    receiveChannel: ReceiveChannel<Frame>,
+    readChannel: ByteReadChannel,
     receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
   ) {
     log("FileMessageHandler", "Receiving file $message")
@@ -93,23 +89,25 @@ class FileMessageHandler(
 
           while (totalBytesReceived < message.fileSize) {
 
-            log("FileMessageHandler", "Waiting to receive new frame for $message")
-            val newFrame = withTimeout(5.seconds) {
-              receiveChannel.receive()
+            log("FileMessageHandler", "Waiting to receive data for $message")
+            val chunkSize = min(32 * 1024, (message.fileSize - totalBytesReceived).toInt())
+            val data = ByteArray(chunkSize)
+            
+            val bytesRead = withTimeout(5.seconds) {
+              readChannel.readFully(data, 0, chunkSize)
+              chunkSize
             }
 
-            val data = newFrame.data
+            log("FileMessageHandler", "Received $bytesRead bytes")
 
-            log("FileMessageHandler", "Received frame $newFrame")
-
-            if (newFrame.fin && data.isEmpty()) {
-              log("FileMessageHandler", "Received empty frame. Finishing")
+            if (bytesRead == 0) {
+              log("FileMessageHandler", "No more data. Finishing")
               break
             }
 
-            it.write(data)
+            it.write(data, 0, bytesRead)
 
-            totalBytesReceived += data.size
+            totalBytesReceived += bytesRead
             val progressValue = ((totalBytesReceived * 100L) / message.fileSize).toInt()
 
             log("FileMessageHandler", "Received total $totalBytesReceived / ${message.fileSize} :  Progress $progressValue %")
@@ -145,68 +143,55 @@ class FileMessageHandler(
 
   override suspend fun handleOutgoing(
     request: FileMessage.FileSendRequest,
-    webSocketSession: WebSocketSession,
+    writeChannel: ByteWriteChannel,
     progressFlow: MutableSharedFlow<MessengerSendProgress>
   ) {
     coroutines.ioDispatcher.invoke {
 
       updateSentProgress(progressFlow, 0, request.message.fileSize)
 
+      // Send initial message with metadata
       val initialMessage = serializer.serialize(request.message)
-      webSocketSession.send(initialMessage)
+      val initialLengthBytes = ByteArray(4)
+      initialLengthBytes[0] = (initialMessage.size shr 24).toByte()
+      initialLengthBytes[1] = (initialMessage.size shr 16).toByte()
+      initialLengthBytes[2] = (initialMessage.size shr 8).toByte()
+      initialLengthBytes[3] = initialMessage.size.toByte()
+      
+      writeChannel.writeFully(initialLengthBytes)
+      writeChannel.writeFully(initialMessage)
 
       val sourceFile = request.file
 
       log("FileMessageHandler", "Sending file with path: $sourceFile")
 
-      // Constants for optimal performance
-      val chunkSize: Long = min(32 * 1024, webSocketSession.maxFrameSize) // 32KB chunks - good balance for WebSocket frames
-      val flushInterval = 10 // Flush every 10 frames
-
-      val buffer = Buffer()
+      // Constants for optimal performance  
+      val chunkSize = 32 * 1024 // 32KB chunks
+      val buffer = ByteArray(chunkSize)
       var totalSent = 0L
-      var frameCount = 0
 
       val start = clock.currentTimeMillis()
       runCatching {
 
         fileManager.getReadStreamFrom(sourceFile).buffered().use { readBuffer ->
           while (!readBuffer.exhausted()) {
-            buffer.clear()
+            val bytesToRead = min(chunkSize.toLong(), request.message.fileSize - totalSent).toInt()
+            val bytesRead = readBuffer.readAtMostTo(buffer, 0, bytesToRead)
+            
+            if (bytesRead <= 0) break
 
-            kotlin.runCatching {
-              readBuffer.readAtMostTo(buffer, chunkSize)
-            }.onFailure {
-              log("FileMessageHandler", "Error while reading file", it)
-              throw it
-            }
+            writeChannel.writeFully(buffer, 0, bytesRead)
 
-
-            // closing the Frame with fin so the receiver can receive the full frame and flush to disk
-            val bufferSize = buffer.size
-            val isLastChunk = readBuffer.exhausted()
-
-            webSocketSession.send(Frame.Binary(isLastChunk, buffer))
-
-            totalSent += bufferSize
+            totalSent += bytesRead
             updateSentProgress(progressFlow, totalSent, request.message.fileSize)
 
-            frameCount += 1
-
-            val shouldFlush = frameCount % flushInterval == 0
-            if (shouldFlush) {
-              webSocketSession.flush()
-            }
+            log("FileMessageHandler", "Sent $totalSent / ${request.message.fileSize} bytes")
           }
-
-          webSocketSession.flush()
-          buffer.close()
         }
       }.onSuccess {
         log("FileMessageHandler", "File ${request.file} sent successfully in ${clock.currentTimeMillis() - start} ms")
       }.onFailure {
         log("FileMessageHandler", "Error sending file", it)
-        buffer.close()
 
         log("FileMessageHandler", "After error exists? ${request.file.exists()} ${request.file.size()} ${request.file.readBytes().size}")
 

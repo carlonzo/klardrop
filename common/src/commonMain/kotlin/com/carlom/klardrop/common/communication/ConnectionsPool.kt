@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.utils.log
-import io.ktor.websocket.*
+import io.ktor.network.sockets.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -75,11 +75,10 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
 }
 
 data class Connection(
-  val session: DefaultWebSocketSession,
+  val socket: Socket,
   val deviceId: String
 )
 
-internal fun DefaultWebSocketSession.isClosed(): Boolean {
-  // if there is a close reason, the connection may be closed
-  return closeReason.isCompleted
+internal fun Socket.isClosed(): Boolean {
+  return isClosed
 }
