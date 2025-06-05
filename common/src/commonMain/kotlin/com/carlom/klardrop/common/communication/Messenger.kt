@@ -86,17 +86,14 @@ class MessengerImpl(
 
     require(nearbyConnections.isNotEmpty()) { "Device $deviceId has no nearby connections" }
 
-    nearbyConnections.forEach {
+    nearbyConnections.first {
       log("Messenger", "Client sending message to $deviceId: ${it.address} ${it.port}")
 
       runCatching {
         nearbyClient.send(it.address, it.port, listOf(messageRequest), sendFlow)
-      }.onSuccess {
-        return@forEach
-      }.onFailure {
-
-        throw it
-      }
+      }.onFailure { exception ->
+        log("Messenger", "Error sending message to $deviceId", exception)
+      }.isSuccess
 
     }
 

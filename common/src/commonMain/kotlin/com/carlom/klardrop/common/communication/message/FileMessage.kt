@@ -25,6 +25,7 @@ import kotlinx.coroutines.invoke
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.Buffer
 import kotlinx.io.buffered
+import kotlinx.io.readByteArray
 import kotlinx.serialization.Serializable
 import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
@@ -159,8 +160,8 @@ class FileMessageHandler(
       log("FileMessageHandler", "Sending file with path: $sourceFile")
 
       // Constants for optimal performance
-      val chunkSize: Long = min(64 * 1024, webSocketSession.maxFrameSize) // 64KB chunks - good balance for WebSocket frames
-      val flushInterval = 10 // Flush every 10 frames (640KB)
+      val chunkSize: Long = min(32 * 1024, webSocketSession.maxFrameSize) // 32KB chunks - good balance for WebSocket frames
+      val flushInterval = 10 // Flush every 10 frames
 
       val buffer = Buffer()
       var totalSent = 0L
@@ -185,19 +186,17 @@ class FileMessageHandler(
             val bufferSize = buffer.size
             val isLastChunk = readBuffer.exhausted()
 
-            // Determine when to set fin=true (for complete frames) and when to flush
-            val shouldFlush = isLastChunk || frameCount % flushInterval == 0
-
-            webSocketSession.send(Frame.Binary(shouldFlush, buffer))
-
-            if (shouldFlush) {
-              webSocketSession.maxFrameSize
-            }
+            webSocketSession.send(Frame.Binary(isLastChunk, buffer))
 
             totalSent += bufferSize
             updateSentProgress(progressFlow, totalSent, request.message.fileSize)
 
             frameCount += 1
+
+            val shouldFlush = frameCount % flushInterval == 0
+            if (shouldFlush) {
+              webSocketSession.flush()
+            }
           }
 
           webSocketSession.flush()
@@ -207,7 +206,6 @@ class FileMessageHandler(
         log("FileMessageHandler", "File ${request.file} sent successfully in ${clock.currentTimeMillis() - start} ms")
       }.onFailure {
         log("FileMessageHandler", "Error sending file", it)
-//        webSocketSession.flush()
         buffer.close()
 
         log("FileMessageHandler", "After error exists? ${request.file.exists()} ${request.file.size()} ${request.file.readBytes().size}")
