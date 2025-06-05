@@ -9,7 +9,7 @@ import com.carlom.klardrop.common.utils.log
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 
@@ -33,7 +33,7 @@ class Server(
    * @return The server configuration containing host and port.
    */
   suspend fun startServer(): ServerConfig {
-    val selectorManager = SelectorManager(Dispatchers.Default)
+    val selectorManager = SelectorManager(coroutines.ioDispatcher)
     val serverSocket = aSocket(selectorManager).tcp().bind("0.0.0.0", 0)
 
     val localAddress = serverSocket.localAddress as InetSocketAddress
@@ -42,13 +42,13 @@ class Server(
 
     log("Server", "Server started on $host:$actualPort")
 
-    coroutines.appScope.launch {
-      while (true) {
+    coroutines.appScope.launch(coroutines.ioDispatcher) {
+      while (isActive) {
         val socket = serverSocket.accept()
         val remoteAddress = socket.remoteAddress.toString()
         log("Server", "New connection from: $remoteAddress")
 
-        coroutines.appScope.launch {
+        launch(coroutines.ioDispatcher) {
           try {
             onConnectionRequest(socket, remoteAddress)
           } catch (e: Exception) {
@@ -64,13 +64,12 @@ class Server(
 
   private suspend fun onConnectionRequest(socket: Socket, remoteAddress: String) {
     val readChannel = socket.openReadChannel()
-    val writeChannel = socket.openWriteChannel(autoFlush = true)
-
     val request = readChannel.readMessage(serializer) as HandshakeMessage
 
     log("Server", "Connection request from: $remoteAddress - ${request.deviceId}")
 
     if (isAcceptedSender(request.deviceId, remoteAddress)) {
+      val writeChannel = socket.openWriteChannel(autoFlush = true)
       val connection = Connection(socket, request.deviceId)
       val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter, readChannel, writeChannel)
 

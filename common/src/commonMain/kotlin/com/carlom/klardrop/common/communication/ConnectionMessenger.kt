@@ -53,6 +53,8 @@ class ConnectionMessenger internal constructor(
 
   suspend fun close() {
     log("ConnectionMessenger: Closing connection with ${connection.deviceId}")
+    readChannel.cancel()
+    writeChannel.flushAndClose()
     connection.socket.close()
   }
 

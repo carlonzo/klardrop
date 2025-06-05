@@ -36,7 +36,6 @@ class ClientImpl(
 
   override suspend fun connectTo(deviceId: String) = coroutines.ioDispatcher {
 
-
     if (connectionsPool.isAvailable(deviceId)) {
       log("Client", "has already a connection with $deviceId. skipping")
       return@ioDispatcher
