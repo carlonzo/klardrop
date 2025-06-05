@@ -21,11 +21,6 @@ kotlin {
         implementation(deps.kotlinx.coroutines.core)
 
         implementation(deps.ktor.network)
-        implementation(deps.ktor.server.websockets)
-        implementation(deps.ktor.server.core)
-        implementation(deps.ktor.server.cio)
-        implementation(deps.ktor.client.websockets)
-        implementation(deps.ktor.client.cio)
         implementation(deps.ktor.serialization.protobuf)
 
         implementation(deps.kotlinx.io.core)
