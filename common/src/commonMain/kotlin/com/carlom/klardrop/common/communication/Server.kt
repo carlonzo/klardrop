@@ -83,7 +83,7 @@ class Server(
 
     if (isAcceptedSender(request.deviceId, remoteAddress)) {
       val connection = Connection(socket, request.deviceId)
-      val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
+      val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter, readChannel, writeChannel)
 
       connectionsPool.updateConnection(request.deviceId, connectionMessenger)
 

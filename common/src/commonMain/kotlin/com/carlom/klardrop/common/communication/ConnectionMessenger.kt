@@ -13,11 +13,10 @@ import kotlinx.coroutines.withContext
 class ConnectionMessenger internal constructor(
   private val coroutines: Coroutines,
   private val connection: Connection,
-  private val messagesRouter: MessagesRouter
+  private val messagesRouter: MessagesRouter,
+  private val readChannel: ByteReadChannel,
+  private val writeChannel: ByteWriteChannel
 ) {
-
-  private val readChannel = connection.socket.openReadChannel()
-  private val writeChannel = connection.socket.openWriteChannel(autoFlush = true)
 
   init {
     if (connection.socket.isClosed) {

@@ -127,7 +127,7 @@ class ClientImpl(
 
       if (serverHandshakeMessage.deviceId == deviceId) {
         val connection = Connection(socket, deviceId)
-        val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
+        val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter, readChannel, writeChannel)
 
         connectionsPool.updateConnection(deviceId, connectionMessenger)
         log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
