@@ -13,7 +13,7 @@ The discovery mechanism uses mDNS to find devices on the local network.
 The project is organized into several modules:
 
 - **`common/`** - Core business logic and platform abstractions
-  - Communication layer (Client/Server, WebSocket messaging)
+  - Communication layer (Client/Server, raw TCP socket messaging)
   - Device discovery (mDNS, nearby share protocols)
   - File management and transfer
   - Dependency injection with Dagger
@@ -38,14 +38,35 @@ Platform-specific modules:
 - **Klardrop** (`common/src/commonMain/kotlin/com/carlom/klardrop/common/Klardrop.kt`) - Main entry point that initializes servers and discovery
 - **CommonComponent** - Main dependency injection component providing all services
 - **DiscoveryNetwork** - Handles device discovery via mDNS for multiple protocols
-- **Server/Client** - WebSocket-based communication layer using Ktor
+- **Server/Client** - Raw TCP socket-based communication layer using Ktor
 - **FileManager** - Cross-platform file operations using kotlinx-io
 
 ### Communication Protocols
 
 The app supports multiple sharing protocols:
-- **Klardrop protocol** - Custom WebSocket-based protocol
+- **Klardrop protocol** - Custom raw TCP socket protocol with length-prefixed messages
 - **Nearby Share** - Google's nearby sharing protocol
+
+#### Klardrop Socket Protocol
+
+The Klardrop protocol uses raw TCP sockets with a simple length-prefixed message format:
+
+```
+[4 bytes: message length][message data: type_id + protobuf_payload]
+```
+
+**Key Features:**
+- **Connection**: Direct TCP socket connection using Ktor network
+- **Handshake**: Device identification exchange using shortened device IDs (8 chars)
+- **Messages**: Protocol Buffer serialized with type prefix (TEXT, FILE, HANDSHAKE)
+- **File Transfer**: Streaming transfer with 32KB chunks and progress tracking
+- **Multiplexing**: Single connection handles all message types bidirectionally
+
+**Benefits over WebSocket:**
+- Lower overhead (no WebSocket framing)
+- Simpler debugging and monitoring
+- Better cross-platform compatibility
+- Reduced dependency footprint
 
 ### Platform Dependencies
 
@@ -67,7 +88,7 @@ Each platform provides implementations for:
 
 - **Kotlin Multiplatform** - Code sharing across platforms
 - **Compose Multiplatform** - Cross-platform UI framework
-- **Ktor** - Networking and WebSocket communication
+- **Ktor** - Networking and raw TCP socket communication
 - **kotlinx.coroutines** - Asynchronous programming
 - **kotlinx.serialization** - Data serialization with Protocol Buffers
 - **Dagger** - Dependency injection
@@ -76,4 +97,6 @@ Each platform provides implementations for:
 
 ## Common Development Commands
 
-Please provide the gradle commands for building, testing, and linting as they are not included in the existing documentation.
+- Compile sources for common and jvm platform: run the `:desktop:compileKotlinJvm` gradle task.
+- Run unit tests for common and jvm platform: run the `desktopJvmTest` gradle task.
+- To Run the desktop application: run the `:desktop:run` gradle task.

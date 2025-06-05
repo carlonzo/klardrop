@@ -42,7 +42,7 @@ kotlin {
 
     pod("Sentry") {
       // Check the version compatibility table for the correct version
-      version = "8.44.0"
+      version = "8.49.0"
       linkOnly = true
       extraOpts += listOf("-compiler-option", "-fmodules")
     }

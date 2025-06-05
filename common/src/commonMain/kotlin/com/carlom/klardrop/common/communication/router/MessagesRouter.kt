@@ -4,23 +4,24 @@ import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.readMessage
+import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import io.ktor.websocket.*
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.SendChannel
+import io.ktor.utils.io.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 
 interface MessagesRouter {
-  suspend fun onMessageIncoming(fromDeviceId: String, sendChannel: SendChannel<Frame>, receiveChannel: ReceiveChannel<Frame>)
+  suspend fun onMessageIncoming(fromDeviceId: String, writeChannel: ByteWriteChannel, readChannel: ByteReadChannel)
   suspend fun <S : SendMessageRequest> onSendingMessage(
     toDeviceId: String,
     sendMessageRequest: S,
-    webSocketSession: WebSocketSession,
+    writeChannel: ByteWriteChannel,
+    readChannel: ByteReadChannel,
     progress: MutableSharedFlow<MessengerSendProgress>
   )
 }
@@ -31,15 +32,13 @@ class MessagesRouterImpl(
   private val coroutines: Coroutines,
   private val messengeReceiver: MessageReceiver,
 ) : MessagesRouter {
-  override suspend fun onMessageIncoming(fromDeviceId: String, sendChannel: SendChannel<Frame>, receiveChannel: ReceiveChannel<Frame>) =
+  override suspend fun onMessageIncoming(fromDeviceId: String, writeChannel: ByteWriteChannel, readChannel: ByteReadChannel) =
     coroutines.ioDispatcher {
-      val firstFrame = receiveChannel.receive()
 
-      val message = messageSerializer.deserialize(firstFrame)
+      val message =  readChannel.readMessage(messageSerializer)
       log("MessagesRouter", "Received message from $fromDeviceId: $message")
 
       val receiveFlow = messengeReceiver.onReceiveMessage(fromDeviceId)
-
 
       if (message.hasPayload) {
         // message has extra payload. we need to handle it
@@ -49,7 +48,7 @@ class MessagesRouterImpl(
           return@ioDispatcher
         }
 
-        messageHandler.handleIncoming(message, receiveChannel, receiveFlow)
+        messageHandler.handleIncoming(message, readChannel, receiveFlow)
       } else {
         receiveFlow.update {
           it.copy(
@@ -63,11 +62,11 @@ class MessagesRouterImpl(
   override suspend fun <S : SendMessageRequest> onSendingMessage(
     toDeviceId: String,
     sendMessageRequest: S,
-    webSocketSession: WebSocketSession,
+    writeChannel: ByteWriteChannel,
+    readChannel: ByteReadChannel,
     progress: MutableSharedFlow<MessengerSendProgress>
   ) {
     coroutines.ioDispatcher {
-
       val message = sendMessageRequest.message
 
       if (message.hasPayload) {
@@ -78,11 +77,10 @@ class MessagesRouterImpl(
           return@ioDispatcher
         }
 
-
-        messageHandler.handleOutgoing(sendMessageRequest, webSocketSession, progress)
+        messageHandler.handleOutgoing(sendMessageRequest, writeChannel, progress)
       } else {
         // message has no payload. we can send it directly
-        webSocketSession.send(messageSerializer.serialize(message))
+        writeChannel.sendMessage(message, messageSerializer)
       }
 
     }

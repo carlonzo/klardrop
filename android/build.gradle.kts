@@ -23,6 +23,8 @@ dependencies {
   implementation(deps.dagger)
   kapt(deps.dagger.compiler)
 
+  implementation(deps.sentry.android)
+
   debugImplementation(compose.uiTooling)
   implementation(compose.preview)
 }

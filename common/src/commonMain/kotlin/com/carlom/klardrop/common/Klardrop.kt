@@ -31,7 +31,8 @@ class Klardrop(
 
     if (applicationInfo.enableKlardropServer) {
       appScope.launch(commonComponent.coroutines().ioDispatcher) {
-        val serverPort = commonComponent.server().startServer().port
+        val serverConfig = commonComponent.server().startServer()
+        val serverPort = serverConfig.port
 
         discoveryNetwork.startPublishKlardrop(serverPort)
       }

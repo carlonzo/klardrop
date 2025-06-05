@@ -30,13 +30,7 @@ androidx-datastore-core-okio = { module = "androidx.datastore:datastore-core-oki
 
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }
-ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
-ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
-ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
-ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
-ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-serialization-protobuf = { module = "io.ktor:ktor-serialization-kotlinx-protobuf", version.ref = "ktor" }
-ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging", version.ref = "ktor" }
 
 kotlinx-io-core = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinx-io" }
 kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.ref = "kotlinx-io" }
@@ -50,6 +44,7 @@ jmdns = { module = "org.jmdns:jmdns", version = "3.6.1" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.0"}
 sentry-kotlin-multiplatform = { module = "io.sentry:sentry-kotlin-multiplatform", version.ref = "sentry-multiplatform" }
+sentry-android = { module = "io.sentry:sentry-android", version = "8.8.0" }
 filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekit" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
 

@@ -6,17 +6,14 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.websocket.*
-import io.ktor.http.*
+import io.ktor.network.selector.*
+import io.ktor.network.sockets.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.invoke
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlin.time.Duration.Companion.seconds
 
 interface Client {
   suspend fun connectTo(deviceId: String)
@@ -35,105 +32,86 @@ class ClientImpl(
   private val visibleDevicesFlow =
     visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
 
+  private val selectorManager = SelectorManager(coroutines.ioDispatcher)
 
-  private val client by lazy {
-    HttpClient(CIO) {
-      install(WebSockets) {
-        pingInterval = 20.seconds
+  override suspend fun connectTo(deviceId: String) = coroutines.ioDispatcher {
 
-
-        extensions { install(FrameLoggerExtension) }
-      }
-    }
-  }
-
-  override suspend fun connectTo(deviceId: String) {
-    withContext(coroutines.ioDispatcher) {
-
-      if (connectionsPool.isAvailable(deviceId)) {
-        log("Client", "has already a connection with $deviceId. skipping")
-        return@withContext
-      }
-
-
-      val discoveryDevice = visibleDevicesFlow.value[deviceId] ?: kotlin.run {
-        log("Client", "cant connect. Device $deviceId cant be found")
-        return@withContext
-      }
-
-      val connections = discoveryDevice.getKlardropConnection()
-
-      require(connections.isNotEmpty()) {
-        "Cant connect to $deviceId. KLARDROP connection is not available"
-      }
-
-
-      val connectionJob = CompletableDeferred<Boolean>()
-
-      coroutines.appScope.launch {
-
-        connections.forEach { connection ->
-          val address = connection.address
-          val port = connection.port
-
-          log("Client", "Connecting to $deviceId with address $address port $port")
-
-          establishConnection(address, port, deviceId, connectionJob)
-            .onSuccess {
-              // if connected, return
-              return@forEach
-            }
-            .onFailure {
-              log("Client", "Failed to connect to $deviceId with address $address", it)
-            }
-
-        }
-
-      }
-
-      log("Client", "Awaiting for client to finish connection")
-      val await = connectionJob.await()
-      log("Client", "On client finished connection: $await")
+    if (connectionsPool.isAvailable(deviceId)) {
+      log("Client", "has already a connection with $deviceId. skipping")
+      return@ioDispatcher
     }
 
+
+    val discoveryDevice = visibleDevicesFlow.value[deviceId] ?: kotlin.run {
+      log("Client", "cant connect. Device $deviceId cant be found")
+      return@ioDispatcher
+    }
+
+    val connections = discoveryDevice.getKlardropConnection()
+
+    require(connections.isNotEmpty()) {
+      "Cant connect to $deviceId. Klardrop connection is not available"
+    }
+
+    val connectionJob = CompletableDeferred<Boolean>()
+
+    coroutines.appScope.launch {
+
+      connections.forEach { connection ->
+        val address = connection.address
+        val port = connection.port
+
+        log("Client", "Connecting to $deviceId with address $address port $port")
+
+        establishConnection(address, port, deviceId, connectionJob)
+          .onSuccess {
+            // if connected, return
+            return@forEach
+          }
+          .onFailure {
+            log("Client", "Failed to connect to $deviceId with address $address", it)
+          }
+
+      }
+
+    }
+
+    log("Client", "Awaiting for client to finish connection")
+    val await = connectionJob.await()
+    log("Client", "On client finished connection: $await")
   }
 
   private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) =
     runCatching {
 
-      client.webSocket(
-        method = HttpMethod.Get,
-        host = address,
-        port = port,
-        path = "/connect"
-      ) {
-        log("Client", "Connected to $address. Sending greetings")
+      val socket = aSocket(selectorManager).tcp().connect(address, port)
+      log("Client", "Connected to $address:$port. Sending greetings")
 
-        val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+      val readChannel = socket.openReadChannel()
+      val writeChannel = socket.openWriteChannel(autoFlush = true)
 
-        send(serializer.serialize(handshakeMessage))
+      val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
 
-        log("Client", "Waiting for response greetings from $deviceId")
-        val serverHandshakeMessage = serializer.deserialize(incoming.receive()) as HandshakeMessage
+      writeChannel.sendMessage(handshakeMessage, serializer)
 
-        if (serverHandshakeMessage.deviceId == deviceId) {
-          val connection = Connection(this, deviceId)
-          val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter)
+      log("Client", "Waiting for response greetings from $deviceId")
 
-          connectionsPool.updateConnection(deviceId, connectionMessenger)
-          log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
+      val serverHandshakeMessage = readChannel.readMessage(serializer) as HandshakeMessage
 
-          connectionJob.complete(true)
+      if (serverHandshakeMessage.deviceId == deviceId) {
+        val connection = Connection(socket, deviceId)
+        val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter, readChannel, writeChannel)
 
-          connectionMessenger.acceptIncomingMessages()
+        connectionsPool.updateConnection(deviceId, connectionMessenger)
+        log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
 
-          // suspends so the connection is kept alive
-          log("Client", "closing reason: ${closeReason.await()}")
-        } else {
-          connectionJob.complete(false)
-          log("Client", "cant connect. Device $deviceId found is wrong: ${handshakeMessage.deviceId}")
-        }
+        connectionJob.complete(true)
 
+        connectionMessenger.acceptIncomingMessages()
+      } else {
+        connectionJob.complete(false)
+        log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
+        socket.close()
       }
 
     }
