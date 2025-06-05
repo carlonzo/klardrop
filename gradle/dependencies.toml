@@ -66,5 +66,5 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 
 squareup-wire = { id = "com.squareup.wire", version = "5.3.0" }
 sentry-multiplatform = { id = "io.sentry.kotlin.multiplatform.gradle", version.ref = "sentry-multiplatform" }
-sentry-android = { id = "io.sentry.android.gradle", version = "5.3.0" }
+sentry-android = { id = "io.sentry.android.gradle", version = "5.7.0" }
 
