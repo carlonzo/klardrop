@@ -4,6 +4,8 @@ import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.readMessage
+import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.utils.Coroutines
@@ -32,19 +34,8 @@ class MessagesRouterImpl(
 ) : MessagesRouter {
   override suspend fun onMessageIncoming(fromDeviceId: String, writeChannel: ByteWriteChannel, readChannel: ByteReadChannel) =
     coroutines.ioDispatcher {
-      // Read message length first (4 bytes)
-      val lengthBytes = ByteArray(4)
-      readChannel.readFully(lengthBytes)
-      val messageLength = (lengthBytes[0].toInt() and 0xFF shl 24) or
-                        (lengthBytes[1].toInt() and 0xFF shl 16) or 
-                        (lengthBytes[2].toInt() and 0xFF shl 8) or
-                        (lengthBytes[3].toInt() and 0xFF)
 
-      // Read the actual message
-      val messageBytes = ByteArray(messageLength)
-      readChannel.readFully(messageBytes)
-      
-      val message = messageSerializer.deserialize(messageBytes)
+      val message =  readChannel.readMessage(messageSerializer)
       log("MessagesRouter", "Received message from $fromDeviceId: $message")
 
       val receiveFlow = messengeReceiver.onReceiveMessage(fromDeviceId)
@@ -76,7 +67,6 @@ class MessagesRouterImpl(
     progress: MutableSharedFlow<MessengerSendProgress>
   ) {
     coroutines.ioDispatcher {
-
       val message = sendMessageRequest.message
 
       if (message.hasPayload) {
@@ -90,17 +80,7 @@ class MessagesRouterImpl(
         messageHandler.handleOutgoing(sendMessageRequest, writeChannel, progress)
       } else {
         // message has no payload. we can send it directly
-        val messageBytes = messageSerializer.serialize(message)
-        
-        // Send message with length prefix
-        val lengthBytes = ByteArray(4)
-        lengthBytes[0] = (messageBytes.size shr 24).toByte()
-        lengthBytes[1] = (messageBytes.size shr 16).toByte()
-        lengthBytes[2] = (messageBytes.size shr 8).toByte()
-        lengthBytes[3] = messageBytes.size.toByte()
-        
-        writeChannel.writeFully(lengthBytes)
-        writeChannel.writeFully(messageBytes)
+        writeChannel.sendMessage(message, messageSerializer)
       }
 
     }

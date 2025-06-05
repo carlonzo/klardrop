@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.communication.message
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Clock
@@ -12,16 +13,13 @@ import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.exists
 import io.github.vinceglb.filekit.readBytes
 import io.github.vinceglb.filekit.size
-import io.ktor.util.cio.use
 import io.ktor.utils.io.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.withTimeout
-import kotlinx.io.Buffer
 import kotlinx.io.buffered
-import kotlinx.io.readByteArray
 import kotlinx.serialization.Serializable
 import kotlin.math.min
 import kotlin.time.Duration.Companion.seconds
@@ -92,7 +90,7 @@ class FileMessageHandler(
             log("FileMessageHandler", "Waiting to receive data for $message")
             val chunkSize = min(32 * 1024, (message.fileSize - totalBytesReceived).toInt())
             val data = ByteArray(chunkSize)
-            
+
             val bytesRead = withTimeout(5.seconds) {
               readChannel.readFully(data, 0, chunkSize)
               chunkSize
@@ -151,15 +149,7 @@ class FileMessageHandler(
       updateSentProgress(progressFlow, 0, request.message.fileSize)
 
       // Send initial message with metadata
-      val initialMessage = serializer.serialize(request.message)
-      val initialLengthBytes = ByteArray(4)
-      initialLengthBytes[0] = (initialMessage.size shr 24).toByte()
-      initialLengthBytes[1] = (initialMessage.size shr 16).toByte()
-      initialLengthBytes[2] = (initialMessage.size shr 8).toByte()
-      initialLengthBytes[3] = initialMessage.size.toByte()
-      
-      writeChannel.writeFully(initialLengthBytes)
-      writeChannel.writeFully(initialMessage)
+      writeChannel.sendMessage(request.message, serializer)
 
       val sourceFile = request.file
 
@@ -177,7 +167,7 @@ class FileMessageHandler(
           while (!readBuffer.exhausted()) {
             val bytesToRead = min(chunkSize.toLong(), request.message.fileSize - totalSent).toInt()
             val bytesRead = readBuffer.readAtMostTo(buffer, 0, bytesToRead)
-            
+
             if (bytesRead <= 0) break
 
             writeChannel.writeFully(buffer, 0, bytesRead)

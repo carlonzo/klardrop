@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
+import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.utils.Coroutines
@@ -34,11 +35,11 @@ class Server(
   suspend fun startServer(): ServerConfig {
     val selectorManager = SelectorManager(Dispatchers.Default)
     val serverSocket = aSocket(selectorManager).tcp().bind("0.0.0.0", 0)
-    
+
     val localAddress = serverSocket.localAddress as InetSocketAddress
     val actualPort = localAddress.port
     val host = localAddress.hostname
-    
+
     log("Server", "Server started on $host:$actualPort")
 
     coroutines.appScope.launch {
@@ -46,7 +47,7 @@ class Server(
         val socket = serverSocket.accept()
         val remoteAddress = socket.remoteAddress.toString()
         log("Server", "New connection from: $remoteAddress")
-        
+
         coroutines.appScope.launch {
           try {
             onConnectionRequest(socket, remoteAddress)
@@ -65,19 +66,7 @@ class Server(
     val readChannel = socket.openReadChannel()
     val writeChannel = socket.openWriteChannel(autoFlush = true)
 
-    // Read message length first (4 bytes)
-    val lengthBytes = ByteArray(4)
-    readChannel.readFully(lengthBytes)
-    val messageLength = (lengthBytes[0].toInt() and 0xFF shl 24) or
-                      (lengthBytes[1].toInt() and 0xFF shl 16) or 
-                      (lengthBytes[2].toInt() and 0xFF shl 8) or
-                      (lengthBytes[3].toInt() and 0xFF)
-
-    // Read the actual message
-    val messageBytes = ByteArray(messageLength)
-    readChannel.readFully(messageBytes)
-    
-    val request = serializer.deserialize(messageBytes) as HandshakeMessage
+    val request = readChannel.readMessage(serializer) as HandshakeMessage
 
     log("Server", "Connection request from: $remoteAddress - ${request.deviceId}")
 
@@ -91,16 +80,8 @@ class Server(
       val deviceId = currentDeviceProvider.get().shortDeviceId
       val intro = HandshakeMessage(deviceId)
       log("Server", "Sending greetings back to ${request.deviceId} on $remoteAddress")
-      
-      val introBytes = serializer.serialize(intro)
-      val introLengthBytes = ByteArray(4)
-      introLengthBytes[0] = (introBytes.size shr 24).toByte()
-      introLengthBytes[1] = (introBytes.size shr 16).toByte()
-      introLengthBytes[2] = (introBytes.size shr 8).toByte()
-      introLengthBytes[3] = introBytes.size.toByte()
-      
-      writeChannel.writeFully(introLengthBytes)
-      writeChannel.writeFully(introBytes)
+
+      writeChannel.sendMessage(intro, serializer)
 
       log("Server", "Connection accepted from: $remoteAddress")
 
@@ -111,4 +92,33 @@ class Server(
     }
   }
 
+}
+
+internal suspend fun ByteWriteChannel.sendMessage(message: Message, serializer: MessageSerializer) {
+  val introBytes = serializer.serialize(message)
+  val introLengthBytes = ByteArray(4)
+  introLengthBytes[0] = (introBytes.size shr 24).toByte()
+  introLengthBytes[1] = (introBytes.size shr 16).toByte()
+  introLengthBytes[2] = (introBytes.size shr 8).toByte()
+  introLengthBytes[3] = introBytes.size.toByte()
+
+  writeFully(introLengthBytes)
+  writeFully(introBytes)
+}
+
+internal suspend fun ByteReadChannel.readMessage(serializer: MessageSerializer): Message {
+  // Read message length first (4 bytes)
+  val lengthBytes = ByteArray(4)
+
+  readFully(lengthBytes)
+  val messageLength = (lengthBytes[0].toInt() and 0xFF shl 24) or
+      (lengthBytes[1].toInt() and 0xFF shl 16) or
+      (lengthBytes[2].toInt() and 0xFF shl 8) or
+      (lengthBytes[3].toInt() and 0xFF)
+
+  // Read the actual message
+  val messageBytes = ByteArray(messageLength)
+  readFully(messageBytes)
+
+  return serializer.deserialize(messageBytes)
 }
