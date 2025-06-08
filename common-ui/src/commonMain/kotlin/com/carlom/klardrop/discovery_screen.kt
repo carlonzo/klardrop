@@ -55,10 +55,12 @@ import kotlin.coroutines.EmptyCoroutineContext
 fun DiscoveryScreen(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
-  discoveryController: DiscoveryController
+  discoveryController: DiscoveryController,
+  uiDependencies: UiDependencies // Added
 ) {
 
-  var deviceUiClicked = remember<DeviceUi?> { null }
+  val discoveryState by discoveryController.screenStateFlow.collectAsState() // Moved up
+  var deviceUiClicked = remember<DeviceUi?> { null } // Still used by bottom sheet logic if kept
   val scope = rememberCoroutineScope()
 
   val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
@@ -77,59 +79,77 @@ fun DiscoveryScreen(
 
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
-  ModalBottomSheetLayout(
-    sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-    sheetBackgroundColor = MaterialTheme.colorScheme.surface,
-    sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
-    sheetContent = {
-      ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
-    },
-    sheetState = sheetState,
-    content = {
-
-      val discoveryState by discoveryController.screenStateFlow
-        .collectAsState()
-
-      discoveryController.actionsFlow.collectAsEffect {
-        when (it) {
-          is ActionUi.OnDeviceClicked -> {
-
-            deviceUiClicked = it.deviceUi
-            scope.launch {
-              sheetState.show()
+  // --- Navigation to Chat Screen ---
+  if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
+    val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
+        uiDependencies.deviceChatViewModelFactory(discoveryState.navigateToChatDeviceId!!)
+    }
+    DeviceChatScreen(
+        deviceId = discoveryState.navigateToChatDeviceId!!,
+        deviceName = discoveryState.navigateToChatDeviceName!!,
+        viewModel = chatViewModel,
+            onBackClicked = { discoveryController.onBackFromChat() },
+            onOpenFileRequest = { filePath -> chatViewModel.openFileClicked(filePath) } // Added
+    )
+  } else {
+    // --- Original Discovery Screen Content (ModalBottomSheet for sending) ---
+    ModalBottomSheetLayout(
+        sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        sheetBackgroundColor = MaterialTheme.colorScheme.surface,
+        sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
+        sheetContent = {
+            if (deviceUiClicked != null) { // Ensure deviceUiClicked is not null before accessing
+                ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
             }
-          }
+        },
+        sheetState = sheetState,
+        content = {
+            // This LaunchedEffect handles the modal sheet popup.
+            // If onDeviceClick is solely for chat navigation, this might need adjustment
+            // or removal if the modal sheet is no longer triggered by onDeviceClick.
+            // For now, assuming onDeviceClick *also* can show the sheet if not navigating.
+            // However, the subtask said "replace the bottom sheet pop-up with navigation to chat".
+            // So, the ActionUi.OnDeviceClicked pathway to show the sheet is now broken
+            // as onDeviceClick updates state for chat navigation.
+            // This ShareSheet part needs to be re-evaluated if it's still needed.
+            // Let's assume for now the primary action is chat navigation.
+            // The sheetState.show() call would need a different trigger if kept.
+
+            // discoveryController.actionsFlow.collectAsEffect {
+            //   when (it) {
+            //     is ActionUi.OnDeviceClicked -> { // This action is no longer the primary path
+            //       deviceUiClicked = it.deviceUi
+            //       scope.launch {
+            //         sheetState.show()
+            //       }
+            //     }
+            //   }
+            // }
+
+            Box {
+                DiscoveryDashboard(
+                    modifier = modifier,
+                    isLargeScreen = isLargeScreen,
+                    devices = discoveryState.devices,
+                    onDeviceActionListener = discoveryController // This now triggers chat navigation
+                )
+
+                LazyColumn(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                    items(
+                        items = discoveryState.receivingMessages.toList(),
+                        key = { it.first },
+                    ) { item ->
+                        ReceiveNotification(
+                            Modifier.animateItem(placementSpec = tween()).align(Alignment.BottomCenter),
+                            item.second,
+                            discoveryController
+                        )
+                    }
+                }
+            }
         }
-      }
-
-      Box {
-
-        DiscoveryDashboard(
-          modifier = modifier,
-          isLargeScreen = isLargeScreen,
-          devices = discoveryState.devices,
-          onDeviceActionListener = discoveryController
-        )
-
-
-        LazyColumn(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-
-          items(
-            items = discoveryState.receivingMessages.toList(),
-            key = { it.first },
-          ) { item ->
-            ReceiveNotification(
-              Modifier.animateItem(placementSpec = tween()).align(Alignment.BottomCenter),
-              item.second,
-              discoveryController
-            )
-          }
-
-        }
-
-      }
-
-    })
+    )
+  }
 }
 
 
@@ -146,13 +166,20 @@ private fun DiscoveryDashboard(
   ) {
 
     FlowRow {
-
       devices.forEach { device ->
-
-        DeviceDiscovery(device, isLargeScreen, onDeviceActionListener)
-
+        Box { // Wrap DeviceDiscovery to allow overlaying the dot
+          DeviceDiscovery(device, isLargeScreen, onDeviceActionListener)
+          if (device.hasUnreadMessages) {
+            Box(
+              modifier = Modifier
+                .padding(top = 4.dp, end = 4.dp) // Adjust padding as needed
+                .size(10.dp)
+                .background(MaterialTheme.colorScheme.error, RoundedCornerShape(5.dp))
+                .align(Alignment.TopEnd)
+            )
+          }
+        }
       }
-
     }
 
 
