@@ -44,6 +44,6 @@ class SimpleSendMessageRequest(override val message: Message) : SendMessageReque
 interface MessageHandler<E : Message, R : SendMessageRequest> {
 
   suspend fun handleIncoming(message: E, readChannel: ByteReadChannel, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>)
-  suspend fun handleOutgoing(request: R, writeChannel: ByteWriteChannel, progressFlow: MutableSharedFlow<MessengerSendProgress>)
+  suspend fun handleOutgoing(toDeviceId: String, request: R, writeChannel: ByteWriteChannel, progressFlow: MutableSharedFlow<MessengerSendProgress>)
 
 }

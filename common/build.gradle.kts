@@ -2,6 +2,7 @@ plugins {
   alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.kotlin.serialization)
+  alias(deps.plugins.sqldelight)
 }
 
 kotlin {
@@ -32,6 +33,7 @@ kotlin {
         implementation(deps.ukey2)
         implementation(deps.sentry.kotlin.multiplatform)
         implementation(deps.filekit.core)
+        implementation(deps.sqldelight.runtime)
       }
     }
 
@@ -49,12 +51,14 @@ kotlin {
       dependencies {
         implementation(deps.kotlinx.coroutines.android)
         implementation(deps.simplestorage)
+        implementation(deps.sqldelight.android.driver)
       }
     }
 
     val desktopJvmMain by getting {
       dependencies {
         implementation(deps.jmdns)
+        implementation(deps.sqldelight.sqlite.driver)
       }
     }
 
@@ -62,6 +66,15 @@ kotlin {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
       languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
+    }
+
+    val iosMain by creating {
+      dependsOn(commonMain.get())
+      iosArm64Main.get().dependsOn(this)
+      iosSimulatorArm64Main.get().dependsOn(this)
+      dependencies {
+        implementation(deps.sqldelight.native.driver)
+      }
     }
   }
 
@@ -82,5 +95,13 @@ android {
 
   testOptions {
     unitTests.isReturnDefaultValues = true
+  }
+}
+
+sqldelight {
+  databases {
+    create("AppDatabase") {
+      packageName.set("com.carlom.klardrop.common.database")
+    }
   }
 }

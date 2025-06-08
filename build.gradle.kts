@@ -17,6 +17,7 @@ plugins {
   alias(deps.plugins.compose.compiler) apply false
   alias(deps.plugins.kotlin.serialization) apply false
   alias(deps.plugins.sentry.multiplatform) apply false
+alias(deps.plugins.sqldelight) apply false
 }
 
 allprojects {

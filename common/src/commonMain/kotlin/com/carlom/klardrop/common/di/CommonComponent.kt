@@ -10,6 +10,7 @@ import com.carlom.klardrop.common.discovery.DiscoveryModule
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
+import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
@@ -28,7 +29,9 @@ class CommonComponent(
     StorageModule(
       applicationInfo,
       coroutines,
-      platformFileSystem
+      platformFileSystem,
+      internalPlatformDependency.driverFactory(),
+      clock
     )
   }
 
@@ -38,6 +41,10 @@ class CommonComponent(
 
   private val knownDevicesRepository: KnownDevicesRepository by lazy {
     storageModule.knownDevicesRepository()
+  }
+
+  private val messageRepository: MessageRepository by lazy {
+    storageModule.messageRepository()
   }
 
   private val coroutines: Coroutines by lazy { utilsModule.coroutines() }
@@ -54,7 +61,8 @@ class CommonComponent(
       protoBuf,
       clock,
       fileManager,
-      currentDeviceProvider
+      currentDeviceProvider,
+      messageRepository // Added messageRepository
     )
   }
 
@@ -83,5 +91,7 @@ class CommonComponent(
   fun nearbyServer() = communicationModule.nearbyServer()
 
   fun clipboardManager() = clipboardManager
+
+  fun messageRepository() = messageRepository
 
 }
