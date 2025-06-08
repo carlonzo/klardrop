@@ -1,8 +1,8 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
-import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.downloadDir
 import io.github.vinceglb.filekit.toKotlinxIoPath
 import kotlinx.io.files.Path
@@ -22,4 +22,7 @@ actual class InternalPlatformDependencies {
     return ClipboardReaderWriter()
   }
 
+  actual fun driverFactory(): DriverFactory {
+    return DriverFactory()
+  }
 }

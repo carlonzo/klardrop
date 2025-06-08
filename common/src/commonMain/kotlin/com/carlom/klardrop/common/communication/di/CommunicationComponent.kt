@@ -18,6 +18,9 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
+import com.carlom.klardrop.common.mdns.NearbyShareServer
+import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
+import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.MessageReceiverImpl
 import com.carlom.klardrop.common.utils.Clock
@@ -30,7 +33,8 @@ class CommunicationModule(
   private val protoBuf: ProtoBuf,
   private val clock: Clock,
   private val fileManager: FileManager,
-  private val currentDeviceProvider: CurrentDeviceProvider
+  private val currentDeviceProvider: CurrentDeviceProvider,
+  private val messageRepository: MessageRepository // Added
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -39,7 +43,7 @@ class CommunicationModule(
     MessageHandlersImpl(
       mapOf(
         MessageType.TEXT to TextMessageHandler(serializer),
-        MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines),
+        MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
         MessageType.ACK_READY to AckMessageHandler(),
         MessageType.ACK_RECEIVED to AckMessageHandler()
       )
@@ -52,7 +56,8 @@ class CommunicationModule(
       messageHandlers,
       serializer,
       coroutines,
-      messageReceiver
+      messageReceiver,
+      messageRepository // Added messageRepository
     )
   }
 

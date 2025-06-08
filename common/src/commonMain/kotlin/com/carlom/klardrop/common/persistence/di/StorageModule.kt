@@ -4,10 +4,15 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import com.carlom.klardrop.common.ApplicationInfo
+import com.carlom.klardrop.common.database.AppDatabase
+import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.KnownDevicesRepositoryImpl
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepositoryImpl
+import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.persistence.MessageRepositoryImpl
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.nextString
@@ -20,8 +25,14 @@ import kotlin.random.Random
 class StorageModule(
   private val applicationInfo: ApplicationInfo,
   private val coroutines: Coroutines,
-  private val platformFileSystem: PlatformFileSystem
+  private val platformFileSystem: PlatformFileSystem,
+  private val driverFactory: DriverFactory,
+  private val clock: Clock
 ) {
+
+  private val appDatabase: AppDatabase by lazy {
+    AppDatabase(driverFactory.createDriver())
+  }
 
   private companion object {
     const val propertiesFileName = "properties.preferences_pb"
@@ -59,6 +70,13 @@ class StorageModule(
     }, coroutines)
   }
 
+  fun messageRepository(): MessageRepository {
+    return MessageRepositoryImpl(
+      appDatabase,
+      clock,
+      coroutines.ioDispatcher
+    )
+  }
 
   private inline fun Path.toOkioPath(): okio.Path {
     return this.toString().toPath()

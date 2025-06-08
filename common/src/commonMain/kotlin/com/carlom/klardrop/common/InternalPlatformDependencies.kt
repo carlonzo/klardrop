@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.utils.DeviceType
@@ -10,6 +11,7 @@ expect class InternalPlatformDependencies {
   fun getDownloadStoragePath(): Path
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun clipboardReaderWriter(): ClipboardReaderWriter
+  fun driverFactory(): DriverFactory
 }
 
 expect object CommonPlatformDependencies {

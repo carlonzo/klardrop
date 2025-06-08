@@ -15,8 +15,8 @@ plugins {
   alias(deps.plugins.jetbrains.compose) apply false
   alias(deps.plugins.compose.compiler) apply false
   alias(deps.plugins.kotlin.serialization) apply false
+  alias(deps.plugins.sqldelight) apply false
 }
-
 
 allprojects {
   repositories {

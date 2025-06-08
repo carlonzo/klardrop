@@ -8,7 +8,10 @@ import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.readMessage
+import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.sendMessage
+import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.utils.Coroutines
@@ -39,6 +42,7 @@ class MessagesRouterImpl(
   private val messageSerializer: MessageSerializer,
   private val coroutines: Coroutines,
   private val messengeReceiver: MessageReceiver,
+  private val messageRepository: MessageRepository // Added
 ) : MessagesRouter {
   override suspend fun onMessageIncoming(
     fromDeviceId: String, 
@@ -72,11 +76,11 @@ class MessagesRouterImpl(
           log("MessagesRouter", "Sent ACK_READY for message ${message.id} to $fromDeviceId")
         }
 
+        // message has extra payload. we need to handle it
         val messageHandler = handlers[message.type] ?: run {
           log("MessagesRouter", "No handler for message type ${message.type}")
           return@ioDispatcher
         }
-
         messageHandler.handleIncoming(message, readChannel, receiveFlow)
       } else {
         // For messages without payload, process them through handler if available, otherwise directly
@@ -84,6 +88,15 @@ class MessagesRouterImpl(
         if (messageHandler != null) {
           messageHandler.handleIncoming(message, readChannel, receiveFlow)
         } else {
+          // No payload, likely a text message
+          if (message is TextMessage) {
+              messageRepository.insertMessage(
+                  remoteDeviceId = fromDeviceId,
+                  content = message.text, // Assuming TextMessage has a 'text' field
+                  isSender = false,
+                  messageType = PersistenceMessageType.TEXT
+              )
+          }
           receiveFlow.update {
             it.copy(
               messages = listOf(message),
@@ -114,19 +127,24 @@ class MessagesRouterImpl(
 
       if (message.hasPayload) {
         // message has extra payload. we need to handle it
-
         val messageHandler = handlers[message.type] ?: run {
           log("MessagesRouter", "No handler for message type ${message.type}")
           return@ioDispatcher
         }
-
-        messageHandler.handleOutgoing(sendMessageRequest, writeChannel, progress)
+        messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress) // Passed toDeviceId
       } else {
+        // No payload, likely a text message
+        if (message is TextMessage) {
+            messageRepository.insertMessage(
+                remoteDeviceId = toDeviceId,
+                content = message.text, // Assuming TextMessage has a 'text' field
+                isSender = true,
+                messageType = PersistenceMessageType.TEXT
+            )
+        }
         // message has no payload. we can send it directly
         writeChannel.sendMessage(message, messageSerializer)
       }
-
     }
   }
-
 }

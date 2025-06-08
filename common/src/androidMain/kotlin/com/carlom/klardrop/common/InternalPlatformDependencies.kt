@@ -2,6 +2,7 @@ package com.carlom.klardrop.common
 
 import android.content.Context
 import android.os.Environment
+import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import kotlinx.io.files.Path
@@ -20,4 +21,7 @@ actual class InternalPlatformDependencies(private val context: Context) {
     return ClipboardReaderWriter(context)
   }
 
+  actual fun driverFactory(): DriverFactory {
+    return DriverFactory(context)
+  }
 }
