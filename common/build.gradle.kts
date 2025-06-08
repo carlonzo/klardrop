@@ -76,19 +76,16 @@ kotlin {
       }
     }
 
+    val iosMain by getting {
+      dependencies {
+        implementation(deps.sqldelight.native.driver)
+      }
+    }
+
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
       languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
-    }
-
-    val iosMain by creating {
-      dependsOn(commonMain.get())
-      iosArm64Main.get().dependsOn(this)
-      iosSimulatorArm64Main.get().dependsOn(this)
-      dependencies {
-        implementation(deps.sqldelight.native.driver)
-      }
     }
   }
 

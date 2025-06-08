@@ -1,18 +1,23 @@
 package com.carlom.klardrop.chat
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color // Added
-import androidx.compose.ui.text.style.TextDecoration // Added
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.chat.DeviceChatViewModel
 import com.carlom.klardrop.common.database.File_transfers
 import com.carlom.klardrop.common.database.Messages
 import com.carlom.klardrop.common.persistence.FileTransferStatus // Added for enum access
@@ -99,8 +104,10 @@ fun TextMessageBubble(message: Messages) {
         horizontalArrangement = horizontalArrangement
     ) {
         Card(
-            backgroundColor = if (message.is_sender) MaterialTheme.colors.primaryVariant else MaterialTheme.colors.secondaryVariant,
-            elevation = 2.dp
+            colors = CardDefaults.cardColors(
+                containerColor = if (message.is_sender) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Text(
                 text = message.content,
@@ -138,8 +145,10 @@ fun FileMessageBubble(
         horizontalArrangement = horizontalArrangement
     ) {
         Card(
-            backgroundColor = if (isSender) MaterialTheme.colors.primaryVariant else MaterialTheme.colors.secondaryVariant,
-            elevation = 2.dp,
+            colors = CardDefaults.cardColors(
+                containerColor = if (isSender) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
             modifier = Modifier.widthIn(max = 280.dp).then(bubbleModifier)
         ) {
             Column(modifier = Modifier.padding(8.dp)) {

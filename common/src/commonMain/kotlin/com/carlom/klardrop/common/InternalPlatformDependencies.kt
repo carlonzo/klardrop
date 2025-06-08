@@ -12,6 +12,7 @@ expect class InternalPlatformDependencies {
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun clipboardReaderWriter(): ClipboardReaderWriter
   fun driverFactory(): DriverFactory
+  suspend fun openFile(filePath: String): Boolean
 }
 
 expect object CommonPlatformDependencies {

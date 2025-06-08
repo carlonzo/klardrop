@@ -24,4 +24,29 @@ actual class InternalPlatformDependencies(private val context: Context) {
   actual fun driverFactory(): DriverFactory {
     return DriverFactory(context)
   }
+
+  actual suspend fun openFile(filePath: String): Boolean {
+    return try {
+      val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+        val file = java.io.File(filePath)
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+          context, 
+          "${context.packageName}.provider", 
+          file
+        )
+        setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*")
+        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      
+      if (intent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(intent)
+        true
+      } else {
+        false
+      }
+    } catch (e: Exception) {
+      false
+    }
+  }
 }
