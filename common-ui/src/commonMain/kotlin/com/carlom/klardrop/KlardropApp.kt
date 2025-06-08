@@ -18,10 +18,11 @@ import com.carlom.klardrop.common.Klardrop
 @Composable
 fun KlardropApp(
   klardrop: Klardrop,
-  uiDependencies: UiDependencies
+  // uiDependencies is now created inside, or passed as the new class type
+  // For simplicity, let's assume it's created here based on klardrop.commonComponent
 ) {
-
-  val visibleDevicesController = remember { DiscoveryController(klardrop.commonComponent) }
+  val uiDependencies = remember { UiDependencies(klardrop.commonComponent) }
+  val visibleDevicesController = remember { uiDependencies.discoveryController() }
 
   Surface(
     modifier = Modifier.fillMaxSize()
@@ -41,13 +42,15 @@ fun KlardropApp(
               .fillMaxWidth(fraction = 0.75f)
               .fillMaxHeight(),
             isLargeScreen = isLargeScreen,
-            discoveryController = visibleDevicesController
+              discoveryController = visibleDevicesController,
+              uiDependencies = uiDependencies // Added
           )
         }
       } else {
         DiscoveryScreen(
           isLargeScreen = isLargeScreen,
-          discoveryController = visibleDevicesController
+            discoveryController = visibleDevicesController,
+            uiDependencies = uiDependencies // Added
         )
       }
 

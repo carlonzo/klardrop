@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 interface Messenger {
   fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress>
 
-  fun receive(): Flow<Flow<ReceiveMessageUpdate>>
+  fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>> // Changed
 }
 
 class MessengerImpl(
@@ -71,7 +71,7 @@ class MessengerImpl(
     return flow
   }
 
-  override fun receive(): Flow<Flow<ReceiveMessageUpdate>> {
+  override fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>> { // Changed
     return messageReceiver.notifier
   }
 

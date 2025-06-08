@@ -22,7 +22,7 @@ interface MessageReceiver {
 
   fun onReceiveMessage(deviceId: String = ""): MutableStateFlow<ReceiveMessageUpdate>
 
-  val notifier: Flow<Flow<ReceiveMessageUpdate>>
+  val notifier: Flow<Pair<String, StateFlow<ReceiveMessageUpdate>>> // Changed
 
 }
 
@@ -32,9 +32,9 @@ internal class MessageReceiverImpl(
 ) : MessageReceiver {
 
   private val receiverScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
-  private val _notifier = MutableSharedFlow<StateFlow<ReceiveMessageUpdate>>()
+  private val _notifier = MutableSharedFlow<Pair<String, StateFlow<ReceiveMessageUpdate>>>() // Changed
 
-  override val notifier: Flow<Flow<ReceiveMessageUpdate>>
+  override val notifier: Flow<Pair<String, StateFlow<ReceiveMessageUpdate>>> // Changed
     get() = _notifier.asSharedFlow()
 
   override fun onReceiveMessage(deviceId: String): MutableStateFlow<ReceiveMessageUpdate> {
@@ -53,7 +53,7 @@ internal class MessageReceiverImpl(
     )
 
     receiverScope.launch {
-      _notifier.emit(flow.asStateFlow())
+      _notifier.emit(deviceId to flow.asStateFlow()) // Changed: emit Pair
     }
 
     return flow

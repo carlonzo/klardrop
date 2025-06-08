@@ -1,3 +1,26 @@
 package com.carlom.klardrop
 
-interface UiDependencies
+import com.carlom.klardrop.chat.DeviceChatViewModel
+import com.carlom.klardrop.common.CommonComponent
+
+// UiDependencies is now a class that holds CommonComponent
+class UiDependencies(private val commonComponent: CommonComponent) {
+
+    fun discoveryController(): DiscoveryController {
+        // Assuming DiscoveryController now takes CommonComponent directly for simplicity
+        // or specific dependencies from it like:
+        // return DiscoveryController(commonComponent.visibleDevices(), commonComponent.messenger(), commonComponent.coroutines())
+        // Matching the instantiation in KlardropApp.kt for now:
+        return DiscoveryController(commonComponent)
+    }
+
+    fun deviceChatViewModelFactory(deviceId: String): DeviceChatViewModel {
+        return DeviceChatViewModel(
+            deviceId = deviceId,
+            messageRepository = commonComponent.messageRepository(),
+            messenger = commonComponent.messenger(),
+            coroutines = commonComponent.coroutines(),
+            fileManager = commonComponent.fileManager() // Added
+        )
+    }
+}
