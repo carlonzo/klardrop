@@ -9,6 +9,7 @@ import com.carlom.klardrop.common.persistence.MessageType
 import com.carlom.klardrop.common.utils.Coroutines
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -21,6 +22,9 @@ class DeviceChatViewModel(
 ) {
     private val viewModelScope = CoroutineScope(coroutines.mainDispatcher + SupervisorJob())
 
+    private val _uiState = MutableStateFlow(ChatUiState())
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
     val messages: StateFlow<List<Messages>> =
         messageRepository.getMessagesForDevice(deviceId, limit = 100)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -29,53 +33,71 @@ class DeviceChatViewModel(
         if (text.isBlank()) return
 
         viewModelScope.launch {
-            // 1. Optimistically insert into local DB
-            // Note: The actual remoteDeviceId for the messenger.send might be different if `deviceId` is an internal ID.
-            // Assuming `deviceId` is the one known by the messenger.
-            messageRepository.insertMessage(
-                remoteDeviceId = deviceId,
-                content = text,
-                isSender = true,
-                messageType = MessageType.TEXT,
-                fileTransferId = null
-            )
+            try {
+                _uiState.value = _uiState.value.copy(isSending = true, error = null)
+                
+                // 1. Optimistically insert into local DB
+                messageRepository.insertMessage(
+                    remoteDeviceId = deviceId,
+                    content = text,
+                    isSender = true,
+                    messageType = MessageType.TEXT,
+                    fileTransferId = null
+                )
 
-            // 2. Send the message over the network
-            // We need to know the actual remote device ID that the messenger expects.
-            // For now, assume this viewModel's deviceId is the correct one.
-            val remoteDevice = messenger.getDeviceById(deviceId)
-            if (remoteDevice != null) {
-                val textMessage = TextMessage(text = text)
-                messenger.send(remoteDevice, textMessage.toSimpleSendRequest())
-                    .collect { progress ->
-                        // Handle send progress/status if needed in the UI
-                        // For text messages, it's usually quick or fire-and-forget
-                        // For file messages, this flow would be more important.
-                        println("Send progress: $progress")
-                    }
-            } else {
-                // Handle error: device not found or not connected
-                // Maybe update UI or log
-                println("Error sending message: Device $deviceId not found by messenger.")
-                // Optionally, update the just-inserted optimistic message to a 'failed' state here.
+                // 2. Send the message over the network
+                val remoteDevice = messenger.getDeviceById(deviceId)
+                if (remoteDevice != null) {
+                    val textMessage = TextMessage(text = text)
+                    messenger.send(remoteDevice, textMessage.toSimpleSendRequest())
+                        .collect { progress ->
+                            // Handle send progress if needed
+                        }
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isSending = false,
+                        error = "Device not found or not connected"
+                    )
+                }
+                
+                _uiState.value = _uiState.value.copy(isSending = false)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isSending = false,
+                    error = "Failed to send message: ${e.message}"
+                )
             }
         }
     }
 
     fun onDispose() {
         // Cancel any coroutines started by this ViewModel
-        // (viewModelScope.cancel() would typically be called by the lifecycle owner in Android)
-        // For multiplatform, manual cancellation or a lifecycle library is needed.
+        viewModelScope.cancel()
     }
 
     fun openFileClicked(filePath: String) {
         viewModelScope.launch {
-            val success = fileManager.openFile(filePath)
-            if (!success) {
-                // Handle error (e.g., show a snackbar or log)
-                println("DeviceChatViewModel: Failed to open file: $filePath")
-                // Optionally, emit a state to the UI to show an error message
+            try {
+                val success = fileManager.openFile(filePath)
+                if (!success) {
+                    _uiState.value = _uiState.value.copy(
+                        error = "Unable to open file. No suitable app found."
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Failed to open file: ${e.message}"
+                )
             }
         }
     }
+    
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
 }
+
+data class ChatUiState(
+    val isSending: Boolean = false,
+    val error: String? = null
+)

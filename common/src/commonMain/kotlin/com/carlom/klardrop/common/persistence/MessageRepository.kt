@@ -69,28 +69,28 @@ class MessageRepositoryImpl(
         totalSize: Long,
         status: FileTransferStatus
     ): Long = withContext(ioDispatcher) {
-        database.fileTransfersQueries.insert(
+        database.file_transfersQueries.insertFileTransfer(
             file_name = fileName,
             file_path = filePath,
             total_size = totalSize,
             transferred_size = 0, // Initial transferred size is 0
             status = status.name
         )
-        database.fileTransfersQueries.lastInsertRowId().executeAsOne()
+        database.file_transfersQueries.lastInsertRowIdFileTransfer().executeAsOne()
     }
 
     override suspend fun updateFileTransferStatus(id: Long, status: FileTransferStatus, transferredSize: Long?) {
         withContext(ioDispatcher) {
             if (transferredSize != null) {
-                database.fileTransfersQueries.updateStatusAndSize(
-                    id = id,
+                database.file_transfersQueries.updateStatusAndSize(
                     status = status.name,
-                    transferred_size = transferredSize
+                    transferred_size = transferredSize,
+                    id = id
                 )
             } else {
-                database.fileTransfersQueries.updateStatus(
-                    id = id,
-                    status = status.name
+                database.file_transfersQueries.updateStatus(
+                    status = status.name,
+                    id = id
                 )
             }
         }
@@ -103,16 +103,16 @@ class MessageRepositoryImpl(
     }
 
     override fun getFileTransferById(id: Long): Flow<File_transfers?> {
-        return database.fileTransfersQueries.getById(id)
+        return database.file_transfersQueries.getById(id)
             .asFlow()
             .mapToOneOrNull(ioDispatcher)
     }
 
     override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {
         withContext(ioDispatcher) {
-            database.fileTransfersQueries.updateFilePath(
-                id = id,
-                file_path = filePath
+            database.file_transfersQueries.updateFilePath(
+                file_path = filePath,
+                id = id
             )
         }
     }

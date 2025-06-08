@@ -32,7 +32,18 @@ fun DeviceChatScreen(
     onOpenFileRequest: (filePath: String) -> Unit // Added
 ) {
     val messagesState by viewModel.messages.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     var textToSend by remember { mutableStateOf("") }
+    
+    // Show error snackbar if there's an error
+    uiState.error?.let { error ->
+        LaunchedEffect(error) {
+            // In a real app, you might want to show a Snackbar here
+            // For now, just clear the error after a delay
+            kotlinx.coroutines.delay(3000)
+            viewModel.clearError()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -52,17 +63,31 @@ fun DeviceChatScreen(
                 .padding(paddingValues)
                 .padding(8.dp)
         ) {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                reverseLayout = true // To show newest messages at the bottom
-            ) {
-                items(messagesState.sortedByDescending { it.timestamp }) { message -> // Ensure order again if not guaranteed by flow
-                    // Placeholder: Determine if it's a text or file message
-                    // This logic will need to be more robust, potentially fetching File_transfer details
-                    if (message.message_type == "FILE" && message.file_transfer_id != null) {
-                        FileMessageBubble(message = message, messageRepository = viewModel.messageRepository) // Pass repository
-                    } else {
-                        TextMessageBubble(message = message)
+            if (messagesState.isEmpty()) {
+                // Empty state
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "No messages yet. Start a conversation!",
+                        style = MaterialTheme.typography.body1,
+                        color = Color.Gray
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    reverseLayout = true // To show newest messages at the bottom
+                ) {
+                    items(messagesState.sortedByDescending { it.timestamp }) { message -> // Ensure order again if not guaranteed by flow
+                        // Placeholder: Determine if it's a text or file message
+                        // This logic will need to be more robust, potentially fetching File_transfer details
+                        if (message.message_type == "FILE" && message.file_transfer_id != null) {
+                            FileMessageBubble(message = message, messageRepository = viewModel.messageRepository) // Pass repository
+                        } else {
+                            TextMessageBubble(message = message)
+                        }
                     }
                 }
             }
@@ -86,9 +111,16 @@ fun DeviceChatScreen(
                             textToSend = ""
                         }
                     },
-                    enabled = textToSend.isNotBlank()
+                    enabled = textToSend.isNotBlank() && !uiState.isSending
                 ) {
-                    Icon(Icons.Filled.Send, contentDescription = "Send")
+                    if (uiState.isSending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(Icons.Filled.Send, contentDescription = "Send")
+                    }
                 }
             }
         }
@@ -123,7 +155,7 @@ fun FileMessageBubble(
     messageRepository: MessageRepository,
     onOpenFileRequest: (filePath: String) -> Unit
 ) {
-    val fileTransferState by messageRepository.getFileTransferById(message.file_transfer_id!!)
+    val fileTransferState by messageRepository.getFileTransferById(message.file_transfer_id ?: return)
         .collectAsState(null)
 
     val isSender = message.is_sender
@@ -133,8 +165,8 @@ fun FileMessageBubble(
 
     val isCompletedReceivedFile = !isSender && currentStatus == FileTransferStatus.COMPLETED.name && filePath != null
 
-    val bubbleModifier = if (isCompletedReceivedFile) {
-        Modifier.clickable { onOpenFileRequest(filePath!!) }
+    val bubbleModifier = if (isCompletedReceivedFile && filePath != null) {
+        Modifier.clickable { onOpenFileRequest(filePath) }
     } else {
         Modifier
     }
@@ -157,25 +189,29 @@ fun FileMessageBubble(
                         Text(fileName, style = MaterialTheme.typography.subtitle1)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("Status: $currentStatus", style = MaterialTheme.typography.caption)
-                        if (fileTransferState!!.total_size > 0) {
-                            LinearProgressIndicator(
-                                progress = fileTransferState!!.transferred_size.toFloat() / fileTransferState!!.total_size.toFloat(),
-                                modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 2.dp)
-                            )
-                            Text(
-                                text = "${(fileTransferState!!.transferred_size.toFloat() / 1024).toInt()}KB / ${(fileTransferState!!.total_size.toFloat() / 1024).toInt()}KB",
-                                style = MaterialTheme.typography.caption
-                            )
+                        fileTransferState?.let { state ->
+                            if (state.total_size > 0) {
+                                LinearProgressIndicator(
+                                    progress = state.transferred_size.toFloat() / state.total_size.toFloat(),
+                                    modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 2.dp)
+                                )
+                                Text(
+                                    text = "${(state.transferred_size.toFloat() / 1024).toInt()}KB / ${(state.total_size.toFloat() / 1024).toInt()}KB",
+                                    style = MaterialTheme.typography.caption
+                                )
+                            }
                         }
                     }
                     FileTransferStatus.COMPLETED.name -> {
                         Text(fileName, style = MaterialTheme.typography.subtitle1)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("Status: $currentStatus", style = MaterialTheme.typography.caption)
-                        Text(
-                            text = "Size: ${(fileTransferState!!.total_size.toFloat() / 1024).toInt()}KB" + if (isCompletedReceivedFile) " (Click to open)" else "",
-                            style = MaterialTheme.typography.caption
-                        )
+                        fileTransferState?.let { state ->
+                            Text(
+                                text = "Size: ${(state.total_size.toFloat() / 1024).toInt()}KB" + if (isCompletedReceivedFile) " (Click to open)" else "",
+                                style = MaterialTheme.typography.caption
+                            )
+                        }
                     }
                     FileTransferStatus.FAILED.name -> {
                         Row(verticalAlignment = Alignment.CenterVertically) {

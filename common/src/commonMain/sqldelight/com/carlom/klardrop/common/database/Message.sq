@@ -19,6 +19,7 @@ CREATE TABLE file_transfers (
 );
 
 -- Queries for messages table
+insert:
 INSERT INTO messages (remote_device_id, content, timestamp, is_sender, message_type, file_transfer_id)
 VALUES (?, ?, ?, ?, ?, ?);
 
@@ -33,8 +34,12 @@ ORDER BY timestamp DESC
 LIMIT ?;
 
 -- Queries for file_transfers table
+insertFileTransfer:
 INSERT INTO file_transfers (file_name, file_path, total_size, transferred_size, status)
 VALUES (?, ?, ?, ?, ?);
+
+lastInsertRowIdFileTransfer:
+SELECT last_insert_rowid();
 
 updateStatusAndSize:
 UPDATE file_transfers
