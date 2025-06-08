@@ -130,14 +130,14 @@ fun DeviceChatScreen(
 @Composable
 fun TextMessageBubble(message: Messages) {
     // Basic representation, align based on is_sender
-    val horizontalArrangement = if (message.is_sender) Arrangement.End else Arrangement.Start
+    val horizontalArrangement = if (message.is_sender != 0L) Arrangement.End else Arrangement.Start
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = horizontalArrangement
     ) {
         Card(
             colors = CardDefaults.cardColors(
-                containerColor = if (message.is_sender) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+                containerColor = if (message.is_sender != 0L) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
@@ -158,7 +158,7 @@ fun FileMessageBubble(
     val fileTransferState by messageRepository.getFileTransferById(message.file_transfer_id ?: return)
         .collectAsState(null)
 
-    val isSender = message.is_sender
+    val isSender = message.is_sender != 0L
     val currentStatus = fileTransferState?.status
     val filePath = fileTransferState?.file_path
     val fileName = fileTransferState?.file_name ?: message.content

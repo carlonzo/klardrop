@@ -2,8 +2,6 @@ package com.carlom.klardrop.common.communication.message
 
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.MessageSerializer
-import com.carlom.klardrop.common.FileManager
-import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.persistence.FileTransferStatus
