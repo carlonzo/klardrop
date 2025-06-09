@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.communication.message
 
+import com.benasher44.uuid.UUID
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
@@ -26,6 +27,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Serializable
 data class FileMessage(
+  override val messageId: String = UUID.randomUUID().toString(),
   val fileName: String,
   val fileSize: Long,
   val mimeType: String
@@ -44,7 +46,7 @@ fun FileMessage.toSendRequest(file: PlatformFile): FileMessage.FileSendRequest {
 }
 
 class FileMessageHandler(
-  private val serializer: MessageSerializer,
+  private val internalSerializer: MessageSerializer, // Renamed to avoid conflict
   private val fileManager: FileManager,
   private val clock: Clock,
   private val coroutines: Coroutines
@@ -53,9 +55,11 @@ class FileMessageHandler(
   override suspend fun handleIncoming(
     message: FileMessage,
     readChannel: ByteReadChannel,
-    receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
+    receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+    writeChannel: ByteWriteChannel, // Added
+    messageSerializer: MessageSerializer // Added
   ) {
-    log("FileMessageHandler", "Receiving file $message")
+    log("FileMessageHandler", "Receiving file $message with messageId: ${message.messageId}")
 
     coroutines.ioDispatcher {
       log("FileMessageHandler", "Ready to receive file $message")
@@ -125,6 +129,14 @@ class FileMessageHandler(
             status = ReceiveMessageStatus.Completed
           )
         }
+        // Send ACK for successful file reception
+        message.messageId?.let { ackId ->
+          val ackMessage = AckMessage(ackedMessageId = ackId)
+          writeChannel.sendMessage(ackMessage, messageSerializer)
+          log("FileMessageHandler", "Sent ACK for FileMessage with id $ackId")
+        } ?: run {
+          log("FileMessageHandler", "FileMessage messageId is null, cannot send ACK. Message: $message")
+        }
       }.onFailure { throwable ->
         log("FileMessageHandler", "Error while receiving file", throwable)
         fileTransfer.onTransferFailed()
@@ -141,7 +153,7 @@ class FileMessageHandler(
 
   override suspend fun handleOutgoing(
     request: FileMessage.FileSendRequest,
-    writeChannel: ByteWriteChannel,
+    writeChannelParam: ByteWriteChannel, // Renamed to avoid conflict with the one in scope for handleIncoming
     progressFlow: MutableSharedFlow<MessengerSendProgress>
   ) {
     coroutines.ioDispatcher.invoke {
@@ -149,7 +161,8 @@ class FileMessageHandler(
       updateSentProgress(progressFlow, 0, request.message.fileSize)
 
       // Send initial message with metadata
-      writeChannel.sendMessage(request.message, serializer)
+      // Using internalSerializer for outgoing, assuming the passed serializer in handleIncoming is for ACKs.
+      writeChannelParam.sendMessage(request.message, internalSerializer)
 
       val sourceFile = request.file
 

@@ -8,4 +8,5 @@ data class HandshakeMessage(
 ) : Message {
   override val type: MessageType = MessageType.HANDSHAKE
   override val hasPayload: Boolean = false
+  override val messageId: String? = null
 }

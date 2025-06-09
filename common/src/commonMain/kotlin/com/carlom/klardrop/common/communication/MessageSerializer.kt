@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.communication
 
+import com.carlom.klardrop.common.communication.message.AckMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.message.Message
@@ -45,6 +46,7 @@ class MessageSerializer(
       MessageType.HANDSHAKE -> HandshakeMessage.serializer() as KSerializer<E>
       MessageType.TEXT -> TextMessage.serializer() as KSerializer<E>
       MessageType.FILE -> FileMessage.serializer() as KSerializer<E>
+      MessageType.ACK -> AckMessage.serializer() as KSerializer<E>
     }
   }
 }

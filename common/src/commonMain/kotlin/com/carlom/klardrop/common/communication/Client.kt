@@ -22,11 +22,13 @@ interface Client {
 class ClientImpl(
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
-  private val messagesRouter: MessagesRouter,
+  // private val messagesRouter: MessagesRouter, // Removed from constructor
   private val serializer: MessageSerializer,
   visibleDevices: VisibleDevices,
   private val currentDeviceProvider: CurrentDeviceProvider
 ) : Client {
+
+  lateinit var messagesRouter: MessagesRouter // Added public settable property
 
   private val clientScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
   private val visibleDevicesFlow =

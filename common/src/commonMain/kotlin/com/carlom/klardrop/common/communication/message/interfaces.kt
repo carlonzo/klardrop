@@ -11,7 +11,7 @@ enum class MessageType(val id: Byte) {
   HANDSHAKE(0),
   TEXT(1),
   FILE(2),
-
+  ACK(3),
   ;
 
   companion object {
@@ -25,6 +25,7 @@ enum class MessageType(val id: Byte) {
 sealed interface Message {
   val type: MessageType
   val hasPayload: Boolean
+  val messageId: String? // Add this nullable field
 }
 
 sealed interface SendMessageRequest {
@@ -41,9 +42,18 @@ fun Message.toSimpleSendRequest(): SendMessageRequest {
 
 class SimpleSendMessageRequest(override val message: Message) : SendMessageRequest
 
+import com.carlom.klardrop.common.communication.MessageSerializer // Added import
+
 interface MessageHandler<E : Message, R : SendMessageRequest> {
 
-  suspend fun handleIncoming(message: E, readChannel: ByteReadChannel, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>)
+  suspend fun handleIncoming(
+    message: E,
+    readChannel: ByteReadChannel,
+    receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+    // Added for ACK sending capability by handlers
+    writeChannel: ByteWriteChannel,
+    messageSerializer: MessageSerializer
+  )
   suspend fun handleOutgoing(request: R, writeChannel: ByteWriteChannel, progressFlow: MutableSharedFlow<MessengerSendProgress>)
 
 }
