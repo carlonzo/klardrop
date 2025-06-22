@@ -10,7 +10,10 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlin.coroutines.CoroutineContext
 
-class TestCoroutines(val dispatcher: TestDispatcher = UnconfinedTestDispatcher()) : Coroutines {
+class TestCoroutines(
+  val dispatcher: TestDispatcher = UnconfinedTestDispatcher(),
+  override val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+) : Coroutines {
 
   private val handler = CoroutineExceptionHandler { _, exception ->
     log("TestCoroutines", "CoroutineExceptionHandler got ${exception.message}", exception)
@@ -24,14 +27,11 @@ class TestCoroutines(val dispatcher: TestDispatcher = UnconfinedTestDispatcher()
   }
 
   override fun newScope(context: CoroutineContext): CoroutineScope {
-    return CoroutineScope(handler + context + dispatcher)
+    return CoroutineScope(handler + dispatcher + context)
   }
 
   override val appScope: CoroutineScope
     get() = scope
-
-  override val ioDispatcher: CoroutineDispatcher
-    get() = Dispatchers.IO
   override val mainDispatcher: CoroutineDispatcher
     get() = dispatcher
   override val cpuDispatcher: CoroutineDispatcher

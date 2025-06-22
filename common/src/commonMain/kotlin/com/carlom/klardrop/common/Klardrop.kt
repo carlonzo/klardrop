@@ -4,7 +4,6 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.utils.InitSentry
 import com.carlom.klardrop.common.utils.UtilsModule
 import com.carlom.klardrop.common.utils.log
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
 class Klardrop(
@@ -27,29 +26,20 @@ class Klardrop(
 
     val discoveryNetwork = commonComponent.discoveryNetwork()
 
-    // start server
-
-    if (applicationInfo.enableKlardropServer) {
+    // start unified server for both protocols
+    if (applicationInfo.enableKlardropServer || applicationInfo.enableNearbyServer) {
       appScope.launch(commonComponent.coroutines().ioDispatcher) {
-        val serverConfig = commonComponent.server().startServer()
+
+        val serverConfig = commonComponent.unifiedServer().startServer()
         val serverPort = serverConfig.port
 
-        discoveryNetwork.startPublishKlardrop(serverPort)
-      }
-    }
-
-    if (applicationInfo.enableNearbyServer) {
-      // start nearby share
-      appScope.launch(commonComponent.coroutines().ioDispatcher) {
-        val nearbyServer = commonComponent.nearbyServer()
-
-        nearbyServer.start()
-
-        nearbyServer.status
-          .filter { it.isRunning }
-          .collect {
-            discoveryNetwork.startPublishNearbyShare(it.port)
-          }
+        // Publish discovery for both protocols on the same port
+        if (applicationInfo.enableKlardropServer) {
+          discoveryNetwork.startPublishKlardrop(serverPort)
+        }
+        if (applicationInfo.enableNearbyServer) {
+          discoveryNetwork.startPublishNearbyShare(serverPort)
+        }
       }
     }
 

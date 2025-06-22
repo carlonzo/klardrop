@@ -10,12 +10,12 @@ import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
+import kotlin.math.pow
 
 /**
  * Messenger used to send messages
@@ -50,7 +50,7 @@ class MessengerImpl(
       //    skip if not visible
       if (device == null) {
         log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
-        flow.emit(Error("$deviceId but it is not visible"))
+        flow.emit(Error("$deviceId it is not visible"))
         return@launch
       }
 
@@ -97,7 +97,6 @@ class MessengerImpl(
 
     }
 
-
     return true
   }
 
@@ -106,22 +105,110 @@ class MessengerImpl(
     messageRequest: SendMessageRequest,
     flow: MutableSharedFlow<MessengerSendProgress>
   ): Boolean {
-    // if there is no connection, create one
-    if (!connectionsPool.isAvailable(deviceId)) {
-      client.connectTo(deviceId)
-    } else {
-      log("Messenger", "Client has already a connection with $deviceId. skipping")
+    val maxRetries = 2 // From AckTimeoutConfig.DEFAULT.maxRetries
+    var attempt = 0
+    
+    log("Messenger", "[DEBUG] Starting handleKlardropTransfer for $deviceId, message: ${messageRequest.message.id}, maxRetries: $maxRetries")
+    
+    while (attempt <= maxRetries) {
+      attempt++
+      log("Messenger", "[DEBUG] Attempt $attempt/$maxRetries for $deviceId, message: ${messageRequest.message.id}")
+      
+      val result = runCatching {
+        // Get or establish connection
+        log("Messenger", "[DEBUG] Getting or establishing connection to $deviceId (attempt $attempt)")
+        val connectionMessenger = getOrEstablishConnection(deviceId)
+
+        if (connectionMessenger == null) {
+          log("Messenger", "[DEBUG] Failed to establish connection to $deviceId (attempt $attempt)")
+          if (attempt <= maxRetries) {
+            // Don't emit error yet, we'll retry
+            return@runCatching false
+          } else {
+            log("Messenger", "[DEBUG] All connection attempts exhausted for $deviceId")
+            flow.emit(Error("Failed to establish connection after $maxRetries attempts"))
+            return false
+          }
+        }
+
+        log("Messenger", "[DEBUG] Successfully got connection to $deviceId, sending message: ${messageRequest.message.id} (attempt $attempt)")
+
+        // Send the message - this will emit progress updates to the flow and wait for ACKs
+        connectionMessenger.send(messageRequest, flow)
+        log("Messenger", "[DEBUG] Successfully sent message ${messageRequest.message.id} to $deviceId (attempt $attempt)")
+        true
+      }.getOrElse { exception ->
+        log("Messenger", "[DEBUG] Error in Klardrop transfer to $deviceId (attempt $attempt): ${exception::class.simpleName}: ${exception.message}")
+        log("Messenger", "[DEBUG] Full exception for attempt $attempt", exception)
+        
+        // Check if this is an ACK timeout (connection lost)
+        val isAckTimeout = exception.message?.contains("ACK timeout") == true
+        log("Messenger", "[DEBUG] Is ACK timeout: $isAckTimeout, exception message: '${exception.message}'")
+        
+        if (isAckTimeout && attempt <= maxRetries) {
+          log("Messenger", "[DEBUG] ACK timeout detected, will retry connection to $deviceId (attempt $attempt)")
+          // Force cleanup of the connection
+          connectionsPool.closeConnection(deviceId)
+          log("Messenger", "[DEBUG] Closed connection to $deviceId, starting backoff delay")
+          
+          // Wait before retry with exponential backoff
+          val delayMs = (1000 * 1.5.pow(attempt - 1)).toLong()
+          log("Messenger", "[DEBUG] Waiting ${delayMs}ms before retry (attempt $attempt)")
+          kotlinx.coroutines.delay(delayMs)
+          
+          return@getOrElse false // Signal to retry
+        } else {
+          // Final failure or non-timeout error
+          log("Messenger", "[DEBUG] Final failure for $deviceId: not ACK timeout or max retries exceeded")
+          flow.emit(Error("Transfer failed: ${exception.message}"))
+          return false
+        }
+      }
+      
+      if (result) {
+        // Success
+        log("Messenger", "[DEBUG] Successfully completed transfer to $deviceId (attempt $attempt)")
+        return true
+      }
+      
+      log("Messenger", "[DEBUG] Attempt $attempt failed, will retry if attempts remaining")
+      // If we get here, it was a retryable failure and we should try again
+    }
+    
+    // All retries exhausted
+    log("Messenger", "[DEBUG] All retries exhausted for $deviceId after $maxRetries attempts")
+    flow.emit(Error("Transfer failed after $maxRetries retry attempts"))
+    return false
+  }
+
+  private suspend fun getOrEstablishConnection(deviceId: String): ConnectionMessenger? {
+    // First, check if we have a valid existing connection
+    val existingConnection = connectionsPool.getConnection(deviceId)
+    if (existingConnection != null) {
+      val isConnectionClosed = existingConnection.isClosed()
+      log("Messenger", "[DEBUG] Found existing connection for $deviceId, isClosed=$isConnectionClosed")
+      
+      if (!isConnectionClosed) {
+        log("Messenger", "Using existing connection for $deviceId")
+        return existingConnection
+      } else {
+        log("Messenger", "Removing closed connection for $deviceId")
+        connectionsPool.closeConnection(deviceId)
+      }
     }
 
-    log("Messenger", "Client sending message to $deviceId: ${messageRequest.message}")
+    // Establish a new connection
+    log("Messenger", "Establishing new connection for $deviceId")
+    client.connectTo(deviceId)
 
-    val connectionMessenger = connectionsPool.getConnection(deviceId) ?: run {
-      log("Messenger", "No connection available for $deviceId")
-      return false
+    // Verify the connection was established
+    val newConnection = connectionsPool.getConnection(deviceId)
+    if (newConnection == null || newConnection.isClosed()) {
+      log("Messenger", "Failed to establish connection for $deviceId")
+      return null
     }
 
-    connectionMessenger.send(messageRequest, flow)
-    return true
+    return newConnection
   }
 
 }

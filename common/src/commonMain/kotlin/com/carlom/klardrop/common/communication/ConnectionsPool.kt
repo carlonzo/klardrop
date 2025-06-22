@@ -9,7 +9,7 @@ interface ConnectionsPool {
 
   suspend fun isAvailable(deviceId: String): Boolean
 
-  suspend fun updateConnection(deviceId: String, socket: ConnectionMessenger)
+  suspend fun updateConnection(deviceId: String, connectionMessenger: ConnectionMessenger)
 
   suspend fun getConnection(deviceId: String): ConnectionMessenger?
 
@@ -40,33 +40,47 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
     }
   }
 
-  override suspend fun updateConnection(deviceId: String, socket: ConnectionMessenger) {
+  override suspend fun updateConnection(deviceId: String, connectionMessenger: ConnectionMessenger) {
     mutex.withLock {
-      if (connections.containsKey(deviceId)) {
-        connections[deviceId]?.close()
+
+      connections[deviceId]?.let { oldConnectionMessenger ->
+        oldConnectionMessenger.close()
         connections.remove(deviceId)
         log("ConnectionPool", "Closing connection before updating with $deviceId")
       }
 
-      connections[deviceId] = socket
+      connections[deviceId] = connectionMessenger
       log("ConnectionPool", "Updated connection with $deviceId")
     }
   }
 
   override suspend fun getConnection(deviceId: String): ConnectionMessenger? {
-    return mutex.withLock { connections[deviceId] }
+    return mutex.withLock {
+      val connection = connections[deviceId] ?: return@withLock null
+
+      // Remove and return null if connection is closed
+      if (connection.isClosed()) {
+        log("ConnectionPool", "Removing closed connection for $deviceId")
+        connections.remove(deviceId)
+        return@withLock null
+      }
+
+      connection
+    }
   }
 
   override suspend fun closeAllConnections() {
     mutex.withLock {
-      connections.keys.forEach { closeConnection(it) }
+      connections.forEach { (deviceId, connectionMessenger) ->
+        connectionMessenger.close()
+        connections.remove(deviceId)
+      }
     }
   }
 
   override suspend fun closeConnection(deviceId: String) {
     return mutex.withLock {
       val connectionMessenger = connections[deviceId] ?: return
-
       connectionMessenger.close()
       connections.remove(deviceId)
     }

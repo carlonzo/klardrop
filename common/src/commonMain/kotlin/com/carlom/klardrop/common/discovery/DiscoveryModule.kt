@@ -24,5 +24,4 @@ internal class DiscoveryModule(
 
   fun discoveryNetwork() = discoveryNetwork
   fun visibleDevices() = visibleDevices
-  fun serviceDiscoveryMdns() = internalPlatformDependency.serviceDiscoveryMdns()
 }
