@@ -108,47 +108,58 @@ class MessengerImpl(
     val maxRetries = 2 // From AckTimeoutConfig.DEFAULT.maxRetries
     var attempt = 0
     
+    log("Messenger", "[DEBUG] Starting handleKlardropTransfer for $deviceId, message: ${messageRequest.message.id}, maxRetries: $maxRetries")
+    
     while (attempt <= maxRetries) {
       attempt++
+      log("Messenger", "[DEBUG] Attempt $attempt/$maxRetries for $deviceId, message: ${messageRequest.message.id}")
       
       val result = runCatching {
         // Get or establish connection
+        log("Messenger", "[DEBUG] Getting or establishing connection to $deviceId (attempt $attempt)")
         val connectionMessenger = getOrEstablishConnection(deviceId)
 
         if (connectionMessenger == null) {
-          log("Messenger", "Failed to establish connection to $deviceId (attempt $attempt)")
+          log("Messenger", "[DEBUG] Failed to establish connection to $deviceId (attempt $attempt)")
           if (attempt <= maxRetries) {
             // Don't emit error yet, we'll retry
             return@runCatching false
           } else {
+            log("Messenger", "[DEBUG] All connection attempts exhausted for $deviceId")
             flow.emit(Error("Failed to establish connection after $maxRetries attempts"))
             return false
           }
         }
 
-        log("Messenger", "Client sending message to $deviceId: ${messageRequest.message} (attempt $attempt)")
+        log("Messenger", "[DEBUG] Successfully got connection to $deviceId, sending message: ${messageRequest.message.id} (attempt $attempt)")
 
         // Send the message - this will emit progress updates to the flow and wait for ACKs
         connectionMessenger.send(messageRequest, flow)
+        log("Messenger", "[DEBUG] Successfully sent message ${messageRequest.message.id} to $deviceId (attempt $attempt)")
         true
       }.getOrElse { exception ->
-        log("Messenger", "Error in Klardrop transfer to $deviceId (attempt $attempt)", exception)
+        log("Messenger", "[DEBUG] Error in Klardrop transfer to $deviceId (attempt $attempt): ${exception::class.simpleName}: ${exception.message}")
+        log("Messenger", "[DEBUG] Full exception for attempt $attempt", exception)
         
         // Check if this is an ACK timeout (connection lost)
         val isAckTimeout = exception.message?.contains("ACK timeout") == true
+        log("Messenger", "[DEBUG] Is ACK timeout: $isAckTimeout, exception message: '${exception.message}'")
         
         if (isAckTimeout && attempt <= maxRetries) {
-          log("Messenger", "ACK timeout detected, will retry connection to $deviceId")
+          log("Messenger", "[DEBUG] ACK timeout detected, will retry connection to $deviceId (attempt $attempt)")
           // Force cleanup of the connection
           connectionsPool.closeConnection(deviceId)
+          log("Messenger", "[DEBUG] Closed connection to $deviceId, starting backoff delay")
           
           // Wait before retry with exponential backoff
           val delayMs = (1000 * 1.5.pow(attempt - 1)).toLong()
+          log("Messenger", "[DEBUG] Waiting ${delayMs}ms before retry (attempt $attempt)")
           kotlinx.coroutines.delay(delayMs)
           
           return@getOrElse false // Signal to retry
         } else {
           // Final failure or non-timeout error
+          log("Messenger", "[DEBUG] Final failure for $deviceId: not ACK timeout or max retries exceeded")
           flow.emit(Error("Transfer failed: ${exception.message}"))
           return false
         }
@@ -156,13 +167,16 @@ class MessengerImpl(
       
       if (result) {
         // Success
+        log("Messenger", "[DEBUG] Successfully completed transfer to $deviceId (attempt $attempt)")
         return true
       }
       
+      log("Messenger", "[DEBUG] Attempt $attempt failed, will retry if attempts remaining")
       // If we get here, it was a retryable failure and we should try again
     }
     
     // All retries exhausted
+    log("Messenger", "[DEBUG] All retries exhausted for $deviceId after $maxRetries attempts")
     flow.emit(Error("Transfer failed after $maxRetries retry attempts"))
     return false
   }
@@ -170,15 +184,17 @@ class MessengerImpl(
   private suspend fun getOrEstablishConnection(deviceId: String): ConnectionMessenger? {
     // First, check if we have a valid existing connection
     val existingConnection = connectionsPool.getConnection(deviceId)
-    if (existingConnection != null && !existingConnection.isClosed()) {
-      log("Messenger", "Using existing connection for $deviceId")
-      return existingConnection
-    }
-
-    // If we have a closed connection, clean it up
-    if (existingConnection?.isClosed() == true) {
-      log("Messenger", "Removing closed connection for $deviceId")
-      connectionsPool.closeConnection(deviceId)
+    if (existingConnection != null) {
+      val isConnectionClosed = existingConnection.isClosed()
+      log("Messenger", "[DEBUG] Found existing connection for $deviceId, isClosed=$isConnectionClosed")
+      
+      if (!isConnectionClosed) {
+        log("Messenger", "Using existing connection for $deviceId")
+        return existingConnection
+      } else {
+        log("Messenger", "Removing closed connection for $deviceId")
+        connectionsPool.closeConnection(deviceId)
+      }
     }
 
     // Establish a new connection

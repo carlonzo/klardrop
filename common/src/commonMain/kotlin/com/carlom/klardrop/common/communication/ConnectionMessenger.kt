@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.router.MessagesRouter
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.network.sockets.*
@@ -15,6 +16,7 @@ import kotlinx.coroutines.invoke
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlin.time.ExperimentalTime
 
 class ConnectionMessenger internal constructor(
   private val coroutines: Coroutines,
@@ -30,7 +32,7 @@ class ConnectionMessenger internal constructor(
   private val ackMutex = Mutex()
 
   companion object {
-    private const val ACK_TIMEOUT_MS = 10_000L // 10 seconds
+    private const val ACK_TIMEOUT_MS = 2_000L // 2 seconds (reduced for faster test execution)
   }
 
   init {
@@ -81,25 +83,34 @@ class ConnectionMessenger internal constructor(
     }
   }
 
+  @OptIn(ExperimentalTime::class)
   private suspend fun waitForAck(messageId: Int, ackType: AckType) {
     val channel = Channel<Unit>(capacity = 1)
     
     ackMutex.withLock {
       pendingAcks[messageId] = PendingAck(ackType, channel)
+      log("ConnectionMessenger: [DEBUG] Added pending ACK $ackType for message $messageId, total pending: ${pendingAcks.size}")
     }
     
-    log("ConnectionMessenger: Waiting for ACK $ackType for message $messageId from ${connection.deviceId}")
+    log("ConnectionMessenger: [DEBUG] Starting to wait for ACK $ackType for message $messageId from ${connection.deviceId}, timeout=${ACK_TIMEOUT_MS}ms")
+    val startTime = kotlin.time.Clock.System.now()
     
     try {
       withTimeout(ACK_TIMEOUT_MS) {
+        log("ConnectionMessenger: [DEBUG] Entering channel.receive() for ACK $ackType message $messageId")
         channel.receive()
+        val elapsed = kotlin.time.Clock.System.now() - startTime
+        log("ConnectionMessenger: [DEBUG] Successfully received ACK $ackType for message $messageId after ${elapsed.inWholeMilliseconds}ms")
       }
-      log("ConnectionMessenger: Received expected ACK $ackType for message $messageId")
     } catch (e: Exception) {
-      log("ConnectionMessenger: ACK timeout or error for $ackType message $messageId: ${e.message}")
+      val elapsed = kotlin.time.Clock.System.now() - startTime
+      log("ConnectionMessenger: [DEBUG] ACK timeout or error for $ackType message $messageId after ${elapsed.inWholeMilliseconds}ms: ${e::class.simpleName}: ${e.message}")
+      log("ConnectionMessenger: [DEBUG] Connection state during timeout: isClosed=${isClosed()}, socket.isClosed=${connection.socket.isClosed}")
+      
       // Cleanup pending ACK on timeout or error
       ackMutex.withLock {
-        pendingAcks.remove(messageId)
+        val removed = pendingAcks.remove(messageId)
+        log("ConnectionMessenger: [DEBUG] Cleaned up pending ACK for message $messageId, was present: $removed, remaining pending: ${pendingAcks.size}")
       }
       channel.close()
       throw IllegalStateException("ACK timeout: Expected $ackType for message $messageId from ${connection.deviceId}")
@@ -107,44 +118,53 @@ class ConnectionMessenger internal constructor(
   }
 
   suspend fun <S : SendMessageRequest> send(sendRequest: S, flow: MutableSharedFlow<MessengerSendProgress>) {
+    val message = sendRequest.message
+    log("ConnectionMessenger: [DEBUG] Starting send for message ${message.id} to ${connection.deviceId}, isClosed=${isClosed()}")
+    
     if (isClosed()) {
-      log("ConnectionMessenger: Attempted to send message on closed connection to ${connection.deviceId}")
+      log("ConnectionMessenger: [DEBUG] Attempted to send message on closed connection to ${connection.deviceId}")
       flow.emit(MessengerSendProgress.Error("Connection is closed"))
       return
     }
 
     runCatching {
       coroutines.ioDispatcher {
-        val message = sendRequest.message
         
         if (message.hasPayload) {
           // For payload messages (FILE): Send metadata → Wait for ACK_READY → Send payload → Wait for ACK_RECEIVED
-          log("ConnectionMessenger: Sending payload message ${message.id} to ${connection.deviceId}")
+          log("ConnectionMessenger: [DEBUG] Sending payload message ${message.id} to ${connection.deviceId}")
           
           // Send the message metadata through the router (this includes the payload sending)
+          log("ConnectionMessenger: [DEBUG] Calling messagesRouter.onSendingMessage for payload message ${message.id}")
           messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
           
           // Wait for ACK_RECEIVED since the message handler manages the payload flow internally
+          log("ConnectionMessenger: [DEBUG] About to wait for ACK_RECEIVED for payload message ${message.id}, connection.isClosed=${isClosed()}")
           waitForAck(message.id, AckType.RECEIVED)
-          log("ConnectionMessenger: Received ACK_RECEIVED, payload message ${message.id} completed")
+          log("ConnectionMessenger: [DEBUG] Received ACK_RECEIVED, payload message ${message.id} completed")
           
         } else {
           // For no-payload messages (TEXT): Send message → Wait for ACK_RECEIVED
-          log("ConnectionMessenger: Sending no-payload message ${message.id} to ${connection.deviceId}")
+          log("ConnectionMessenger: [DEBUG] Sending no-payload message ${message.id} to ${connection.deviceId}")
           
           // Send the message through the router
+          log("ConnectionMessenger: [DEBUG] Calling messagesRouter.onSendingMessage for no-payload message ${message.id}")
           messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
+          log("ConnectionMessenger: [DEBUG] Completed messagesRouter.onSendingMessage for message ${message.id}")
           
           // Wait for ACK_RECEIVED
-          log("ConnectionMessenger: About to wait for ACK_RECEIVED for message ${message.id}")
+          log("ConnectionMessenger: [DEBUG] About to wait for ACK_RECEIVED for no-payload message ${message.id}, connection.isClosed=${isClosed()}")
           waitForAck(message.id, AckType.RECEIVED)
-          log("ConnectionMessenger: Received ACK_RECEIVED, message ${message.id} completed")
+          log("ConnectionMessenger: [DEBUG] Successfully received ACK_RECEIVED for message ${message.id}")
         }
         
+        log("ConnectionMessenger: [DEBUG] About to emit Completed for message ${message.id}")
         flow.emit(MessengerSendProgress.Completed)
+        log("ConnectionMessenger: [DEBUG] Successfully completed send for message ${message.id}")
       }
     }.onFailure { exception: Throwable ->
-      log("ConnectionMessenger: Error sending message to ${connection.deviceId}", exception)
+      log("ConnectionMessenger: [DEBUG] Error sending message ${message.id} to ${connection.deviceId}: ${exception::class.simpleName}: ${exception.message}")
+      log("ConnectionMessenger: [DEBUG] Full exception details", exception)
       flow.emit(MessengerSendProgress.Error("Send failed: ${exception.message}"))
       close() // Close the connection on error
     }
@@ -159,6 +179,17 @@ class ConnectionMessenger internal constructor(
   }
 
   fun isClosed(): Boolean {
-    return connection.socket.isClosed
+    // Check if socket is explicitly closed
+    if (connection.socket.isClosed) {
+      return true
+    }
+    
+    // Check if read/write channels are closed (indicates remote closure)
+    if (readChannel.isClosedForRead || writeChannel.isClosedForWrite) {
+      log("ConnectionMessenger: [DEBUG] Detected remote closure for ${connection.deviceId} - readClosed=${readChannel.isClosedForRead}, writeClosed=${writeChannel.isClosedForWrite}")
+      return true
+    }
+    
+    return false
   }
 }

@@ -23,6 +23,7 @@ import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.time.ExperimentalTime
 
 class KlardropIntegrationTest {
 
@@ -119,6 +120,7 @@ class KlardropIntegrationTest {
   fun testMessengerReconnectionFromBothSides() = testMessengerReconnection(clientDropsConnection = true, serverDropsConnection = true)
 
   // simple method to parametize the test for reconnection issues. using a boolean to indicate if the client should drop the connection or the server
+  @OptIn(ExperimentalTime::class)
   @Suppress("VisibleForTests")
   private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) = runTest(coroutines.dispatcher) {
     val server = serverCommunicationModule.unifiedServer()
@@ -130,40 +132,64 @@ class KlardropIntegrationTest {
     turbineScope {
 
       // send first message between client and server
+      println("[TEST-DEBUG] Sending first message...")
       sendAndReceiveMessage("firstMessage")
+      println("[TEST-DEBUG] First message completed successfully")
 
       if (clientDropsConnection) {
         // Force close all client connections to simulate the disconnect issue
+        println("[TEST-DEBUG] Closing CLIENT connections...")
         val connectionsPool = clientCommunicationModule.connectionsPool()
         connectionsPool.closeAllConnections()
+        println("[TEST-DEBUG] CLIENT connections closed")
       }
 
       if (serverDropsConnection) {
         // Force close all server connections to simulate the disconnect issue
+        println("[TEST-DEBUG] Closing SERVER connections...")
         val connectionsPool = serverCommunicationModule.connectionsPool()
         connectionsPool.closeAllConnections()
+        println("[TEST-DEBUG] SERVER connections closed")
       }
 
       // Wait a bit to ensure cleanup
+      println("[TEST-DEBUG] Advancing scheduler to ensure cleanup...")
       coroutines.dispatcher.scheduler.advanceUntilIdle()
+      println("[TEST-DEBUG] Cleanup completed")
 
       val messageReceiver = serverCommunicationModule.messageReceiver()
       val clientMessenger = clientCommunicationModule.messenger()
 
       // Now try to send a second message - this should trigger reconnection
       val secondMessage = textSendRequest("reconnection messenger message")
+      println("[TEST-DEBUG] About to send second message: ${secondMessage.message.id}")
 
       val secondSendFlow = clientMessenger.send(serverDeviceId, secondMessage)
       val secondSenderChannel = secondSendFlow.testIn(this)
       val secondReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
 
+      println("[TEST-DEBUG] Started second message send, now waiting for completion...")
 
       // Advance time to allow for timeout detection and reconnection
 //      testDispatcher.scheduler.advanceTimeBy(4000) // Advance past our 3 second timeout
 //      testDispatcher.scheduler.advanceUntilIdle()
 
       // Wait for second message to be sent
-      secondSenderChannel.awaitFor { it is Completed }
+      println("[TEST-DEBUG] Waiting for Completed status from second message...")
+      val startTime = kotlin.time.Clock.System.now()
+      
+      try {
+        secondSenderChannel.awaitFor { 
+          val elapsed = kotlin.time.Clock.System.now() - startTime
+          println("[TEST-DEBUG] Received progress update after ${elapsed.inWholeMilliseconds}ms: $it")
+          it is Completed 
+        }
+        println("[TEST-DEBUG] Second message completed successfully!")
+      } catch (e: Exception) {
+        val elapsed = kotlin.time.Clock.System.now() - startTime
+        println("[TEST-DEBUG] Test failed after ${elapsed.inWholeMilliseconds}ms waiting for Completed: ${e::class.simpleName}: ${e.message}")
+        throw e
+      }
 
       // If it completes, verify the message was received
       coroutines.dispatcher.scheduler.advanceUntilIdle()
