@@ -8,9 +8,11 @@ import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerImpl
 import com.carlom.klardrop.common.communication.UnifiedServer
+import com.carlom.klardrop.common.communication.message.AckMessageHandler
 import com.carlom.klardrop.common.communication.message.FileMessageHandler
 import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
 import com.carlom.klardrop.common.communication.message.MessageType
+import com.carlom.klardrop.common.communication.message.TextMessageHandler
 import com.carlom.klardrop.common.communication.router.MessagesRouterImpl
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
@@ -36,7 +38,10 @@ class CommunicationModule(
   private val messageHandlers by lazy {
     MessageHandlersImpl(
       mapOf(
-        MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines)
+        MessageType.TEXT to TextMessageHandler(serializer),
+        MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines),
+        MessageType.ACK_READY to AckMessageHandler(),
+        MessageType.ACK_RECEIVED to AckMessageHandler()
       )
     )
   }

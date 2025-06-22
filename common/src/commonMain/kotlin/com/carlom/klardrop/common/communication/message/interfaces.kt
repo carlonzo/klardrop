@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import io.ktor.utils.io.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
 enum class MessageType(val id: Byte) {
@@ -12,6 +13,8 @@ enum class MessageType(val id: Byte) {
   HANDSHAKE(0),
   TEXT(1),
   FILE(2),
+  ACK_READY(3),
+  ACK_RECEIVED(4),
 
   ;
 
@@ -42,6 +45,23 @@ fun Message.toSimpleSendRequest(): SendMessageRequest {
 }
 
 class SimpleSendMessageRequest(override val message: Message) : SendMessageRequest
+
+enum class AckType {
+  READY,
+  RECEIVED
+}
+
+@Serializable
+data class MessageAcknowledgment(
+  val ackType: AckType,
+  val messageId: Int
+) : Message() {
+  override val type: MessageType = when (ackType) {
+    AckType.READY -> MessageType.ACK_READY
+    AckType.RECEIVED -> MessageType.ACK_RECEIVED
+  }
+  override val hasPayload: Boolean = false
+}
 
 interface MessageHandler<E : Message, R : SendMessageRequest> {
 

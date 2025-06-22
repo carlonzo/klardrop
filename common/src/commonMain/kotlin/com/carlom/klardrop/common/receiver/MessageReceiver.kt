@@ -5,8 +5,6 @@ import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
-import io.ktor.util.reflect.instanceOf
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -14,7 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 
@@ -23,7 +20,7 @@ import kotlinx.coroutines.launch
  */
 interface MessageReceiver {
 
-  fun onReceiveMessage(deviceId: String = ""): MutableStateFlow<ReceiveMessageUpdate>
+  fun onReceiveMessage(deviceId: String): MutableStateFlow<ReceiveMessageUpdate>
 
   val notifier: Flow<Flow<ReceiveMessageUpdate>>
 
@@ -55,15 +52,12 @@ internal class MessageReceiverImpl(
   override fun onReceiveMessage(deviceId: String): MutableStateFlow<ReceiveMessageUpdate> {
 
     val device = visibleDevices.getDevice(deviceId)?.deviceInfo ?: DeviceInfo(
-      deviceId = deviceId,
-      name = "",
-      deviceType = DeviceType.UNKNOWN
+      deviceId = deviceId, name = "unknown", deviceType = DeviceType.UNKNOWN
     )
 
     val flow = MutableStateFlow(
       ReceiveMessageUpdate(
-        device = device,
-        status = ReceiveMessageStatus.Started
+        device = device, status = ReceiveMessageStatus.Started
       )
     )
 
@@ -77,8 +71,7 @@ internal class MessageReceiverImpl(
 }
 
 data class ReceiveMessageUpdate(
-  val device: DeviceInfo? = null,
-  val messages: List<Message> = emptyList(),
+  val device: DeviceInfo? = null, val messages: List<Message> = emptyList(),
 
   val status: ReceiveMessageStatus
 )
