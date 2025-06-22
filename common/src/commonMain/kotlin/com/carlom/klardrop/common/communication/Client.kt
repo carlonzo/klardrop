@@ -116,6 +116,11 @@ class ClientImpl(
         
         // Store the connection in the client's pool keyed by the server's device ID
         connectionsPool.updateConnection(deviceId, connectionMessenger)
+        
+        // Start listening for incoming messages (including ACKs) in a separate coroutine
+        clientScope.launch {
+          connectionMessenger.acceptIncomingMessages()
+        }
       }
       
       connectionJob.complete(true)

@@ -28,7 +28,8 @@ import kotlin.time.Duration.Companion.seconds
 data class FileMessage(
   val fileName: String,
   val fileSize: Long,
-  val mimeType: String
+  val mimeType: String,
+  override val id: Int = kotlin.random.Random.nextInt()
 ) : Message() {
   override val type: MessageType = MessageType.FILE
   override val hasPayload: Boolean = true

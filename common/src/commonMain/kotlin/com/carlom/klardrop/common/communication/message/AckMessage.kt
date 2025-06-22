@@ -24,7 +24,7 @@ class AckMessageHandler : MessageHandler<MessageAcknowledgment, SimpleSendMessag
     writeChannel: ByteWriteChannel,
     progressFlow: MutableSharedFlow<MessengerSendProgress>
   ) {
-    log("AckMessageHandler", "Sending ACK: ${(request.message as MessageAcknowledgment).ackType} for message ${(request.message as MessageAcknowledgment).messageId}")
+    log("AckMessageHandler", "Sending ACK: ${(request.message as MessageAcknowledgment).ackType} for message ${request.message.messageId}")
     // ACKs are sent directly, no additional handling needed
     // The message itself is already serialized by the connection layer
   }

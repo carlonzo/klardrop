@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import io.ktor.utils.io.ByteReadChannel
@@ -11,7 +12,8 @@ class FakeMessagesRouter: MessagesRouter {
   override suspend fun onMessageIncoming(
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
-    readChannel: ByteReadChannel
+    readChannel: ByteReadChannel,
+    ackCallback: (suspend (MessageAcknowledgment) -> Unit)?
   ) {
 
   }
@@ -24,4 +26,5 @@ class FakeMessagesRouter: MessagesRouter {
     progress: MutableSharedFlow<MessengerSendProgress>
   ) {
   }
+  
 }

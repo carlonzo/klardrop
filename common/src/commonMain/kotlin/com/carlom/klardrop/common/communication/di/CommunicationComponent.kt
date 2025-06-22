@@ -63,7 +63,7 @@ class CommunicationModule(
       messagesRouter,
       serializer,
       visibleDevices,
-      currentDeviceProvider,
+      currentDeviceProvider
     )
   }
 
