@@ -1,11 +1,12 @@
 import com.carlom.klardrop.common.persistence.KlardropProperties
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
+import com.carlom.klardrop.common.utils.nextString
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlin.random.Random
 
-class FakeLocalPropertiesRepository: LocalPropertiesRepository {
-
-  override val properties: MutableStateFlow<KlardropProperties> = MutableStateFlow(KlardropProperties(""))
+class FakeLocalPropertiesRepository(private val currentDeviceId: String = Random.nextString(5)): LocalPropertiesRepository {
+  override val properties: MutableStateFlow<KlardropProperties> = MutableStateFlow(KlardropProperties(currentDeviceId))
 
   override suspend fun getProperty(): KlardropProperties {
     return properties.first()

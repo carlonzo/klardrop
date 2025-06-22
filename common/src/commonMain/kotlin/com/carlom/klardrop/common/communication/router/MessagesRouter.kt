@@ -35,7 +35,7 @@ class MessagesRouterImpl(
   override suspend fun onMessageIncoming(fromDeviceId: String, writeChannel: ByteWriteChannel, readChannel: ByteReadChannel) =
     coroutines.ioDispatcher {
 
-      val message =  readChannel.readMessage(messageSerializer)
+      val message = readChannel.readMessage(messageSerializer)
       log("MessagesRouter", "Received message from $fromDeviceId: $message")
 
       val receiveFlow = messengeReceiver.onReceiveMessage(fromDeviceId)

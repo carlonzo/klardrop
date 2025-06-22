@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class HandshakeMessage(
   val deviceId: String,
-) : Message {
+) : Message() {
   override val type: MessageType = MessageType.HANDSHAKE
   override val hasPayload: Boolean = false
 }

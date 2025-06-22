@@ -15,18 +15,11 @@ import com.carlom.klardrop.common.utils.getMimeTypeFromExtension
 import com.carlom.klardrop.common.utils.log
 import com.carlonzo.ukey2.Ukey2Handshake
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
-import com.google.location.nearby.connections.proto.ConnectionResponseFrame
-import com.google.location.nearby.connections.proto.OfflineFrame
-import com.google.location.nearby.connections.proto.OsInfo
-import com.google.location.nearby.connections.proto.PayloadTransferFrame
+import com.google.location.nearby.connections.proto.*
 import com.google.location.nearby.connections.proto.PayloadTransferFrame.PayloadHeader.PayloadType
-import com.google.location.nearby.connections.proto.V1Frame
 import com.google.security.cryptauth.lib.securegcm.DeviceType
-import io.ktor.network.sockets.Socket
-import io.ktor.network.sockets.openReadChannel
-import io.ktor.network.sockets.openWriteChannel
-import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.network.sockets.*
+import io.ktor.utils.io.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -54,16 +47,17 @@ class NearbyReceiverConnectionHandler(
 
   private val connectionScope = coroutines.newScope(coroutines.ioDispatcher)
 
-  suspend fun onConnection(connection: Socket, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>) {
+  suspend fun onConnection(
+    connection: Socket,
+    receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+    connectionRequest: OfflineFrame,
+    readChannel: ByteReadChannel
+  ) {
 
     this.receiveFlow = receiveFlow
 
     try {
-      val readChannel = connection.openReadChannel()
       val writeChannel = connection.openWriteChannel(autoFlush = false)
-
-      // connection request
-      val connectionRequest = readChannel.readByteArray().let { OfflineFrame.ADAPTER.decode(it) }
 
       val msg = connectionRequest.toString()
       log("NearbyReceiverConnectionHandler", "Connection request received ${msg.substring(0, msg.length / 2)}")
@@ -112,7 +106,7 @@ class NearbyReceiverConnectionHandler(
       // just accept directly
       keepAliveWhileWaitingJob.cancel()
       // await the keepalive job is completed
-      mutexKeepAlive.withLock {  }
+      mutexKeepAlive.withLock { }
 
       acceptTransfer(nearbyConnection, writeChannel)
 

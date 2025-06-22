@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import io.ktor.utils.io.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlin.random.Random
 
 enum class MessageType(val id: Byte) {
 
@@ -22,9 +23,10 @@ enum class MessageType(val id: Byte) {
 
 }
 
-sealed interface Message {
-  val type: MessageType
-  val hasPayload: Boolean
+sealed class Message {
+  val id = Random.nextInt()
+  abstract val type: MessageType
+  abstract val hasPayload: Boolean
 }
 
 sealed interface SendMessageRequest {

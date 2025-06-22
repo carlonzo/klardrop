@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
+import io.ktor.util.reflect.instanceOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 
 /**
@@ -24,18 +27,30 @@ interface MessageReceiver {
 
   val notifier: Flow<Flow<ReceiveMessageUpdate>>
 
+  /**
+   * Flow that emits updates when a message is received and the status is completed.
+   */
+  val messageReceivedNotifier: Flow<ReceiveMessageUpdate>
+
 }
 
 internal class MessageReceiverImpl(
   coroutines: Coroutines,
-  private val visibleDevices: VisibleDevices
+  private val visibleDevices: VisibleDevices,
 ) : MessageReceiver {
 
   private val receiverScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
-  private val _notifier = MutableSharedFlow<StateFlow<ReceiveMessageUpdate>>()
+  private val _notifier = MutableSharedFlow<StateFlow<ReceiveMessageUpdate>>(extraBufferCapacity = 1)
 
   override val notifier: Flow<Flow<ReceiveMessageUpdate>>
     get() = _notifier.asSharedFlow()
+
+  override val messageReceivedNotifier: Flow<ReceiveMessageUpdate>
+    get() = _notifier.mapNotNull {
+      val value = it.value
+      if (value.status is ReceiveMessageStatus.Completed) value
+      else null
+    }
 
   override fun onReceiveMessage(deviceId: String): MutableStateFlow<ReceiveMessageUpdate> {
 

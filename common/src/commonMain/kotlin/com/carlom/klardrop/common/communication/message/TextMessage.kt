@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 data class TextMessage(
   val title: String = "",
   val text: String
-) : Message {
+) : Message() {
 
   override val type = MessageType.TEXT
   override val hasPayload: Boolean = false

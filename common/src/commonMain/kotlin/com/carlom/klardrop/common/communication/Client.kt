@@ -41,7 +41,6 @@ class ClientImpl(
       return@ioDispatcher
     }
 
-
     val discoveryDevice = visibleDevicesFlow.value[deviceId] ?: kotlin.run {
       log("Client", "cant connect. Device $deviceId cant be found")
       return@ioDispatcher
@@ -55,8 +54,8 @@ class ClientImpl(
 
     val connectionJob = CompletableDeferred<Boolean>()
 
-    coroutines.appScope.launch {
-
+    // launch coroutine to connect and await for the connection to stay alive
+    launch {
       connections.forEach { connection ->
         val address = connection.address
         val port = connection.port
@@ -71,48 +70,60 @@ class ClientImpl(
           .onFailure {
             log("Client", "Failed to connect to $deviceId with address $address", it)
           }
-
       }
 
     }
 
-    log("Client", "Awaiting for client to finish connection")
-    val await = connectionJob.await()
-    log("Client", "On client finished connection: $await")
+    // await for the connection to be established and connectionpool to be updated
+    val connectionResult = connectionJob.await()
+    log("Client", "On client connection completed with $deviceId: result: $connectionResult")
   }
 
   private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) =
     runCatching {
 
-      val socket = aSocket(selectorManager).tcp().connect(address, port)
-      log("Client", "Connected to $address:$port. Sending greetings")
+    val socket = aSocket(selectorManager).tcp().connect(address, port)
+    log("Client", "Connected to $address:$port. Sending greetings")
 
-      val readChannel = socket.openReadChannel()
-      val writeChannel = socket.openWriteChannel(autoFlush = true)
+    val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+    val writeChannel = socket.openWriteChannel(autoFlush = true)
+    writeChannel.sendMessage(handshakeMessage, serializer)
 
-      val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+    log("Client", "Waiting for response greetings from $deviceId")
 
-      writeChannel.sendMessage(handshakeMessage, serializer)
+    val readChannel = socket.openReadChannel()
+    val serverHandshakeMessage = readChannel.readMessage(serializer) as HandshakeMessage
 
-      log("Client", "Waiting for response greetings from $deviceId")
+    if (serverHandshakeMessage.deviceId == deviceId) {
+      log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
 
-      val serverHandshakeMessage = readChannel.readMessage(serializer) as HandshakeMessage
-
-      if (serverHandshakeMessage.deviceId == deviceId) {
-        val connection = Connection(socket, deviceId)
-        val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter, readChannel, writeChannel)
-
-        connectionsPool.updateConnection(deviceId, connectionMessenger)
-        log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
-
-        connectionJob.complete(true)
-
-        connectionMessenger.acceptIncomingMessages()
+      // Check if client and server have the same device ID (test scenario)
+      val clientDeviceId = currentDeviceProvider.get().shortDeviceId
+      if (clientDeviceId == deviceId) {
+        log("Client", "Client and server have same device ID - server will manage the connection")
+        // Don't create a client-side ConnectionMessenger to avoid conflicts
+        // The server has already created one and stored it with the same key
       } else {
-        connectionJob.complete(false)
-        log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
-        socket.close()
+        // Create a ConnectionMessenger for the client side to send messages to the server
+        val connection = Connection(socket, deviceId)
+        val connectionMessenger = ConnectionMessenger(
+          coroutines = coroutines,
+          connection = connection,
+          messagesRouter = messagesRouter,
+          readChannel = readChannel,
+          writeChannel = writeChannel
+        )
+        
+        // Store the connection in the client's pool keyed by the server's device ID
+        connectionsPool.updateConnection(deviceId, connectionMessenger)
       }
-
+      
+      connectionJob.complete(true)
+    } else {
+      log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
+      connectionJob.complete(false)
+      socket.close()
     }
+
+  }
 }

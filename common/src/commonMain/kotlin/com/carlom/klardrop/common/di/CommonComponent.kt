@@ -8,7 +8,6 @@ import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
 import com.carlom.klardrop.common.features.ClipboardManager
-import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.Clock
@@ -36,10 +35,6 @@ class CommonComponent(
     storageModule.localPropertiesRepository()
   }
 
-  private val knownDevicesRepository: KnownDevicesRepository by lazy {
-    storageModule.knownDevicesRepository()
-  }
-
   private val coroutines: Coroutines by lazy { utilsModule.coroutines() }
   private val clock: Clock by lazy { utilsModule.clock() }
   private val protoBuf = ProtoBuf
@@ -49,7 +44,6 @@ class CommonComponent(
   private val communicationModule by lazy {
     CommunicationModule(
       coroutines,
-      localProperties,
       discoveryModule.visibleDevices(),
       protoBuf,
       clock,
@@ -73,14 +67,12 @@ class CommonComponent(
 
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
-  fun server() = communicationModule.server()
+  fun unifiedServer() = communicationModule.unifiedServer()
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()
 
   fun platformFileSystem() = platformFileSystem
-
-  fun nearbyServer() = communicationModule.nearbyServer()
 
   fun clipboardManager() = clipboardManager
 

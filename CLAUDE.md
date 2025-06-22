@@ -43,9 +43,26 @@ Platform-specific modules:
 
 ### Communication Protocols
 
-The app supports multiple sharing protocols:
+The app supports multiple sharing protocols through a unified server architecture:
 - **Klardrop protocol** - Custom raw TCP socket protocol with length-prefixed messages
 - **Nearby Share** - Google's nearby sharing protocol
+
+#### Unified Server Architecture
+
+The `UnifiedServer` (`common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/UnifiedServer.kt`) automatically detects which protocol a client is using and routes connections appropriately:
+
+**Protocol Detection Strategy:**
+- Both protocols use identical transport (raw TCP with 4-byte length-prefixed messages)
+- **Klardrop Protocol**: `[4-byte length][1-byte message type][protobuf payload]`
+- **Nearby Share Protocol**: `[4-byte length][protobuf OfflineFrame]`
+- Detection examines the first payload byte and message structure
+- Failed parsing attempts fall back to the other protocol
+
+**Benefits:**
+- **Single Port**: Both protocols share the same listening socket
+- **Automatic Detection**: No manual protocol selection required
+- **Resource Efficiency**: One server instead of two separate instances
+- **Backward Compatibility**: Existing clients work unchanged
 
 #### Klardrop Socket Protocol
 
@@ -91,12 +108,11 @@ Each platform provides implementations for:
 - **Ktor** - Networking and raw TCP socket communication
 - **kotlinx.coroutines** - Asynchronous programming
 - **kotlinx.serialization** - Data serialization with Protocol Buffers
-- **Dagger** - Dependency injection
 - **jmDNS** - Service discovery
-- **Okio** - File I/O operations
 
 ## Common Development Commands
+Always append a `-q` to the gradle commands to reduce output verbosity.
 
 - Compile sources for common and jvm platform: run the `:desktop:compileKotlinJvm` gradle task.
-- Run unit tests for common and jvm platform: run the `desktopJvmTest` gradle task.
+- Run unit tests for common and jvm platform: run the `:jvmTest` gradle task.
 - To Run the desktop application: run the `:desktop:run` gradle task.

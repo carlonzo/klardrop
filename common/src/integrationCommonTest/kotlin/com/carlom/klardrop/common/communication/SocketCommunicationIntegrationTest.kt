@@ -48,7 +48,6 @@ class SocketCommunicationIntegrationTest {
     val serverCurrentDeviceProvider = CurrentDeviceProvider(fakeLocalPropertiesRepository)
     val serverCommunicationModule = CommunicationModule(
       coroutines = testCoroutines,
-      localPropertiesRepository = fakeLocalPropertiesRepository,
       visibleDevices = fakeVisibleDevices,
       protoBuf = ProtoBuf,
       clock = utilsModule.clock(),
@@ -62,7 +61,6 @@ class SocketCommunicationIntegrationTest {
     val clientCurrentDeviceProvider = CurrentDeviceProvider(clientLocalPropertiesRepository)
     val clientCommunicationModule = CommunicationModule(
       coroutines = testCoroutines,
-      localPropertiesRepository = clientLocalPropertiesRepository,
       visibleDevices = clientVisibleDevices,
       protoBuf = ProtoBuf,
       clock = utilsModule.clock(),
@@ -77,9 +75,9 @@ class SocketCommunicationIntegrationTest {
     fakeLocalPropertiesRepository.save(KlardropProperties(serverDeviceId))
     clientLocalPropertiesRepository.save(KlardropProperties(clientDeviceId))
 
-    // Start server
-    val server = serverCommunicationModule.server()
-    val serverConfig = server.startServer()
+    // Start unified server
+    val unifiedServer = serverCommunicationModule.unifiedServer()
+    val serverConfig = unifiedServer.startServer()
     
     assertTrue(serverConfig.port > 0, "Server should start on a valid port")
     
@@ -156,7 +154,7 @@ class SocketCommunicationIntegrationTest {
 }
 
 // Test helper classes
-private class FakeFileManager : FileManager {
+internal class FakeFileManager : FileManager {
   override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer {
     error("File operations not needed for socket communication test")
   }

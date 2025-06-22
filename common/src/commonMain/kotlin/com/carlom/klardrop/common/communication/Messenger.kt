@@ -10,7 +10,6 @@ import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -50,7 +49,7 @@ class MessengerImpl(
       //    skip if not visible
       if (device == null) {
         log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
-        flow.emit(Error("$deviceId but it is not visible"))
+        flow.emit(Error("$deviceId it is not visible"))
         return@launch
       }
 
@@ -97,7 +96,6 @@ class MessengerImpl(
 
     }
 
-
     return true
   }
 
@@ -106,22 +104,54 @@ class MessengerImpl(
     messageRequest: SendMessageRequest,
     flow: MutableSharedFlow<MessengerSendProgress>
   ): Boolean {
-    // if there is no connection, create one
-    if (!connectionsPool.isAvailable(deviceId)) {
-      client.connectTo(deviceId)
-    } else {
-      log("Messenger", "Client has already a connection with $deviceId. skipping")
+    return runCatching {
+      // Get or establish connection
+      val connectionMessenger = getOrEstablishConnection(deviceId)
+
+      if (connectionMessenger == null) {
+        log("Messenger", "Failed to establish connection to $deviceId")
+        flow.emit(Error("Failed to establish connection"))
+        return false
+      }
+
+      log("Messenger", "Client sending message to $deviceId: ${messageRequest.message}")
+
+      // Send the message - this will emit progress updates to the flow
+      connectionMessenger.send(messageRequest, flow)
+      true
+    }.getOrElse { exception ->
+      log("Messenger", "Error in Klardrop transfer to $deviceId", exception)
+      flow.emit(Error("Transfer failed: ${exception.message}"))
+      false
+    }
+  }
+
+  private suspend fun getOrEstablishConnection(deviceId: String): ConnectionMessenger? {
+    // First, check if we have a valid existing connection
+    val existingConnection = connectionsPool.getConnection(deviceId)
+    if (existingConnection != null && !existingConnection.isClosed()) {
+      log("Messenger", "Using existing connection for $deviceId")
+      return existingConnection
     }
 
-    log("Messenger", "Client sending message to $deviceId: ${messageRequest.message}")
-
-    val connectionMessenger = connectionsPool.getConnection(deviceId) ?: run {
-      log("Messenger", "No connection available for $deviceId")
-      return false
+    // If we have a closed connection, clean it up
+    if (existingConnection?.isClosed() == true) {
+      log("Messenger", "Removing closed connection for $deviceId")
+      connectionsPool.closeConnection(deviceId)
     }
 
-    connectionMessenger.send(messageRequest, flow)
-    return true
+    // Establish a new connection
+    log("Messenger", "Establishing new connection for $deviceId")
+    client.connectTo(deviceId)
+
+    // Verify the connection was established
+    val newConnection = connectionsPool.getConnection(deviceId)
+    if (newConnection == null || newConnection.isClosed()) {
+      log("Messenger", "Failed to establish connection for $deviceId")
+      return null
+    }
+
+    return newConnection
   }
 
 }

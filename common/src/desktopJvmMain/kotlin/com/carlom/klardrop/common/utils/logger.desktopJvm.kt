@@ -5,6 +5,6 @@ actual fun nativeLogger(tag: String, message: String) {
 }
 
 actual fun nativeLoggerException(tag: String, message: String, throwable: Throwable) {
-  println("[Klardrop]: [$tag]: $message ${throwable.message}")
+  println("[Klardrop]: [$tag]: $message")
   throwable.printStackTrace()
 }

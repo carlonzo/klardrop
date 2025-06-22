@@ -24,7 +24,7 @@ class TestCoroutines(val dispatcher: TestDispatcher = UnconfinedTestDispatcher()
   }
 
   override fun newScope(context: CoroutineContext): CoroutineScope {
-    return CoroutineScope(handler + context + dispatcher)
+    return CoroutineScope(handler + dispatcher + context)
   }
 
   override val appScope: CoroutineScope
