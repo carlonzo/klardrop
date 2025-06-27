@@ -1,8 +1,10 @@
-import com.carlom.klardrop.common.getAvailableFilePath
+package com.carlom.klardrop.common
+
 import kotlinx.io.IOException
 import kotlinx.io.buffered
 import kotlinx.io.files.FileSystem
 import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.files.SystemTemporaryDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,7 +13,7 @@ import kotlin.test.assertTrue
 
 class FileManagerTest {
 
-  private val testFileSystem = kotlinx.io.files.SystemFileSystem
+  private val testFileSystem = SystemFileSystem
 
 
   @Test

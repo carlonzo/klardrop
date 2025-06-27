@@ -7,7 +7,7 @@ PODS:
 
 DEPENDENCIES:
   - common_ui (from `../common-ui`)
-  - Sentry
+  - Sentry (= 8.49.0)
 
 SPEC REPOS:
   trunk:
@@ -21,6 +21,6 @@ SPEC CHECKSUMS:
   common_ui: a2f6e64adbc16b8f87ed36dc18fc3cc2df3fdcea
   Sentry: 5eda2559a20fa0c377b695ed9d7c178a47122891
 
-PODFILE CHECKSUM: 9523cf08d525aadaeb6bcf86a0a4e6aca5e4bc10
+PODFILE CHECKSUM: 73c07c51b458f4fdc835cb3bc0d0426ed1388070
 
 COCOAPODS: 1.16.2
