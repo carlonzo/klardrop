@@ -46,8 +46,8 @@ class FileMessageHandlerTest {
         var nextFileTransferId = 1L
         var nextMessageId = 1L
 
-        override suspend fun insertMessage(remoteDeviceId: String, content: String, isSender: Boolean, messageType: PersistenceMessageType, fileTransferId: Long?): Long {
-            calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId)")
+        override suspend fun insertMessage(remoteDeviceId: String, content: String, isSender: Boolean, messageType: PersistenceMessageType, fileTransferId: Long?, isRead: Boolean): Long {
+            calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead)")
             return nextMessageId++
         }
 
@@ -63,6 +63,21 @@ class FileMessageHandlerTest {
         override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {
             calls.add("updateFileTransferFilePath($id, $filePath)")
         }
+        
+        override suspend fun markMessagesAsRead(remoteDeviceId: String) {
+            calls.add("markMessagesAsRead($remoteDeviceId)")
+        }
+        
+        override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long {
+            calls.add("getUnreadCountForDevice($remoteDeviceId)")
+            return 0L
+        }
+        
+        override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> {
+            calls.add("getAllDevicesWithUnreadCounts()")
+            return kotlinx.coroutines.flow.flowOf(emptyMap())
+        }
+        
         override fun getMessagesForDevice(remoteDeviceId: String, limit: Long): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> = 
             kotlinx.coroutines.flow.flowOf(emptyList())
         override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> = 
@@ -131,7 +146,7 @@ class FileMessageHandlerTest {
         // Verify initial DB calls
         assertEquals("insertFileTransfer(test.txt, dummy_path_placeholder, 100, IN_PROGRESS)", mockMessageRepository.calls[0])
         val expectedFileTransferId = mockMessageRepository.nextFileTransferId -1
-        assertEquals("insertMessage($remoteDeviceId, test.txt, false, FILE, $expectedFileTransferId)", mockMessageRepository.calls[1])
+        assertEquals("insertMessage($remoteDeviceId, test.txt, false, FILE, $expectedFileTransferId, false)", mockMessageRepository.calls[1])
 
         // Verify NO intermediate progress updates (only final state)
         // Note: file path update is commented out due to interface limitations
@@ -163,7 +178,7 @@ class FileMessageHandlerTest {
         // Verify initial DB calls
         assertEquals("insertFileTransfer(fail.txt, dummy_path_placeholder, 100, IN_PROGRESS)", mockMessageRepository.calls[0])
         val expectedFileTransferId = mockMessageRepository.nextFileTransferId -1
-        assertEquals("insertMessage($remoteDeviceId, fail.txt, false, FILE, $expectedFileTransferId)", mockMessageRepository.calls[1])
+        assertEquals("insertMessage($remoteDeviceId, fail.txt, false, FILE, $expectedFileTransferId, false)", mockMessageRepository.calls[1])
 
         // Verify only final failure status (no intermediate progress updates)
         assertEquals("updateFileTransferStatus($expectedFileTransferId, FAILED)", mockMessageRepository.calls.last())
@@ -207,7 +222,7 @@ class FileMessageHandlerTest {
         // Verify initial DB calls
         assertEquals("insertFileTransfer($fileName, ${mockPlatformFile.path}, $fileSize, IN_PROGRESS)", mockMessageRepository.calls[0])
         val expectedFileTransferId = mockMessageRepository.nextFileTransferId -1
-        assertEquals("insertMessage($toDeviceId, $fileName, true, FILE, $expectedFileTransferId)", mockMessageRepository.calls[1])
+        assertEquals("insertMessage($toDeviceId, $fileName, true, FILE, $expectedFileTransferId, true)", mockMessageRepository.calls[1])
 
         // Verify only final completion status (no intermediate progress updates to DB)
         assertEquals("updateFileTransferStatus($expectedFileTransferId, COMPLETED)", mockMessageRepository.calls.last())

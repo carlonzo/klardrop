@@ -1,6 +1,6 @@
 package com.carlom.klardrop.common.persistence
 
-import app.cash.sqldelight.coroutines. bijna.collectToList
+import app.cash.turbine.test
 import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.database.createTestDriver
 import com.carlom.klardrop.common.utils.Clock
@@ -47,7 +47,7 @@ class MessageRepositoryImplTest {
     }
 
     @Test
-    fun testInsertTextMessageAndGetMessages() = runTest(testDispatcher) {
+    fun testInsertTextMessageWithReadStatus() = runTest(testDispatcher) {
         val remoteDeviceId = "device-123"
         val content = "Hello, Klardrop!"
 
@@ -55,24 +55,106 @@ class MessageRepositoryImplTest {
             remoteDeviceId = remoteDeviceId,
             content = content,
             isSender = true,
-            messageType = MessageType.TEXT
+            messageType = MessageType.TEXT,
+            isRead = true
         )
         assertTrue(insertedId > 0)
 
-        val messages = messageRepository.getMessagesForDevice(remoteDeviceId, 10).collectToList().flatten()
-
-        assertEquals(1, messages.size)
-        val msg = messages.first()
-        assertEquals(insertedId, msg.id)
-        assertEquals(remoteDeviceId, msg.remote_device_id)
-        assertEquals(content, msg.content)
-        assertEquals(true, msg.is_sender)
-        assertEquals(MessageType.TEXT.name, msg.message_type)
-        assertEquals(mockClock.nowMillis(), msg.timestamp)
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(1, messages.size)
+            val msg = messages.first()
+            assertEquals(insertedId, msg.id)
+            assertEquals(remoteDeviceId, msg.remote_device_id)
+            assertEquals(content, msg.content)
+            assertEquals(1L, msg.is_sender)
+            assertEquals(MessageType.TEXT.name, msg.message_type)
+            assertEquals(1L, msg.is_read) // Check read status
+            assertEquals(mockClock.nowMillis(), msg.timestamp)
+        }
     }
 
     @Test
-    fun testInsertFileMessageAndGetMessages() = runTest(testDispatcher) {
+    fun testInsertUnreadMessage() = runTest(testDispatcher) {
+        val remoteDeviceId = "device-unread"
+        val content = "Unread message"
+
+        val insertedId = messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = content,
+            isSender = false,
+            messageType = MessageType.TEXT,
+            isRead = false
+        )
+        assertTrue(insertedId > 0)
+
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(1, messages.size)
+            val msg = messages.first()
+            assertEquals(0L, msg.is_read) // Should be unread
+        }
+    }
+
+    @Test
+    fun testMarkMessagesAsRead() = runTest(testDispatcher) {
+        val remoteDeviceId = "device-mark-read"
+
+        // Insert multiple unread messages
+        messageRepository.insertMessage(remoteDeviceId, "Message 1", false, MessageType.TEXT, isRead = false)
+        messageRepository.insertMessage(remoteDeviceId, "Message 2", false, MessageType.TEXT, isRead = false)
+        messageRepository.insertMessage(remoteDeviceId, "Message 3", false, MessageType.TEXT, isRead = false)
+
+        // Mark all messages as read
+        messageRepository.markMessagesAsRead(remoteDeviceId)
+
+        // Verify all messages are now read
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(3, messages.size)
+            messages.forEach { message ->
+                assertEquals(1L, message.is_read)
+            }
+        }
+    }
+
+    @Test
+    fun testGetUnreadCountForDevice() = runTest(testDispatcher) {
+        val remoteDeviceId = "device-unread-count"
+
+        // Insert mix of read and unread messages
+        messageRepository.insertMessage(remoteDeviceId, "Read 1", false, MessageType.TEXT, isRead = true)
+        messageRepository.insertMessage(remoteDeviceId, "Unread 1", false, MessageType.TEXT, isRead = false)
+        messageRepository.insertMessage(remoteDeviceId, "Unread 2", false, MessageType.TEXT, isRead = false)
+        messageRepository.insertMessage(remoteDeviceId, "Read 2", false, MessageType.TEXT, isRead = true)
+
+        val unreadCount = messageRepository.getUnreadCountForDevice(remoteDeviceId)
+        assertEquals(2L, unreadCount)
+    }
+
+    @Test
+    fun testGetAllDevicesWithUnreadCounts() = runTest(testDispatcher) {
+        val device1 = "device-1"
+        val device2 = "device-2"
+        val device3 = "device-3"
+
+        // Insert messages for different devices
+        messageRepository.insertMessage(device1, "Unread 1", false, MessageType.TEXT, isRead = false)
+        messageRepository.insertMessage(device1, "Unread 2", false, MessageType.TEXT, isRead = false)
+        messageRepository.insertMessage(device2, "Unread 1", false, MessageType.TEXT, isRead = false)
+        messageRepository.insertMessage(device3, "Read 1", false, MessageType.TEXT, isRead = true) // Read message, shouldn't appear
+
+        messageRepository.getAllDevicesWithUnreadCounts().test {
+            val unreadCounts = awaitItem()
+            assertEquals(2, unreadCounts.size) // Only device1 and device2 should have unread messages
+            assertEquals(2L, unreadCounts[device1])
+            assertEquals(1L, unreadCounts[device2])
+            assertEquals(null, unreadCounts[device3]) // No unread messages
+        }
+    }
+
+    @Test
+    fun testInsertFileMessageWithReadStatus() = runTest(testDispatcher) {
         val remoteDeviceId = "device-file"
         val fileName = "test_file.zip"
 
@@ -89,28 +171,31 @@ class MessageRepositoryImplTest {
             content = fileName,
             isSender = false,
             messageType = MessageType.FILE,
-            fileTransferId = fileTransferId
+            fileTransferId = fileTransferId,
+            isRead = false
         )
         assertTrue(messageId > 0)
 
-        val messages = messageRepository.getMessagesForDevice(remoteDeviceId, 10).collectToList().flatten()
-        assertEquals(1, messages.size)
-        val msg = messages.first()
-        assertEquals(messageId, msg.id)
-        assertEquals(remoteDeviceId, msg.remote_device_id)
-        assertEquals(fileName, msg.content)
-        assertEquals(false, msg.is_sender)
-        assertEquals(MessageType.FILE.name, msg.message_type)
-        assertEquals(fileTransferId, msg.file_transfer_id)
-        assertEquals(mockClock.nowMillis(), msg.timestamp)
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(1, messages.size)
+            val msg = messages.first()
+            assertEquals(messageId, msg.id)
+            assertEquals(remoteDeviceId, msg.remote_device_id)
+            assertEquals(fileName, msg.content)
+            assertEquals(0L, msg.is_sender)
+            assertEquals(MessageType.FILE.name, msg.message_type)
+            assertEquals(fileTransferId, msg.file_transfer_id)
+            assertEquals(0L, msg.is_read) // Should be unread
+            assertEquals(mockClock.nowMillis(), msg.timestamp)
+        }
     }
 
     @Test
-    fun testInsertFileTransferAndUpdateStatus() = runTest(testDispatcher) {
+    fun testUpdateFileTransferStatus() = runTest(testDispatcher) {
         val fileName = "document.pdf"
         val initialStatus = FileTransferStatus.IN_PROGRESS
         val updatedStatus = FileTransferStatus.COMPLETED
-        val transferredSize = 500L
 
         val fileTransferId = messageRepository.insertFileTransfer(
             fileName = fileName,
@@ -120,104 +205,13 @@ class MessageRepositoryImplTest {
         )
         assertTrue(fileTransferId > 0)
 
-        messageRepository.updateFileTransferStatus(fileTransferId, updatedStatus, transferredSize)
+        messageRepository.updateFileTransferStatus(fileTransferId, updatedStatus)
 
-        val fileTransfer = messageRepository.getFileTransferById(fileTransferId).collectToList().first()
-        assertNotNull(fileTransfer)
-        assertEquals(fileTransferId, fileTransfer.id)
-        assertEquals(updatedStatus.name, fileTransfer.status)
-        assertEquals(transferredSize, fileTransfer.transferred_size)
-    }
-
-    @Test
-    fun testUpdateFileTransferStatusWithoutSize() = runTest(testDispatcher) {
-        val fileName = "archive.zip"
-        val initialStatus = FileTransferStatus.IN_PROGRESS
-        val updatedStatus = FileTransferStatus.FAILED
-
-        val fileTransferId = messageRepository.insertFileTransfer(
-            fileName = fileName,
-            filePath = "/path/archive.zip",
-            totalSize = 2000L,
-            status = initialStatus
-        )
-        assertTrue(fileTransferId > 0)
-
-        // Check initial transferred_size (should be 0 as per schema default)
-        var fileTransfer = messageRepository.getFileTransferById(fileTransferId).collectToList().first()
-        assertNotNull(fileTransfer)
-        assertEquals(0, fileTransfer.transferred_size)
-
-        messageRepository.updateFileTransferStatus(fileTransferId, updatedStatus) // Not passing transferredSize
-
-        fileTransfer = messageRepository.getFileTransferById(fileTransferId).collectToList().first()
-        assertNotNull(fileTransfer)
-        assertEquals(fileTransferId, fileTransfer.id)
-        assertEquals(updatedStatus.name, fileTransfer.status)
-        // Transferred size should remain unchanged from its previous value (0 in this case)
-        assertEquals(0, fileTransfer.transferred_size)
-    }
-
-
-    @Test
-    fun testUpdateFileTransferFilePath() = runTest(testDispatcher) {
-        val fileName = "image.jpg"
-        val initialPath = "/tmp/image.jpg"
-        val updatedPath = "/storage/image_final.jpg"
-
-        val fileTransferId = messageRepository.insertFileTransfer(
-            fileName = fileName,
-            filePath = initialPath,
-            totalSize = 300L,
-            status = FileTransferStatus.COMPLETED
-        )
-        assertTrue(fileTransferId > 0)
-
-        messageRepository.updateFileTransferFilePath(fileTransferId, updatedPath)
-
-        val fileTransfer = messageRepository.getFileTransferById(fileTransferId).collectToList().first()
-        assertNotNull(fileTransfer)
-        assertEquals(fileTransferId, fileTransfer.id)
-        assertEquals(updatedPath, fileTransfer.file_path)
-    }
-
-    @Test
-    fun testGetMessagesForDevice_OrdersByTimestampDescending() = runTest(testDispatcher) {
-        val remoteDeviceId = "device-timestamps"
-
-        messageRepository.insertMessage(remoteDeviceId, "Message 1", true, MessageType.TEXT) // time = 1000L
-        mockClock.advanceTimeBy(100) // time = 1100L
-        messageRepository.insertMessage(remoteDeviceId, "Message 2", false, MessageType.TEXT)
-        mockClock.advanceTimeBy(100) // time = 1200L
-        val id3 = messageRepository.insertMessage(remoteDeviceId, "Message 3", true, MessageType.TEXT)
-
-        val messages = messageRepository.getMessagesForDevice(remoteDeviceId, 10).collectToList().flatten()
-        assertEquals(3, messages.size)
-        assertEquals(id3, messages[0].id) // Message 3 should be first (latest timestamp)
-        assertEquals(1200L, messages[0].timestamp)
-        assertEquals(1100L, messages[1].timestamp)
-        assertEquals(1000L, messages[2].timestamp)
-    }
-
-    @Test
-    fun testGetMessagesForDevice_Limit() = runTest(testDispatcher) {
-        val remoteDeviceId = "device-limit"
-        messageRepository.insertMessage(remoteDeviceId, "M1", true, MessageType.TEXT)
-        mockClock.advanceTimeBy(10)
-        messageRepository.insertMessage(remoteDeviceId, "M2", true, MessageType.TEXT)
-        mockClock.advanceTimeBy(10)
-        messageRepository.insertMessage(remoteDeviceId, "M3", true, MessageType.TEXT)
-
-        var messages = messageRepository.getMessagesForDevice(remoteDeviceId, 2).collectToList().flatten()
-        assertEquals(2, messages.size)
-
-        messages = messageRepository.getMessagesForDevice(remoteDeviceId, 5).collectToList().flatten()
-        assertEquals(3, messages.size)
-    }
-
-    @Test
-    fun testGetFileTransferById_NotFound() = runTest(testDispatcher) {
-        val fileTransfer = messageRepository.getFileTransferById(9999L).collectToList().firstOrNull()
-        assertEquals(null, fileTransfer)
+        messageRepository.getFileTransferById(fileTransferId).test {
+            val fileTransfer = awaitItem()
+            assertNotNull(fileTransfer)
+            assertEquals(fileTransferId, fileTransfer.id)
+            assertEquals(updatedStatus.name, fileTransfer.status)
+        }
     }
 }

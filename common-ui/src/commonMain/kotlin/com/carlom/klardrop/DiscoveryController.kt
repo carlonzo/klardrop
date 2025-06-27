@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
@@ -42,6 +43,7 @@ class DiscoveryController(
   private val messenger: Messenger,
   private val platformFileSystem: PlatformFileSystem,
   private val clipboardManager: ClipboardManager,
+  private val messageRepository: MessageRepository,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -49,11 +51,12 @@ class DiscoveryController(
     commonComponent.visibleDevices(),
     commonComponent.messenger(),
     commonComponent.platformFileSystem(),
-    commonComponent.clipboardManager()
+    commonComponent.clipboardManager(),
+    commonComponent.messageRepository()
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices)
+  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository)
 
   val actionsFlow = MutableSharedFlow<ActionUi>()
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
@@ -102,6 +105,12 @@ class DiscoveryController(
 
   override fun onDeviceClick(deviceUi: DeviceUi) {
     log("DiscoveryController", "on device click for chat: ${deviceUi.deviceName}")
+    
+    // Mark messages as read in the database
+    controllerScope.launch {
+      messageRepository.markMessagesAsRead(deviceUi.deviceId)
+    }
+    
     screenStateFlow.update { currentState ->
       val updatedDevices = currentState.devices.map {
         if (it.deviceId == deviceUi.deviceId) {

@@ -94,7 +94,8 @@ class MessagesRouterImpl(
                   remoteDeviceId = fromDeviceId,
                   content = message.text, // Assuming TextMessage has a 'text' field
                   isSender = false,
-                  messageType = PersistenceMessageType.TEXT
+                  messageType = PersistenceMessageType.TEXT,
+                  isRead = false // Incoming messages are unread initially
               )
           }
           receiveFlow.update {
@@ -139,7 +140,8 @@ class MessagesRouterImpl(
                 remoteDeviceId = toDeviceId,
                 content = message.text, // Assuming TextMessage has a 'text' field
                 isSender = true,
-                messageType = PersistenceMessageType.TEXT
+                messageType = PersistenceMessageType.TEXT,
+                isRead = true // Outgoing messages are read by default
             )
         }
         // message has no payload. we can send it directly

@@ -9,6 +9,7 @@ import com.carlom.klardrop.common.database.Messages
 import com.carlom.klardrop.common.utils.Clock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 interface MessageRepository {
@@ -17,7 +18,8 @@ interface MessageRepository {
         content: String,
         isSender: Boolean,
         messageType: MessageType,
-        fileTransferId: Long? = null
+        fileTransferId: Long? = null,
+        isRead: Boolean = false
     ): Long
 
     suspend fun insertFileTransfer(
@@ -34,6 +36,12 @@ interface MessageRepository {
     fun getFileTransferById(id: Long): Flow<File_transfers?>
 
     suspend fun updateFileTransferFilePath(id: Long, filePath: String)
+
+    suspend fun markMessagesAsRead(remoteDeviceId: String)
+
+    suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long
+
+    fun getAllDevicesWithUnreadCounts(): Flow<Map<String, Long>>
 }
 
 enum class MessageType { TEXT, FILE }
@@ -50,7 +58,8 @@ class MessageRepositoryImpl(
         content: String,
         isSender: Boolean,
         messageType: MessageType,
-        fileTransferId: Long?
+        fileTransferId: Long?,
+        isRead: Boolean
     ): Long = withContext(ioDispatcher) {
         database.messageQueries.insert(
             remote_device_id = remoteDeviceId,
@@ -58,7 +67,8 @@ class MessageRepositoryImpl(
             timestamp = clock.currentTimeMillis(),
             is_sender = if (isSender) 1L else 0L,
             message_type = messageType.name,
-            file_transfer_id = fileTransferId
+            file_transfer_id = fileTransferId,
+            is_read = if (isRead) 1L else 0L
         )
         database.messageQueries.lastInsertRowId().executeAsOne()
     }
@@ -107,5 +117,26 @@ class MessageRepositoryImpl(
                 id = id
             )
         }
+    }
+
+    override suspend fun markMessagesAsRead(remoteDeviceId: String) {
+        withContext(ioDispatcher) {
+            database.messageQueries.markMessagesAsRead(remoteDeviceId)
+        }
+    }
+
+    override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long {
+        return withContext(ioDispatcher) {
+            database.messageQueries.getUnreadCountForDevice(remoteDeviceId).executeAsOne()
+        }
+    }
+
+    override fun getAllDevicesWithUnreadCounts(): Flow<Map<String, Long>> {
+        return database.messageQueries.getAllDevicesWithUnreadCounts()
+            .asFlow()
+            .mapToList(ioDispatcher)
+            .map { results ->
+                results.associate { it.remote_device_id to it.unread_count }
+            }
     }
 }

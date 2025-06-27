@@ -73,7 +73,8 @@ class FileMessageHandler(
         content = message.fileName,
         isSender = false,
         messageType = PersistenceMessageType.FILE,
-        fileTransferId = fileTransferId
+        fileTransferId = fileTransferId,
+        isRead = false // Incoming messages are unread initially
     )
 
     coroutines.ioDispatcher {
@@ -179,7 +180,8 @@ class FileMessageHandler(
         content = request.message.fileName,
         isSender = true,
         messageType = PersistenceMessageType.FILE,
-        fileTransferId = fileTransferId
+        fileTransferId = fileTransferId,
+        isRead = true // Outgoing messages are read by default
     )
 
     coroutines.ioDispatcher.invoke {

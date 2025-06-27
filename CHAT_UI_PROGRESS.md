@@ -50,23 +50,33 @@ This document tracks the progress of implementing a chat-like UI for Klardrop wi
 - UI shows real-time progress during transfers
 - Transfer history shows final states from database
 
-### Phase 2: Implement Unread Messages Logic 📋
-**Status**: NOT STARTED  
+### Phase 2: Implement Unread Messages Logic ✅
+**Status**: COMPLETED  
 **Objective**: Track which messages haven't been seen by the user
 
 **Tasks**:
-- [ ] Extend Database Schema: Add `is_read` column to messages table
-- [ ] Update MessageRepository: Add methods to mark messages as read/unread
-- [ ] Implement Read Status Logic: Mark messages as read when chat screen is opened
-- [ ] Update Discovery UI: Show unread indicator based on actual unread count
-- [ ] Background Updates: Mark incoming messages as unread initially
-- [ ] Add unit tests: `UnreadMessageTest`, `MessageRepositoryUnreadTest`, `DeviceChatViewModelTest`, `DiscoveryControllerTest`
+- [x] Extend Database Schema: Add `is_read` column to messages table
+- [x] Update MessageRepository: Add methods to mark messages as read/unread
+- [x] Implement Read Status Logic: Mark messages as read when chat screen is opened
+- [x] Update Discovery UI: Show unread indicator based on actual unread count
+- [x] Background Updates: Mark incoming messages as unread initially
+- [x] Add unit tests: Enhanced `MessageRepositoryImplTest` with unread message tests
+
+**Implementation Notes**:
+- Added `is_read` column to messages table with default value 0 (unread)
+- Created SQL queries: `markMessagesAsRead`, `getUnreadCountForDevice`, `getAllDevicesWithUnreadCounts`
+- Updated `MessageRepository` interface and implementation with unread tracking methods
+- Modified all `insertMessage` calls to include `isRead` parameter (incoming=false, outgoing=true)
+- Updated `DiscoveryController` and `ShowDevicesControllerHelper` to integrate with database unread counts
+- Chat screens automatically mark messages as read when opened (both in `DeviceChatViewModel` and `DiscoveryController`)
+- Discovery screen shows red dot indicators for devices with unread messages
+- Unit tests cover all unread message functionality: insertion, marking as read, counting
 
 **Acceptance Criteria**:
-- Messages are marked as unread when received
-- Opening a chat screen marks all messages as read
-- Discovery screen shows accurate unread counts
-- Unread status persists across app restarts
+- ✅ Messages are marked as unread when received
+- ✅ Opening a chat screen marks all messages as read  
+- ✅ Discovery screen shows accurate unread counts from database
+- ✅ Unread status persists across app restarts
 
 ### Phase 3: Improve Message History and Persistence 📋
 **Status**: NOT STARTED  

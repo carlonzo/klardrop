@@ -91,4 +91,6 @@ class CommonComponent(
 
   fun messageRepository() = messageRepository
 
+  fun fileManager() = fileManager
+
 }

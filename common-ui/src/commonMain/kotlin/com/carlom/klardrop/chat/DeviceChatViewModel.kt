@@ -29,6 +29,13 @@ class DeviceChatViewModel(
         messageRepository.getMessagesForDevice(deviceId, limit = 100)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    init {
+        // Mark messages as read when chat screen is opened
+        viewModelScope.launch {
+            messageRepository.markMessagesAsRead(deviceId)
+        }
+    }
+
     fun sendTextMessage(text: String) {
         if (text.isBlank()) return
 
@@ -42,7 +49,8 @@ class DeviceChatViewModel(
                     content = text,
                     isSender = true,
                     messageType = MessageType.TEXT,
-                    fileTransferId = null
+                    fileTransferId = null,
+                    isRead = true // Outgoing messages are read by default
                 )
 
                 // 2. Send the message over the network
