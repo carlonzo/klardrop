@@ -67,7 +67,7 @@ class CommonComponent(
 
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
-  fun unifiedServer() = communicationModule.unifiedServer()
+  fun server() = communicationModule.server()
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()

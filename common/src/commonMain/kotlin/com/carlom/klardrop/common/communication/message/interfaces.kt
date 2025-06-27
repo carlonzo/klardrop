@@ -27,7 +27,8 @@ enum class MessageType(val id: Byte) {
 }
 
 sealed class Message {
-  open val id = Random.nextInt()
+  val id: Int = Random.nextInt()
+
   abstract val type: MessageType
   abstract val hasPayload: Boolean
 }
@@ -55,7 +56,6 @@ enum class AckType {
 data class MessageAcknowledgment(
   val ackType: AckType,
   val messageId: Int,
-  override val id: Int = Random.nextInt()
 ) : Message() {
   override val type: MessageType = when (ackType) {
     AckType.READY -> MessageType.ACK_READY

@@ -1,7 +1,11 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
+import kotlinx.serialization.decodeFromByteArray
+import kotlinx.serialization.encodeToByteArray
+import kotlinx.serialization.protobuf.ProtoBuf
 
 actual object CommonPlatformDependencies {
   actual fun osType(): OsType {
@@ -31,4 +35,17 @@ actual object CommonPlatformDependencies {
 
 internal fun readFromBash(vararg command: String): String {
   return ProcessBuilder(*command).start().inputStream.use { it.bufferedReader().readText().trim() }
+}
+
+fun main(args: Array<String>) {
+
+  val message = HandshakeMessage(deviceId = "ciao")
+  println("befroe $message")
+
+  val bytes = ProtoBuf.encodeToByteArray(message)
+
+  val messageAfter = ProtoBuf.decodeFromByteArray<HandshakeMessage>(bytes)
+
+  println(messageAfter)
+
 }

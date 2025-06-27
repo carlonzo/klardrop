@@ -29,12 +29,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * Tests for UnifiedServer protocol detection logic.
+ * Tests for Server protocol detection logic.
  *
  * These tests verify that the protocol detection correctly identifies
  * Klardrop vs Nearby Share protocols based on message structure.
  */
-class UnifiedServerTest {
+class ServerTest {
 
   private val protoBuf = ProtoBuf
 
@@ -50,9 +50,9 @@ class UnifiedServerTest {
     val payload = byteArrayOf(messageType) + serializedHandshake
 
     // Test protocol detection using production code
-    val server = createTestUnifiedServer()
+    val server = createTestServer()
     val protocol = server.detectProtocol(payload)
-    assertEquals(UnifiedServer.Protocol.KLARDROP, protocol)
+    assertEquals(Server.Protocol.KLARDROP, protocol)
   }
 
   @Test
@@ -74,15 +74,15 @@ class UnifiedServerTest {
     // The production method expects just the payload, not the complete message
 
     // Test protocol detection using production code
-    val server = createTestUnifiedServer()
+    val server = createTestServer()
     val protocol = server.detectProtocol(serializedRequest)
-    assertEquals(UnifiedServer.Protocol.NEARBY_SHARE, protocol)
+    assertEquals(Server.Protocol.NEARBY_SHARE, protocol)
   }
 
   @Test
   fun testDetectProtocolWithTooShortMessage() {
     assertFailsWith<IllegalArgumentException> {
-      val server = createTestUnifiedServer()
+      val server = createTestServer()
       server.detectProtocol(byteArrayOf()) // Empty payload
     }
   }
@@ -97,7 +97,7 @@ class UnifiedServerTest {
 
     // Should fail to detect any protocol
     assertFailsWith<IllegalArgumentException> {
-      val server = createTestUnifiedServer()
+      val server = createTestServer()
       server.detectProtocol(payload)
     }
   }
@@ -110,7 +110,7 @@ class UnifiedServerTest {
 
     // Should fail to detect any protocol
     assertFailsWith<IllegalArgumentException> {
-      val server = createTestUnifiedServer()
+      val server = createTestServer()
       server.detectProtocol(invalidPayload)
     }
   }
@@ -130,7 +130,7 @@ class UnifiedServerTest {
 
     // Should fail to detect as Nearby Share since it's not a CONNECTION_REQUEST
     assertFailsWith<IllegalArgumentException> {
-      val server = createTestUnifiedServer()
+      val server = createTestServer()
       server.detectProtocol(serializedFrame)
     }
   }
@@ -146,32 +146,32 @@ class UnifiedServerTest {
 
       // Should detect as Klardrop for HANDSHAKE type, might fail for others due to wrong message structure
       if (messageTypeId.toByte() == MessageType.HANDSHAKE.id) {
-        val server = createTestUnifiedServer()
+        val server = createTestServer()
         val protocol = server.detectProtocol(payload)
-        assertEquals(UnifiedServer.Protocol.KLARDROP, protocol)
+        assertEquals(Server.Protocol.KLARDROP, protocol)
       }
     }
   }
 
 }
 
-internal class UnifiedServerTestFakeFileManager : FileManager {
+internal class ServerTestFakeFileManager : FileManager {
   override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer = error("Not needed for protocol detection test")
   override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.Source = error("Not needed for protocol detection test")
 }
 
-internal fun createTestUnifiedServer(
+internal fun createTestServer(
   connectionsPool: ConnectionsPool = FakeConnectionPool(),
-  fileManager: FileManager = UnifiedServerTestFakeFileManager(),
+  fileManager: FileManager = ServerTestFakeFileManager(),
   coroutines: TestCoroutines = TestCoroutines(),
   localPropertiesRepository: LocalPropertiesRepository = FakeLocalPropertiesRepository(),
   visibleDevices: VisibleDevices = FakeVisibleDevices(),
   messageReceiver: MessageReceiver = MessageReceiverImpl(coroutines, visibleDevices),
   messagesRouter: MessagesRouter = FakeMessagesRouter(),
-): UnifiedServer {
+): Server {
   val currentDeviceProvider = CurrentDeviceProvider(localPropertiesRepository)
 
-  return UnifiedServer(
+  return Server(
     connectionsPool = connectionsPool,
     coroutines = coroutines,
     messagesRouter = messagesRouter,

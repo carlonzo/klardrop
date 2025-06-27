@@ -55,7 +55,7 @@ class KlardropIntegrationTest {
 
   @Test
   fun startKlardropServerAndSendTextMessage() = runTest(coroutines.dispatcher) {
-    val server = serverCommunicationModule.unifiedServer()
+    val server = serverCommunicationModule.server()
     val serverStatus = server.startServer()
 
     // add server to visible devices
@@ -93,7 +93,7 @@ class KlardropIntegrationTest {
 
   @Test
   fun testKlardropSendTwoMessages() = runTest(coroutines.dispatcher) {
-    val server = serverCommunicationModule.unifiedServer()
+    val server = serverCommunicationModule.server()
     val serverStatus = server.startServer()
 
     // add server to visible devices
@@ -123,7 +123,7 @@ class KlardropIntegrationTest {
   @OptIn(ExperimentalTime::class)
   @Suppress("VisibleForTests")
   private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) = runTest(coroutines.dispatcher) {
-    val server = serverCommunicationModule.unifiedServer()
+    val server = serverCommunicationModule.server()
     val serverStatus = server.startServer()
 
     // Add device to visible devices

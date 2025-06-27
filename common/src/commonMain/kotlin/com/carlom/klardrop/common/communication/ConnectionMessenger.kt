@@ -32,7 +32,7 @@ class ConnectionMessenger internal constructor(
   private val ackMutex = Mutex()
 
   companion object {
-    private const val ACK_TIMEOUT_MS = 2_000L // 2 seconds (reduced for faster test execution)
+    private const val ACK_TIMEOUT_MS = 2_000L
   }
 
   init {
@@ -187,6 +187,8 @@ class ConnectionMessenger internal constructor(
     // Check if read/write channels are closed (indicates remote closure)
     if (readChannel.isClosedForRead || writeChannel.isClosedForWrite) {
       log("ConnectionMessenger: [DEBUG] Detected remote closure for ${connection.deviceId} - readClosed=${readChannel.isClosedForRead}, writeClosed=${writeChannel.isClosedForWrite}")
+      runCatching { connection.socket.close() }
+        .onFailure { log("Failed closing the socket", it) }
       return true
     }
     

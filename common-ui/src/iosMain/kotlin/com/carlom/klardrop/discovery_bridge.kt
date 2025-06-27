@@ -8,7 +8,6 @@ import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
 
 class DiscoveryBridge {
-
   val klardrop = Klardrop(internalPlatformDependency = InternalPlatformDependencies())
 
   init {
