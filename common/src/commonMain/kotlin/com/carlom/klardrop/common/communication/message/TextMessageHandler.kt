@@ -32,6 +32,7 @@ class TextMessageHandler(
   }
 
   override suspend fun handleOutgoing(
+    toDeviceId: String,
     request: SimpleSendMessageRequest,
     writeChannel: ByteWriteChannel,
     progressFlow: MutableSharedFlow<MessengerSendProgress>

@@ -18,7 +18,6 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
-import com.carlom.klardrop.common.mdns.NearbyShareServer
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.MessageReceiver

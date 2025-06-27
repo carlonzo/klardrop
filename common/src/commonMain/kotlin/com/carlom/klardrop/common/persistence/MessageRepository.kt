@@ -27,7 +27,7 @@ interface MessageRepository {
         status: FileTransferStatus
     ): Long
 
-    suspend fun updateFileTransferStatus(id: Long, status: FileTransferStatus, transferredSize: Long? = null)
+    suspend fun updateFileTransferStatus(id: Long, status: FileTransferStatus)
 
     fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<Messages>>
 
@@ -55,7 +55,7 @@ class MessageRepositoryImpl(
         database.messageQueries.insert(
             remote_device_id = remoteDeviceId,
             content = content,
-            timestamp = clock.nowMillis(),
+            timestamp = clock.currentTimeMillis(),
             is_sender = if (isSender) 1L else 0L,
             message_type = messageType.name,
             file_transfer_id = fileTransferId
@@ -79,20 +79,12 @@ class MessageRepositoryImpl(
         database.fileTransferQueries.lastInsertRowIdFileTransfer().executeAsOne()
     }
 
-    override suspend fun updateFileTransferStatus(id: Long, status: FileTransferStatus, transferredSize: Long?) {
+    override suspend fun updateFileTransferStatus(id: Long, status: FileTransferStatus) {
         withContext(ioDispatcher) {
-            if (transferredSize != null) {
-                database.fileTransferQueries.updateStatusAndSize(
-                    status = status.name,
-                    transferred_size = transferredSize,
-                    id = id
-                )
-            } else {
-                database.fileTransferQueries.updateStatus(
-                    status = status.name,
-                    id = id
-                )
-            }
+            database.fileTransferQueries.updateStatus(
+                status = status.name,
+                id = id
+            )
         }
     }
 

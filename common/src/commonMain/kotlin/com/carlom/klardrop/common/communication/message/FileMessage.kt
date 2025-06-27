@@ -14,6 +14,7 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.exists
+import io.github.vinceglb.filekit.path
 import io.github.vinceglb.filekit.readBytes
 import io.github.vinceglb.filekit.size
 import io.ktor.utils.io.*
@@ -102,7 +103,6 @@ class FileMessageHandler(
               status = ReceiveMessageStatus.Progress(listOf(message to 0))
             )
           }
-          messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.IN_PROGRESS, 0)
 
           while (totalBytesReceived < message.fileSize) {
 
@@ -128,7 +128,6 @@ class FileMessageHandler(
             val progressValue = ((totalBytesReceived * 100L) / message.fileSize).toInt()
 
             log("FileMessageHandler", "Received total $totalBytesReceived / ${message.fileSize} :  Progress $progressValue %")
-            messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.IN_PROGRESS, totalBytesReceived.toLong())
             receiveFlow.update {
               it.copy(
                 status = ReceiveMessageStatus.Progress(listOf(message to progressValue.coerceIn(0, 100)))
@@ -139,11 +138,10 @@ class FileMessageHandler(
       }.onSuccess {
         log("FileMessageHandler", "Received file with size: $totalBytesReceived")
         fileTransfer.onTransferCompleted()
-        // Assuming fileTransfer.file.path is the correct way to get the path. This might need adjustment.
-        fileTransfer.file?.path?.let { finalPath ->
-             messageRepository.updateFileTransferFilePath(fileTransferId, finalPath)
-        }
-        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED, totalBytesReceived.toLong())
+        // TODO: Need to get the final file path after transfer completion
+        // The current FileTransfer interface doesn't provide access to the final path
+        // This will need to be addressed in a future iteration
+        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
         receiveFlow.update {
           it.copy(
             status = ReceiveMessageStatus.Completed
@@ -152,7 +150,7 @@ class FileMessageHandler(
       }.onFailure { throwable ->
         log("FileMessageHandler", "Error while receiving file", throwable)
         fileTransfer.onTransferFailed()
-        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED, totalBytesReceived.toLong())
+        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
         receiveFlow.update {
           it.copy(
             status = ReceiveMessageStatus.Failed(throwable.message ?: "Unknown error")
@@ -172,7 +170,7 @@ class FileMessageHandler(
   ) {
     val fileTransferId = messageRepository.insertFileTransfer(
         fileName = request.message.fileName,
-        filePath = request.file.path ?: "unknown_path", // Or some other placeholder if path is null
+        filePath = request.file.path ?: "unknown_path",
         totalSize = request.message.fileSize,
         status = FileTransferStatus.IN_PROGRESS
     )
@@ -185,7 +183,7 @@ class FileMessageHandler(
     )
 
     coroutines.ioDispatcher.invoke {
-      updateSentProgress(progressFlow, 0, request.message.fileSize, fileTransferId, FileTransferStatus.IN_PROGRESS)
+      updateSentProgress(progressFlow, 0, request.message.fileSize)
 
       // Send initial message with metadata
       writeChannel.sendMessage(request.message, serializer)
@@ -212,17 +210,17 @@ class FileMessageHandler(
             writeChannel.writeFully(buffer, 0, bytesRead)
 
             totalSent += bytesRead
-            updateSentProgress(progressFlow, totalSent, request.message.fileSize, fileTransferId, FileTransferStatus.IN_PROGRESS)
+            updateSentProgress(progressFlow, totalSent, request.message.fileSize)
 
             log("FileMessageHandler", "Sent $totalSent / ${request.message.fileSize} bytes")
           }
         }
       }.onSuccess {
         log("FileMessageHandler", "File ${request.file} sent successfully in ${clock.currentTimeMillis() - start} ms")
-        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED, totalSent)
+        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
       }.onFailure {
         log("FileMessageHandler", "Error sending file", it)
-        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED, totalSent)
+        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
         log("FileMessageHandler", "After error exists? ${request.file.exists()} ${request.file.size()} ${request.file.readBytes().size}")
 
         throw it
@@ -230,7 +228,7 @@ class FileMessageHandler(
     }
   }
 
-  private suspend fun updateSentProgress(progress: MutableSharedFlow<MessengerSendProgress>, sent: Long, total: Long, fileTransferId: Long, status: FileTransferStatus) {
+  private suspend fun updateSentProgress(progress: MutableSharedFlow<MessengerSendProgress>, sent: Long, total: Long) {
     val progressValue = (sent * 100) / total
     progress.emit(MessengerSendProgress.InProgress(progressValue.toInt()))
     log("FileMessageHandler", "Sending update progress: $progressValue% - $sent / $total")

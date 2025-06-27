@@ -15,11 +15,6 @@ VALUES (?, ?, ?, ?, ?);
 lastInsertRowIdFileTransfer:
 SELECT last_insert_rowid();
 
-updateStatusAndSize:
-UPDATE file_transfers
-SET status = ?, transferred_size = ?
-WHERE id = ?;
-
 updateStatus:
 UPDATE file_transfers
 SET status = ?

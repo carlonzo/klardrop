@@ -20,6 +20,7 @@ class AckMessageHandler : MessageHandler<MessageAcknowledgment, SimpleSendMessag
   }
 
   override suspend fun handleOutgoing(
+    toDeviceId: String,
     request: SimpleSendMessageRequest,
     writeChannel: ByteWriteChannel,
     progressFlow: MutableSharedFlow<MessengerSendProgress>
