@@ -2,5 +2,5 @@ target 'iosApp' do
   use_frameworks!
   platform :ios, '14.1'
   pod 'common_ui', :path => '../common-ui'
-  pod 'Sentry', '8.49.0'
+  pod 'Sentry', '8.53.1'
 end
