@@ -16,7 +16,8 @@ import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -36,7 +37,7 @@ class FileMessageHandlerTest {
     private lateinit var mockMessageRepository: MockMessageRepository
     private lateinit var mockFileManager: MockFileManager
     private lateinit var mockClock: MockClock
-    private lateinit var testDispatcher: StandardTestDispatcher
+    private lateinit var testDispatcher: TestDispatcher
     private lateinit var mockCoroutines: Coroutines
 
     // --- Mocks ---
@@ -62,8 +63,10 @@ class FileMessageHandlerTest {
         override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {
             calls.add("updateFileTransferFilePath($id, $filePath)")
         }
-        override fun getMessagesForDevice(remoteDeviceId: String, limit: Long) = kotlinx.coroutines.flow.flowOf(emptyList())
-        override fun getFileTransferById(id: Long) = kotlinx.coroutines.flow.flowOf(null) // Not used in these tests directly
+        override fun getMessagesForDevice(remoteDeviceId: String, limit: Long): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> = 
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> = 
+            kotlinx.coroutines.flow.flowOf(null)
     }
 
     class MockFileManager : FileManager {
@@ -85,8 +88,8 @@ class FileMessageHandlerTest {
     }
 
 
-    class MockClock(private var currentTime: Long = 1000L) : Clock {
-        override fun currentTimeMillis(): Long = currentTime
+    class MockClock(private var currentTime: Long = 1000L) {
+        fun currentTimeMillis(): Long = currentTime
     }
 
     @BeforeTest
@@ -94,8 +97,13 @@ class FileMessageHandlerTest {
         mockMessageRepository = MockMessageRepository()
         mockFileManager = MockFileManager()
         mockClock = MockClock()
-        testDispatcher = StandardTestDispatcher()
-        mockCoroutines = Coroutines(testDispatcher, testDispatcher, testDispatcher) // Using testDispatcher for all
+        testDispatcher = UnconfinedTestDispatcher()
+        mockCoroutines = object : Coroutines {
+            override val ioDispatcher = testDispatcher
+            override val mainDispatcher = testDispatcher
+            override val computationDispatcher = testDispatcher
+            override fun newScope(context: kotlin.coroutines.CoroutineContext) = kotlinx.coroutines.CoroutineScope(context)
+        }
 
         fileMessageHandler = FileMessageHandler(
             serializer = MessageSerializer(kotlinx.serialization.protobuf.ProtoBuf, mockCoroutines), // Dummy serializer
@@ -115,7 +123,8 @@ class FileMessageHandlerTest {
             status = ReceiveMessageStatus.Started
         ))
         // Simulate reading 50 bytes, then another 50 bytes.
-        val byteReadChannel = ByteReadChannel(byteArrayOfNulls(50) + byteArrayOfNulls(50))
+        val data = ByteArray(100) { 0 }
+        val byteReadChannel = ByteReadChannel(data)
 
         fileMessageHandler.handleIncoming(fileMessage, byteReadChannel, receiveFlow)
 
@@ -140,7 +149,7 @@ class FileMessageHandlerTest {
             status = ReceiveMessageStatus.Started
         ))
         // Simulate a channel that closes prematurely
-        val byteReadChannel = ByteReadChannel(ByteReadPacket.Empty) // Empty channel will cause readFully to fail or hang then timeout
+        val byteReadChannel = ByteReadChannel(ByteArray(0)) // Empty channel will cause readFully to fail or hang then timeout
 
         var exceptionThrown = false
         try {
@@ -169,17 +178,12 @@ class FileMessageHandlerTest {
         val fileName = "outgoing.dat"
         val fileSize = 200L
         val fileMessage = FileMessage(fileName, fileSize, "application/octet-stream")
-        val mockPlatformFile = object : PlatformFile { // Basic mock for PlatformFile
-            override val path: String? = "/fake/path/outgoing.dat"
-            override val name: String = fileName
-            override val size: Long = fileSize
-            override suspend fun readBytes(): ByteArray = byteArrayOfNulls(fileSize.toInt()) // Simulate reading
-            override suspend fun writeBytes(bytes: ByteArray) {}
-            override suspend fun exists(): Boolean = true
-            override suspend fun delete() {}
-            override suspend fun create() {}
-            override suspend fun uriString(): String = "file:///fake/path/outgoing.dat"
-        }
+        // Create a simple mock that satisfies the path property requirement
+        val mockPlatformFile = object {
+            val path: String = "/fake/path/outgoing.dat"
+            val name: String = fileName
+            val size: Long = fileSize
+        } as PlatformFile
         val sendRequest = FileMessage.FileSendRequest(fileMessage, mockPlatformFile)
         val progressFlow = MutableSharedFlow<MessengerSendProgress>()
         val byteWriteChannel = ByteWriteChannel(true) // Auto-flush true
@@ -187,7 +191,7 @@ class FileMessageHandlerTest {
         // Mock FileManager to return a valid RawSource
         mockFileManager = object : MockFileManager() {
             override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.RawSource {
-                return kotlinx.io.Buffer().apply { write(byteArrayOfNulls(fileSize.toInt())) } // Provide a source with enough bytes
+                return kotlinx.io.Buffer().apply { write(ByteArray(fileSize.toInt()) { 0 }) } // Provide a source with enough bytes
             }
         }
         fileMessageHandler = FileMessageHandler( // Re-init with new mockFileManager
@@ -220,7 +224,7 @@ class FileMessageHandlerTest {
         ))
         
         // Create a channel with data to simulate progress
-        val data = byteArrayOfNulls(100)
+        val data = ByteArray(100) { 0 }
         val byteReadChannel = ByteReadChannel(data)
 
         fileMessageHandler.handleIncoming(fileMessage, byteReadChannel, receiveFlow)

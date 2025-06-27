@@ -40,6 +40,7 @@ kotlin {
         implementation(deps.ukey2)
         implementation(deps.filekit.core)
         implementation(deps.sqldelight.runtime)
+        implementation(deps.sqldelight.coroutines.extensions)
       }
     }
 

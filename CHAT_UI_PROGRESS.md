@@ -41,6 +41,8 @@ This document tracks the progress of implementing a chat-like UI for Klardrop wi
 - Updated tests to expect only final state persistence (COMPLETED/FAILED)
 - Progress updates still flow to UI through `receiveFlow` and `progressFlow` (in memory only)
 - Removed `updateStatusAndSize` query from SQL schema
+- Added missing `sqldelight-coroutines-extensions` dependency to fix compilation
+- Fixed import issues with FileKit and SQLDelight APIs
 
 **Acceptance Criteria**:
 - File transfer progress updates are not stored in database
