@@ -4,7 +4,7 @@ plugins {
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
   kotlin("kapt")
-  alias(deps.plugins.sentry.android)
+  id("com.bugsnag.android.gradle") version "8.+"
 }
 
 group = "com.carlom.klardrop"
@@ -23,7 +23,7 @@ dependencies {
   implementation(deps.dagger)
   kapt(deps.dagger.compiler)
 
-  implementation(deps.sentry.android)
+  implementation(deps.bugsnag.android)
 
   debugImplementation(compose.uiTooling)
   implementation(compose.preview)
@@ -33,7 +33,7 @@ android {
   compileSdk = 35
   defaultConfig {
     applicationId = "com.carlom.klardrop.android"
-    minSdk = 23
+    minSdk = 24
     targetSdk = 34
     versionCode = 1
     versionName = "1.0-SNAPSHOT"

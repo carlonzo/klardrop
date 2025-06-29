@@ -26,6 +26,7 @@ kotlin {
         implementation(project(":common-ui"))
         implementation(compose.desktop.currentOs)
         implementation(deps.kotlinx.coroutines.core)
+        implementation(deps.bugsnag.jvm)
       }
     }
     val jvmTest by getting

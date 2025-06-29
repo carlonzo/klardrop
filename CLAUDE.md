@@ -116,3 +116,7 @@ Always append a `-q` to the gradle commands to reduce output verbosity.
 - Compile sources for common and jvm platform: run the `:desktop:compileKotlinJvm` gradle task.
 - Run unit tests for common and jvm platform: run the `:jvmTest` gradle task.
 - To Run the desktop application: run the `:desktop:run` gradle task.
+
+## Development Best Practices
+
+- After you completed your work, ensure that the project compiles and tests are passing

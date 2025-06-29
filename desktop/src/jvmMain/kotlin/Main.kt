@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
+import com.klardrop.common.BugsnagWrapper
 import io.github.vinceglb.filekit.FileKit
 
 fun main(args: Array<String>) {
@@ -20,10 +21,15 @@ fun main(args: Array<String>) {
   val disableNearby = args.contains("--no-nearby")
 
   val applicationInfo = ApplicationInfo(
+
     isDebug = debug,
     disablePersistence = inMemory,
     enableKlardropServer = !disableKlardrop,
     enableNearbyServer = !disableNearby,
+  )
+
+  BugsnagWrapper.init(
+    applicationInfo.appVersion
   )
 
   val k = Klardrop(

@@ -5,7 +5,6 @@ plugins {
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
   alias(deps.plugins.android.library)
-  alias(deps.plugins.sentry.multiplatform)
   kotlin("native.cocoapods")
 }
 
@@ -40,12 +39,7 @@ kotlin {
     ios.deploymentTarget = "14.1"
     podfile = project.file("../iosApp/Podfile")
 
-    pod("Sentry") {
-      // Check the version compatibility table for the correct version
-      version = "8.49.0"
-      linkOnly = true
-      extraOpts += listOf("-compiler-option", "-fmodules")
-    }
+//    pod("Bugsnag", "~> 6.0")
 
     framework {
       baseName = "common_ui"

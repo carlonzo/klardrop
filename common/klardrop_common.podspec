@@ -1,23 +1,23 @@
 Pod::Spec.new do |spec|
-    spec.name                     = 'common_ui'
+    spec.name                     = 'klardrop_common'
     spec.version                  = '1.0-SNAPSHOT'
-    spec.homepage                 = 'https://github.com/carlonzo/klardrop'
+    spec.homepage                 = ''
     spec.source                   = { :http=> ''}
     spec.authors                  = ''
     spec.license                  = ''
-    spec.summary                  = 'Shared Module for Klardrop'
-    spec.vendored_frameworks      = 'build/cocoapods/framework/common_ui.framework'
+    spec.summary                  = ''
+    spec.vendored_frameworks      = 'build/cocoapods/framework/klardrop_common.framework'
     spec.libraries                = 'c++'
     spec.ios.deployment_target    = '14.1'
+    spec.dependency 'Bugsnag', '~> 6.0'
                 
-                
-    if !Dir.exist?('build/cocoapods/framework/common_ui.framework') || Dir.empty?('build/cocoapods/framework/common_ui.framework')
+    if !Dir.exist?('build/cocoapods/framework/klardrop_common.framework') || Dir.empty?('build/cocoapods/framework/klardrop_common.framework')
         raise "
 
-        Kotlin framework 'common_ui' doesn't exist yet, so a proper Xcode project can't be generated.
+        Kotlin framework 'klardrop_common' doesn't exist yet, so a proper Xcode project can't be generated.
         'pod install' should be executed after running ':generateDummyFramework' Gradle task:
 
-            ./gradlew :common-ui:generateDummyFramework
+            ./gradlew :klardrop-common:generateDummyFramework
 
         Alternatively, proper pod installation is performed during Gradle sync in the IDE (if Podfile location is set)"
     end
@@ -27,13 +27,13 @@ Pod::Spec.new do |spec|
     }
                 
     spec.pod_target_xcconfig = {
-        'KOTLIN_PROJECT_PATH' => ':common-ui',
-        'PRODUCT_MODULE_NAME' => 'common_ui',
+        'KOTLIN_PROJECT_PATH' => ':klardrop-common',
+        'PRODUCT_MODULE_NAME' => 'klardrop_common',
     }
                 
     spec.script_phases = [
         {
-            :name => 'Build common_ui',
+            :name => 'Build klardrop_common',
             :execution_position => :before_compile,
             :shell_path => '/bin/sh',
             :script => <<-SCRIPT
@@ -50,5 +50,5 @@ Pod::Spec.new do |spec|
             SCRIPT
         }
     ]
-    spec.resources = ['build/compose/cocoapods/compose-resources']
+                
 end

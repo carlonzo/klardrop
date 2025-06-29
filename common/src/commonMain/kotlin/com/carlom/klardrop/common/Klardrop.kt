@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.di.CommonComponent
-import com.carlom.klardrop.common.utils.InitSentry
+
 import com.carlom.klardrop.common.utils.UtilsModule
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.launch
@@ -19,8 +19,6 @@ class Klardrop(
     if (::commonComponent.isInitialized) throw IllegalStateException("Klardrop already initialized")
 
     log("Starting Klardrop with ApplicationInfo: $applicationInfo")
-
-    InitSentry.init(applicationInfo)
 
     commonComponent = CommonComponent(applicationInfo, utilsModule, internalPlatformDependency)
 

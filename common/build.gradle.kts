@@ -2,6 +2,7 @@ plugins {
   alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.kotlin.serialization)
+  kotlin("native.cocoapods")
 }
 
 kotlin {
@@ -12,6 +13,12 @@ kotlin {
   iosSimulatorArm64()
 
   applyDefaultHierarchyTemplate()
+
+  cocoapods {
+    version = rootProject.version.toString()
+    ios.deploymentTarget = "14.1"
+    pod("Bugsnag", "~> 6.0")
+  }
 
   sourceSets {
 
@@ -30,7 +37,6 @@ kotlin {
         implementation(deps.androidx.datastore.core.okio)
         implementation(deps.kotlinx.serialization.protobuf)
         implementation(deps.ukey2)
-        implementation(deps.sentry.kotlin.multiplatform)
         implementation(deps.filekit.core)
       }
     }
@@ -49,12 +55,20 @@ kotlin {
       dependencies {
         implementation(deps.kotlinx.coroutines.android)
         implementation(deps.simplestorage)
+        implementation(deps.bugsnag.kmp)
+      }
+    }
+
+    val iosMain by getting {
+      dependencies {
+        implementation(deps.bugsnag.kmp)
       }
     }
 
     val desktopJvmMain by getting {
       dependencies {
         implementation(deps.jmdns)
+        implementation(deps.bugsnag.jvm)
       }
     }
 

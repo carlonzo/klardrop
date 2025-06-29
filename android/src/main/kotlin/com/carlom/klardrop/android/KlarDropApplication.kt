@@ -2,10 +2,11 @@ package com.carlom.klardrop.android
 
 import android.app.Application
 import android.content.Context
+import com.bugsnag.android.Bugsnag
+import com.bugsnag.android.Configuration
 import com.carlom.klardrop.android.di.ApplicationComponent
 import com.carlom.klardrop.android.di.DaggerApplicationComponent
-import io.github.vinceglb.filekit.FileKit
-import io.github.vinceglb.filekit.dialogs.init
+import com.klardrop.common.BugsnagConfig
 
 class KlarDropApplication : Application(), ApplicationComponentProvider {
 
@@ -15,6 +16,11 @@ class KlarDropApplication : Application(), ApplicationComponentProvider {
 
   override fun onCreate() {
     super.onCreate()
+
+    Bugsnag.start(
+      this,
+      Configuration(BugsnagConfig.apiKey)
+    )
 
     component = DaggerApplicationComponent.factory().create(this)
     component.klardrop().init()
