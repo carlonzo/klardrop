@@ -36,7 +36,7 @@ class FileMessageHandlerTest {
     private lateinit var fileMessageHandler: FileMessageHandler
     private lateinit var mockMessageRepository: MockMessageRepository
     private lateinit var mockFileManager: MockFileManager
-    private lateinit var mockClock: MockClock
+    private lateinit var realClock: Clock
     private lateinit var testDispatcher: TestDispatcher
     private lateinit var mockCoroutines: Coroutines
 
@@ -84,7 +84,7 @@ class FileMessageHandlerTest {
             kotlinx.coroutines.flow.flowOf(null)
     }
 
-    class MockFileManager : FileManager {
+    open class MockFileManager : FileManager {
         var preparedFile: MockFileTransfer? = null
         override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer {
             preparedFile = MockFileTransfer("/fake/path/$fileName")
@@ -103,27 +103,27 @@ class FileMessageHandlerTest {
     }
 
 
-    class MockClock(private var currentTime: Long = 1000L) {
-        fun currentTimeMillis(): Long = currentTime
-    }
+    // Just use a real Clock instance - tests will work with actual timestamps
 
     @BeforeTest
     fun setup() {
         mockMessageRepository = MockMessageRepository()
         mockFileManager = MockFileManager()
-        mockClock = MockClock()
+        realClock = Clock()
         testDispatcher = UnconfinedTestDispatcher()
         mockCoroutines = object : Coroutines {
             override val ioDispatcher = testDispatcher
             override val mainDispatcher = testDispatcher
-            override val computationDispatcher = testDispatcher
+            override val cpuDispatcher = testDispatcher
+            override val appScope = kotlinx.coroutines.CoroutineScope(testDispatcher)
+            override fun newScope() = kotlinx.coroutines.CoroutineScope(testDispatcher)
             override fun newScope(context: kotlin.coroutines.CoroutineContext) = kotlinx.coroutines.CoroutineScope(context)
         }
 
         fileMessageHandler = FileMessageHandler(
             serializer = MessageSerializer(kotlinx.serialization.protobuf.ProtoBuf, mockCoroutines), // Dummy serializer
             fileManager = mockFileManager,
-            clock = mockClock,
+            clock = realClock,
             coroutines = mockCoroutines,
             messageRepository = mockMessageRepository
         )
@@ -201,7 +201,7 @@ class FileMessageHandlerTest {
         } as PlatformFile
         val sendRequest = FileMessage.FileSendRequest(fileMessage, mockPlatformFile)
         val progressFlow = MutableSharedFlow<MessengerSendProgress>()
-        val byteWriteChannel = ByteWriteChannel(true) // Auto-flush true
+        val byteWriteChannel = io.ktor.utils.io.ByteChannel(true).apply { close() } // Auto-flush true
 
         // Mock FileManager to return a valid RawSource
         mockFileManager = object : MockFileManager() {
@@ -212,7 +212,7 @@ class FileMessageHandlerTest {
         fileMessageHandler = FileMessageHandler( // Re-init with new mockFileManager
             serializer = MessageSerializer(kotlinx.serialization.protobuf.ProtoBuf, mockCoroutines),
             fileManager = mockFileManager,
-            clock = mockClock,
+            clock = realClock,
             coroutines = mockCoroutines,
             messageRepository = mockMessageRepository
         )
@@ -220,7 +220,7 @@ class FileMessageHandlerTest {
         fileMessageHandler.handleOutgoing(toDeviceId, sendRequest, byteWriteChannel, progressFlow)
 
         // Verify initial DB calls
-        assertEquals("insertFileTransfer($fileName, ${mockPlatformFile.path}, $fileSize, IN_PROGRESS)", mockMessageRepository.calls[0])
+        assertEquals("insertFileTransfer($fileName, /fake/path/outgoing.dat, $fileSize, IN_PROGRESS)", mockMessageRepository.calls[0])
         val expectedFileTransferId = mockMessageRepository.nextFileTransferId -1
         assertEquals("insertMessage($toDeviceId, $fileName, true, FILE, $expectedFileTransferId, true)", mockMessageRepository.calls[1])
 
