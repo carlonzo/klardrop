@@ -105,7 +105,8 @@ class MessengerImpl(
     messageRequest: SendMessageRequest,
     flow: MutableSharedFlow<MessengerSendProgress>
   ): Boolean {
-    val maxRetries = 2 // From AckTimeoutConfig.DEFAULT.maxRetries
+    val config = AckTimeoutConfig.DEFAULT
+    val maxRetries = config.maxRetries
     var attempt = 0
     
     log("Messenger", "[DEBUG] Starting handleKlardropTransfer for $deviceId, message: ${messageRequest.message.id}, maxRetries: $maxRetries")
@@ -152,7 +153,7 @@ class MessengerImpl(
           log("Messenger", "[DEBUG] Closed connection to $deviceId, starting backoff delay")
           
           // Wait before retry with exponential backoff
-          val delayMs = (1000 * 1.5.pow(attempt - 1)).toLong()
+          val delayMs = (1000 * config.retryBackoffMultiplier.pow(attempt - 1)).toLong()
           log("Messenger", "[DEBUG] Waiting ${delayMs}ms before retry (attempt $attempt)")
           kotlinx.coroutines.delay(delayMs)
           
