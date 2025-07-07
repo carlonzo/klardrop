@@ -143,8 +143,9 @@ class MessengerImpl(
         log("Messenger", "[DEBUG] Full exception for attempt $attempt", exception)
         
         // Check if this is an ACK timeout (connection lost)
-        val isAckTimeout = exception.message?.contains("ACK timeout") == true
-        log("Messenger", "[DEBUG] Is ACK timeout: $isAckTimeout, exception message: '${exception.message}'")
+        val exceptionMessage = exception.message ?: ""
+        val isAckTimeout = exceptionMessage.contains("ACK timeout")
+        log("Messenger", "[DEBUG] Is ACK timeout: $isAckTimeout, exception message: '$exceptionMessage'")
         
         if (isAckTimeout && attempt <= maxRetries) {
           log("Messenger", "[DEBUG] ACK timeout detected, will retry connection to $deviceId (attempt $attempt)")
@@ -161,7 +162,8 @@ class MessengerImpl(
         } else {
           // Final failure or non-timeout error
           log("Messenger", "[DEBUG] Final failure for $deviceId: not ACK timeout or max retries exceeded")
-          flow.emit(Error("Transfer failed: ${exception.message}"))
+          val errorMessage = exception.message ?: "Unknown connection error"
+          flow.emit(Error("Transfer failed: $errorMessage"))
           return false
         }
       }
@@ -200,12 +202,20 @@ class MessengerImpl(
 
     // Establish a new connection
     log("Messenger", "Establishing new connection for $deviceId")
-    client.connectTo(deviceId)
+    val connectResult = runCatching {
+      client.connectTo(deviceId)
+    }
+    
+    if (connectResult.isFailure) {
+      val exception = connectResult.exceptionOrNull()
+      log("Messenger", "Failed to connect to $deviceId: ${exception?.message}")
+      return null
+    }
 
     // Verify the connection was established
     val newConnection = connectionsPool.getConnection(deviceId)
     if (newConnection == null || newConnection.isClosed()) {
-      log("Messenger", "Failed to establish connection for $deviceId")
+      log("Messenger", "Failed to establish connection for $deviceId - connection not found in pool")
       return null
     }
 
