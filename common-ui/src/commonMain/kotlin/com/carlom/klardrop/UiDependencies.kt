@@ -1,7 +1,7 @@
 package com.carlom.klardrop
 
 import com.carlom.klardrop.chat.DeviceChatViewModel
-import com.carlom.klardrop.common.CommonComponent
+import com.carlom.klardrop.common.di.CommonComponent
 
 // UiDependencies is now a class that holds CommonComponent
 class UiDependencies(private val commonComponent: CommonComponent) {
@@ -20,7 +20,9 @@ class UiDependencies(private val commonComponent: CommonComponent) {
             messageRepository = commonComponent.messageRepository(),
             messenger = commonComponent.messenger(),
             coroutines = commonComponent.coroutines(),
-            fileManager = commonComponent.fileManager() // Added
+            fileManager = commonComponent.fileManager(), // Added,
+            visibleDevices = commonComponent.visibleDevices(),
+            platformFileSystem = commonComponent.platformFileSystem()
         )
     }
 }
