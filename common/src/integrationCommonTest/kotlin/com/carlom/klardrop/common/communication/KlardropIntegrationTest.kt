@@ -266,3 +266,15 @@ internal class KlardropTestContext(
     receiverChannel.cancelAndIgnoreRemainingEvents()
   }
 }
+
+internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.MessageRepository {
+  override suspend fun insertMessage(remoteDeviceId: String, content: String, isSender: Boolean, messageType: com.carlom.klardrop.common.persistence.MessageType, fileTransferId: Long?, isRead: Boolean): Long = 1L
+  override suspend fun insertFileTransfer(fileName: String, filePath: String, totalSize: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus): Long = 1L
+  override suspend fun updateFileTransferStatus(id: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus) {}
+  override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {}
+  override suspend fun markMessagesAsRead(remoteDeviceId: String) {}
+  override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long = 0L
+  override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> = kotlinx.coroutines.flow.flowOf(emptyMap())
+  override fun getMessagesForDevice(remoteDeviceId: String, limit: Long): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> = kotlinx.coroutines.flow.flowOf(emptyList())
+  override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> = kotlinx.coroutines.flow.flowOf(null)
+}

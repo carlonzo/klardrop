@@ -63,6 +63,12 @@ kotlin {
       }
     }
 
+    val androidUnitTest by getting {
+      dependencies {
+        implementation(deps.robolectric)
+      }
+    }
+
     val iosMain by getting {
       dependencies {
         implementation(deps.bugsnag.kmp)

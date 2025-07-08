@@ -25,16 +25,12 @@ class MainActivity : AppCompatActivity() {
 
     setContent {
 
-      val uiDependencies = remember {
-        object : UiDependencies {
-        }
-      }
+
 
       AppTheme {
 
         KlardropApp(
-          klardrop,
-          uiDependencies
+          klardrop
         )
 
       }

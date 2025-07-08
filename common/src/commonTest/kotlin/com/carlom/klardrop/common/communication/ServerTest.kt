@@ -158,6 +158,7 @@ class ServerTest {
 internal class ServerTestFakeFileManager : FileManager {
   override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer = error("Not needed for protocol detection test")
   override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.Source = error("Not needed for protocol detection test")
+  override suspend fun openFile(filePath: String): Boolean = error("Not needed for protocol detection test")
 }
 
 internal fun createTestServer(

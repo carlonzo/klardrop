@@ -51,13 +51,10 @@ fun main(args: Array<String>) {
       state = windowState
     ) {
 
-      val uiDependencies = remember(window) {
-        object : UiDependencies {}
-      }
 
       AppTheme {
 
-        KlardropApp(k, uiDependencies)
+        KlardropApp(k)
       }
 
     }
