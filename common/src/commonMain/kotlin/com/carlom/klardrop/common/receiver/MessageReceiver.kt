@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 
@@ -43,10 +44,11 @@ internal class MessageReceiverImpl(
     get() = _notifier.asSharedFlow()
 
   override val messageReceivedNotifier: Flow<ReceiveMessageUpdate>
-    get() = _notifier.mapNotNull {
-      val value = it.value
-      if (value.status is ReceiveMessageStatus.Completed) value
-      else null
+    get() = _notifier.flatMapLatest { stateFlow ->
+      stateFlow.mapNotNull { update ->
+        if (update.status is ReceiveMessageStatus.Completed) update
+        else null
+      }
     }
 
   override fun onReceiveMessage(deviceId: String): MutableStateFlow<ReceiveMessageUpdate> {
