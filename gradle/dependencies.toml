@@ -44,7 +44,7 @@ jmdns = { module = "org.jmdns:jmdns", version = "3.6.1" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.1"}
 sentry-kotlin-multiplatform = { module = "io.sentry:sentry-kotlin-multiplatform", version.ref = "sentry-multiplatform" }
-sentry-android = { module = "io.sentry:sentry-android", version = "8.15.0" }
+sentry-android = { module = "io.sentry:sentry-android", version = "8.17.0" }
 filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekit" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
 
