@@ -7,11 +7,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlin.coroutines.CoroutineContext
 
 class TestCoroutines(
-  val dispatcher: TestDispatcher = StandardTestDispatcher(),
+  val dispatcher: TestDispatcher = UnconfinedTestDispatcher(),
   override val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : Coroutines {
 
