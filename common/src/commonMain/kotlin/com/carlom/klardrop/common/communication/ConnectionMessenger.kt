@@ -23,7 +23,8 @@ class ConnectionMessenger internal constructor(
   private val connection: Connection,
   private val messagesRouter: MessagesRouter,
   private val readChannel: ByteReadChannel,
-  private val writeChannel: ByteWriteChannel
+  private val writeChannel: ByteWriteChannel,
+  private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT
 ) {
 
   // ACK correlation system
@@ -31,9 +32,6 @@ class ConnectionMessenger internal constructor(
   private val pendingAcks = mutableMapOf<Int, PendingAck>()
   private val ackMutex = Mutex()
 
-  companion object {
-    private const val ACK_TIMEOUT_MS = 2_000L
-  }
 
   init {
     if (connection.socket.isClosed) {
@@ -92,7 +90,11 @@ class ConnectionMessenger internal constructor(
       log("ConnectionMessenger: [DEBUG] Added pending ACK $ackType for message $messageId, total pending: ${pendingAcks.size}")
     }
     
-    val timeoutMs = ACK_TIMEOUT_MS
+    val timeout = when (ackType) {
+      AckType.READY -> ackTimeoutConfig.readyAckTimeout
+      AckType.RECEIVED -> ackTimeoutConfig.noPayloadAckTimeout
+    }
+    val timeoutMs = timeout.inWholeMilliseconds
     
     log("ConnectionMessenger: [DEBUG] Starting to wait for ACK $ackType for message $messageId from ${connection.deviceId}, timeout=${timeoutMs}ms")
     val startTime = kotlin.time.Clock.System.now()
