@@ -76,6 +76,10 @@ class KlardropIntegrationTest {
       val sendProgressFlow = clientMessenger.send(serverDeviceId, textMessage)
       val sendProgressChannel = sendProgressFlow.testIn(this)
 
+      // Start coroutines and advance time to complete the operation
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
+
       // sender statuses
       sendProgressChannel.awaitFor { it is Completed }
 
@@ -170,24 +174,29 @@ class KlardropIntegrationTest {
 
       println("[TEST-DEBUG] Started second message send, now waiting for completion...")
 
-      // Advance time to allow for timeout detection and reconnection
-//      testDispatcher.scheduler.advanceTimeBy(4000) // Advance past our 3 second timeout
-//      testDispatcher.scheduler.advanceUntilIdle()
+      // Start coroutines and try to advance until completion
+      coroutines.dispatcher.scheduler.runCurrent()
+      
+      // Since connections were dropped, this should trigger timeouts and retries
+      // Advance past the ACK timeout (2 seconds) to trigger retry logic
+      println("[TEST-DEBUG] Advancing time to trigger timeout and retry...")
+      coroutines.dispatcher.scheduler.advanceTimeBy(2100) // Past 2-second ACK timeout
+      coroutines.dispatcher.scheduler.runCurrent()
+      
+      // Allow retry logic to complete
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
 
       // Wait for second message to be sent
       println("[TEST-DEBUG] Waiting for Completed status from second message...")
-      val startTime = kotlin.time.Clock.System.now()
       
       try {
         secondSenderChannel.awaitFor { 
-          val elapsed = kotlin.time.Clock.System.now() - startTime
-          println("[TEST-DEBUG] Received progress update after ${elapsed.inWholeMilliseconds}ms: $it")
+          println("[TEST-DEBUG] Received progress update: $it")
           it is Completed 
         }
         println("[TEST-DEBUG] Second message completed successfully!")
       } catch (e: Exception) {
-        val elapsed = kotlin.time.Clock.System.now() - startTime
-        println("[TEST-DEBUG] Test failed after ${elapsed.inWholeMilliseconds}ms waiting for Completed: ${e::class.simpleName}: ${e.message}")
+        println("[TEST-DEBUG] Test failed waiting for Completed: ${e::class.simpleName}: ${e.message}")
         throw e
       }
 
@@ -212,6 +221,10 @@ class KlardropIntegrationTest {
     val senderFlow = clientMessenger.send(serverDeviceId, firstMessage)
     val senderChannel = senderFlow.testIn(this)
     val firstReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this)
+
+    // Start coroutines and advance time to complete the operation
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
 
     // Wait for first message to complete
     senderChannel.awaitFor { it is Completed }
