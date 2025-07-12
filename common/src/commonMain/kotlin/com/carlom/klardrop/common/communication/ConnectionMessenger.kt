@@ -16,6 +16,7 @@ import kotlinx.coroutines.invoke
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 import kotlin.time.ExperimentalTime
 
 class ConnectionMessenger internal constructor(
@@ -23,7 +24,8 @@ class ConnectionMessenger internal constructor(
   private val connection: Connection,
   private val messagesRouter: MessagesRouter,
   private val readChannel: ByteReadChannel,
-  private val writeChannel: ByteWriteChannel
+  private val writeChannel: ByteWriteChannel,
+  private val ackTimeoutMs: Long = ACK_TIMEOUT_MS
 ) {
 
   // ACK correlation system
@@ -32,7 +34,7 @@ class ConnectionMessenger internal constructor(
   private val ackMutex = Mutex()
 
   companion object {
-    private const val ACK_TIMEOUT_MS = 2_000L // 2 seconds (reduced for faster test execution)
+    private const val ACK_TIMEOUT_MS = 2_000L
   }
 
   init {
@@ -92,19 +94,20 @@ class ConnectionMessenger internal constructor(
       log("ConnectionMessenger: [DEBUG] Added pending ACK $ackType for message $messageId, total pending: ${pendingAcks.size}")
     }
     
-    log("ConnectionMessenger: [DEBUG] Starting to wait for ACK $ackType for message $messageId from ${connection.deviceId}, timeout=${ACK_TIMEOUT_MS}ms")
-    val startTime = kotlin.time.Clock.System.now()
+    val timeoutMs = ackTimeoutMs
+    
+    log("ConnectionMessenger: [DEBUG] Starting to wait for ACK $ackType for message $messageId from ${connection.deviceId}, timeout=${timeoutMs}ms")
     
     try {
-      withTimeout(ACK_TIMEOUT_MS) {
-        log("ConnectionMessenger: [DEBUG] Entering channel.receive() for ACK $ackType message $messageId")
-        channel.receive()
-        val elapsed = kotlin.time.Clock.System.now() - startTime
-        log("ConnectionMessenger: [DEBUG] Successfully received ACK $ackType for message $messageId after ${elapsed.inWholeMilliseconds}ms")
+      withContext(coroutines.mainDispatcher) {
+        withTimeout(timeoutMs) {
+          log("ConnectionMessenger: [DEBUG] Entering channel.receive() for ACK $ackType message $messageId")
+          channel.receive()
+          log("ConnectionMessenger: [DEBUG] Successfully received ACK $ackType for message $messageId")
+        }
       }
     } catch (e: Exception) {
-      val elapsed = kotlin.time.Clock.System.now() - startTime
-      log("ConnectionMessenger: [DEBUG] ACK timeout or error for $ackType message $messageId after ${elapsed.inWholeMilliseconds}ms: ${e::class.simpleName}: ${e.message}")
+      log("ConnectionMessenger: [DEBUG] ACK timeout or error for $ackType message $messageId (configured timeout: ${timeoutMs}ms): ${e::class.simpleName}: ${e.message}")
       log("ConnectionMessenger: [DEBUG] Connection state during timeout: isClosed=${isClosed()}, socket.isClosed=${connection.socket.isClosed}")
       
       // Cleanup pending ACK on timeout or error
@@ -187,6 +190,8 @@ class ConnectionMessenger internal constructor(
     // Check if read/write channels are closed (indicates remote closure)
     if (readChannel.isClosedForRead || writeChannel.isClosedForWrite) {
       log("ConnectionMessenger: [DEBUG] Detected remote closure for ${connection.deviceId} - readClosed=${readChannel.isClosedForRead}, writeClosed=${writeChannel.isClosedForWrite}")
+      runCatching { connection.socket.close() }
+        .onFailure { log("Failed closing the socket", it) }
       return true
     }
     

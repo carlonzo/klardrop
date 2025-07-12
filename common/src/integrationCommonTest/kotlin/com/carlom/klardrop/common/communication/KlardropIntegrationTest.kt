@@ -18,6 +18,7 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.utils.Clock
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.io.Source
 import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.test.Test
@@ -55,7 +56,7 @@ class KlardropIntegrationTest {
 
   @Test
   fun startKlardropServerAndSendTextMessage() = runTest(coroutines.dispatcher) {
-    val server = serverCommunicationModule.unifiedServer()
+    val server = serverCommunicationModule.server()
     val serverStatus = server.startServer()
 
     // add server to visible devices
@@ -76,6 +77,10 @@ class KlardropIntegrationTest {
       val sendProgressFlow = clientMessenger.send(serverDeviceId, textMessage)
       val sendProgressChannel = sendProgressFlow.testIn(this)
 
+      // Start coroutines and advance time to complete the operation
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
+
       // sender statuses
       sendProgressChannel.awaitFor { it is Completed }
 
@@ -93,7 +98,7 @@ class KlardropIntegrationTest {
 
   @Test
   fun testKlardropSendTwoMessages() = runTest(coroutines.dispatcher) {
-    val server = serverCommunicationModule.unifiedServer()
+    val server = serverCommunicationModule.server()
     val serverStatus = server.startServer()
 
     // add server to visible devices
@@ -106,9 +111,6 @@ class KlardropIntegrationTest {
       sendAndReceiveMessage("This is a second message!")
     }
   }
-
-
-  // TODO we need an ack back signal when a message is received
 
   @Test
   fun testMessengerReconnectionFromClient() = testMessengerReconnection(clientDropsConnection = true, serverDropsConnection = false)
@@ -123,7 +125,7 @@ class KlardropIntegrationTest {
   @OptIn(ExperimentalTime::class)
   @Suppress("VisibleForTests")
   private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) = runTest(coroutines.dispatcher) {
-    val server = serverCommunicationModule.unifiedServer()
+    val server = serverCommunicationModule.server()
     val serverStatus = server.startServer()
 
     // Add device to visible devices
@@ -170,24 +172,29 @@ class KlardropIntegrationTest {
 
       println("[TEST-DEBUG] Started second message send, now waiting for completion...")
 
-      // Advance time to allow for timeout detection and reconnection
-//      testDispatcher.scheduler.advanceTimeBy(4000) // Advance past our 3 second timeout
-//      testDispatcher.scheduler.advanceUntilIdle()
+      // Start coroutines and try to advance until completion
+      coroutines.dispatcher.scheduler.runCurrent()
+
+      // Since connections were dropped, this should trigger timeouts and retries
+      // Advance past the ACK timeout (2 seconds) to trigger retry logic
+      println("[TEST-DEBUG] Advancing time to trigger timeout and retry...")
+      coroutines.dispatcher.scheduler.advanceTimeBy(2100) // Past 2-second ACK timeout
+      coroutines.dispatcher.scheduler.runCurrent()
+
+      // Allow retry logic to complete
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
 
       // Wait for second message to be sent
       println("[TEST-DEBUG] Waiting for Completed status from second message...")
-      val startTime = kotlin.time.Clock.System.now()
-      
+
       try {
-        secondSenderChannel.awaitFor { 
-          val elapsed = kotlin.time.Clock.System.now() - startTime
-          println("[TEST-DEBUG] Received progress update after ${elapsed.inWholeMilliseconds}ms: $it")
-          it is Completed 
+        secondSenderChannel.awaitFor {
+          println("[TEST-DEBUG] Received progress update: $it")
+          it is Completed
         }
         println("[TEST-DEBUG] Second message completed successfully!")
       } catch (e: Exception) {
-        val elapsed = kotlin.time.Clock.System.now() - startTime
-        println("[TEST-DEBUG] Test failed after ${elapsed.inWholeMilliseconds}ms waiting for Completed: ${e::class.simpleName}: ${e.message}")
+        println("[TEST-DEBUG] Test failed waiting for Completed: ${e::class.simpleName}: ${e.message}")
         throw e
       }
 
@@ -212,6 +219,10 @@ class KlardropIntegrationTest {
     val senderFlow = clientMessenger.send(serverDeviceId, firstMessage)
     val senderChannel = senderFlow.testIn(this)
     val firstReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this)
+
+    // Start coroutines and advance time to complete the operation
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
 
     // Wait for first message to complete
     senderChannel.awaitFor { it is Completed }

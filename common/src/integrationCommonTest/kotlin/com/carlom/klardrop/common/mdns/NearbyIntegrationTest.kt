@@ -7,7 +7,7 @@ import app.cash.turbine.turbineScope
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
-import com.carlom.klardrop.common.communication.createTestUnifiedServer
+import com.carlom.klardrop.common.communication.createTestServer
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -34,7 +34,7 @@ class NearbyIntegrationTest {
   private val currentDeviceProvider = CurrentDeviceProvider(fakeLocalPropertiesRepository)
   private val shareClient = NearbyClient(coroutines, currentDeviceProvider, fakeFileManager)
 
-  private val server = createTestUnifiedServer(
+  private val server = createTestServer(
     fileManager = fakeFileManager,
     coroutines = coroutines,
     localPropertiesRepository = fakeLocalPropertiesRepository,

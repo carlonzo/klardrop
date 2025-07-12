@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.serialization.protobuf.ProtoBuf
 
 /**
- * UnifiedServer - A single server that handles both Klardrop and Nearby Share protocols
+ * Server - A single server that handles both Klardrop and Nearby Share protocols
  *
  * This server listens on a single TCP socket and automatically detects which protocol
  * a client is using based on the structure of the first message received. It then routes
@@ -67,12 +67,12 @@ import kotlinx.serialization.protobuf.ProtoBuf
  * ## Usage:
  *
  * ```kotlin
- * val unifiedServer = UnifiedServer(...)
- * val config = unifiedServer.startServer()
+ * val server = Server(...)
+ * val config = server.startServer()
  * // Server now accepts both Klardrop and Nearby Share connections on config.port
  * ```
  */
-class UnifiedServer(
+class Server(
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,
@@ -105,25 +105,25 @@ class UnifiedServer(
     val actualPort = localAddress.port
     val host = localAddress.hostname
 
-    log("UnifiedServer", "Unified server started on $host:$actualPort (handles both Klardrop and Nearby Share)")
+    log("Server", "Unified server started on $host:$actualPort")
 
     serverScope.launch {
       while (isActive) {
         val socket = serverSocket.accept()
         val remoteAddress = socket.remoteAddress.toString()
-        log("UnifiedServer", "New connection from: $remoteAddress")
+        log("Server", "New connection from: $remoteAddress")
 
         launch {
           try {
             handleConnection(socket, remoteAddress)
           } catch (e: Exception) {
-            log("UnifiedServer", "Error handling connection from $remoteAddress", e)
+            log("Server", "Error handling connection from $remoteAddress", e)
             socket.close()
           }
         }
       }
 
-      log("UnifiedServer", "Closing the server connection")
+      log("Server", "Closing the server connection")
       serverSocket.close()
       selectorManager.close()
     }
@@ -133,7 +133,7 @@ class UnifiedServer(
 
   fun stopServer() {
     serverScope.cancel()
-    log("UnifiedServer", "Unified server stopped")
+    log("Server", "Unified server stopped")
   }
 
   /**
@@ -146,7 +146,7 @@ class UnifiedServer(
     val firstMessage = readChannel.readByteArrayMessage()
 
     val protocol = detectProtocol(firstMessage)
-    log("UnifiedServer", "Detected protocol: $protocol for connection from $remoteAddress")
+    log("Server", "Detected protocol: $protocol for connection from $remoteAddress")
 
     when (protocol) {
       Protocol.KLARDROP -> handleKlardropConnection(socket, firstMessage, remoteAddress, readChannel)
@@ -198,7 +198,7 @@ class UnifiedServer(
     val handshakePayload = firstMessage.sliceArray(1 until firstMessage.size)
     val request = protoBuf.decodeFromByteArray(HandshakeMessage.serializer(), handshakePayload)
 
-    log("UnifiedServer", "Klardrop connection request from: $remoteAddress - ${request.deviceId}")
+    log("Server", "Klardrop connection request from: $remoteAddress - ${request.deviceId}")
 
     if (isAcceptedSender(request.deviceId, remoteAddress)) {
       val writeChannel = socket.openWriteChannel(autoFlush = true)
@@ -210,11 +210,11 @@ class UnifiedServer(
       // Send back introduction
       val deviceId = currentDeviceProvider.get().shortDeviceId
       val intro = HandshakeMessage(deviceId)
-      log("UnifiedServer", "Sending Klardrop greetings back to ${request.deviceId} on $remoteAddress")
+      log("Server", "Sending Klardrop greetings back to ${request.deviceId} on $remoteAddress")
 
       writeChannel.sendMessage(intro, serializer)
 
-      log("UnifiedServer", "Klardrop connection accepted from: $remoteAddress")
+      log("Server", "Klardrop connection accepted from: $remoteAddress")
 
       // Start listening for incoming messages in a separate coroutine
       // This prevents blocking the connection establishment
@@ -222,7 +222,7 @@ class UnifiedServer(
         connectionMessenger.acceptIncomingMessages()
       }
     } else {
-      log("UnifiedServer", "Klardrop connection rejected from: $remoteAddress")
+      log("Server", "Klardrop connection rejected from: $remoteAddress")
       socket.close()
     }
   }
@@ -231,14 +231,14 @@ class UnifiedServer(
    * Handles a Nearby Share protocol connection.
    */
   private fun handleNearbyShareConnection(socket: Socket, firstMessage: ByteArray, remoteAddress: String, readChannel: ByteReadChannel) {
-    log("UnifiedServer", "Handling Nearby Share connection from: $remoteAddress")
+    log("Server", "Handling Nearby Share connection from: $remoteAddress")
 
     // Find the device info for this connection
     val device = visibleDevices.findDeviceByAddress(socket.remoteAddress as InetSocketAddress)
     val receiveFlow = messageReceiver.onReceiveMessage(device?.deviceInfo?.deviceId ?: "")
 
     val exceptionHandler = CoroutineExceptionHandler { _, exception ->
-      log("UnifiedServer", "Received exception on Nearby Share connection from $remoteAddress", exception)
+      log("Server", "Received exception on Nearby Share connection from $remoteAddress", exception)
       socket.dispose()
       receiveFlow.update {
         it.copy(status = com.carlom.klardrop.common.receiver.ReceiveMessageStatus.Failed(exception.message ?: "Unknown error"))

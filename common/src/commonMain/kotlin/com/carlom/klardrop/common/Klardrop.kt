@@ -30,7 +30,7 @@ class Klardrop(
     if (applicationInfo.enableKlardropServer || applicationInfo.enableNearbyServer) {
       appScope.launch(commonComponent.coroutines().ioDispatcher) {
 
-        val serverConfig = commonComponent.unifiedServer().startServer()
+        val serverConfig = commonComponent.server().startServer()
         val serverPort = serverConfig.port
 
         // Publish discovery for both protocols on the same port
@@ -46,7 +46,7 @@ class Klardrop(
     // start discovery jobs
     discoveryNetwork.discoveryKlardropDevices()
     discoveryNetwork.discoveryNearbyShareDevices()
-    discoveryNetwork.discoverAirdrop()
+//    discoveryNetwork.discoverAirdrop()
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()

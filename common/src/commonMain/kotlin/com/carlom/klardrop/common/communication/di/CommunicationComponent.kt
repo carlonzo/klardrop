@@ -7,7 +7,7 @@ import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerImpl
-import com.carlom.klardrop.common.communication.UnifiedServer
+import com.carlom.klardrop.common.communication.Server
 import com.carlom.klardrop.common.communication.message.AckMessageHandler
 import com.carlom.klardrop.common.communication.message.FileMessageHandler
 import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
@@ -71,8 +71,8 @@ class CommunicationModule(
     MessageReceiverImpl(coroutines, visibleDevices)
   }
 
-  private val unifiedServer by lazy {
-    UnifiedServer(
+  private val server by lazy {
+    Server(
       connectionsPool,
       coroutines,
       messagesRouter,
@@ -106,7 +106,7 @@ class CommunicationModule(
 
 
   fun client() = client
-  fun unifiedServer() = unifiedServer
+  fun server() = server
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
 

@@ -10,17 +10,17 @@ data class AckTimeoutConfig(
   /**
    * Timeout for ACK_RECEIVED when sending messages without payload (TextMessage)
    */
-  val noPayloadAckTimeout: Duration = 10.seconds,
+  val noPayloadAckTimeout: Duration = 5.seconds,
   
   /**
    * Timeout for ACK_READY when sending message headers with payload (FileMessage)
    */
-  val readyAckTimeout: Duration = 10.seconds,
+  val readyAckTimeout: Duration = 5.seconds,
   
   /**
    * Timeout for ACK_RECEIVED when sending payload completion
    */
-  val receivedAckTimeout: Duration = 30.seconds,
+  val receivedAckTimeout: Duration = 10.seconds,
   
   /**
    * Maximum number of retry attempts for no-payload messages and payload headers

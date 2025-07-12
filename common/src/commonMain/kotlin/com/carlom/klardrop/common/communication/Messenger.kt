@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.transformWhile
@@ -30,7 +31,7 @@ class MessengerImpl(
   private val visibleDevices: VisibleDevices,
   private val connectionsPool: ConnectionsPool,
   private val client: Client,
-  coroutines: Coroutines,
+  private val coroutines: Coroutines,
   private val nearbyClient: NearbyClient,
   private val messageReceiver: MessageReceiver
 ) : Messenger {
@@ -105,7 +106,8 @@ class MessengerImpl(
     messageRequest: SendMessageRequest,
     flow: MutableSharedFlow<MessengerSendProgress>
   ): Boolean {
-    val maxRetries = 2 // From AckTimeoutConfig.DEFAULT.maxRetries
+    val config = AckTimeoutConfig.DEFAULT
+    val maxRetries = config.maxRetries
     var attempt = 0
     
     log("Messenger", "[DEBUG] Starting handleKlardropTransfer for $deviceId, message: ${messageRequest.message.id}, maxRetries: $maxRetries")
@@ -142,8 +144,9 @@ class MessengerImpl(
         log("Messenger", "[DEBUG] Full exception for attempt $attempt", exception)
         
         // Check if this is an ACK timeout (connection lost)
-        val isAckTimeout = exception.message?.contains("ACK timeout") == true
-        log("Messenger", "[DEBUG] Is ACK timeout: $isAckTimeout, exception message: '${exception.message}'")
+        val exceptionMessage = exception.message ?: ""
+        val isAckTimeout = exceptionMessage.contains("ACK timeout")
+        log("Messenger", "[DEBUG] Is ACK timeout: $isAckTimeout, exception message: '$exceptionMessage'")
         
         if (isAckTimeout && attempt <= maxRetries) {
           log("Messenger", "[DEBUG] ACK timeout detected, will retry connection to $deviceId (attempt $attempt)")
@@ -152,15 +155,18 @@ class MessengerImpl(
           log("Messenger", "[DEBUG] Closed connection to $deviceId, starting backoff delay")
           
           // Wait before retry with exponential backoff
-          val delayMs = (1000 * 1.5.pow(attempt - 1)).toLong()
+          val delayMs = (1000 * config.retryBackoffMultiplier.pow(attempt - 1)).toLong()
           log("Messenger", "[DEBUG] Waiting ${delayMs}ms before retry (attempt $attempt)")
-          kotlinx.coroutines.delay(delayMs)
+          withContext(coroutines.mainDispatcher) {
+            kotlinx.coroutines.delay(delayMs)
+          }
           
           return@getOrElse false // Signal to retry
         } else {
           // Final failure or non-timeout error
           log("Messenger", "[DEBUG] Final failure for $deviceId: not ACK timeout or max retries exceeded")
-          flow.emit(Error("Transfer failed: ${exception.message}"))
+          val errorMessage = exception.message ?: "Unknown connection error"
+          flow.emit(Error("Transfer failed: $errorMessage"))
           return false
         }
       }
@@ -199,12 +205,20 @@ class MessengerImpl(
 
     // Establish a new connection
     log("Messenger", "Establishing new connection for $deviceId")
-    client.connectTo(deviceId)
+    val connectResult = runCatching {
+      client.connectTo(deviceId)
+    }
+    
+    if (connectResult.isFailure) {
+      val exception = connectResult.exceptionOrNull()
+      log("Messenger", "Failed to connect to $deviceId: ${exception?.message}")
+      return null
+    }
 
     // Verify the connection was established
     val newConnection = connectionsPool.getConnection(deviceId)
     if (newConnection == null || newConnection.isClosed()) {
-      log("Messenger", "Failed to establish connection for $deviceId")
+      log("Messenger", "Failed to establish connection for $deviceId - connection not found in pool")
       return null
     }
 
