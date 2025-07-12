@@ -18,6 +18,7 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.utils.Clock
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.io.Source
 import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.test.Test
@@ -111,9 +112,6 @@ class KlardropIntegrationTest {
     }
   }
 
-
-  // TODO we need an ack back signal when a message is received
-
   @Test
   fun testMessengerReconnectionFromClient() = testMessengerReconnection(clientDropsConnection = true, serverDropsConnection = false)
 
@@ -176,23 +174,23 @@ class KlardropIntegrationTest {
 
       // Start coroutines and try to advance until completion
       coroutines.dispatcher.scheduler.runCurrent()
-      
+
       // Since connections were dropped, this should trigger timeouts and retries
       // Advance past the ACK timeout (2 seconds) to trigger retry logic
       println("[TEST-DEBUG] Advancing time to trigger timeout and retry...")
       coroutines.dispatcher.scheduler.advanceTimeBy(2100) // Past 2-second ACK timeout
       coroutines.dispatcher.scheduler.runCurrent()
-      
+
       // Allow retry logic to complete
       coroutines.dispatcher.scheduler.advanceUntilIdle()
 
       // Wait for second message to be sent
       println("[TEST-DEBUG] Waiting for Completed status from second message...")
-      
+
       try {
-        secondSenderChannel.awaitFor { 
+        secondSenderChannel.awaitFor {
           println("[TEST-DEBUG] Received progress update: $it")
-          it is Completed 
+          it is Completed
         }
         println("[TEST-DEBUG] Second message completed successfully!")
       } catch (e: Exception) {
