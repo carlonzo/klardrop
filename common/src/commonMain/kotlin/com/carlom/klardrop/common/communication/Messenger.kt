@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.transformWhile
@@ -30,7 +31,7 @@ class MessengerImpl(
   private val visibleDevices: VisibleDevices,
   private val connectionsPool: ConnectionsPool,
   private val client: Client,
-  coroutines: Coroutines,
+  private val coroutines: Coroutines,
   private val nearbyClient: NearbyClient,
   private val messageReceiver: MessageReceiver
 ) : Messenger {
@@ -156,7 +157,9 @@ class MessengerImpl(
           // Wait before retry with exponential backoff
           val delayMs = (1000 * config.retryBackoffMultiplier.pow(attempt - 1)).toLong()
           log("Messenger", "[DEBUG] Waiting ${delayMs}ms before retry (attempt $attempt)")
-          kotlinx.coroutines.delay(delayMs)
+          withContext(coroutines.mainDispatcher) {
+            kotlinx.coroutines.delay(delayMs)
+          }
           
           return@getOrElse false // Signal to retry
         } else {

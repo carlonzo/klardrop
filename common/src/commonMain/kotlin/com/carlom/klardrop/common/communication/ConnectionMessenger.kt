@@ -16,6 +16,7 @@ import kotlinx.coroutines.invoke
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 import kotlin.time.ExperimentalTime
 
 class ConnectionMessenger internal constructor(
@@ -98,10 +99,12 @@ class ConnectionMessenger internal constructor(
     log("ConnectionMessenger: [DEBUG] Starting to wait for ACK $ackType for message $messageId from ${connection.deviceId}, timeout=${timeoutMs}ms")
     
     try {
-      withTimeout(timeoutMs) {
-        log("ConnectionMessenger: [DEBUG] Entering channel.receive() for ACK $ackType message $messageId")
-        channel.receive()
-        log("ConnectionMessenger: [DEBUG] Successfully received ACK $ackType for message $messageId")
+      withContext(coroutines.mainDispatcher) {
+        withTimeout(timeoutMs) {
+          log("ConnectionMessenger: [DEBUG] Entering channel.receive() for ACK $ackType message $messageId")
+          channel.receive()
+          log("ConnectionMessenger: [DEBUG] Successfully received ACK $ackType for message $messageId")
+        }
       }
     } catch (e: Exception) {
       log("ConnectionMessenger: [DEBUG] ACK timeout or error for $ackType message $messageId (configured timeout: ${timeoutMs}ms): ${e::class.simpleName}: ${e.message}")
