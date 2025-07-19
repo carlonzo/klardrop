@@ -45,9 +45,12 @@ actual class ServiceDiscoveryMdns {
 
     browser.scheduleInRunLoop(mainRunLoop, NSDefaultRunLoopMode)
 
-    browser.searchForServicesOfType(type = serviceType, inDomain = "")
+    val domain = "local."
+    val cleanServiceType = serviceType.removeSuffix(".local.").removeSuffix(".")
 
-    log("ServiceDiscoveryMdns","Bonjour discovery started for $serviceType")
+    browser.searchForServicesOfType(type = cleanServiceType, inDomain = domain)
+
+    log("ServiceDiscoveryMdns", "Bonjour discovery started for $cleanServiceType in domain $domain")
 
 
     awaitClose {

@@ -13,7 +13,7 @@ class FakeMessagesRouter: MessagesRouter {
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    ackCallback: (suspend (MessageAcknowledgment) -> Unit)?
+    ackCallback: (suspend (MessageAcknowledgment) -> Unit)
   ) {
 
   }

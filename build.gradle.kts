@@ -2,7 +2,6 @@ import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.dsl.CommonExtension
 import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 group = "com.carlom.klardrop"
@@ -16,8 +15,8 @@ plugins {
   alias(deps.plugins.jetbrains.compose) apply false
   alias(deps.plugins.compose.compiler) apply false
   alias(deps.plugins.kotlin.serialization) apply false
-  alias(deps.plugins.sentry.multiplatform) apply false
 }
+
 
 allprojects {
   repositories {

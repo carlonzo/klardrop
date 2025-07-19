@@ -10,7 +10,9 @@ datastore = "1.1.7"
 dagger = "2.57"
 androidx-activity = "1.10.1"
 kotlinx-io = "0.8.0"
-sentry-multiplatform = "0.12.0"
+bugsnag-kmp = "1.0.0-beta03"
+bugsnag-android = "6.14.0"
+bugsnag-jvm = "3.7.2"
 filekit = "0.10.0-beta04"
 
 [libraries]
@@ -43,8 +45,9 @@ simplestorage = { module = "com.anggrayudi:storage", version = "2.1.0" }
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.1" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.1"}
-sentry-kotlin-multiplatform = { module = "io.sentry:sentry-kotlin-multiplatform", version.ref = "sentry-multiplatform" }
-sentry-android = { module = "io.sentry:sentry-android", version = "8.8.0" }
+bugsnag-kmp = { module = "com.bugsnag:bugsnag-kmp", version.ref = "bugsnag-kmp" }
+bugsnag-android = { module = "com.bugsnag:bugsnag-android", version.ref = "bugsnag-android" }
+bugsnag-jvm = { module = "com.bugsnag:bugsnag", version.ref = "bugsnag-jvm" }
 filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekit" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
 
@@ -60,6 +63,3 @@ jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "jetbrains-com
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
 squareup-wire = { id = "com.squareup.wire", version = "5.3.5" }
-sentry-multiplatform = { id = "io.sentry.kotlin.multiplatform.gradle", version.ref = "sentry-multiplatform" }
-sentry-android = { id = "io.sentry.android.gradle", version = "5.8.0" }
-

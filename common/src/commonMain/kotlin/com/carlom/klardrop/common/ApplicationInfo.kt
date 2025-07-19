@@ -9,4 +9,6 @@ data class ApplicationInfo(
   val enableKlardropServer: Boolean = true,
 
   val enableNearbyServer: Boolean = true,
+
+  val appVersion: String = "1.0.0"
 )

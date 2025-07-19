@@ -23,7 +23,7 @@ interface MessagesRouter {
     fromDeviceId: String, 
     writeChannel: ByteWriteChannel, 
     readChannel: ByteReadChannel,
-    ackCallback: (suspend (MessageAcknowledgment) -> Unit)? = null
+    ackCallback: (suspend (MessageAcknowledgment) -> Unit)
   )
   suspend fun <S : SendMessageRequest> onSendingMessage(
     toDeviceId: String,
@@ -44,7 +44,7 @@ class MessagesRouterImpl(
     fromDeviceId: String, 
     writeChannel: ByteWriteChannel, 
     readChannel: ByteReadChannel,
-    ackCallback: (suspend (MessageAcknowledgment) -> Unit)?
+    ackCallback: (suspend (MessageAcknowledgment) -> Unit)
   ) = coroutines.ioDispatcher {
 
       val message = readChannel.readMessage(messageSerializer)
@@ -53,13 +53,9 @@ class MessagesRouterImpl(
       // Handle ACK messages specially - call the callback instead of normal processing
       if (message is MessageAcknowledgment) {
         log("MessagesRouter", "Received ACK message: ${message.ackType} for message ${message.messageId}")
-        if (ackCallback != null) {
-          log("MessagesRouter", "Calling ACK callback for message ${message.messageId}")
-          ackCallback.invoke(message)
-          log("MessagesRouter", "ACK callback completed for message ${message.messageId}")
-        } else {
-          log("MessagesRouter", "No ACK callback available for message ${message.messageId}")
-        }
+
+        ackCallback(message)
+        log("MessagesRouter", "ACK callback completed for message ${message.messageId}")
         return@ioDispatcher
       }
 
