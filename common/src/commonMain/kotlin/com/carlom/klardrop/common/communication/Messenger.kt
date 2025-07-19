@@ -188,6 +188,8 @@ class MessengerImpl(
   }
 
   private suspend fun getOrEstablishConnection(deviceId: String): ConnectionMessenger? {
+    log("Messenger", "[DEBUG] getOrEstablishConnection() called for $deviceId")
+    
     // First, check if we have a valid existing connection
     val existingConnection = connectionsPool.getConnection(deviceId)
     if (existingConnection != null) {
@@ -195,12 +197,14 @@ class MessengerImpl(
       log("Messenger", "[DEBUG] Found existing connection for $deviceId, isClosed=$isConnectionClosed")
       
       if (!isConnectionClosed) {
-        log("Messenger", "Using existing connection for $deviceId")
+        log("Messenger", "[DEBUG] Using existing active connection for $deviceId")
         return existingConnection
       } else {
-        log("Messenger", "Removing closed connection for $deviceId")
+        log("Messenger", "[DEBUG] Existing connection is closed, removing and establishing new one for $deviceId")
         connectionsPool.closeConnection(deviceId)
       }
+    } else {
+      log("Messenger", "[DEBUG] No existing connection found for $deviceId")
     }
 
     // Establish a new connection
@@ -216,12 +220,17 @@ class MessengerImpl(
     }
 
     // Verify the connection was established
+    log("Messenger", "[DEBUG] Verifying new connection for $deviceId")
     val newConnection = connectionsPool.getConnection(deviceId)
-    if (newConnection == null || newConnection.isClosed()) {
-      log("Messenger", "Failed to establish connection for $deviceId - connection not found in pool")
+    if (newConnection == null) {
+      log("Messenger", "[DEBUG] Failed to establish connection for $deviceId - connection not found in pool")
+      return null
+    } else if (newConnection.isClosed()) {
+      log("Messenger", "[DEBUG] Failed to establish connection for $deviceId - connection is closed")
       return null
     }
 
+    log("Messenger", "[DEBUG] Successfully established new connection for $deviceId")
     return newConnection
   }
 

@@ -52,14 +52,15 @@ class MessagesRouterImpl(
   ) = coroutines.ioDispatcher {
 
       val message = readChannel.readMessage(messageSerializer)
+      log("MessagesRouter", "[DEBUG] Raw message received from $fromDeviceId: type=${message.type}, id=${message.id}, hasPayload=${message.hasPayload}")
       log("MessagesRouter", "Received message from $fromDeviceId: $message")
 
       // Handle ACK messages specially - call the callback instead of normal processing
       if (message is MessageAcknowledgment) {
-        log("MessagesRouter", "Received ACK message: ${message.ackType} for message ${message.messageId}")
+        log("MessagesRouter", "Received ACK message: ${message.ackType} for message ${message.id}")
 
         ackCallback(message)
-        log("MessagesRouter", "ACK callback completed for message ${message.messageId}")
+        log("MessagesRouter", "ACK callback completed for message ${message.id}")
         return@ioDispatcher
       }
 
@@ -145,6 +146,7 @@ class MessagesRouterImpl(
             )
         }
         // message has no payload. we can send it directly
+        log("MessagesRouter", "[DEBUG] Sending message to $toDeviceId: type=${message.type}, id=${message.id}")
         writeChannel.sendMessage(message, messageSerializer)
       }
     }

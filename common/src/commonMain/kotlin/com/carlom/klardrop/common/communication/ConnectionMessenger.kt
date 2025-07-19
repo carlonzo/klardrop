@@ -51,10 +51,11 @@ class ConnectionMessenger internal constructor(
       runCatching {
         // Use the existing router but register ourselves for ACK handling
         messagesRouter.onMessageIncoming(connection.deviceId, writeChannel, readChannel) { ack ->
-          log("ConnectionMessenger: Received ACK callback for message ${ack.messageId}, ackType: ${ack.ackType}")
+          log("ConnectionMessenger: Received ACK callback for message ${ack.id}, ackType: ${ack.ackType}")
           handleAckMessage(ack)
         }
       }.onFailure {
+        log("ConnectionMessenger: Exception in acceptIncomingMessages loop for ${connection.deviceId}: ${it::class.simpleName}: ${it.message}")
         log("ConnectionMessenger: Error while listening for messages from ${connection.deviceId}. Closing connection.", it)
         close()
       }
@@ -66,41 +67,57 @@ class ConnectionMessenger internal constructor(
 
   // Public method for ACK message handling - called by MessagesRouter or AckMessageHandler
   suspend fun handleAckMessage(ack: MessageAcknowledgment) {
-    log("ConnectionMessenger: Received ACK ${ack.ackType} for message ${ack.messageId} from ${connection.deviceId}")
+    log("ConnectionMessenger: Received ACK ${ack.ackType} for message ${ack.id} from ${connection.deviceId}")
 
     ackMutex.withLock {
-      val pendingAck = pendingAcks[ack.messageId]
+      val pendingAck = pendingAcks[ack.id]
       if (pendingAck != null && pendingAck.type == ack.ackType) {
         // Signal the waiting sender
         val sendResult = pendingAck.channel.trySend(Unit)
         if (sendResult.isSuccess) {
-          pendingAcks.remove(ack.messageId)
-          log("ConnectionMessenger: Successfully signaled ACK ${ack.ackType} for message ${ack.messageId}")
+          pendingAcks.remove(ack.id)
+          log("ConnectionMessenger: Successfully signaled ACK ${ack.ackType} for message ${ack.id}")
         } else {
-          log("ConnectionMessenger: Failed to signal ACK ${ack.ackType} for message ${ack.messageId}: ${sendResult.exceptionOrNull()}")
+          log("ConnectionMessenger: Failed to signal ACK ${ack.ackType} for message ${ack.id}: ${sendResult.exceptionOrNull()}")
         }
       } else {
-        log("ConnectionMessenger: Unexpected ACK ${ack.ackType} for message ${ack.messageId} - no matching pending request")
+        log("ConnectionMessenger: Unexpected ACK ${ack.ackType} for message ${ack.id} - no matching pending request")
       }
     }
   }
 
-  @OptIn(ExperimentalTime::class)
-  private suspend fun waitForAck(messageId: Int, ackType: AckType) {
+  /**
+   * Registers a pending ACK request BEFORE sending the message.
+   * This prevents race conditions where ACK arrives before registration.
+   */
+  private suspend fun registerPendingAck(messageId: Int, ackType: AckType): Channel<Unit> {
     val channel = Channel<Unit>(capacity = 1)
-
+    log("ConnectionMessenger: [DEBUG] Registering pending ACK $ackType for message $messageId to ${connection.deviceId}")
+    
     ackMutex.withLock {
       pendingAcks[messageId] = PendingAck(ackType, channel)
     }
+    
+    return channel
+  }
 
+  /**
+   * Waits for a previously registered ACK to arrive.
+   */
+  @OptIn(ExperimentalTime::class)
+  private suspend fun awaitRegisteredAck(messageId: Int, ackType: AckType, channel: Channel<Unit>) {
     val timeoutMs = ackTimeoutMs
+    log("ConnectionMessenger: [DEBUG] Awaiting ACK $ackType for message $messageId from ${connection.deviceId} (timeout: ${timeoutMs}ms)")
+    
     try {
       withContext(coroutines.mainDispatcher) {
         withTimeout(timeoutMs) {
           channel.receive()
         }
       }
+      log("ConnectionMessenger: [DEBUG] Successfully received ACK $ackType for message $messageId from ${connection.deviceId}")
     } catch (e: Exception) {
+      log("ConnectionMessenger: [DEBUG] ACK timeout for message $messageId, cleaning up pending request")
       // Cleanup pending ACK on timeout or error
       ackMutex.withLock {
         pendingAcks.remove(messageId)
@@ -122,27 +139,34 @@ class ConnectionMessenger internal constructor(
       coroutines.ioDispatcher {
 
         if (message.hasPayload) {
-          // For payload messages (FILE): Send metadata → Wait for ACK_READY → Send payload → Wait for ACK_RECEIVED
+          // For payload messages (FILE): Register ACK → Send metadata → Wait for ACK_READY → Send payload → Wait for ACK_RECEIVED
 
+          // FIXED: Register pending ACK BEFORE sending message to prevent race condition
+          val ackChannel = registerPendingAck(message.id, AckType.RECEIVED)
+          
           // Send the message metadata through the router (this includes the payload sending)
           messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
 
           // Wait for ACK_RECEIVED since the message handler manages the payload flow internally
-          waitForAck(message.id, AckType.RECEIVED)
+          awaitRegisteredAck(message.id, AckType.RECEIVED, ackChannel)
 
         } else {
-          // For no-payload messages (TEXT): Send message → Wait for ACK_RECEIVED
+          // For no-payload messages (TEXT): Register ACK → Send message → Wait for ACK_RECEIVED
 
+          // FIXED: Register pending ACK BEFORE sending message to prevent race condition
+          val ackChannel = registerPendingAck(message.id, AckType.RECEIVED)
+          
           // Send the message through the router
           messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
 
           // Wait for ACK_RECEIVED
-          waitForAck(message.id, AckType.RECEIVED)
+          awaitRegisteredAck(message.id, AckType.RECEIVED, ackChannel)
         }
 
         flow.emit(MessengerSendProgress.Completed)
       }
     }.onFailure { exception: Throwable ->
+      log("ConnectionMessenger: Exception while sending message ${message.id} to ${connection.deviceId}", exception)
       flow.emit(MessengerSendProgress.Error("Send failed: ${exception.message}"))
       close() // Close the connection on error
     }
@@ -151,24 +175,35 @@ class ConnectionMessenger internal constructor(
 
   fun close() = runCatching {
     if (!connection.socket.isClosed) {
-      log("ConnectionMessenger: Closing connection with ${connection.deviceId}")
+      log("ConnectionMessenger: [DEBUG] Explicitly closing connection with ${connection.deviceId}")
       connection.socket.close()
+      log("ConnectionMessenger: [DEBUG] Socket closed for ${connection.deviceId}")
+    } else {
+      log("ConnectionMessenger: [DEBUG] close() called but socket already closed for ${connection.deviceId}")
     }
   }
 
   fun isClosed(): Boolean {
     // Check if socket is explicitly closed
     if (connection.socket.isClosed) {
+      log("ConnectionMessenger: [DEBUG] isClosed() = true - socket is explicitly closed for ${connection.deviceId}")
       return true
     }
 
     // Check if read/write channels are closed (indicates remote closure)
-    if (readChannel.isClosedForRead || writeChannel.isClosedForWrite) {
+    val readClosed = readChannel.isClosedForRead
+    val writeClosed = writeChannel.isClosedForWrite
+    
+    log("ConnectionMessenger: [DEBUG] isClosed() check for ${connection.deviceId}: readClosed=$readClosed, writeClosed=$writeClosed")
+    
+    if (readClosed || writeClosed) {
+      log("ConnectionMessenger: [DEBUG] Detected channel closure for ${connection.deviceId}, closing socket (readClosed=$readClosed, writeClosed=$writeClosed)")
       runCatching { connection.socket.close() }
         .onFailure { log("Failed closing the socket", it) }
       return true
     }
 
+    log("ConnectionMessenger: [DEBUG] isClosed() = false for ${connection.deviceId}")
     return false
   }
 }

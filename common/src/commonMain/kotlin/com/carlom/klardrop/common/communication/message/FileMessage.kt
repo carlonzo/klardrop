@@ -26,6 +26,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.io.buffered
 import kotlinx.serialization.Serializable
 import kotlin.math.min
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
 @Serializable
@@ -33,6 +34,7 @@ data class FileMessage(
   val fileName: String,
   val fileSize: Long,
   val mimeType: String,
+  override val id: Int = Random.nextInt(),
 ) : Message() {
   override val type: MessageType = MessageType.FILE
   override val hasPayload: Boolean = true

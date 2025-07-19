@@ -55,9 +55,8 @@ enum class AckType {
 @Serializable
 data class MessageAcknowledgment(
   val ackType: AckType,
-  val messageId: Int,
+  override val id: Int = Random.nextInt(),
 ) : Message() {
-  override val id: Int = messageId
   override val type: MessageType = when (ackType) {
     AckType.READY -> MessageType.ACK_READY
     AckType.RECEIVED -> MessageType.ACK_RECEIVED

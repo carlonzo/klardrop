@@ -86,6 +86,47 @@ class KlardropIntegrationTest {
   @Test
   fun testMessengerReconnectionFromBothSides() = testMessengerReconnection(clientDropsConnection = true, serverDropsConnection = true)
 
+  @Test 
+  fun testAckCorrelationRaceCondition() = runTest(coroutines.dispatcher) {
+    // This test verifies our fix for the ACK correlation race condition
+    testContext.setupServerAndClient()
+
+    turbineScope {
+      with(testContext) {
+        val messageReceiver = serverCommunicationModule.messageReceiver()
+        val clientMessenger = clientCommunicationModule.messenger()
+
+        // Send multiple messages sequentially to test ACK correlation
+        val messages = (1..3).map { textSendRequest("ACK correlation test message $it") }
+        
+        val receiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
+
+        for ((index, message) in messages.withIndex()) {
+          // Send one message at a time
+          val senderFlow = clientMessenger.send(serverDeviceId, message)
+          val senderChannel = senderFlow.testIn(this@turbineScope)
+          
+          // Advance to complete the send operation
+          advanceToCompletion()
+          
+          // Verify send completed successfully (no ACK timeout)
+          val result = senderChannel.awaitFor { it is Completed }
+          assertEquals(Completed, result)
+          
+          // Verify message was received
+          val update = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
+          assertIs<ReceiveMessageStatus.Completed>(update.status)
+          assertEquals(1, update.messages.size)
+          assertEquals((message.message as TextMessage).text, (update.messages.first() as TextMessage).text)
+          
+          senderChannel.cancelAndIgnoreRemainingEvents()
+        }
+
+        receiverChannel.cancelAndIgnoreRemainingEvents()
+      }
+    }
+  }
+
   // simple method to parametize the test for reconnection issues. using a boolean to indicate if the client should drop the connection or the server
   @OptIn(ExperimentalTime::class)
   @Suppress("VisibleForTests")
