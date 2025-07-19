@@ -13,12 +13,12 @@ import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
+import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
 import com.carlom.klardrop.common.mdns.FakeVisibleDevices
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.utils.Clock
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.io.Source
 import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.test.Test
@@ -30,85 +30,50 @@ class KlardropIntegrationTest {
 
   private val coroutines = TestCoroutines()
   private val clock = Clock()
-
   private val clientVisibleDevices = FakeVisibleDevices()
-
   private val clientDeviceId = "client01"
   private val serverDeviceId = "server01"
 
-  private val clientCommunicationModule = CommunicationModule(
+  private val testContext = KlardropTestContext(
     coroutines = coroutines,
-    visibleDevices = clientVisibleDevices,
-    protoBuf = ProtoBuf,
     clock = clock,
-    fileManager = KlardropTestFileManager(),
-    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(clientDeviceId))
-  )
-
-  private val serverCommunicationModule = CommunicationModule(
-    coroutines = coroutines,
-    visibleDevices = FakeVisibleDevices(),
-    protoBuf = ProtoBuf,
-    clock = clock,
-    fileManager = KlardropTestFileManager(),
-    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(serverDeviceId))
+    clientVisibleDevices = clientVisibleDevices,
+    clientDeviceId = clientDeviceId,
+    serverDeviceId = serverDeviceId
   )
 
   @Test
-  fun startKlardropServerAndSendTextMessage() = runTest(coroutines.dispatcher) {
-    val server = serverCommunicationModule.server()
-    val serverStatus = server.startServer()
-
-    // add server to visible devices
-    clientVisibleDevices.addKlardropDevice(serverDeviceId, "localhost", serverStatus.port)
-
+  fun startServerAndSendTextMessage() = runTest(coroutines.dispatcher) {
+    testContext.setupServerAndClient()
 
     turbineScope {
-      val serverMessageReceiver = serverCommunicationModule.messageReceiver()
-
-      // server receiver
-      val receiverChannel = serverMessageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
-
-      // prepare the client to send a message
-      val textMessage = textSendRequest()
-      val clientMessenger = clientCommunicationModule.messenger()
-
-      // send
-      val sendProgressFlow = clientMessenger.send(serverDeviceId, textMessage)
-      val sendProgressChannel = sendProgressFlow.testIn(this)
-
-      // Start coroutines and advance time to complete the operation
-      coroutines.dispatcher.scheduler.runCurrent()
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
-
-      // sender statuses
-      sendProgressChannel.awaitFor { it is Completed }
-
-      // receiver statuses
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
-      val completedUpdate = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
-      assertIs<ReceiveMessageStatus.Completed>(completedUpdate.status)
-      assertEquals(1, completedUpdate.messages.size)
-      assertEquals((textMessage.message as TextMessage).text, (completedUpdate.messages.first() as TextMessage).text)
-
-      sendProgressChannel.cancelAndIgnoreRemainingEvents()
-      receiverChannel.cancelAndIgnoreRemainingEvents()
+      with(testContext) {
+        sendAndVerifyMessage("klardrop protocol test")
+      }
     }
   }
 
   @Test
-  fun testKlardropSendTwoMessages() = runTest(coroutines.dispatcher) {
-    val server = serverCommunicationModule.server()
-    val serverStatus = server.startServer()
-
-    // add server to visible devices
-    clientVisibleDevices.addKlardropDevice(serverDeviceId, "localhost", serverStatus.port)
+  fun testSendTwoMessagesForKlardrop() = runTest(coroutines.dispatcher) {
+    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
     turbineScope {
-      sendAndReceiveMessage("This is the first message")
+      with(testContext) {
+        sendAndVerifyMessage("This is the first message")
+        sendAndVerifyMessage("This is a second message!")
+      }
+    }
+  }
 
-      // Now try to send a second message
-      sendAndReceiveMessage("This is a second message!")
+  @Test
+  fun testSendTwoMessagesForNearby() = runTest(coroutines.dispatcher) {
+    testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
+
+    turbineScope {
+      with(testContext) {
+        sendAndVerifyMessage("This is the first message")
+        sendAndVerifyMessage("This is a second message!")
+      }
     }
   }
 
@@ -125,132 +90,62 @@ class KlardropIntegrationTest {
   @OptIn(ExperimentalTime::class)
   @Suppress("VisibleForTests")
   private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) = runTest(coroutines.dispatcher) {
-    val server = serverCommunicationModule.server()
-    val serverStatus = server.startServer()
-
-    // Add device to visible devices
-    clientVisibleDevices.addKlardropDevice(serverDeviceId, "localhost", serverStatus.port)
+    testContext.setupServerAndClient()
 
     turbineScope {
+      with(testContext) {
+        // send first message between client and server
+        sendAndVerifyMessage("firstMessage")
 
-      // send first message between client and server
-      println("[TEST-DEBUG] Sending first message...")
-      sendAndReceiveMessage("firstMessage")
-      println("[TEST-DEBUG] First message completed successfully")
-
-      if (clientDropsConnection) {
-        // Force close all client connections to simulate the disconnect issue
-        println("[TEST-DEBUG] Closing CLIENT connections...")
-        val connectionsPool = clientCommunicationModule.connectionsPool()
-        connectionsPool.closeAllConnections()
-        println("[TEST-DEBUG] CLIENT connections closed")
-      }
-
-      if (serverDropsConnection) {
-        // Force close all server connections to simulate the disconnect issue
-        println("[TEST-DEBUG] Closing SERVER connections...")
-        val connectionsPool = serverCommunicationModule.connectionsPool()
-        connectionsPool.closeAllConnections()
-        println("[TEST-DEBUG] SERVER connections closed")
-      }
-
-      // Wait a bit to ensure cleanup
-      println("[TEST-DEBUG] Advancing scheduler to ensure cleanup...")
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
-      println("[TEST-DEBUG] Cleanup completed")
-
-      val messageReceiver = serverCommunicationModule.messageReceiver()
-      val clientMessenger = clientCommunicationModule.messenger()
-
-      // Now try to send a second message - this should trigger reconnection
-      val secondMessage = textSendRequest("reconnection messenger message")
-      println("[TEST-DEBUG] About to send second message: ${secondMessage.message.id}")
-
-      val secondSendFlow = clientMessenger.send(serverDeviceId, secondMessage)
-      val secondSenderChannel = secondSendFlow.testIn(this)
-      val secondReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
-
-      println("[TEST-DEBUG] Started second message send, now waiting for completion...")
-
-      // Start coroutines and try to advance until completion
-      coroutines.dispatcher.scheduler.runCurrent()
-
-      // Since connections were dropped, this should trigger timeouts and retries
-      // Advance past the ACK timeout (2 seconds) to trigger retry logic
-      println("[TEST-DEBUG] Advancing time to trigger timeout and retry...")
-      coroutines.dispatcher.scheduler.advanceTimeBy(2100) // Past 2-second ACK timeout
-      coroutines.dispatcher.scheduler.runCurrent()
-
-      // Allow retry logic to complete
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
-
-      // Wait for second message to be sent
-      println("[TEST-DEBUG] Waiting for Completed status from second message...")
-
-      try {
-        secondSenderChannel.awaitFor {
-          println("[TEST-DEBUG] Received progress update: $it")
-          it is Completed
+        if (clientDropsConnection) {
+          dropClientConnections()
         }
-        println("[TEST-DEBUG] Second message completed successfully!")
-      } catch (e: Exception) {
-        println("[TEST-DEBUG] Test failed waiting for Completed: ${e::class.simpleName}: ${e.message}")
-        throw e
+
+        if (serverDropsConnection) {
+          dropServerConnections()
+        }
+
+        // Wait a bit to ensure cleanup
+        advanceToCompletion()
+
+        val messageReceiver = serverCommunicationModule.messageReceiver()
+        val clientMessenger = clientCommunicationModule.messenger()
+
+        // Now try to send a second message - this should trigger reconnection
+        val secondMessage = textSendRequest("reconnection messenger message")
+
+        val secondSendFlow = clientMessenger.send(serverDeviceId, secondMessage)
+        val secondSenderChannel = secondSendFlow.testIn(this@turbineScope)
+        val secondReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
+
+
+        // Since connections were dropped, this should trigger timeouts and retries
+        // Advance past the ACK timeout (2 seconds) to trigger retry logic
+        advanceTimeAndComplete(2100) // Past 2-second ACK timeout
+
+        // Wait for second message to be sent
+
+        try {
+          secondSenderChannel.awaitFor {
+            it is Completed
+          }
+        } catch (e: Exception) {
+          throw e
+        }
+
+        // If it completes, verify the message was received
+        advanceToCompletion()
+        val secondCompletedUpdate = secondReceiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
+        assertIs<ReceiveMessageStatus.Completed>(secondCompletedUpdate.status)
+        assertEquals(1, secondCompletedUpdate.messages.size)
+        assertEquals((secondMessage.message as TextMessage).text, (secondCompletedUpdate.messages.first() as TextMessage).text)
+        secondReceiverChannel.cancelAndIgnoreRemainingEvents()
+
+        secondSenderChannel.cancelAndIgnoreRemainingEvents()
       }
-
-      // If it completes, verify the message was received
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
-      val secondCompletedUpdate = secondReceiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
-      assertIs<ReceiveMessageStatus.Completed>(secondCompletedUpdate.status)
-      assertEquals(1, secondCompletedUpdate.messages.size)
-      assertEquals((secondMessage.message as TextMessage).text, (secondCompletedUpdate.messages.first() as TextMessage).text)
-      secondReceiverChannel.cancelAndIgnoreRemainingEvents()
-
-      secondSenderChannel.cancelAndIgnoreRemainingEvents()
     }
   }
 
-  private suspend fun TurbineContext.sendAndReceiveMessage(textMessage: String) {
-    val firstMessage = textSendRequest(textMessage)
-
-    val messageReceiver = serverCommunicationModule.messageReceiver()
-    val clientMessenger = clientCommunicationModule.messenger()
-
-    val senderFlow = clientMessenger.send(serverDeviceId, firstMessage)
-    val senderChannel = senderFlow.testIn(this)
-    val firstReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this)
-
-    // Start coroutines and advance time to complete the operation
-    coroutines.dispatcher.scheduler.runCurrent()
-    coroutines.dispatcher.scheduler.advanceUntilIdle()
-
-    // Wait for first message to complete
-    senderChannel.awaitFor { it is Completed }
-
-    // Verify first message received
-    coroutines.dispatcher.scheduler.advanceUntilIdle()
-    val firstCompletedUpdate = firstReceiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
-    assertIs<ReceiveMessageStatus.Completed>(firstCompletedUpdate.status)
-    assertEquals(1, firstCompletedUpdate.messages.size)
-    assertEquals((firstMessage.message as TextMessage).text, (firstCompletedUpdate.messages.first() as TextMessage).text)
-
-    senderChannel.cancelAndIgnoreRemainingEvents()
-    firstReceiverChannel.cancelAndIgnoreRemainingEvents()
-  }
-
-  private suspend fun <T> ReceiveTurbine<T>.awaitFor(block: ((T) -> Boolean)): T {
-    var item: T
-
-    do {
-      item = awaitItem()
-    } while (!block(item))
-
-    return item
-  }
-
-  private fun textSendRequest(text: String = "klardrop protocol test"): SendMessageRequest {
-    return SimpleSendMessageRequest(TextMessage("Test Title", text = text))
-  }
 }
 
 internal class KlardropTestFileManager : FileManager {
@@ -260,5 +155,114 @@ internal class KlardropTestFileManager : FileManager {
 
   override fun getReadStreamFrom(file: PlatformFile): Source {
     error("not implemented")
+  }
+}
+
+internal class KlardropTestContext(
+  val coroutines: TestCoroutines,
+  private val clock: Clock,
+  private val clientVisibleDevices: FakeVisibleDevices,
+  private val clientDeviceId: String,
+  private val serverDeviceId: String
+) {
+
+  val clientCommunicationModule = CommunicationModule(
+    coroutines = coroutines,
+    visibleDevices = clientVisibleDevices,
+    protoBuf = ProtoBuf,
+    clock = clock,
+    fileManager = KlardropTestFileManager(),
+    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(clientDeviceId))
+  )
+
+  val serverCommunicationModule = CommunicationModule(
+    coroutines = coroutines,
+    visibleDevices = FakeVisibleDevices(),
+    protoBuf = ProtoBuf,
+    clock = clock,
+    fileManager = KlardropTestFileManager(),
+    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(serverDeviceId))
+  )
+
+  data class ServerContext(
+    val server: Server,
+    val port: Int
+  )
+
+
+  suspend fun setupServerAndClient(clientConnectionType: DeviceConnectionType = DeviceConnectionType.KLARDROP): ServerContext {
+    val server = serverCommunicationModule.server()
+    val serverStatus = server.startServer()
+
+    when (clientConnectionType) {
+      DeviceConnectionType.NEARBY -> clientVisibleDevices.addNearbyDevice(serverDeviceId, "localhost", serverStatus.port)
+      DeviceConnectionType.KLARDROP -> clientVisibleDevices.addKlardropDevice(serverDeviceId, "localhost", serverStatus.port)
+    }
+
+    return ServerContext(server, serverStatus.port)
+  }
+
+  fun advanceToCompletion() {
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
+  }
+
+  fun advanceTimeAndComplete(timeMs: Long) {
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceTimeBy(timeMs)
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
+  }
+
+  @Suppress("VisibleForTests")
+  suspend fun dropClientConnections() {
+    val connectionsPool = clientCommunicationModule.connectionsPool()
+    connectionsPool.closeAllConnections()
+  }
+
+  @Suppress("VisibleForTests")
+  suspend fun dropServerConnections() {
+    val connectionsPool = serverCommunicationModule.connectionsPool()
+    connectionsPool.closeAllConnections()
+  }
+
+  fun textSendRequest(text: String = "klardrop protocol test"): SendMessageRequest {
+    return SimpleSendMessageRequest(TextMessage("Test Title", text = text))
+  }
+
+  suspend fun <T> ReceiveTurbine<T>.awaitFor(block: ((T) -> Boolean)): T {
+    var item: T
+    do {
+      item = awaitItem()
+    } while (!block(item))
+    return item
+  }
+
+  suspend fun TurbineContext.sendAndVerifyMessage(text: String) {
+    val message = textSendRequest(text)
+
+    val messageReceiver = serverCommunicationModule.messageReceiver()
+    val clientMessenger = clientCommunicationModule.messenger()
+
+    val senderFlow = clientMessenger.send(serverDeviceId, message)
+    val senderChannel = senderFlow.testIn(this)
+    val receiverChannel = messageReceiver.messageReceivedNotifier.testIn(this)
+
+    // Start coroutines and advance time to complete the operation
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
+
+    // Wait for send completion
+    senderChannel.awaitFor { it is Completed }
+
+    // Verify message received
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
+    val completedUpdate = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
+    assertIs<ReceiveMessageStatus.Completed>(completedUpdate.status)
+    assertEquals(1, completedUpdate.messages.size)
+    assertEquals((message.message as TextMessage).text, (completedUpdate.messages.first() as TextMessage).text)
+
+    senderChannel.cancelAndIgnoreRemainingEvents()
+    receiverChannel.cancelAndIgnoreRemainingEvents()
   }
 }
