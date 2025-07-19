@@ -6,6 +6,10 @@ import com.bugsnag.kmp.Bugsnag
 
 actual object BugsnagWrapper {
 
+  init {
+    com.bugsnag.cocoa.Bugsnag.startWithApiKey(BugsnagConfig.apiKey)
+  }
+
   actual fun notify(throwable: Throwable) {
     try {
       // Use native iOS Bugsnag via Objective-C interop
