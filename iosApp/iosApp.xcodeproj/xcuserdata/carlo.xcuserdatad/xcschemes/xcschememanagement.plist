@@ -3,6 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>SchemeUserState</key>
+<<<<<<< Updated upstream
 	<dict>
 		<key>iosApp.xcscheme_^#shared#^_</key>
 		<dict>
@@ -10,6 +11,9 @@
 			<integer>0</integer>
 		</dict>
 	</dict>
+=======
+	<dict />
+>>>>>>> Stashed changes
 	<key>SuppressBuildableAutocreation</key>
 	<dict>
 		<key>236550712A75989700412ADF</key>
