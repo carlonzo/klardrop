@@ -30,11 +30,11 @@ dependencies {
 }
 
 android {
-  compileSdk = 35
+  compileSdk = 36
   defaultConfig {
     applicationId = "com.carlom.klardrop.android"
     minSdk = 24
-    targetSdk = 34
+    targetSdk = 35
     versionCode = 1
     versionName = "1.0-SNAPSHOT"
     proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

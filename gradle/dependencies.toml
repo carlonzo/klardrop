@@ -45,7 +45,7 @@ simplestorage = { module = "com.anggrayudi:storage", version = "2.1.0" }
 
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.1" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
-turbine = { module = "app.cash.turbine:turbine", version = "1.2.1"}
+turbine = { module = "app.cash.turbine:turbine", version = "1.2.1" }
 bugsnag-kmp = { module = "com.bugsnag:bugsnag-kmp", version.ref = "bugsnag-kmp" }
 bugsnag-android = { module = "com.bugsnag:bugsnag-android", version.ref = "bugsnag-android" }
 bugsnag-jvm = { module = "com.bugsnag:bugsnag", version.ref = "bugsnag-jvm" }
@@ -58,7 +58,6 @@ sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", ver
 sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
 
-robolectric = { module = "org.robolectric:robolectric", version = "4.14.1" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

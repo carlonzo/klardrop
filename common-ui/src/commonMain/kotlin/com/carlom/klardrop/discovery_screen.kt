@@ -1,6 +1,5 @@
 package com.carlom.klardrop
 
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,13 +43,7 @@ import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.PickerResultLauncher
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 
 @Composable
 fun DiscoveryScreen(
@@ -106,49 +97,14 @@ fun DiscoveryScreen(
       },
       sheetState = sheetState,
       content = {
-        // This LaunchedEffect handles the modal sheet popup.
-        // If onDeviceClick is solely for chat navigation, this might need adjustment
-        // or removal if the modal sheet is no longer triggered by onDeviceClick.
-        // For now, assuming onDeviceClick *also* can show the sheet if not navigating.
-        // However, the subtask said "replace the bottom sheet pop-up with navigation to chat".
-        // So, the ActionUi.OnDeviceClicked pathway to show the sheet is now broken
-        // as onDeviceClick updates state for chat navigation.
-        // This ShareSheet part needs to be re-evaluated if it's still needed.
-        // Let's assume for now the primary action is chat navigation.
-        // The sheetState.show() call would need a different trigger if kept.
 
-        // discoveryController.actionsFlow.collectAsEffect {
-        //   when (it) {
-        //     is ActionUi.OnDeviceClicked -> { // This action is no longer the primary path
-        //       deviceUiClicked = it.deviceUi
-        //       scope.launch {
-        //         sheetState.show()
-        //       }
-        //     }
-        //   }
-        // }
+        DiscoveryDashboard(
+          modifier = modifier,
+          isLargeScreen = isLargeScreen,
+          devices = discoveryState.devices,
+          onDeviceActionListener = discoveryController // This now triggers chat navigation
+        )
 
-        Box {
-          DiscoveryDashboard(
-            modifier = modifier,
-            isLargeScreen = isLargeScreen,
-            devices = discoveryState.devices,
-            onDeviceActionListener = discoveryController // This now triggers chat navigation
-          )
-
-          LazyColumn(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-            items(
-              items = discoveryState.receivingMessages.toList(),
-              key = { it.first },
-            ) { item ->
-              ReceiveNotification(
-                Modifier.animateItem(placementSpec = tween()).align(Alignment.BottomCenter),
-                item.second,
-                discoveryController
-              )
-            }
-          }
-        }
       }
     )
   }

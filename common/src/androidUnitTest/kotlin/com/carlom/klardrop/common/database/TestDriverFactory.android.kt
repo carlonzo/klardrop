@@ -1,8 +1,10 @@
 package com.carlom.klardrop.common.database
 
-import android.app.Application
+import app.cash.sqldelight.db.SqlDriver
+import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 
-actual fun createTestDriver(): app.cash.sqldelight.db.SqlDriver {
-  val app = ApplicationProvider.getApplicationContext<Application>()
-  return AndroidSqliteDriver(LibraryDB.Schema, app, null)
+actual fun createTestDriver(): SqlDriver {
+  val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+  AppDatabase.Schema.create(driver)
+  return driver
 }

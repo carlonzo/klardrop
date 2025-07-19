@@ -3,9 +3,7 @@ package com.carlom.klardrop.android
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.runtime.remember
 import com.carlom.klardrop.KlardropApp
-import com.carlom.klardrop.UiDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
 import io.github.vinceglb.filekit.FileKit
@@ -25,13 +23,9 @@ class MainActivity : AppCompatActivity() {
 
     setContent {
 
-
-
       AppTheme {
 
-        KlardropApp(
-          klardrop
-        )
+        KlardropApp(klardrop)
 
       }
 

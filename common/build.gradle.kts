@@ -65,13 +65,15 @@ kotlin {
 
     val androidUnitTest by getting {
       dependencies {
-        implementation(deps.robolectric)
+        implementation(deps.sqldelight.sqlite.driver)
       }
     }
 
     val iosMain by getting {
       dependencies {
         implementation(deps.bugsnag.kmp)
+        implementation(deps.sqldelight.native.driver)
+
       }
     }
 
@@ -80,12 +82,6 @@ kotlin {
         implementation(deps.jmdns)
         implementation(deps.bugsnag.jvm)
         implementation(deps.sqldelight.sqlite.driver)
-      }
-    }
-
-    val iosMain by getting {
-      dependencies {
-        implementation(deps.sqldelight.native.driver)
       }
     }
 

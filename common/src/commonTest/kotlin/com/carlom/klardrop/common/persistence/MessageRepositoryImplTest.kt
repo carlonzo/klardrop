@@ -34,13 +34,6 @@ class MessageRepositoryImplTest {
         messageRepository = MessageRepositoryImpl(db, realClock, testDispatcher)
     }
 
-    @AfterTest
-    fun tearDown() {
-        // No explicit close for JdbcSqliteDriver.IN_MEMORY needed for each test,
-        // as it's in-memory and will be garbage collected.
-        // If using a file-based DB for tests, driver.close() would be important.
-    }
-
     @Test
     fun testInsertTextMessageWithReadStatus() = runTest(testDispatcher) {
         val remoteDeviceId = "device-123"

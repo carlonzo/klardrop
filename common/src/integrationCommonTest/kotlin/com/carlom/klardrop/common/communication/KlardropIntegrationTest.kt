@@ -156,6 +156,10 @@ internal class KlardropTestFileManager : FileManager {
   override fun getReadStreamFrom(file: PlatformFile): Source {
     error("not implemented")
   }
+
+  override suspend fun openFile(filePath: String): Boolean {
+    return false // Return false for test implementation
+  }
 }
 
 internal class KlardropTestContext(
@@ -172,7 +176,8 @@ internal class KlardropTestContext(
     protoBuf = ProtoBuf,
     clock = clock,
     fileManager = KlardropTestFileManager(),
-    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(clientDeviceId))
+    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(clientDeviceId)),
+    messageRepository = FakeMessageRepository()
   )
 
   val serverCommunicationModule = CommunicationModule(
@@ -181,7 +186,8 @@ internal class KlardropTestContext(
     protoBuf = ProtoBuf,
     clock = clock,
     fileManager = KlardropTestFileManager(),
-    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(serverDeviceId))
+    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(serverDeviceId)),
+    messageRepository = FakeMessageRepository()
   )
 
   data class ServerContext(
@@ -268,13 +274,32 @@ internal class KlardropTestContext(
 }
 
 internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.MessageRepository {
-  override suspend fun insertMessage(remoteDeviceId: String, content: String, isSender: Boolean, messageType: com.carlom.klardrop.common.persistence.MessageType, fileTransferId: Long?, isRead: Boolean): Long = 1L
-  override suspend fun insertFileTransfer(fileName: String, filePath: String, totalSize: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus): Long = 1L
+  override suspend fun insertMessage(
+    remoteDeviceId: String,
+    content: String,
+    isSender: Boolean,
+    messageType: com.carlom.klardrop.common.persistence.MessageType,
+    fileTransferId: Long?,
+    isRead: Boolean
+  ): Long = 1L
+
+  override suspend fun insertFileTransfer(
+    fileName: String,
+    filePath: String,
+    totalSize: Long,
+    status: com.carlom.klardrop.common.persistence.FileTransferStatus
+  ): Long = 1L
+
   override suspend fun updateFileTransferStatus(id: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus) {}
   override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {}
   override suspend fun markMessagesAsRead(remoteDeviceId: String) {}
   override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long = 0L
   override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> = kotlinx.coroutines.flow.flowOf(emptyMap())
-  override fun getMessagesForDevice(remoteDeviceId: String, limit: Long): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> = kotlinx.coroutines.flow.flowOf(emptyList())
-  override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> = kotlinx.coroutines.flow.flowOf(null)
+  override fun getMessagesForDevice(
+    remoteDeviceId: String,
+    limit: Long
+  ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> = kotlinx.coroutines.flow.flowOf(emptyList())
+
+  override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> =
+    kotlinx.coroutines.flow.flowOf(null)
 }
