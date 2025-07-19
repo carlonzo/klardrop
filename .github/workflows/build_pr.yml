@@ -2,10 +2,12 @@ name: Build with Gradle
 
 on:
   pull_request:
-    branches: main
+    branches: [main]
 
 permissions:
   contents: read
+  checks: write
+  pull-requests: write
 
 jobs:
   build:
@@ -31,3 +33,11 @@ jobs:
 
       - name: Build
         run: ./gradlew build
+
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v2
+        if: ${{ !cancelled() }}  
+        with:
+          name: Test Results
+          path: '**/build/test-results/**/TEST-*.xml'
+          reporter: java-junit
