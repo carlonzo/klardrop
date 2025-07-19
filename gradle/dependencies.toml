@@ -12,7 +12,7 @@ androidx-activity = "1.10.1"
 kotlinx-io = "0.8.0"
 bugsnag-kmp = "1.0.0-beta03"
 bugsnag-android = "6.15.0"
-bugsnag-jvm = "3.7.2"
+bugsnag-jvm = "3.8.0"
 filekit = "0.10.0-beta04"
 
 [libraries]
