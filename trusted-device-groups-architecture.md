@@ -74,7 +74,8 @@ data class TrustGroup(
     val groupKey: ByteArray,        // Shared symmetric key
     val devices: List<DeviceIdentity>,
     val createdAt: Long,
-    val groupName: String           // Optional user-defined name
+    val groupName: String,          // Optional user-defined name
+    val protocolVersion: Int = 1    // Enable future protocol upgrades
 )
 ```
 
@@ -96,26 +97,46 @@ data class TrustGroup(
 2. **Pairing Initiation:**
    - User selects "Add to My Devices" on Device A
    - Device A generates a time-limited pairing token
-   - Pairing token displayed as QR code or short code
+   - Multiple pairing methods available:
+     - **QR Code**: For visual scanning (with warning about photography risk)
+     - **Proximity-based**: Using device vibration patterns or audio chirps
+     - **Manual PIN**: 6-digit PIN as fallback option
+     - **NFC tap**: For supported devices (Android/iOS)
    
-3. **Secure Key Exchange:**
-   ```
-   Device A → Device B: {
+3. **Secure Key Exchange with Forward Secrecy:**
+   ```kotlin
+   // Phase 1: Initial handshake with ephemeral keys
+   Device A → Device B: PairingRequest {
      pairingToken: String,
-     deviceAPublicKey: ByteArray,
-     challenge: ByteArray
+     devicePublicKey: ByteArray,
+     ephemeralPublicKey: ByteArray,  // Ephemeral key for this session
+     challenge: ByteArray,
+     timestamp: Long,                // Prevent replay attacks
+     nonce: ByteArray               // Additional randomness
    }
    
-   Device B → Device A: {
-     deviceBPublicKey: ByteArray,
+   // Phase 2: Response with device info
+   Device B → Device A: PairingResponse {
+     devicePublicKey: ByteArray,
+     ephemeralPublicKey: ByteArray,  // B's ephemeral key
      challengeResponse: ByteArray,
-     deviceInfo: DeviceIdentity
+     deviceInfo: DeviceIdentity,
+     timestamp: Long,
+     signature: ByteArray           // Sign with device private key
    }
    
-   Device A → Device B: {
-     groupKey: ByteArray,        // Encrypted with Device B's public key
-     groupMembers: List<DeviceIdentity>,
-     groupId: String
+   // Phase 3: Two-phase commit - provisional membership
+   Device A → Device B: ProvisionalAcceptance {
+     encryptedGroupKey: ByteArray,  // Encrypted with shared ephemeral secret
+     groupId: String,
+     provisionalExpiry: Long,       // Time limit for other devices to verify
+     existingMembers: List<DeviceIdentity>
+   }
+   
+   // Phase 4: Full membership after verification
+   Device A → Device B: FullMembership {
+     status: MembershipStatus,      // ACCEPTED or REJECTED
+     groupMembers: List<DeviceIdentity>
    }
    ```
 
@@ -132,9 +153,19 @@ data class TrustGroup(
    - Optional PIN verification for extra security
 
 2. **Group Key Management:**
-   - AES-256 symmetric key for group
-   - Key rotation on device removal
+   - AES-256 symmetric key for group (or ChaCha20-Poly1305 for mobile performance)
+   - Key derivation using HKDF (HMAC-based Key Derivation Function) with salt
+   - Automatic key rotation with versioning:
+     ```kotlin
+     data class GroupKeyVersion(
+         val version: Int,
+         val key: ByteArray,
+         val validFrom: Long,
+         val validUntil: Long?
+     )
+     ```
    - Keys stored in platform keychain/keystore
+   - Old keys retained temporarily for message decryption during rotation
 
 3. **Message Authentication:**
    - All messages between trusted devices include HMAC
@@ -184,10 +215,14 @@ data class TrustGroup(
 - [ ] Implement device management screen
 
 #### Phase 4: Clipboard Sync
-- [ ] Create clipboard sync protocol
-- [ ] Add sync preferences
-- [ ] Implement background sync
-- [ ] Handle conflicts/timestamps
+- [ ] Create clipboard sync protocol with configurable intervals (min 30s)
+- [ ] Add sync preferences (manual vs automatic)
+- [ ] Handle platform restrictions:
+  - iOS: Request clipboard permission
+  - Android 12+: Handle background clipboard restrictions
+  - Desktop: Security software compatibility
+- [ ] Implement conflict resolution with timestamps
+- [ ] Start with manual sync button before automatic
 
 ### Data Storage
 
@@ -222,6 +257,26 @@ CREATE TABLE pairing_history (
     timestamp INTEGER NOT NULL,
     details TEXT
 );
+
+-- Security Events (for monitoring and analysis)
+CREATE TABLE security_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL, -- 'auth_failed', 'key_rotation', 'device_removed', 'suspicious_activity'
+    device_id TEXT,
+    ip_address TEXT,
+    timestamp INTEGER NOT NULL,
+    details TEXT
+);
+
+-- Key Versions (for key rotation management)
+CREATE TABLE key_versions (
+    version INTEGER PRIMARY KEY,
+    group_id TEXT NOT NULL,
+    key_hash TEXT NOT NULL,     -- Store hash, not actual key
+    valid_from INTEGER NOT NULL,
+    valid_until INTEGER,
+    FOREIGN KEY (group_id) REFERENCES trust_groups(group_id)
+);
 ```
 
 ### Platform Considerations
@@ -230,16 +285,36 @@ CREATE TABLE pairing_history (
 - Use Android Keystore for key storage
 - Consider using Nearby Connections API for pairing
 - Handle Doze mode for clipboard sync
+- Clipboard monitoring restrictions in Android 12+
 
 #### iOS
 - Use iOS Keychain for secure storage
 - Implement proper background modes
 - Consider iOS 16+ proximity permissions
+- Clipboard access requires user permission
 
 #### Desktop
 - Platform-specific secure storage (Keychain/Credential Manager)
 - System tray integration for background sync
 - Handle sleep/wake for sync
+- Consider security software blocking clipboard monitoring
+
+### Performance Optimizations
+
+1. **Discovery Performance:**
+   - Implement async trust validation to avoid blocking mDNS discovery
+   - Cache trust status for faster subsequent connections
+   - Use connection pooling for trusted devices
+
+2. **Cryptographic Performance:**
+   - Consider ChaCha20-Poly1305 for better mobile performance than AES-256
+   - Cache HMAC computations for repeated device interactions
+   - Use hardware acceleration where available
+
+3. **Battery Optimization:**
+   - Configurable clipboard sync intervals (default: 30 seconds minimum)
+   - Batch sync operations to reduce wake-ups
+   - Use platform-specific power-efficient APIs
 
 ## Alternative: Hybrid Approach
 
@@ -254,25 +329,138 @@ We could also implement both options:
 1. **Key Compromise:**
    - If group key is compromised, need to rotate
    - Implement "remove device" that triggers key rotation
-   - Consider forward secrecy for future versions
+   - Forward secrecy implemented through ephemeral keys in pairing
 
 2. **Device Theft:**
    - Remote device removal capability
    - Optional biometric lock for app
    - Encrypted storage of keys
+   - Time-based access expiry for extra security
 
 3. **Network Attacks:**
    - Pairing only works on same network (reduces attack surface)
    - All traffic encrypted even on local network
    - Certificate pinning for any cloud features
+   - Rate limiting on pairing attempts to prevent spam
+
+## Backup and Recovery
+
+### Export/Import Functionality
+1. **Secure Export:**
+   - Export group keys encrypted with user-chosen password
+   - Use PBKDF2 for password-based encryption
+   - Include device list and trust relationships
+   - Format: Encrypted JSON with version info
+
+2. **Recovery Options:**
+   - Import from encrypted backup file
+   - Recovery codes (one-time use) for emergency access
+   - Optional cloud backup (encrypted) in hybrid approach
+
+3. **Recovery Process:**
+   ```kotlin
+   data class TrustBackup(
+       val version: Int,
+       val exportDate: Long,
+       val encryptedData: ByteArray,  // Contains group keys and device list
+       val salt: ByteArray,
+       val iterations: Int = 100000   // PBKDF2 iterations
+   )
+   ```
+
+## Error Handling Strategy
+
+### Network Failures
+- Retry logic with exponential backoff for pairing
+- Offline queueing for pending operations
+- Clear error messages for users
+
+### Corrupted Data
+- Integrity checks on trust database
+- Automatic backup before modifications
+- Recovery mode for corrupted databases
+
+### Key Conflicts
+- Version-based conflict resolution
+- Automatic key rotation on conflicts
+- User notification for manual intervention
+
+### Partial Group Lists
+- Eventual consistency model
+- Periodic sync with other group members
+- Conflict resolution based on timestamps
+
+## Testing Strategy
+
+### Security Testing
+1. **Penetration Testing:**
+   - Test pairing protocol against MITM attacks
+   - Attempt replay attacks with captured tokens
+   - Test key extraction from device storage
+
+2. **Cryptographic Validation:**
+   - Verify proper random number generation
+   - Test key derivation functions
+   - Validate HMAC implementations
+
+3. **Fuzzing:**
+   - Fuzz message parsing logic
+   - Test malformed pairing requests
+   - Validate input sanitization
+
+### Functional Testing
+1. **Cross-Platform Pairing:**
+   - Test all platform combinations (Android↔iOS, Desktop↔Mobile, etc.)
+   - Verify UI consistency across platforms
+   - Test different pairing methods (QR, PIN, NFC)
+
+2. **Network Resilience:**
+   - Test pairing with packet loss
+   - Verify timeout handling
+   - Test concurrent pairing attempts
+
+3. **Performance Testing:**
+   - Large group handling (10+ devices)
+   - Rapid key rotation scenarios
+   - Clipboard sync under load
+
+4. **Edge Cases:**
+   - Device name conflicts
+   - Clock synchronization issues
+   - Storage limitations
+
+## User Control and Permissions
+
+### Granular Permissions
+1. **Trust Levels:**
+   - Full trust: File sharing + clipboard sync
+   - File sharing only
+   - Read-only access (receive files but not send)
+
+2. **Temporary Trust:**
+   - Time-limited device access (1 hour, 1 day, 1 week)
+   - Automatic removal after expiry
+   - Option to make permanent
+
+3. **Per-Device Settings:**
+   ```kotlin
+   data class DeviceTrustSettings(
+       val deviceId: String,
+       val trustLevel: TrustLevel,
+       val permissions: Set<Permission>,
+       val expiresAt: Long?,
+       val clipboardSyncEnabled: Boolean
+   )
+   ```
 
 ## Next Steps
 
 1. Decide on approach (recommend starting with decentralized)
-2. Design detailed protocol specifications
-3. Create UI mockups for pairing flow
-4. Implement proof of concept
-5. Security audit of implementation
+2. Design detailed protocol specifications with security review
+3. Create UI mockups for pairing flow with UX testing
+4. Implement proof of concept with core security features
+5. Security audit of implementation before production
+6. Phased rollout with monitoring
 
 ## Open Questions
 
@@ -281,3 +469,5 @@ We could also implement both options:
 3. Should clipboard sync be opt-in or opt-out?
 4. Do we need a "master device" or fully distributed?
 5. How to handle device name conflicts?
+6. Should we implement trust levels from the start or add later?
+7. What's the maximum group size we should support?
