@@ -1,6 +1,6 @@
 package com.carlom.klardrop
 
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,8 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,29 +36,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.chat.DeviceChatScreen
 import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.utils.DeviceType
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.PickerResultLauncher
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 
 @Composable
 fun DiscoveryScreen(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
-  discoveryController: DiscoveryController
+  discoveryController: DiscoveryController,
+  uiDependencies: UiDependencies // Added
 ) {
 
-  var deviceUiClicked = remember<DeviceUi?> { null }
-  val scope = rememberCoroutineScope()
+  val discoveryState by discoveryController.screenStateFlow.collectAsState() // Moved up
+  val deviceUiClicked = remember<DeviceUi?> { null } // Still used by bottom sheet logic if kept
 
   val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
     if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
@@ -77,59 +72,42 @@ fun DiscoveryScreen(
 
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
-  ModalBottomSheetLayout(
-    sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-    sheetBackgroundColor = MaterialTheme.colorScheme.surface,
-    sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
-    sheetContent = {
-      ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
-    },
-    sheetState = sheetState,
-    content = {
-
-      val discoveryState by discoveryController.screenStateFlow
-        .collectAsState()
-
-      discoveryController.actionsFlow.collectAsEffect {
-        when (it) {
-          is ActionUi.OnDeviceClicked -> {
-
-            deviceUiClicked = it.deviceUi
-            scope.launch {
-              sheetState.show()
-            }
-          }
+  // --- Navigation to Chat Screen ---
+  if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
+    val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
+      uiDependencies.deviceChatViewModelFactory(discoveryState.navigateToChatDeviceId!!)
+    }
+    DeviceChatScreen(
+      deviceId = discoveryState.navigateToChatDeviceId!!,
+      deviceName = discoveryState.navigateToChatDeviceName!!,
+      viewModel = chatViewModel,
+      onBackClicked = { discoveryController.onBackFromChat() },
+      onOpenFileRequest = { filePath -> chatViewModel.openFileClicked(filePath) } // Added
+    )
+  } else {
+    // --- Original Discovery Screen Content (ModalBottomSheet for sending) ---
+    ModalBottomSheetLayout(
+      sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+      sheetBackgroundColor = MaterialTheme.colorScheme.surface,
+      sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
+      sheetContent = {
+        if (deviceUiClicked != null) { // Ensure deviceUiClicked is not null before accessing
+          ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
         }
-      }
-
-      Box {
+      },
+      sheetState = sheetState,
+      content = {
 
         DiscoveryDashboard(
           modifier = modifier,
           isLargeScreen = isLargeScreen,
           devices = discoveryState.devices,
-          onDeviceActionListener = discoveryController
+          onDeviceActionListener = discoveryController // This now triggers chat navigation
         )
 
-
-        LazyColumn(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-
-          items(
-            items = discoveryState.receivingMessages.toList(),
-            key = { it.first },
-          ) { item ->
-            ReceiveNotification(
-              Modifier.animateItem(placementSpec = tween()).align(Alignment.BottomCenter),
-              item.second,
-              discoveryController
-            )
-          }
-
-        }
-
       }
-
-    })
+    )
+  }
 }
 
 
@@ -146,13 +124,20 @@ private fun DiscoveryDashboard(
   ) {
 
     FlowRow {
-
       devices.forEach { device ->
-
-        DeviceDiscovery(device, isLargeScreen, onDeviceActionListener)
-
+        Box { // Wrap DeviceDiscovery to allow overlaying the dot
+          DeviceDiscovery(device, isLargeScreen, onDeviceActionListener)
+          if (device.hasUnreadMessages) {
+            Box(
+              modifier = Modifier
+                .padding(top = 4.dp, end = 4.dp) // Adjust padding as needed
+                .size(10.dp)
+                .background(MaterialTheme.colorScheme.error, RoundedCornerShape(5.dp))
+                .align(Alignment.TopEnd)
+            )
+          }
+        }
       }
-
     }
 
 
@@ -245,14 +230,4 @@ private fun ColumnScope.ShareSheet(
 
 
   Spacer(Modifier.height(40.dp))
-}
-
-@Composable
-fun <T> Flow<T>.collectAsEffect(
-  context: CoroutineContext = EmptyCoroutineContext,
-  block: (T) -> Unit
-) {
-  LaunchedEffect(key1 = Unit) {
-    onEach(block).flowOn(context).launchIn(this)
-  }
 }

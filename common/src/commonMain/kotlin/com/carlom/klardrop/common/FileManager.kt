@@ -10,6 +10,7 @@ import kotlinx.io.files.Path
 interface FileManager {
   fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer
   fun getReadStreamFrom(file: PlatformFile): RawSource
+  suspend fun openFile(filePath: String): Boolean // New method
 }
 
 interface FileTransfer {

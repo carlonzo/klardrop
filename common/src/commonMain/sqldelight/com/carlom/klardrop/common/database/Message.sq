@@ -1,0 +1,42 @@
+CREATE TABLE messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    remote_device_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    is_sender INTEGER NOT NULL,
+    message_type TEXT NOT NULL, -- Enum: TEXT, FILE
+    file_transfer_id INTEGER,
+    is_read INTEGER NOT NULL DEFAULT 0, -- 0 = unread, 1 = read
+    FOREIGN KEY(file_transfer_id) REFERENCES file_transfers(id)
+);
+
+-- Queries for messages table
+insert:
+INSERT INTO messages (remote_device_id, content, timestamp, is_sender, message_type, file_transfer_id, is_read)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+lastInsertRowId:
+SELECT last_insert_rowid();
+
+getMessagesForDevice:
+SELECT *
+FROM messages
+WHERE remote_device_id = ?
+ORDER BY timestamp DESC
+LIMIT ?;
+
+markMessagesAsRead:
+UPDATE messages
+SET is_read = 1
+WHERE remote_device_id = ? AND is_read = 0;
+
+getUnreadCountForDevice:
+SELECT COUNT(*)
+FROM messages
+WHERE remote_device_id = ? AND is_read = 0;
+
+getAllDevicesWithUnreadCounts:
+SELECT remote_device_id, COUNT(*) AS unread_count
+FROM messages
+WHERE is_read = 0
+GROUP BY remote_device_id;

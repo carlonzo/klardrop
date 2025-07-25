@@ -23,7 +23,7 @@ interface MessageReceiver {
 
   fun onReceiveMessage(deviceId: String): MutableStateFlow<ReceiveMessageUpdate>
 
-  val notifier: Flow<Flow<ReceiveMessageUpdate>>
+  val notifier: Flow<Pair<String, StateFlow<ReceiveMessageUpdate>>> // Changed
 
   /**
    * Flow that emits updates when a message is received and the status is completed.
@@ -38,14 +38,14 @@ internal class MessageReceiverImpl(
 ) : MessageReceiver {
 
   private val receiverScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
-  private val _notifier = MutableSharedFlow<StateFlow<ReceiveMessageUpdate>>(extraBufferCapacity = 1)
+  private val _notifier = MutableSharedFlow<Pair<String, StateFlow<ReceiveMessageUpdate>>>()
 
-  override val notifier: Flow<Flow<ReceiveMessageUpdate>>
+  override val notifier: Flow<Pair<String, StateFlow<ReceiveMessageUpdate>>>
     get() = _notifier.asSharedFlow()
 
   override val messageReceivedNotifier: Flow<ReceiveMessageUpdate>
-    get() = _notifier.flatMapMerge { stateFlow ->
-      stateFlow.mapNotNull { update ->
+    get() = _notifier.flatMapMerge {
+      it.second.mapNotNull { update ->
         if (update.status is ReceiveMessageStatus.Completed) update
         else null
       }
@@ -64,7 +64,7 @@ internal class MessageReceiverImpl(
     )
 
     receiverScope.launch {
-      _notifier.emit(flow.asStateFlow())
+      _notifier.emit(deviceId to flow.asStateFlow()) // Changed: emit Pair
     }
 
     return flow

@@ -13,6 +13,7 @@ import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import io.github.vinceglb.filekit.PlatformFile
@@ -25,18 +26,20 @@ class ShareToDeviceController(
   private val coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
   private val messenger: Messenger,
-  private val platformFileSystem: PlatformFileSystem
+  private val platformFileSystem: PlatformFileSystem,
+  private val messageRepository: MessageRepository
 ) {
 
   constructor(commonComponent: CommonComponent) : this(
     coroutines = commonComponent.coroutines(),
     visibleDevices = commonComponent.visibleDevices(),
     messenger = commonComponent.messenger(),
-    platformFileSystem = commonComponent.platformFileSystem()
+    platformFileSystem = commonComponent.platformFileSystem(),
+    messageRepository = commonComponent.messageRepository()
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher)
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices)
+  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository)
 
   private var onDataToSend: OnDataToSend? = null
 

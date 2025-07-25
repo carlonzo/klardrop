@@ -28,6 +28,10 @@ class FileManagerImpl(
     return platformFileSystem.getReadStreamFrom(file)
   }
 
+  override suspend fun openFile(filePath: String): Boolean {
+    return platformFileSystem.openFile(filePath)
+  }
+
   inner class FileTransferImpl(
     private val destinationPath: Path,
     private val mimeType: String

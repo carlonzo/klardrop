@@ -16,12 +16,10 @@ class DiscoveryBridge {
 
   fun RootKlardropApp() = ComposeUIViewController {
 
-    val uiDependencies = object : UiDependencies {}
 
     AppTheme {
       KlardropApp(
         klardrop = klardrop,
-        uiDependencies = uiDependencies
       )
     }
 

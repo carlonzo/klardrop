@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
@@ -42,6 +43,7 @@ class DiscoveryController(
   private val messenger: Messenger,
   private val platformFileSystem: PlatformFileSystem,
   private val clipboardManager: ClipboardManager,
+  private val messageRepository: MessageRepository,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -49,19 +51,20 @@ class DiscoveryController(
     commonComponent.visibleDevices(),
     commonComponent.messenger(),
     commonComponent.platformFileSystem(),
-    commonComponent.clipboardManager()
+    commonComponent.clipboardManager(),
+    commonComponent.messageRepository()
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices)
+  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository)
 
   val actionsFlow = MutableSharedFlow<ActionUi>()
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 
   init {
     controllerScope.launch {
-      messenger.receive().collect {
-        listenNewMessagesReceived(it)
+      messenger.receive().collect { (remoteDeviceId, flowOfUpdates) -> // Changed
+        listenNewMessagesReceived(remoteDeviceId, flowOfUpdates) // Changed
       }
     }
 
@@ -101,12 +104,30 @@ class DiscoveryController(
   }
 
   override fun onDeviceClick(deviceUi: DeviceUi) {
-    log("DiscoveryController", "on device click: ${deviceUi.deviceName}")
+    log("DiscoveryController", "on device click for chat: ${deviceUi.deviceName}")
+    
+    // Mark messages as read in the database
     controllerScope.launch {
-      actionsFlow.emit(ActionUi.OnDeviceClicked(deviceUi))
+      messageRepository.markMessagesAsRead(deviceUi.deviceId)
+    }
+    
+    screenStateFlow.update { currentState ->
+      val updatedDevices = currentState.devices.map {
+        if (it.deviceId == deviceUi.deviceId) {
+          it.copy(hasUnreadMessages = false) // Clear unread on click
+        } else it
+      }
+      currentState.copy(
+        devices = updatedDevices,
+        navigateToChatDeviceId = deviceUi.deviceId,
+        navigateToChatDeviceName = deviceUi.deviceName
+      )
     }
   }
 
+  // This method might still be used if sending is initiated from somewhere else,
+  // or could be refactored if all sending now happens via chat.
+  // For now, keeping it as is.
   override fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend) {
 
     when (onDataToSend) {
@@ -116,29 +137,40 @@ class DiscoveryController(
 
   }
 
-  private fun listenNewMessagesReceived(flow: Flow<ReceiveMessageUpdate>) {
+  private fun listenNewMessagesReceived(remoteDeviceId: String, flow: Flow<ReceiveMessageUpdate>) { // Changed
 
-    val receiveId = Random.nextInt()
+    val receiveId = Random.nextInt() // Used to track individual notification cards
 
     controllerScope.launch {
 
+      var messageProcessedForUnreadUpdate = false
       flow.transformWhile {
         emit(it)
-
         !it.status.isFinished()
       }.collect { receiveMessageUpdate ->
-        screenStateFlow.update {
-          val messages = it.receivingMessages.toMutableMap()
-          messages[receiveId] = receiveMessageUpdate
+        screenStateFlow.update { currentState ->
+          val messagesMap = currentState.receivingMessages.toMutableMap()
+          messagesMap[receiveId] = receiveMessageUpdate
 
-          it.copy(
-            receivingMessages = messages
+          var updatedDevices = currentState.devices
+          if (!messageProcessedForUnreadUpdate && receiveMessageUpdate.status.isFinished() && !(receiveMessageUpdate.status is ReceiveMessageStatus.Failed)) {
+            if (remoteDeviceId != currentState.navigateToChatDeviceId) {
+              updatedDevices = currentState.devices.map { deviceUi ->
+                if (deviceUi.deviceId == remoteDeviceId) {
+                  deviceUi.copy(hasUnreadMessages = true)
+                } else deviceUi
+              }
+            }
+            messageProcessedForUnreadUpdate = true // Mark as processed for this flow instance
+          }
+
+          currentState.copy(
+            devices = updatedDevices,
+            receivingMessages = messagesMap
           )
         }
       }
-
     }
-
   }
 
   fun dispose() {
@@ -175,17 +207,25 @@ class DiscoveryController(
     }
 
   }
+
+  fun onBackFromChat() {
+    screenStateFlow.update {
+      it.copy(navigateToChatDeviceId = null, navigateToChatDeviceName = null)
+    }
+  }
 }
 
 data class DiscoveryScreenState(
   val devices: List<DeviceUi> = emptyList(),
-  val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap()
+  val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap(),
+  val navigateToChatDeviceId: String? = null,    // New
+  val navigateToChatDeviceName: String? = null   // New
 )
 
+// ActionUi might not be needed anymore if onDeviceClick directly updates state for navigation
+// For now, keeping it, but OnDeviceClicked action might become obsolete.
 sealed interface ActionUi {
-
   class OnDeviceClicked(val deviceUi: DeviceUi) : ActionUi
-
 }
 
 data class DeviceUi(
@@ -193,7 +233,8 @@ data class DeviceUi(
   val deviceName: String,
   val deviceType: DeviceType,
   val activityState: ActivityState = ActivityState.Idle,
-  val connectionTypes: List<DeviceConnection.DeviceConnectionType>
+  val connectionTypes: List<DeviceConnection.DeviceConnectionType>,
+  val hasUnreadMessages: Boolean = false // New
 )
 
 sealed interface ActivityState {

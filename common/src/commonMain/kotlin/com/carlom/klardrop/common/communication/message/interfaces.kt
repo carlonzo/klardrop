@@ -55,9 +55,8 @@ enum class AckType {
 @Serializable
 data class MessageAcknowledgment(
   val ackType: AckType,
-  val messageId: Int,
+  override val id: Int = Random.nextInt(),
 ) : Message() {
-  override val id: Int = messageId
   override val type: MessageType = when (ackType) {
     AckType.READY -> MessageType.ACK_READY
     AckType.RECEIVED -> MessageType.ACK_RECEIVED
@@ -68,6 +67,6 @@ data class MessageAcknowledgment(
 interface MessageHandler<E : Message, R : SendMessageRequest> {
 
   suspend fun handleIncoming(message: E, readChannel: ByteReadChannel, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>)
-  suspend fun handleOutgoing(request: R, writeChannel: ByteWriteChannel, progressFlow: MutableSharedFlow<MessengerSendProgress>)
+  suspend fun handleOutgoing(toDeviceId: String, request: R, writeChannel: ByteWriteChannel, progressFlow: MutableSharedFlow<MessengerSendProgress>)
 
 }

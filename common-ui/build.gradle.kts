@@ -55,6 +55,7 @@ kotlin {
         api(compose.foundation)
         api(compose.material)
         api(compose.material3)
+        api(compose.materialIconsExtended)
         api(compose.ui)
 
         api(deps.kotlinx.coroutines.core)

@@ -279,11 +279,15 @@ internal suspend fun ByteReadChannel.readByteArrayMessage(): ByteArray {
 
 internal suspend fun ByteReadChannel.readMessage(serializer: MessageSerializer): Message {
   val messageBytes = readByteArrayMessage()
-
-  return serializer.deserialize(messageBytes)
+  com.carlom.klardrop.common.utils.log("ByteReadChannel", "[DEBUG] Read message: ${messageBytes.size} bytes")
+  
+  val message = serializer.deserialize(messageBytes)
+  com.carlom.klardrop.common.utils.log("ByteReadChannel", "[DEBUG] Deserialized message: type=${message.type}, id=${message.id}, class=${message::class.simpleName}")
+  return message
 }
 
 internal suspend fun ByteWriteChannel.sendMessage(message: Message, serializer: MessageSerializer) {
+  com.carlom.klardrop.common.utils.log("ByteWriteChannel", "[DEBUG] Sending message: type=${message.type}, id=${message.id}, class=${message::class.simpleName}")
   val introBytes = serializer.serialize(message)
   val introLengthBytes = ByteArray(4)
   introLengthBytes[0] = (introBytes.size shr 24).toByte()
@@ -293,4 +297,5 @@ internal suspend fun ByteWriteChannel.sendMessage(message: Message, serializer: 
 
   writeByteArray(introLengthBytes)
   writeByteArray(introBytes)
+  com.carlom.klardrop.common.utils.log("ByteWriteChannel", "[DEBUG] Message sent successfully: ${introBytes.size} bytes")
 }

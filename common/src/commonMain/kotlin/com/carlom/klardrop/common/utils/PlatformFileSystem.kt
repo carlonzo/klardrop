@@ -37,6 +37,8 @@ interface PlatformFileSystem {
   fun getTempStoragePath(): Path
 
   fun getInternalStoragePath(): Path
+
+  suspend fun openFile(filePath: String): Boolean
 }
 
 internal class PlatformFileSystemImpl(
@@ -88,6 +90,10 @@ internal class PlatformFileSystemImpl(
 
   override fun getInternalStoragePath(): Path {
     return FileKit.filesDir.toKotlinxIoPath()
+  }
+
+  override suspend fun openFile(filePath: String): Boolean {
+    return platformDependencies.openFile(filePath)
   }
 
 }
