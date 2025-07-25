@@ -1,0 +1,46 @@
+stateDiagram-v2
+    [*] --> Unpaired
+    
+    Unpaired --> InitiatePairing: User initiates pairing
+    
+    InitiatePairing --> QRCodePairing: QR Code Method
+    InitiatePairing --> NumericPairing: Numeric Code Method
+    InitiatePairing --> ProximityPairing: Proximity Method
+    
+    QRCodePairing --> DisplayQR: Generate QR with:<br/>- Session ID<br/>- Public Key Hash<br/>- Expiry (5 min)
+    DisplayQR --> WaitingForScan: Display on Device A
+    
+    NumericPairing --> DisplayCode: Generate 6-digit code
+    DisplayCode --> WaitingForCode: Display on Device A<br/>Enter on Device B
+    
+    ProximityPairing --> BroadcastBeacon: Broadcast BLE/NFC beacon
+    BroadcastBeacon --> WaitingForProximity: Detect nearby device
+    
+    WaitingForScan --> VerifyQR: Device B scans QR
+    WaitingForCode --> VerifyCode: Device B enters code
+    WaitingForProximity --> VerifyProximity: Devices in proximity
+    
+    VerifyQR --> ExchangeCertificates
+    VerifyCode --> ExchangeCertificates
+    VerifyProximity --> ExchangeCertificates
+    
+    ExchangeCertificates --> ValidateCertificates: Exchange X.509 certificates<br/>and public keys
+    
+    ValidateCertificates --> EstablishTrust: Verify certificate chain<br/>Check revocation status
+    ValidateCertificates --> PairingFailed: Invalid certificate
+    
+    EstablishTrust --> CreateDeviceGroup: Add to trusted devices<br/>Set trust level: VERIFIED
+    
+    CreateDeviceGroup --> GenerateGroupKey: Create or join group<br/>Generate shared group key
+    
+    GenerateGroupKey --> PairingComplete: Devices paired<br/>Can share via cloud
+    
+    PairingComplete --> [*]
+    
+    PairingFailed --> Unpaired: Retry pairing
+    
+    WaitingForScan --> SessionTimeout: 5 minutes elapsed
+    WaitingForCode --> SessionTimeout: 2 minutes elapsed
+    WaitingForProximity --> SessionTimeout: 1 minute elapsed
+    
+    SessionTimeout --> PairingFailed

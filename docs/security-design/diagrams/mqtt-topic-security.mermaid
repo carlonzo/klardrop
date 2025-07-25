@@ -1,0 +1,59 @@
+graph LR
+    subgraph "Device A Topics"
+        A1[klardrop/devices/A/presence]
+        A2[klardrop/devices/A/control]
+        A3[klardrop/transfer/A/+/request]
+    end
+    
+    subgraph "Device B Topics"
+        B1[klardrop/devices/B/presence]
+        B2[klardrop/devices/B/control]
+        B3[klardrop/transfer/+/B/request]
+    end
+    
+    subgraph "Session Topics"
+        S1[klardrop/transfer/session/xyz/data]
+        S2[klardrop/transfer/session/xyz/control]
+    end
+    
+    subgraph "JWT Permissions"
+        P1[Device A JWT<br/>Can publish: A/+<br/>Can subscribe: +/A]
+        P2[Device B JWT<br/>Can publish: B/+<br/>Can subscribe: +/B]
+        P3[Session Permission<br/>Both can pub/sub<br/>to session/xyz/+]
+    end
+    
+    subgraph "MQTT Broker ACL"
+        ACL{Access Control<br/>Check JWT claims}
+    end
+    
+    A1 -.->|Publish| ACL
+    A2 -.->|Subscribe| ACL
+    A3 -.->|Publish| ACL
+    
+    B1 -.->|Publish| ACL
+    B2 -.->|Subscribe| ACL
+    B3 -.->|Subscribe| ACL
+    
+    S1 <-.->|Pub/Sub| ACL
+    S2 <-.->|Pub/Sub| ACL
+    
+    P1 --> ACL
+    P2 --> ACL
+    P3 --> ACL
+    
+    ACL -->|Allow/Deny| Decision{Authorized?}
+    
+    style A1 fill:#e8f5e9
+    style A2 fill:#e8f5e9
+    style A3 fill:#e8f5e9
+    style B1 fill:#e3f2fd
+    style B2 fill:#e3f2fd
+    style B3 fill:#e3f2fd
+    style S1 fill:#fff3e0
+    style S2 fill:#fff3e0
+    style ACL fill:#ffebee
+    
+    classDef deviceA fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    classDef deviceB fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
+    classDef session fill:#fff3e0,stroke:#ff9800,stroke-width:2px
+    classDef security fill:#ffebee,stroke:#f44336,stroke-width:2px

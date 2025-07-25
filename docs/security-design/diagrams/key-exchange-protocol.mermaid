@@ -1,0 +1,59 @@
+sequenceDiagram
+    participant A as Device A<br/>(Sender)
+    participant M as MQTT Broker
+    participant B as Device B<br/>(Receiver)
+    
+    Note over A,B: Key Exchange Phase
+    
+    A->>A: 1. Generate Ephemeral ECDH Key Pair
+    Note right of A: ephemeralPriv_A, ephemeralPub_A
+    
+    A->>A: 2. Create Transfer Request
+    Note right of A: - Session ID<br/>- Encrypted Metadata<br/>- ephemeralPub_A<br/>- Timestamp
+    
+    A->>M: 3. Publish Transfer Request
+    Note right of A: Topic: /transfer/A/B/request<br/>QoS: 2 (exactly once)
+    
+    M->>B: 4. Deliver Transfer Request
+    
+    B->>B: 5. Verify Sender Identity
+    Note right of B: - Check trust level<br/>- Verify timestamp<br/>- Validate certificate
+    
+    B->>B: 6. Generate Ephemeral ECDH Key Pair
+    Note right of B: ephemeralPriv_B, ephemeralPub_B
+    
+    B->>B: 7. Perform ECDH Key Agreement
+    Note right of B: sharedSecret = ECDH(ephemeralPriv_B, ephemeralPub_A)
+    
+    B->>B: 8. Derive Encryption Keys
+    Note right of B: fileKey = HKDF(sharedSecret, "file-encryption")<br/>metaKey = HKDF(sharedSecret, "metadata-encryption")
+    
+    B->>B: 9. Decrypt Metadata
+    Note right of B: metadata = AES-GCM-Decrypt(encMetadata, metaKey)
+    
+    B->>M: 10. Send Accept Message
+    Note right of B: Topic: /transfer/session/{id}/control<br/>Contains: ephemeralPub_B
+    
+    M->>A: 11. Deliver Accept Message
+    
+    A->>A: 12. Perform ECDH Key Agreement
+    Note right of A: sharedSecret = ECDH(ephemeralPriv_A, ephemeralPub_B)
+    
+    A->>A: 13. Derive Same Keys
+    Note right of A: Keys match Device B's keys
+    
+    Note over A,B: Secure Channel Established
+    
+    Note over A,B: File Transfer Phase
+    
+    loop For each chunk
+        A->>A: Encrypt chunk with fileKey
+        A->>M: Publish encrypted chunk
+        M->>B: Deliver encrypted chunk
+        B->>B: Decrypt chunk with fileKey
+    end
+    
+    Note over A,B: Perfect Forward Secrecy
+    A->>A: Delete ephemeralPriv_A
+    B->>B: Delete ephemeralPriv_B
+    Note over A,B: Past sessions cannot be decrypted<br/>even if long-term keys are compromised

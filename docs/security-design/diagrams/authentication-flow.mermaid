@@ -1,0 +1,51 @@
+sequenceDiagram
+    participant D as Device
+    participant A as Auth Service
+    participant K as Key Service
+    participant M as MQTT Broker
+    participant C as Certificate Authority
+    
+    Note over D,M: Initial Device Registration
+    D->>D: Generate ECDSA Key Pair
+    D->>C: Request Device Certificate
+    C->>D: Issue X.509 Certificate
+    
+    Note over D,M: Authentication Flow
+    D->>A: 1. Request Auth Challenge
+    Note right of A: Generate nonce & challenge
+    A->>D: 2. Challenge + Nonce
+    
+    D->>D: 3. Sign Challenge with Device Private Key
+    Note right of D: signature = ECDSA_Sign(challenge, deviceKey)
+    
+    D->>A: 4. Submit (deviceId, challenge, signature, nonce)
+    
+    A->>A: 5. Verify Signature
+    Note right of A: Verify ECDSA signature<br/>Check nonce validity<br/>Validate device certificate
+    
+    alt Signature Valid
+        A->>K: 6. Request JWT Generation
+        Note right of K: Create JWT with:<br/>- Device ID<br/>- Groups<br/>- Permissions<br/>- Expiry (15min)
+        K->>A: 7. JWT + Refresh Token
+        A->>D: 8. Return Tokens + MQTT Config
+        
+        D->>M: 9. Connect with JWT
+        Note right of D: MQTT over TLS 1.3<br/>Username: deviceId<br/>Password: JWT
+        
+        M->>A: 10. Validate JWT
+        Note right of M: Verify JWT signature<br/>Check expiry<br/>Validate permissions
+        
+        A->>M: 11. Validation Result
+        M->>D: 12. Connection Established
+        
+        Note over D,M: Periodic Token Refresh
+        loop Every 10 minutes
+            D->>A: Refresh Token
+            A->>D: New JWT
+            D->>M: Update Authentication
+        end
+        
+    else Signature Invalid
+        A->>D: Authentication Failed
+        Note right of D: Exponential backoff<br/>before retry
+    end

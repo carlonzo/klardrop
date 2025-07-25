@@ -1,0 +1,56 @@
+graph TB
+    subgraph "Device A"
+        A1[File Data]
+        A2[Chunk & Compress]
+        A3[E2E Encryption<br/>AES-256-GCM]
+        A4[Add Metadata]
+        A5[Group Encryption<br/>Optional]
+        A6[TLS 1.3<br/>Transport Security]
+    end
+    
+    subgraph "MQTT Broker"
+        B1[TLS Termination]
+        B2[Message Routing]
+        B3[Access Control]
+        B4[Message Queue]
+        B5[TLS Initiation]
+    end
+    
+    subgraph "Device B"
+        C1[TLS 1.3<br/>Transport Security]
+        C2[Group Decryption<br/>If Applicable]
+        C3[Verify Metadata]
+        C4[E2E Decryption<br/>AES-256-GCM]
+        C5[Decompress & Assemble]
+        C6[File Data]
+    end
+    
+    A1 --> A2
+    A2 --> A3
+    A3 --> A4
+    A4 --> A5
+    A5 --> A6
+    
+    A6 -.->|Encrypted MQTT/TLS| B1
+    B1 --> B2
+    B2 --> B3
+    B3 --> B4
+    B4 --> B5
+    B5 -.->|Encrypted MQTT/TLS| C1
+    
+    C1 --> C2
+    C2 --> C3
+    C3 --> C4
+    C4 --> C5
+    C5 --> C6
+    
+    style A3 fill:#e1f5e1
+    style C4 fill:#e1f5e1
+    style A6 fill:#ffe1e1
+    style B1 fill:#ffe1e1
+    style B5 fill:#ffe1e1
+    style C1 fill:#ffe1e1
+    
+    classDef e2e fill:#e1f5e1,stroke:#4caf50,stroke-width:2px
+    classDef tls fill:#ffe1e1,stroke:#f44336,stroke-width:2px
+    classDef process fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
