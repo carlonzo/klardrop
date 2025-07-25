@@ -2,6 +2,7 @@ plugins {
   alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.kotlin.serialization)
+  alias(deps.plugins.sqldelight)
   kotlin("native.cocoapods")
 }
 
@@ -38,6 +39,13 @@ kotlin {
         implementation(deps.kotlinx.serialization.protobuf)
         implementation(deps.ukey2)
         implementation(deps.filekit.core)
+        
+        // SQLDelight
+        implementation(deps.sqldelight.runtime)
+        implementation(deps.sqldelight.coroutines)
+        
+        // Cryptography
+        implementation(deps.cryptography.core)
       }
     }
 
@@ -56,12 +64,14 @@ kotlin {
         implementation(deps.kotlinx.coroutines.android)
         implementation(deps.simplestorage)
         implementation(deps.bugsnag.kmp)
+        implementation(deps.sqldelight.driver.android)
       }
     }
 
     val iosMain by getting {
       dependencies {
         implementation(deps.bugsnag.kmp)
+        implementation(deps.sqldelight.driver.native)
       }
     }
 
@@ -69,6 +79,7 @@ kotlin {
       dependencies {
         implementation(deps.jmdns)
         implementation(deps.bugsnag.jvm)
+        implementation(deps.sqldelight.driver.jvm)
       }
     }
 
@@ -96,5 +107,13 @@ android {
 
   testOptions {
     unitTests.isReturnDefaultValues = true
+  }
+}
+
+sqldelight {
+  databases {
+    create("TrustDatabase") {
+      packageName.set("com.carlom.klardrop.common.trust.db")
+    }
   }
 }

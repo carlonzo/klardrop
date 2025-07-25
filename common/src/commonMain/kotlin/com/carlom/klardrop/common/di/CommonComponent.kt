@@ -10,6 +10,7 @@ import com.carlom.klardrop.common.discovery.DiscoveryModule
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
+import com.carlom.klardrop.common.trust.di.TrustModule
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
@@ -65,15 +66,33 @@ class CommonComponent(
   private val fileManager: FileManager
     get() = FileManagerImpl(platformFileSystem)
 
+  private val trustModule by lazy {
+    TrustModule(
+      applicationInfo = applicationInfo,
+      coroutines = coroutines,
+      internalPlatformDependencies = internalPlatformDependency,
+      currentDeviceProvider = currentDeviceProvider,
+      clipboardManager = clipboardManager,
+      sendTrustMessage = { deviceId, message ->
+        // This will be implemented when we integrate with the messenger
+        messenger().sendTrustMessage(deviceId, message)
+      }
+    )
+  }
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
   fun server() = communicationModule.server()
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()
-
   fun platformFileSystem() = platformFileSystem
-
   fun clipboardManager() = clipboardManager
+  
+  // Trust components
+  fun trustManager() = trustModule.trustManager
+  fun trustAwareDiscoveryUtils() = trustModule.trustAwareDiscoveryUtils
+  fun trustClipboardSyncManager() = trustModule.trustClipboardSyncManager
+  fun wrapMessageReceiver(receiver: com.carlom.klardrop.common.receiver.MessageReceiver) = 
+    trustModule.wrapMessageReceiver(receiver)
 
 }
