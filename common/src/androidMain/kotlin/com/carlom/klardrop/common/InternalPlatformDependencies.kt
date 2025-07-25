@@ -5,6 +5,8 @@ import android.os.Environment
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
+import com.carlom.klardrop.common.trust.db.DatabaseDriverFactory
+import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
 import kotlinx.io.files.Path
 
 actual class InternalPlatformDependencies(private val context: Context) {
@@ -19,6 +21,14 @@ actual class InternalPlatformDependencies(private val context: Context) {
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter(context)
+  }
+  
+  actual fun databaseDriverFactory(): DatabaseDriverFactory {
+    return DatabaseDriverFactory(context)
+  }
+  
+  actual fun secureKeyStorageFactory(): SecureKeyStorageFactory {
+    return SecureKeyStorageFactory()
   }
 
   actual fun driverFactory(): DriverFactory {

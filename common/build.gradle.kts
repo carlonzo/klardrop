@@ -39,8 +39,13 @@ kotlin {
         implementation(deps.kotlinx.serialization.protobuf)
         implementation(deps.ukey2)
         implementation(deps.filekit.core)
+        
+        // SQLDelight
         implementation(deps.sqldelight.runtime)
         implementation(deps.sqldelight.coroutines.extensions)
+        
+        // Cryptography
+        implementation(deps.cryptography.core)
       }
     }
 
@@ -73,7 +78,6 @@ kotlin {
       dependencies {
         implementation(deps.bugsnag.kmp)
         implementation(deps.sqldelight.native.driver)
-
       }
     }
 
@@ -116,6 +120,9 @@ sqldelight {
   databases {
     create("AppDatabase") {
       packageName.set("com.carlom.klardrop.common.database")
+    }
+    create("TrustDatabase") {
+      packageName.set("com.carlom.klardrop.common.trust.db")
     }
   }
 }

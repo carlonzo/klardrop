@@ -1,0 +1,168 @@
+syntax = "proto3";
+
+package trust;
+
+option java_package = "com.carlom.klardrop.protos.trust";
+
+// Device types
+enum DeviceType {
+  DEVICE_TYPE_UNKNOWN = 0;
+  DEVICE_TYPE_ANDROID = 1;
+  DEVICE_TYPE_IOS = 2;
+  DEVICE_TYPE_MACOS = 3;
+  DEVICE_TYPE_WINDOWS = 4;
+  DEVICE_TYPE_LINUX = 5;
+}
+
+// Trust levels
+enum TrustLevel {
+  TRUST_LEVEL_UNKNOWN = 0;
+  TRUST_LEVEL_FULL = 1;
+  TRUST_LEVEL_FILE_ONLY = 2;
+  TRUST_LEVEL_READ_ONLY = 3;
+}
+
+// Permission types
+enum Permission {
+  PERMISSION_UNKNOWN = 0;
+  PERMISSION_FILE_SEND = 1;
+  PERMISSION_FILE_RECEIVE = 2;
+  PERMISSION_CLIPBOARD_SYNC = 3;
+}
+
+// Trust protocol message types
+enum TrustMessageType {
+  MESSAGE_TYPE_UNKNOWN = 0;
+  MESSAGE_TYPE_DISCOVERY_ANNOUNCEMENT = 1;
+  MESSAGE_TYPE_CAPABILITY_RESPONSE = 2;
+  MESSAGE_TYPE_ECDH_INITIATION = 3;
+  MESSAGE_TYPE_ECDH_RESPONSE = 4;
+  MESSAGE_TYPE_GROUP_INVITATION = 5;
+  MESSAGE_TYPE_JOIN_CONFIRMATION = 6;
+  MESSAGE_TYPE_MEMBER_UPDATE = 7;
+  MESSAGE_TYPE_CLIPBOARD_SYNC = 8;
+  MESSAGE_TYPE_HEARTBEAT = 9;
+}
+
+// Device identity
+message DeviceIdentity {
+  string device_id = 1;
+  bytes public_key = 2;
+  string device_name = 3;
+  DeviceType device_type = 4;
+  repeated Permission capabilities = 5;
+}
+
+// Discovery announcement
+message DiscoveryAnnouncement {
+  string device_id = 1;
+  bytes public_key = 2;
+  bool is_in_trust_group = 3;
+  bool supports_auto_trust = 4;
+  int64 timestamp = 5;
+  bytes signature = 6;
+  int32 protocol_version = 7;
+}
+
+// Capability response
+message CapabilityResponse {
+  string device_id = 1;
+  bytes public_key = 2;
+  int32 supported_version = 3;
+  int64 timestamp = 4;
+  bytes signature = 5;
+}
+
+// ECDH key exchange initiation
+message ECDHInitiation {
+  string session_id = 1;
+  string device_id = 2;
+  bytes ephemeral_public_key = 3;
+  bytes encrypted_group_id = 4; // Encrypted with recipient's public key
+  int64 timestamp = 5;
+  bytes nonce = 6;
+  bytes signature = 7;
+}
+
+// ECDH key exchange response
+message ECDHResponse {
+  string session_id = 1;
+  string device_id = 2;
+  bytes ephemeral_public_key = 3;
+  bytes encrypted_device_info = 4; // Encrypted with shared secret
+  int64 timestamp = 5;
+  bytes signature = 6;
+}
+
+// Encrypted payload wrapper
+message EncryptedPayload {
+  bytes ciphertext = 1;
+  bytes nonce = 2;
+  bytes tag = 3; // Authentication tag
+}
+
+// Group invitation
+message GroupInvitation {
+  string session_id = 1;
+  EncryptedPayload encrypted_payload = 2; // Contains GroupInfo
+}
+
+// Group information (encrypted content)
+message GroupInfo {
+  string group_id = 1;
+  bytes group_key = 2;
+  string group_name = 3;
+  repeated TrustedDevice members = 4;
+  int32 protocol_version = 5;
+}
+
+// Trusted device info
+message TrustedDevice {
+  DeviceIdentity identity = 1;
+  int64 added_at = 2;
+  string added_by = 3;
+  TrustLevel trust_level = 4;
+  repeated Permission permissions = 5;
+  int64 expires_at = 6; // Optional expiration
+}
+
+// Join confirmation
+message JoinConfirmation {
+  string session_id = 1;
+  string device_id = 2;
+  bool accepted = 3;
+  int64 timestamp = 4;
+  bytes signature = 5;
+}
+
+// Member update action
+enum UpdateAction {
+  UPDATE_ACTION_UNKNOWN = 0;
+  UPDATE_ACTION_ADD = 1;
+  UPDATE_ACTION_REMOVE = 2;
+  UPDATE_ACTION_UPDATE = 3;
+}
+
+// Member update notification
+message MemberUpdate {
+  string group_id = 1;
+  UpdateAction action = 2;
+  TrustedDevice device = 3;
+  int32 version = 4;
+  int64 timestamp = 5;
+  bytes signature = 6;
+}
+
+// Clipboard sync message
+message ClipboardSync {
+  string device_id = 1;
+  bytes encrypted_content = 2; // Encrypted with group key
+  int64 timestamp = 3;
+  bytes signature = 4;
+}
+
+// Trust protocol wrapper message
+message TrustMessage {
+  TrustMessageType type = 1;
+  bytes payload = 2; // Serialized message based on type
+}
