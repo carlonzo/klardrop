@@ -1,0 +1,34 @@
+-- Security Events table for audit logging
+CREATE TABLE security_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL, -- 'auth_failed', 'key_rotation', 'device_removed', 'pairing_attempt', etc.
+    device_id TEXT,
+    ip_address TEXT,
+    timestamp INTEGER NOT NULL,
+    details TEXT -- JSON with additional context
+);
+
+-- Create index for faster queries
+CREATE INDEX idx_security_events_timestamp ON security_events(timestamp DESC);
+CREATE INDEX idx_security_events_device ON security_events(device_id);
+
+-- Insert security event
+insertSecurityEvent:
+INSERT INTO security_events (event_type, device_id, ip_address, timestamp, details)
+VALUES (?, ?, ?, ?, ?);
+
+-- Get recent security events
+getRecentSecurityEvents:
+SELECT * FROM security_events ORDER BY timestamp DESC LIMIT ?;
+
+-- Get events by device
+getSecurityEventsByDevice:
+SELECT * FROM security_events WHERE device_id = ? ORDER BY timestamp DESC LIMIT ?;
+
+-- Get events by type
+getSecurityEventsByType:
+SELECT * FROM security_events WHERE event_type = ? ORDER BY timestamp DESC LIMIT ?;
+
+-- Clean old events (older than given timestamp)
+cleanOldSecurityEvents:
+DELETE FROM security_events WHERE timestamp < ?;
