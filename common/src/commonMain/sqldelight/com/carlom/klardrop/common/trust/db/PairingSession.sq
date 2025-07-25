@@ -1,0 +1,29 @@
+-- Pairing Sessions table for tracking active pairing attempts
+CREATE TABLE pairing_sessions (
+    session_id TEXT PRIMARY KEY NOT NULL,
+    device_id TEXT NOT NULL,
+    ephemeral_public_key BLOB NOT NULL,
+    expires_at INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING', -- PENDING, ACCEPTED, REJECTED, EXPIRED
+    created_at INTEGER NOT NULL
+);
+
+-- Create index for cleanup
+CREATE INDEX idx_pairing_sessions_expires ON pairing_sessions(expires_at);
+
+-- Insert pairing session
+insertPairingSession:
+INSERT INTO pairing_sessions (session_id, device_id, ephemeral_public_key, expires_at, status, created_at)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- Get active pairing session
+getActivePairingSession:
+SELECT * FROM pairing_sessions WHERE session_id = ? AND expires_at > ? AND status = 'PENDING';
+
+-- Update pairing session status
+updatePairingSessionStatus:
+UPDATE pairing_sessions SET status = ? WHERE session_id = ?;
+
+-- Clean expired sessions
+cleanExpiredPairingSessions:
+DELETE FROM pairing_sessions WHERE expires_at < ? OR status != 'PENDING';
