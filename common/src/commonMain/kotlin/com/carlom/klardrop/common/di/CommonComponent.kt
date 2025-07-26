@@ -87,10 +87,15 @@ class CommonComponent(
       currentDeviceProvider = currentDeviceProvider,
       clipboardManager = clipboardManager,
       sendTrustMessage = { deviceId, message ->
-        // This will be implemented when we integrate with the messenger
+        // Use the messenger to send trust messages
         messenger().sendTrustMessage(deviceId, message)
       }
     )
+  }
+  
+  init {
+    // Set up the trust manager provider for the communication module
+    communicationModule.setTrustManagerProvider { trustModule.trustManager }
   }
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()

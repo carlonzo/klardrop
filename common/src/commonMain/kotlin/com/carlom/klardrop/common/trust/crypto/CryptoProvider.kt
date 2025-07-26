@@ -6,9 +6,6 @@ import dev.whyoleg.cryptography.algorithms.ECDH
 import dev.whyoleg.cryptography.algorithms.ECDSA
 import dev.whyoleg.cryptography.algorithms.HKDF
 import dev.whyoleg.cryptography.algorithms.digest.SHA256
-import kotlinx.io.bytestring.ByteString
-import kotlinx.io.bytestring.decodeToString
-import kotlinx.io.bytestring.encodeToByteString
 
 interface CryptoProvider {
     // Key generation

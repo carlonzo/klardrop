@@ -9,8 +9,9 @@ import com.carlom.klardrop.protos.trust.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.io.bytestring.ByteString
-import java.util.UUID
+import com.carlom.klardrop.common.utils.Clock
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 interface TrustProtocolHandler {
     // Discovery
@@ -82,10 +83,10 @@ class TrustProtocolHandlerImpl(
         
         val announcement = DiscoveryAnnouncement.newBuilder()
             .setDeviceId(device.deviceId)
-            .setPublicKey(ByteString.copyFrom(device.publicKey))
+            .setPublicKey(device.publicKey)
             .setIsInTrustGroup(trustGroup != null)
             .setSupportsAutoTrust(true)
-            .setTimestamp(System.currentTimeMillis())
+            .setTimestamp(Clock().currentTimeMillis()
             .setProtocolVersion(1)
             .build()
         
@@ -93,7 +94,7 @@ class TrustProtocolHandlerImpl(
         val signature = cryptoProvider.signECDSA(dataToSign, device.privateKey)
         
         return announcement.toBuilder()
-            .setSignature(ByteString.copyFrom(signature))
+            .setSignature(signature)
             .build()
     }
     
@@ -142,8 +143,9 @@ class TrustProtocolHandlerImpl(
         }
     }
     
+    @OptIn(ExperimentalUuidApi::class)
     override suspend fun initiatePairing(deviceId: String): String {
-        val sessionId = UUID.randomUUID().toString()
+        val sessionId = Uuid.random().toString()
         val device = deviceInfo()
         val trustGroup = trustStore.getTrustGroup() ?: throw IllegalStateException("No trust group")
         
@@ -165,7 +167,7 @@ class TrustProtocolHandlerImpl(
                 sessionId = sessionId,
                 deviceId = deviceId,
                 ephemeralPublicKey = ephemeralKeyPair.publicKey,
-                expiresAt = System.currentTimeMillis() + (5 * 60 * 1000) // 5 minutes
+                expiresAt = Clock().currentTimeMillis() + (5 * 60 * 1000) // 5 minutes
             )
         )
         
@@ -178,10 +180,10 @@ class TrustProtocolHandlerImpl(
         val initiation = ECDHInitiation.newBuilder()
             .setSessionId(sessionId)
             .setDeviceId(device.deviceId)
-            .setEphemeralPublicKey(ByteString.copyFrom(ephemeralKeyPair.publicKey))
-            .setEncryptedGroupId(ByteString.copyFrom(encryptedGroupId))
-            .setTimestamp(System.currentTimeMillis())
-            .setNonce(ByteString.copyFrom(cryptoProvider.generateNonce()))
+            .setEphemeralPublicKey(ephemeralKeyPair.publicKey)
+            .setEncryptedGroupId(encryptedGroupId)
+            .setTimestamp(Clock().currentTimeMillis()
+            .setNonce(cryptoProvider.generateNonce())
             .build()
         
         val signature = cryptoProvider.signECDSA(
@@ -190,7 +192,7 @@ class TrustProtocolHandlerImpl(
         )
         
         val signedInitiation = initiation.toBuilder()
-            .setSignature(ByteString.copyFrom(signature))
+            .setSignature(signature)
             .build()
         
         // Send initiation
@@ -198,7 +200,7 @@ class TrustProtocolHandlerImpl(
             deviceId,
             TrustMessage.newBuilder()
                 .setType(TrustMessageType.MESSAGE_TYPE_ECDH_INITIATION)
-                .setPayload(signedInitiation.toByteString())
+                .setPayload(signedInitiation.toByteString()
                 .build()
         )
         
@@ -241,14 +243,14 @@ class TrustProtocolHandlerImpl(
         // Create device info
         val myDeviceInfo = DeviceIdentity.newBuilder()
             .setDeviceId(device.deviceId)
-            .setPublicKey(ByteString.copyFrom(device.publicKey))
+            .setPublicKey(device.publicKey)
             .setDeviceName(device.deviceName)
             .setDeviceType(device.deviceType)
             .addAllCapabilities(listOf(
                 Permission.PERMISSION_FILE_SEND,
                 Permission.PERMISSION_FILE_RECEIVE,
                 Permission.PERMISSION_CLIPBOARD_SYNC
-            ))
+            )
             .build()
         
         // Encrypt device info
@@ -261,9 +263,9 @@ class TrustProtocolHandlerImpl(
         val response = ECDHResponse.newBuilder()
             .setSessionId(initiation.sessionId)
             .setDeviceId(device.deviceId)
-            .setEphemeralPublicKey(ByteString.copyFrom(ephemeralKeyPair.publicKey))
-            .setEncryptedDeviceInfo(ByteString.copyFrom(encryptedInfo.toProtoBytes()))
-            .setTimestamp(System.currentTimeMillis())
+            .setEphemeralPublicKey(ephemeralKeyPair.publicKey)
+            .setEncryptedDeviceInfo(encryptedInfo.toProtoBytes())
+            .setTimestamp(Clock().currentTimeMillis()
             .build()
         
         val signature = cryptoProvider.signECDSA(
@@ -272,7 +274,7 @@ class TrustProtocolHandlerImpl(
         )
         
         val signedResponse = response.toBuilder()
-            .setSignature(ByteString.copyFrom(signature))
+            .setSignature(signature)
             .build()
         
         // Store session data
@@ -293,7 +295,7 @@ class TrustProtocolHandlerImpl(
             initiation.deviceId,
             TrustMessage.newBuilder()
                 .setType(TrustMessageType.MESSAGE_TYPE_ECDH_RESPONSE)
-                .setPayload(signedResponse.toByteString())
+                .setPayload(signedResponse.toByteString()
                 .build()
         )
         
@@ -334,7 +336,7 @@ class TrustProtocolHandlerImpl(
         
         // Decrypt group info
         val decryptedData = cryptoProvider.decryptAESGCM(
-            EncryptedPayload.fromProtoBytes(invitation.encryptedPayload.toByteArray()),
+            encryptedPayloadFromProtoBytes(invitation.encryptedPayload.toByteArray(),
             decryptionKey
         )
         
@@ -408,7 +410,7 @@ class TrustProtocolHandlerImpl(
         )
         
         // Emit event
-        _trustEvents.emit(TrustEvent.DeviceJoined(trustedDevice))
+        _trustEvents.emit(TrustEvent.DeviceJoined(trustedDevice)
     }
     
     override suspend fun handleMemberUpdate(update: MemberUpdate) {
@@ -435,11 +437,11 @@ class TrustProtocolHandlerImpl(
                     permissions = update.device.permissionsList.toSet()
                 )
                 trustStore.addTrustedDevice(trustedDevice)
-                _trustEvents.emit(TrustEvent.DeviceJoined(trustedDevice))
+                _trustEvents.emit(TrustEvent.DeviceJoined(trustedDevice)
             }
             UpdateAction.UPDATE_ACTION_REMOVE -> {
                 trustStore.removeTrustedDevice(update.device.identity.deviceId)
-                _trustEvents.emit(TrustEvent.DeviceRemoved(update.device.identity.deviceId))
+                _trustEvents.emit(TrustEvent.DeviceRemoved(update.device.identity.deviceId)
             }
             UpdateAction.UPDATE_ACTION_UPDATE -> {
                 // Update device info
@@ -455,7 +457,7 @@ class TrustProtocolHandlerImpl(
                     permissions = update.device.permissionsList.toSet()
                 )
                 trustStore.addTrustedDevice(trustedDevice) // upsert
-                _trustEvents.emit(TrustEvent.DeviceUpdated(trustedDevice))
+                _trustEvents.emit(TrustEvent.DeviceUpdated(trustedDevice)
             }
             else -> {}
         }
@@ -472,7 +474,7 @@ class TrustProtocolHandlerImpl(
             .setAction(action)
             .setDevice(protoDevice)
             .setVersion(trustGroup.protocolVersion)
-            .setTimestamp(System.currentTimeMillis())
+            .setTimestamp(Clock().currentTimeMillis()
             .build()
         
         val signature = cryptoProvider.signECDSA(
@@ -481,7 +483,7 @@ class TrustProtocolHandlerImpl(
         )
         
         val signedUpdate = update.toBuilder()
-            .setSignature(ByteString.copyFrom(signature))
+            .setSignature(signature)
             .build()
         
         // Send to all trusted devices except the one being updated
@@ -492,7 +494,7 @@ class TrustProtocolHandlerImpl(
                     trustedDevice.deviceId,
                     TrustMessage.newBuilder()
                         .setType(TrustMessageType.MESSAGE_TYPE_MEMBER_UPDATE)
-                        .setPayload(signedUpdate.toByteString())
+                        .setPayload(signedUpdate.toByteString()
                         .build()
                 )
             }
@@ -512,15 +514,15 @@ class TrustProtocolHandlerImpl(
         
         // Decrypt content
         val decryptedContent = cryptoProvider.decryptAESGCM(
-            EncryptedPayload.fromProtoBytes(sync.encryptedContent.toByteArray()),
+            encryptedPayloadFromProtoBytes(sync.encryptedContent.toByteArray(),
             trustGroup.groupKey
         )
         
         val content = String(decryptedContent)
-        val contentHash = cryptoProvider.hash(content.toByteArray()).toHexString()
+        val contentHash = cryptoProvider.hash(content.toByteArray().toHexString()
         
         // Check if content is new
-        if (trustStore.isClipboardContentNew(contentHash)) {
+        if (trustStore.isClipboardContentNew(contentHash) {
             // Save clipboard entry
             trustStore.saveClipboardEntry(
                 ClipboardEntry(
@@ -533,7 +535,7 @@ class TrustProtocolHandlerImpl(
             )
             
             // Emit event for UI
-            _trustEvents.emit(TrustEvent.ClipboardUpdate(content, sync.deviceId))
+            _trustEvents.emit(TrustEvent.ClipboardUpdate(content, sync.deviceId)
         }
     }
     
@@ -549,8 +551,8 @@ class TrustProtocolHandlerImpl(
         
         val sync = ClipboardSync.newBuilder()
             .setDeviceId(device.deviceId)
-            .setEncryptedContent(ByteString.copyFrom(encrypted.toProtoBytes()))
-            .setTimestamp(System.currentTimeMillis())
+            .setEncryptedContent(encrypted.toProtoBytes())
+            .setTimestamp(Clock().currentTimeMillis()
             .build()
         
         val signature = cryptoProvider.signECDSA(
@@ -559,11 +561,11 @@ class TrustProtocolHandlerImpl(
         )
         
         val signedSync = sync.toBuilder()
-            .setSignature(ByteString.copyFrom(signature))
+            .setSignature(signature)
             .build()
         
         // Save our own clipboard entry
-        val contentHash = cryptoProvider.hash(content.toByteArray()).toHexString()
+        val contentHash = cryptoProvider.hash(content.toByteArray().toHexString()
         trustStore.saveClipboardEntry(
             ClipboardEntry(
                 deviceId = device.deviceId,
@@ -583,7 +585,7 @@ class TrustProtocolHandlerImpl(
                     trustedDevice.deviceId,
                     TrustMessage.newBuilder()
                         .setType(TrustMessageType.MESSAGE_TYPE_CLIPBOARD_SYNC)
-                        .setPayload(signedSync.toByteString())
+                        .setPayload(signedSync.toByteString()
                         .build()
                 )
             }
@@ -624,7 +626,7 @@ class TrustProtocolHandlerImpl(
             .setSessionId(sessionId)
             .setDeviceId(device.deviceId)
             .setAccepted(accepted)
-            .setTimestamp(System.currentTimeMillis())
+            .setTimestamp(Clock().currentTimeMillis()
             .build()
         
         val signature = cryptoProvider.signECDSA(
@@ -633,7 +635,7 @@ class TrustProtocolHandlerImpl(
         )
         
         val signedConfirmation = confirmation.toBuilder()
-            .setSignature(ByteString.copyFrom(signature))
+            .setSignature(signature)
             .build()
         
         val session = sessionMutex.withLock {
@@ -644,7 +646,7 @@ class TrustProtocolHandlerImpl(
             session.deviceId,
             TrustMessage.newBuilder()
                 .setType(TrustMessageType.MESSAGE_TYPE_JOIN_CONFIRMATION)
-                .setPayload(signedConfirmation.toByteString())
+                .setPayload(signedConfirmation.toByteString()
                 .build()
         )
     }
@@ -665,14 +667,14 @@ class TrustProtocolHandlerImpl(
 // Extension functions for protobuf conversion
 private fun EncryptedPayload.toProtoBytes(): ByteArray {
     return com.carlom.klardrop.protos.trust.EncryptedPayload.newBuilder()
-        .setCiphertext(ByteString.copyFrom(ciphertext))
-        .setNonce(ByteString.copyFrom(nonce))
-        .setTag(ByteString.copyFrom(tag))
+        .setCiphertext(ciphertext)
+        .setNonce(nonce)
+        .setTag(tag)
         .build()
         .toByteArray()
 }
 
-private fun EncryptedPayload.Companion.fromProtoBytes(data: ByteArray): EncryptedPayload {
+private fun encryptedPayloadFromProtoBytes(data: ByteArray): EncryptedPayload {
     val proto = com.carlom.klardrop.protos.trust.EncryptedPayload.parseFrom(data)
     return EncryptedPayload(
         ciphertext = proto.ciphertext.toByteArray(),
@@ -686,7 +688,7 @@ private fun TrustedDevice.toProto(): com.carlom.klardrop.protos.trust.TrustedDev
         .setIdentity(
             com.carlom.klardrop.protos.trust.DeviceIdentity.newBuilder()
                 .setDeviceId(deviceId)
-                .setPublicKey(ByteString.copyFrom(publicKey))
+                .setPublicKey(publicKey)
                 .setDeviceName(deviceName)
                 .setDeviceType(deviceType)
                 .addAllCapabilities(permissions)

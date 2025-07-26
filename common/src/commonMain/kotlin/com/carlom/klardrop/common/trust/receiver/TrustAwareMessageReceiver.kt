@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.trust.TrustManager
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.protos.trust.Permission
 import kotlinx.coroutines.CoroutineScope
@@ -67,11 +68,11 @@ class TrustAwareMessageReceiver(
                         status.acceptTransfer(true)
                         
                         // Log security event
-                        trustManager.trustStore.logSecurityEvent(
+                        trustManager.logSecurityEvent(
                             com.carlom.klardrop.common.trust.model.SecurityEvent(
                                 eventType = com.carlom.klardrop.common.trust.model.SecurityEventType.AUTH_FAILED,
                                 deviceId = deviceId,
-                                timestamp = System.currentTimeMillis(),
+                                timestamp = Clock().currentTimeMillis(),
                                 details = mapOf("action" to "auto_accept_transfer")
                             )
                         )
