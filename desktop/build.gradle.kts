@@ -27,9 +27,14 @@ kotlin {
         implementation(compose.desktop.currentOs)
         implementation(deps.kotlinx.coroutines.core)
         implementation(deps.bugsnag.jvm)
+        implementation(deps.kotlinx.serialization.protobuf)
       }
     }
     val jvmTest by getting
+    
+    all {
+      languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
+    }
 
   }
 }
