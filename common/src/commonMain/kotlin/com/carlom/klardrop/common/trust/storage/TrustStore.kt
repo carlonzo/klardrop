@@ -315,7 +315,7 @@ class TrustStoreImpl(
     }
     
     override suspend fun isClipboardContentNew(contentHash: String): Boolean {
-        return !database.clipboardEntryQueries.contentExists(contentHash).executeAsOne()
+        return !database.clipboardEntryQueries.contentExists(contentHash).executeAsOne().content_exists
     }
     
     override suspend fun cleanupExpiredDevices() {
