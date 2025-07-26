@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.trust.model
 
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.protos.trust.DeviceType
 import com.carlom.klardrop.protos.trust.Permission
 import com.carlom.klardrop.protos.trust.TrustLevel
@@ -11,7 +12,7 @@ data class DeviceKeypair(
     val privateKey: ByteArray,
     val deviceName: String,
     val deviceType: DeviceType,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = Clock().currentTimeMillis()
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -165,7 +166,7 @@ data class PairingSession(
     val ephemeralPublicKey: ByteArray,
     val expiresAt: Long,
     val status: PairingSessionStatus = PairingSessionStatus.PENDING,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = Clock().currentTimeMillis()
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

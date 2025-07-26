@@ -38,13 +38,23 @@ class CommunicationModule(
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
 
+  // Trust manager provider to be set by CommonComponent
+  private var trustManagerProvider: (() -> com.carlom.klardrop.common.trust.TrustManager?)? = null
+  
+  fun setTrustManagerProvider(provider: () -> com.carlom.klardrop.common.trust.TrustManager?) {
+    trustManagerProvider = provider
+  }
+  
   private val messageHandlers by lazy {
     MessageHandlersImpl(
       mapOf(
         MessageType.TEXT to TextMessageHandler(serializer),
         MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
         MessageType.ACK_READY to AckMessageHandler(),
-        MessageType.ACK_RECEIVED to AckMessageHandler()
+        MessageType.ACK_RECEIVED to AckMessageHandler(),
+        MessageType.TRUST to com.carlom.klardrop.common.communication.message.TrustMessageHandler { 
+          trustManagerProvider?.invoke()
+        }
       )
     )
   }

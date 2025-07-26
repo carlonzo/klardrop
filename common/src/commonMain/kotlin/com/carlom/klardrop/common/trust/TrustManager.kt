@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.trust.crypto.CryptoProviderImpl
 import com.carlom.klardrop.common.trust.db.DatabaseDriverFactory
 import com.carlom.klardrop.common.trust.db.TrustDatabase
 import com.carlom.klardrop.common.trust.model.*
+import com.carlom.klardrop.common.trust.crypto.EncryptedPayload
 import com.carlom.klardrop.common.trust.protocol.TrustEvent
 import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandler
 import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandlerImpl
@@ -19,7 +20,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.UUID
+import com.carlom.klardrop.common.utils.Clock
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * TrustManager - Central coordinator for all trust-related functionality
@@ -114,8 +119,9 @@ class TrustManager(
     /**
      * Create a new device keypair
      */
+    @OptIn(ExperimentalUuidApi::class)
     private suspend fun createDeviceKeypair(): DeviceKeypair {
-        val deviceId = UUID.randomUUID().toString()
+        val deviceId = Uuid.random().toString()
         val ecdsaKeyPair = cryptoProvider.generateECDSAKeypair()
         
         return DeviceKeypair(
@@ -130,8 +136,9 @@ class TrustManager(
     /**
      * Create a new trust group
      */
+    @OptIn(ExperimentalUuidApi::class)
     suspend fun createTrustGroup(groupName: String? = null): TrustGroup {
-        val groupId = UUID.randomUUID().toString()
+        val groupId = Uuid.random().toString()
         val groupKey = cryptoProvider.generateAESKey()
         val device = _currentDeviceKeypair.value ?: throw IllegalStateException("Device not initialized")
         
@@ -146,12 +153,12 @@ class TrustManager(
                     publicKey = device.publicKey,
                     deviceName = device.deviceName,
                     deviceType = device.deviceType,
-                    addedAt = System.currentTimeMillis(),
+                    addedAt = Clock().currentTimeMillis(),
                     addedBy = device.deviceId
                 )
             ),
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis()
+            createdAt = Clock().currentTimeMillis(),
+            updatedAt = Clock().currentTimeMillis()
         )
         
         trustStore.saveTrustGroup(trustGroup)
@@ -295,6 +302,13 @@ class TrustManager(
     }
     
     /**
+     * Log a security event
+     */
+    suspend fun logSecurityEvent(event: SecurityEvent) {
+        trustStore.logSecurityEvent(event)
+    }
+    
+    /**
      * Handle trust events from protocol handler
      */
     private suspend fun handleTrustEvent(event: TrustEvent) {
@@ -326,7 +340,7 @@ class TrustManager(
         trustStore.updateGroupKey(group.groupId, newKey)
         _currentTrustGroup.value = group.copy(
             groupKey = newKey,
-            updatedAt = System.currentTimeMillis()
+            updatedAt = Clock().currentTimeMillis()
         )
         
         // Notify all trusted devices about key rotation
@@ -337,7 +351,7 @@ class TrustManager(
             publicKey = device.publicKey,
             deviceName = device.deviceName,
             deviceType = device.deviceType,
-            addedAt = System.currentTimeMillis(),
+            addedAt = Clock().currentTimeMillis(),
             addedBy = device.deviceId
         )
         
@@ -375,14 +389,14 @@ class TrustManager(
         // Create export data
         val exportData = TrustExportData(
             version = 1,
-            exportDate = System.currentTimeMillis(),
+            exportDate = Clock().currentTimeMillis(),
             deviceKeypair = keypair,
             trustGroup = group,
             trustedDevices = _trustedDevices.value
         )
         
         // Serialize and encrypt
-        val serialized = kotlinx.serialization.json.Json.encodeToString(
+        val serialized = Json.encodeToString(
             TrustExportData.serializer(),
             exportData
         )
@@ -427,7 +441,7 @@ class TrustManager(
         )
         
         // Deserialize
-        val exportData = kotlinx.serialization.json.Json.decodeFromString<TrustExportData>(
+        val exportData = Json.decodeFromString<TrustExportData>(
             String(decrypted)
         )
         
@@ -445,7 +459,7 @@ class TrustManager(
 /**
  * Data class for trust export/import
  */
-@kotlinx.serialization.Serializable
+@Serializable
 private data class TrustExportData(
     val version: Int,
     val exportDate: Long,

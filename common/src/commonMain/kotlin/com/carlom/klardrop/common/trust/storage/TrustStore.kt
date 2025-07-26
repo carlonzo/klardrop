@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.trust.storage
 
 import com.carlom.klardrop.common.trust.db.TrustDatabase
 import com.carlom.klardrop.common.trust.model.*
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.protos.trust.DeviceType
 import com.carlom.klardrop.protos.trust.Permission
 import com.carlom.klardrop.protos.trust.TrustLevel
@@ -150,14 +151,14 @@ class TrustStoreImpl(
     override suspend fun updateGroupKey(groupId: String, newKey: ByteArray) {
         database.trustGroupQueries.updateGroupKey(
             group_key = newKey,
-            updated_at = System.currentTimeMillis(),
+            updated_at = Clock().currentTimeMillis(),
             group_id = groupId
         )
     }
     
     override suspend fun enableCloudSync(groupId: String) {
         database.trustGroupQueries.enableCloudSync(
-            updated_at = System.currentTimeMillis(),
+            updated_at = Clock().currentTimeMillis(),
             group_id = groupId
         )
     }
@@ -184,7 +185,7 @@ class TrustStoreImpl(
                 SecurityEvent(
                     eventType = SecurityEventType.DEVICE_ADDED,
                     deviceId = device.deviceId,
-                    timestamp = System.currentTimeMillis(),
+                    timestamp = Clock().currentTimeMillis(),
                     details = mapOf("added_by" to device.addedBy)
                 )
             )
@@ -200,7 +201,7 @@ class TrustStoreImpl(
                 SecurityEvent(
                     eventType = SecurityEventType.DEVICE_REMOVED,
                     deviceId = deviceId,
-                    timestamp = System.currentTimeMillis()
+                    timestamp = Clock().currentTimeMillis()
                 )
             )
         }
@@ -208,7 +209,7 @@ class TrustStoreImpl(
     
     override suspend fun updateDeviceLastSeen(deviceId: String) {
         database.trustedDeviceQueries.updateLastSeen(
-            last_seen = System.currentTimeMillis(),
+            last_seen = Clock().currentTimeMillis(),
             device_id = deviceId
         )
     }
@@ -216,14 +217,14 @@ class TrustStoreImpl(
     override suspend fun isDeviceTrusted(deviceId: String): Boolean {
         return database.trustedDeviceQueries.isDeviceTrusted(
             device_id = deviceId,
-            timestamp = System.currentTimeMillis()
+            timestamp = Clock().currentTimeMillis()
         ).executeAsOne()
     }
     
     override suspend fun getDeviceTrustLevel(deviceId: String): TrustLevel? {
         val levelStr = database.trustedDeviceQueries.getDeviceTrustLevel(
             device_id = deviceId,
-            timestamp = System.currentTimeMillis()
+            timestamp = Clock().currentTimeMillis()
         ).executeAsOneOrNull()
         
         return levelStr?.let { 
@@ -272,7 +273,7 @@ class TrustStoreImpl(
     override suspend fun getPairingSession(sessionId: String): PairingSession? {
         return database.pairingSessionQueries.getActivePairingSession(
             session_id = sessionId,
-            timestamp = System.currentTimeMillis()
+            timestamp = Clock().currentTimeMillis()
         ).executeAsOneOrNull()?.toPairingSession()
     }
     
@@ -284,7 +285,7 @@ class TrustStoreImpl(
     }
     
     override suspend fun cleanExpiredPairingSessions() {
-        database.pairingSessionQueries.cleanExpiredPairingSessions(System.currentTimeMillis())
+        database.pairingSessionQueries.cleanExpiredPairingSessions(Clock().currentTimeMillis())
     }
     
     override suspend fun saveClipboardEntry(entry: ClipboardEntry) {
@@ -318,11 +319,11 @@ class TrustStoreImpl(
     }
     
     override suspend fun cleanupExpiredDevices() {
-        database.trustedDeviceQueries.deleteExpiredDevices(System.currentTimeMillis())
+        database.trustedDeviceQueries.deleteExpiredDevices(Clock().currentTimeMillis())
     }
     
     override suspend fun cleanupOldSecurityEvents(daysToKeep: Int) {
-        val cutoffTime = System.currentTimeMillis() - (daysToKeep * 24 * 60 * 60 * 1000L)
+        val cutoffTime = Clock().currentTimeMillis() - (daysToKeep * 24 * 60 * 60 * 1000L)
         database.securityEventQueries.cleanOldSecurityEvents(cutoffTime)
     }
     
