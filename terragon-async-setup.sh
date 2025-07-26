@@ -6,9 +6,9 @@ set -e
 
 echo "Starting Terragon environment setup..."
 
-# Install Java 17
-echo "Installing Java 17..."
-apt update && apt install -y openjdk-17-jdk
+# Install dependencies and Java 17
+echo "Installing dependencies and Java 17..."
+apt update && apt install -y openjdk-17-jdk wget unzip
 
 # Download and setup Android SDK
 echo "Setting up Android SDK..."
