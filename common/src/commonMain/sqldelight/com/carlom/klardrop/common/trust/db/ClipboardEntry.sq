@@ -32,7 +32,7 @@ UPDATE clipboard_entries SET synced = 1 WHERE id = ?;
 
 -- Check if content exists
 contentExists:
-SELECT COUNT(*) > 0 AS exists FROM clipboard_entries WHERE content_hash = ?;
+SELECT COUNT(*) > 0 AS content_exists FROM clipboard_entries WHERE content_hash = ?;
 
 -- Clean old entries (keep last N entries)
 cleanOldClipboardEntries:
