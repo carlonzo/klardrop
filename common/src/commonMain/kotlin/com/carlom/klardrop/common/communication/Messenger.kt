@@ -81,11 +81,11 @@ class MessengerImpl(
   override suspend fun sendTrustMessage(deviceId: String, message: com.carlom.klardrop.protos.trust.TrustMessage) {
     // Convert protobuf message to our internal TrustMessage format
     val trustMessage = com.carlom.klardrop.common.communication.message.TrustMessage(
-      trustMessageBytes = message.toByteArray()
+      trustMessageBytes = message.encode()
     )
     
-    // Send as a regular message request
-    val messageRequest = SendMessageRequest(trustMessage)
+    // Send as a regular message request  
+    val messageRequest = SimpleSendMessageRequest(trustMessage)
     
     // Send and wait for completion
     send(deviceId, messageRequest).collect { progress ->
