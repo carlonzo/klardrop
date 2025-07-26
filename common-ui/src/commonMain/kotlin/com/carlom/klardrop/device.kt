@@ -56,11 +56,28 @@ internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceAct
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
 
-    CircleDevice(deviceUi)
+    Box {
+      CircleDevice(deviceUi)
+      
+      // Trust indicator positioned at bottom-right of circle
+      TrustIndicatorDot(
+        trustStatus = deviceUi.trustStatus,
+        modifier = Modifier
+          .align(Alignment.BottomEnd)
+          .padding(4.dp)
+      )
+    }
 
     Text(
       text = deviceUi.deviceName,
       maxLines = 2
+    )
+    
+    // Show trust status badge below device name
+    TrustStatusBadge(
+      trustStatus = deviceUi.trustStatus,
+      showLabel = false,
+      modifier = Modifier.padding(top = 4.dp)
     )
   }
 
@@ -87,7 +104,17 @@ internal fun DeviceLarge(
         verticalAlignment = Alignment.CenterVertically
       ) {
 
-        CircleDevice(deviceUi)
+        Box {
+          CircleDevice(deviceUi)
+          
+          // Trust indicator on device circle
+          TrustIndicatorDot(
+            trustStatus = deviceUi.trustStatus,
+            modifier = Modifier
+              .align(Alignment.BottomEnd)
+              .padding(4.dp)
+          )
+        }
 
         Spacer(modifier = Modifier.size(12.dp))
 
@@ -102,11 +129,21 @@ internal fun DeviceLarge(
 
         Spacer(modifier = Modifier.size(16.dp))
 
-        Text(
-          text = deviceUi.deviceName,
-          color = Color.Black,
-          maxLines = 2
-        )
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = deviceUi.deviceName,
+            color = Color.Black,
+            maxLines = 2
+          )
+          
+          Spacer(modifier = Modifier.size(4.dp))
+          
+          // Trust status and permissions
+          DeviceTrustIndicator(
+            deviceUi = deviceUi,
+            showDetails = true
+          )
+        }
 
       }
 

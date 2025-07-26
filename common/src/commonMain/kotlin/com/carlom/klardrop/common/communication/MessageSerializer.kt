@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.TrustMessage
 import com.carlom.klardrop.common.utils.Coroutines
 import kotlinx.coroutines.invoke
 import kotlinx.serialization.KSerializer
@@ -48,6 +49,7 @@ class MessageSerializer(
       MessageType.FILE -> FileMessage.serializer() as KSerializer<E>
       MessageType.ACK_READY -> MessageAcknowledgment.serializer() as KSerializer<E>
       MessageType.ACK_RECEIVED -> MessageAcknowledgment.serializer() as KSerializer<E>
+      MessageType.TRUST -> TrustMessage.serializer() as KSerializer<E>
     }
   }
 }

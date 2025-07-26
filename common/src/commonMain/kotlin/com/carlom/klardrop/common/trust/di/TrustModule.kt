@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.trust.di
 
 import com.carlom.klardrop.common.ApplicationInfo
+import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils
@@ -43,11 +44,15 @@ class TrustModule(
     }
     
     val trustManager: TrustManager by lazy {
+        // Get device info synchronously - this might need to be cached or initialized elsewhere
+        val deviceName = CommonPlatformDependencies.getDeviceName()
+        val deviceType = CommonPlatformDependencies.deviceType()
+        
         TrustManager(
             databaseDriverFactory = databaseDriverFactory,
             secureKeyStorageFactory = secureKeyStorageFactory,
-            deviceName = currentDeviceProvider.get().deviceName,
-            deviceType = mapDeviceType(currentDeviceProvider.get().deviceType),
+            deviceName = deviceName,
+            deviceType = mapDeviceType(deviceType),
             scope = trustScope,
             sendTrustMessage = sendTrustMessage
         )
@@ -79,7 +84,7 @@ class TrustModule(
         return when (deviceType) {
             com.carlom.klardrop.common.utils.DeviceType.PHONE -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_ANDROID
             com.carlom.klardrop.common.utils.DeviceType.TABLET -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_ANDROID
-            com.carlom.klardrop.common.utils.DeviceType.LAPTOP -> when (currentDeviceProvider.get().osType) {
+            com.carlom.klardrop.common.utils.DeviceType.LAPTOP -> when (CommonPlatformDependencies.osType()) {
                 OsType.WINDOWS -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_WINDOWS
                 OsType.LINUX -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_LINUX
                 OsType.MAC -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_MACOS

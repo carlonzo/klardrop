@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -60,6 +61,11 @@ fun DiscoveryScreen(
 
   var deviceUiClicked = remember<DeviceUi?> { null }
   val scope = rememberCoroutineScope()
+  
+  // Trust UI states
+  var showQuickTrustDialog by remember { mutableStateOf<DeviceUi?>(null) }
+  var showPairingProgress by remember { mutableStateOf(false) }
+  var pairingResult by remember { mutableStateOf<Pair<Boolean, String?>?>(null) }
 
   val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
     if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
@@ -93,11 +99,28 @@ fun DiscoveryScreen(
       discoveryController.actionsFlow.collectAsEffect {
         when (it) {
           is ActionUi.OnDeviceClicked -> {
-
-            deviceUiClicked = it.deviceUi
-            scope.launch {
-              sheetState.show()
+            val device = it.deviceUi
+            
+            // Check if device is untrusted and show trust dialog
+            if (device.trustStatus == com.carlom.klardrop.common.trust.model.TrustStatus.UNTRUSTED) {
+              showQuickTrustDialog = device
+            } else {
+              // For trusted devices, show the share sheet
+              deviceUiClicked = device
+              scope.launch {
+                sheetState.show()
+              }
             }
+          }
+          is ActionUi.TrustNotification -> {
+            // Handle trust notifications - this will be implemented when we update the controller
+          }
+          is ActionUi.PairingStarted -> {
+            showPairingProgress = true
+          }
+          is ActionUi.PairingCompleted -> {
+            showPairingProgress = false
+            pairingResult = it.success to it.errorMessage
           }
         }
       }
@@ -126,10 +149,52 @@ fun DiscoveryScreen(
           }
 
         }
+        
+        // Trust notifications
+        discoveryState.trustNotifications.forEach { notification ->
+          TrustPairingNotification(
+            notification = notification,
+            modifier = Modifier
+              .align(Alignment.TopCenter)
+              .padding(top = 8.dp)
+          )
+        }
 
       }
 
     })
+    
+  // Quick trust dialog
+  showQuickTrustDialog?.let { device ->
+    QuickTrustDialog(
+      deviceUi = device,
+      onApprove = {
+        showQuickTrustDialog = null
+        discoveryController.onTrustDevice(device.deviceId)
+      },
+      onDecline = {
+        showQuickTrustDialog = null
+      }
+    )
+  }
+  
+  // Pairing progress dialog
+  if (showPairingProgress) {
+    PairingProgressDialog(
+      deviceName = deviceUiClicked?.deviceName ?: "device",
+      onDismiss = { showPairingProgress = false }
+    )
+  }
+  
+  // Pairing result dialog
+  pairingResult?.let { (success, errorMessage) ->
+    PairingResultDialog(
+      success = success,
+      deviceName = deviceUiClicked?.deviceName ?: "device",
+      errorMessage = errorMessage,
+      onDismiss = { pairingResult = null }
+    )
+  }
 }
 
 

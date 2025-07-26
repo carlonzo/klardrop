@@ -25,6 +25,8 @@ interface Messenger {
   fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress>
 
   fun receive(): Flow<Flow<ReceiveMessageUpdate>>
+  
+  suspend fun sendTrustMessage(deviceId: String, message: com.carlom.klardrop.protos.trust.TrustMessage)
 }
 
 class MessengerImpl(
@@ -74,6 +76,25 @@ class MessengerImpl(
 
   override fun receive(): Flow<Flow<ReceiveMessageUpdate>> {
     return messageReceiver.notifier
+  }
+  
+  override suspend fun sendTrustMessage(deviceId: String, message: com.carlom.klardrop.protos.trust.TrustMessage) {
+    // Convert protobuf message to our internal TrustMessage format
+    val trustMessage = com.carlom.klardrop.common.communication.message.TrustMessage(
+      trustMessageBytes = message.toByteArray()
+    )
+    
+    // Send as a regular message request
+    val messageRequest = SendMessageRequest(trustMessage)
+    
+    // Send and wait for completion
+    send(deviceId, messageRequest).collect { progress ->
+      when (progress) {
+        is Error -> throw RuntimeException("Failed to send trust message: ${progress.message}")
+        is Completed -> return@collect
+        else -> {} // Continue
+      }
+    }
   }
 
   private suspend fun handleNearbyTransfer(

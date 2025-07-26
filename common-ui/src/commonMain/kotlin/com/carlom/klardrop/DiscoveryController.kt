@@ -42,6 +42,7 @@ class DiscoveryController(
   private val messenger: Messenger,
   private val platformFileSystem: PlatformFileSystem,
   private val clipboardManager: ClipboardManager,
+  private val trustManager: com.carlom.klardrop.common.trust.TrustManager? = null,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -49,7 +50,8 @@ class DiscoveryController(
     commonComponent.visibleDevices(),
     commonComponent.messenger(),
     commonComponent.platformFileSystem(),
-    commonComponent.clipboardManager()
+    commonComponent.clipboardManager(),
+    commonComponent.trustManager()
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
@@ -66,9 +68,42 @@ class DiscoveryController(
     }
 
     controllerScope.launch {
-      showDevicesHelper.devicesFlow.collect {
+      showDevicesHelper.devicesFlow.collect { devices ->
         screenStateFlow.update { state ->
-          state.copy(devices = it.toList())
+          // Enhance devices with trust information
+          val enhancedDevices = devices.map { deviceUi ->
+            trustManager?.let { tm ->
+              val trustStatus = runCatching {
+                val isTrusted = tm.isDeviceTrusted(deviceUi.deviceId).let { 
+                  coroutines.mainDispatcher { it }
+                }
+                val trustLevel = tm.getDeviceTrustLevel(deviceUi.deviceId).let {
+                  coroutines.mainDispatcher { it }
+                }
+                
+                deviceUi.copy(
+                  trustStatus = if (isTrusted) {
+                    com.carlom.klardrop.common.trust.model.TrustStatus.TRUSTED
+                  } else {
+                    com.carlom.klardrop.common.trust.model.TrustStatus.UNTRUSTED
+                  },
+                  trustLevel = trustLevel,
+                  isTrustGroupMember = isTrusted
+                )
+              }.getOrNull() ?: deviceUi
+            } ?: deviceUi
+          }
+          
+          state.copy(devices = enhancedDevices.toList())
+        }
+      }
+    }
+    
+    // Listen for trust events
+    trustManager?.let { tm ->
+      controllerScope.launch {
+        tm.getTrustEvents().collect { event ->
+          handleTrustEvent(event)
         }
       }
     }
@@ -175,16 +210,116 @@ class DiscoveryController(
     }
 
   }
+  
+  /**
+   * Handle trust device action
+   */
+  fun onTrustDevice(deviceId: String) {
+    trustManager?.let { tm ->
+      coroutines.appScope.launch {
+        try {
+          actionsFlow.emit(ActionUi.PairingStarted)
+          
+          // Initiate pairing
+          tm.initiatePairing(deviceId)
+          
+          // Wait a bit for pairing to complete (in real implementation, this would be event-driven)
+          kotlinx.coroutines.delay(2000)
+          
+          // Check if pairing succeeded
+          val isTrusted = tm.isDeviceTrusted(deviceId)
+          
+          actionsFlow.emit(ActionUi.PairingCompleted(
+            success = isTrusted,
+            errorMessage = if (!isTrusted) "Failed to establish trust" else null
+          ))
+          
+          // Update device list to reflect new trust status
+          showDevicesHelper.refreshDevices()
+          
+        } catch (e: Exception) {
+          log("DiscoveryController", "Failed to trust device", e)
+          actionsFlow.emit(ActionUi.PairingCompleted(
+            success = false,
+            errorMessage = e.message ?: "Unknown error"
+          ))
+        }
+      }
+    }
+  }
+  
+  /**
+   * Handle trust events from TrustManager
+   */
+  private suspend fun handleTrustEvent(event: com.carlom.klardrop.common.trust.protocol.TrustEvent) {
+    when (event) {
+      is com.carlom.klardrop.common.trust.protocol.TrustEvent.NewDeviceNearby -> {
+        // Create a trust notification
+        val notification = com.carlom.klardrop.common.trust.model.TrustNotification.NewDeviceNearby(
+          device = event.device,
+          onAccept = {
+            onTrustDevice(event.device.deviceId)
+          },
+          onDecline = {
+            // Remove notification from UI
+            screenStateFlow.update { state ->
+              state.copy(
+                trustNotifications = state.trustNotifications.filterNot { 
+                  it.device.deviceId == event.device.deviceId 
+                }
+              )
+            }
+          }
+        )
+        
+        // Add notification to screen state
+        screenStateFlow.update { state ->
+          state.copy(
+            trustNotifications = state.trustNotifications + notification
+          )
+        }
+        
+        // Also emit as action for immediate handling
+        actionsFlow.emit(ActionUi.TrustNotification(notification))
+      }
+      
+      is com.carlom.klardrop.common.trust.protocol.TrustEvent.DeviceJoined,
+      is com.carlom.klardrop.common.trust.protocol.TrustEvent.DeviceRemoved,
+      is com.carlom.klardrop.common.trust.protocol.TrustEvent.DeviceUpdated -> {
+        // Refresh device list when trust relationships change
+        showDevicesHelper.refreshDevices()
+      }
+      
+      is com.carlom.klardrop.common.trust.protocol.TrustEvent.ClipboardUpdate -> {
+        // Handle clipboard sync updates
+        if (event.deviceId != trustManager?.currentDeviceKeypair?.value?.deviceId) {
+          clipboardManager.write(event.content)
+        }
+      }
+      
+      else -> {
+        // Other events can be logged or handled as needed
+        log("DiscoveryController", "Unhandled trust event: $event")
+      }
+    }
+  }
 }
 
 data class DiscoveryScreenState(
   val devices: List<DeviceUi> = emptyList(),
-  val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap()
+  val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap(),
+  val trustNotifications: List<com.carlom.klardrop.common.trust.model.TrustNotification.NewDeviceNearby> = emptyList()
 )
 
 sealed interface ActionUi {
 
   class OnDeviceClicked(val deviceUi: DeviceUi) : ActionUi
+  
+  class TrustNotification(val notification: com.carlom.klardrop.common.trust.model.TrustNotification) : ActionUi
+  
+  object PairingStarted : ActionUi
+  
+  data class PairingCompleted(val success: Boolean, val errorMessage: String? = null) : ActionUi
 
 }
 
@@ -193,7 +328,13 @@ data class DeviceUi(
   val deviceName: String,
   val deviceType: DeviceType,
   val activityState: ActivityState = ActivityState.Idle,
-  val connectionTypes: List<DeviceConnection.DeviceConnectionType>
+  val connectionTypes: List<DeviceConnection.DeviceConnectionType>,
+  val trustStatus: com.carlom.klardrop.common.trust.model.TrustStatus = com.carlom.klardrop.common.trust.model.TrustStatus.UNTRUSTED,
+  val trustLevel: com.carlom.klardrop.protos.trust.TrustLevel? = null,
+  val isTrustGroupMember: Boolean = false,
+  val hasClipboardSyncPermission: Boolean = false,
+  val hasFileSendPermission: Boolean = true,
+  val hasFileReceivePermission: Boolean = true
 )
 
 sealed interface ActivityState {
