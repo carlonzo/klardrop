@@ -120,11 +120,9 @@ sqldelight {
   databases {
     create("AppDatabase") {
       packageName.set("com.carlom.klardrop.common.database")
-      srcDirs("src/commonMain/sqldelight/database")
     }
     create("TrustDatabase") {
       packageName.set("com.carlom.klardrop.common.trust.db")
-      srcDirs("src/commonMain/sqldelight/trust")
     }
   }
 }

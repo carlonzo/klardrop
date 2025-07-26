@@ -243,7 +243,6 @@ class DiscoveryController(
 
   }
 
-
   fun onBackFromChat() {
     screenStateFlow.update {
       it.copy(navigateToChatDeviceId = null, navigateToChatDeviceName = null)
@@ -340,7 +339,6 @@ class DiscoveryController(
         // Other events can be logged or handled as needed
         log("DiscoveryController", "Unhandled trust event: $event")
       }
-    }
     }
   }
 }

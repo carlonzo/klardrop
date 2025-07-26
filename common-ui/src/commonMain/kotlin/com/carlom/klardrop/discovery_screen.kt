@@ -54,10 +54,7 @@ fun DiscoveryScreen(
   uiDependencies: UiDependencies // Added
 ) {
 
-<<<<<<< HEAD
   val discoveryState by discoveryController.screenStateFlow.collectAsState() // Moved up
-  val deviceUiClicked = remember<DeviceUi?> { null } // Still used by bottom sheet logic if kept
-=======
   var deviceUiClicked = remember<DeviceUi?> { null }
   val scope = rememberCoroutineScope()
   
@@ -65,7 +62,6 @@ fun DiscoveryScreen(
   var showQuickTrustDialog by remember { mutableStateOf<DeviceUi?>(null) }
   var showPairingProgress by remember { mutableStateOf(false) }
   var pairingResult by remember { mutableStateOf<Pair<Boolean, String?>?>(null) }
->>>>>>> 1b33d42 (feat(trust): implement trusted device groups with secure protocol and storage)
 
   val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
     if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
