@@ -15,6 +15,7 @@ enum class MessageType(val id: Byte) {
   FILE(2),
   ACK_READY(3),
   ACK_RECEIVED(4),
+  TRUST(5),
 
   ;
 

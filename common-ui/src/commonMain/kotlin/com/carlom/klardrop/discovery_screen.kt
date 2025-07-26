@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -53,8 +54,18 @@ fun DiscoveryScreen(
   uiDependencies: UiDependencies // Added
 ) {
 
+<<<<<<< HEAD
   val discoveryState by discoveryController.screenStateFlow.collectAsState() // Moved up
   val deviceUiClicked = remember<DeviceUi?> { null } // Still used by bottom sheet logic if kept
+=======
+  var deviceUiClicked = remember<DeviceUi?> { null }
+  val scope = rememberCoroutineScope()
+  
+  // Trust UI states
+  var showQuickTrustDialog by remember { mutableStateOf<DeviceUi?>(null) }
+  var showPairingProgress by remember { mutableStateOf(false) }
+  var pairingResult by remember { mutableStateOf<Pair<Boolean, String?>?>(null) }
+>>>>>>> 1b33d42 (feat(trust): implement trusted device groups with secure protocol and storage)
 
   val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
     if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
@@ -72,6 +83,7 @@ fun DiscoveryScreen(
 
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
+<<<<<<< HEAD
   // --- Navigation to Chat Screen ---
   if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
     val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
@@ -93,6 +105,46 @@ fun DiscoveryScreen(
       sheetContent = {
         if (deviceUiClicked != null) { // Ensure deviceUiClicked is not null before accessing
           ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
+=======
+  ModalBottomSheetLayout(
+    sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+    sheetBackgroundColor = MaterialTheme.colorScheme.surface,
+    sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
+    sheetContent = {
+      ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
+    },
+    sheetState = sheetState,
+    content = {
+
+      val discoveryState by discoveryController.screenStateFlow
+        .collectAsState()
+
+      discoveryController.actionsFlow.collectAsEffect {
+        when (it) {
+          is ActionUi.OnDeviceClicked -> {
+            val device = it.deviceUi
+            
+            // Check if device is untrusted and show trust dialog
+            if (device.trustStatus == com.carlom.klardrop.common.trust.model.TrustStatus.UNTRUSTED) {
+              showQuickTrustDialog = device
+            } else {
+              // For trusted devices, show the share sheet
+              deviceUiClicked = device
+              scope.launch {
+                sheetState.show()
+              }
+            }
+          }
+          is ActionUi.TrustNotification -> {
+            // Handle trust notifications - this will be implemented when we update the controller
+          }
+          is ActionUi.PairingStarted -> {
+            showPairingProgress = true
+          }
+          is ActionUi.PairingCompleted -> {
+            showPairingProgress = false
+            pairingResult = it.success to it.errorMessage
+          }
         }
       },
       sheetState = sheetState,
@@ -105,7 +157,65 @@ fun DiscoveryScreen(
           onDeviceActionListener = discoveryController // This now triggers chat navigation
         )
 
+        LazyColumn(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+
+          items(
+            items = discoveryState.receivingMessages.toList(),
+            key = { it.first },
+          ) { item ->
+            ReceiveNotification(
+              Modifier.animateItem(placementSpec = tween()).align(Alignment.BottomCenter),
+              item.second,
+              discoveryController
+            )
+          }
+
+        }
+        
+        // Trust notifications
+        discoveryState.trustNotifications.forEach { notification ->
+          TrustPairingNotification(
+            notification = notification,
+            modifier = Modifier
+              .align(Alignment.TopCenter)
+              .padding(top = 8.dp)
+          )
+        }
+
       }
+
+    })
+    
+    // Quick trust dialog
+    showQuickTrustDialog?.let { device ->
+      QuickTrustDialog(
+        deviceUi = device,
+        onApprove = {
+          showQuickTrustDialog = null
+          discoveryController.onTrustDevice(device.deviceId)
+        },
+        onDecline = {
+          showQuickTrustDialog = null
+        }
+      )
+    }
+    
+    // Pairing progress dialog
+    if (showPairingProgress) {
+      PairingProgressDialog(
+        deviceName = deviceUiClicked?.deviceName ?: "device",
+        onDismiss = { showPairingProgress = false }
+      )
+    }
+    
+    // Pairing result dialog
+    pairingResult?.let { (success, errorMessage) ->
+      PairingResultDialog(
+        success = success,
+        deviceName = deviceUiClicked?.deviceName ?: "device",
+        errorMessage = errorMessage,
+        onDismiss = { pairingResult = null }
+      )
     )
   }
 }
