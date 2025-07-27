@@ -14,8 +14,8 @@ bugsnag-kmp = "1.0.0-beta03"
 bugsnag-android = "6.15.0"
 bugsnag-jvm = "3.8.0"
 filekit = "0.10.0-beta04"
-sqldelight = "2.0.2"
-cryptography-kotlin = "0.3.1"
+sqldelight = "2.1.0"
+cryptography-kotlin = "0.5.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -42,7 +42,7 @@ kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.re
 dagger = { module = "com.google.dagger:dagger", version.ref = "dagger" }
 dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = "dagger" }
 
-simplestorage = { module = "com.anggrayudi:storage", version = "2.1.0" }
+simplestorage = { module = "com.anggrayudi:storage", version = "2.2.0" }
 
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.1" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
@@ -62,6 +62,7 @@ sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", versi
 
 # Cryptography
 cryptography-core = { module = "dev.whyoleg.cryptography:cryptography-core", version.ref = "cryptography-kotlin" }
+cryptography-provider = { module = "dev.whyoleg.cryptography:cryptography-provider-optimal", version.ref = "cryptography-kotlin" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
