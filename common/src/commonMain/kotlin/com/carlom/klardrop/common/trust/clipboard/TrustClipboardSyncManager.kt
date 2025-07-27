@@ -24,6 +24,7 @@ class TrustClipboardSyncManager(
         private const val TAG = "TrustClipboardSyncManager"
         private const val MIN_SYNC_INTERVAL_MS = 30_000L // 30 seconds minimum
         private const val DEBOUNCE_DELAY_MS = 1000L // 1 second debounce
+        private const val MAX_AUTO_SYNC_SIZE_BYTES = 1024 // 1KB limit for automatic sync
     }
     
     private val _syncEnabled = MutableStateFlow(false)
@@ -108,6 +109,13 @@ class TrustClipboardSyncManager(
             return
         }
         
+        // Check payload size - only auto-sync if under 1KB
+        val contentSizeBytes = content.toByteArray(Charsets.UTF_8).size
+        if (contentSizeBytes > MAX_AUTO_SYNC_SIZE_BYTES) {
+            log(TAG, "Clipboard content too large for auto-sync (${contentSizeBytes} bytes > ${MAX_AUTO_SYNC_SIZE_BYTES} bytes), skipping")
+            return
+        }
+        
         // Check if we have a trust group
         val trustGroup = trustManager.currentTrustGroup.value
         if (trustGroup == null) {
@@ -127,7 +135,7 @@ class TrustClipboardSyncManager(
         
         try {
             // Sync to trusted devices
-            log(TAG, "Syncing clipboard content to ${devicesWithClipboardSync.size} devices")
+            log(TAG, "Syncing clipboard content to ${devicesWithClipboardSync.size} devices (${contentSizeBytes} bytes)")
             trustManager.syncClipboard(content)
             
             // Update last synced content
@@ -180,7 +188,50 @@ class TrustClipboardSyncManager(
         
         val content = clipboardManager.read()
         if (content.isNotEmpty()) {
-            handleLocalClipboardChange(content)
+            val contentSizeBytes = content.toByteArray(Charsets.UTF_8).size
+            if (contentSizeBytes > MAX_AUTO_SYNC_SIZE_BYTES) {
+                log(TAG, "Warning: Manual sync of large clipboard content (${contentSizeBytes} bytes > ${MAX_AUTO_SYNC_SIZE_BYTES} bytes)")
+                // For manual sync, we allow larger content but with a warning
+                // Bypass the size check by calling the sync logic directly
+                manualSyncContent(content)
+            } else {
+                handleLocalClipboardChange(content)
+            }
+        }
+    }
+    
+    /**
+     * Manually sync content without size restrictions (for user-initiated sync)
+     */
+    private suspend fun manualSyncContent(content: String) {
+        // Check if we have a trust group
+        val trustGroup = trustManager.currentTrustGroup.value
+        if (trustGroup == null) {
+            log(TAG, "No trust group, skipping clipboard sync")
+            return
+        }
+        
+        // Check if we have trusted devices with clipboard sync permission
+        val devicesWithClipboardSync = trustManager.trustedDevices.value.filter { device ->
+            device.permissions.contains(Permission.PERMISSION_CLIPBOARD_SYNC)
+        }
+        
+        if (devicesWithClipboardSync.isEmpty()) {
+            log(TAG, "No trusted devices with clipboard sync permission")
+            return
+        }
+        
+        try {
+            val contentSizeBytes = content.toByteArray(Charsets.UTF_8).size
+            // Sync to trusted devices
+            log(TAG, "Manually syncing clipboard content to ${devicesWithClipboardSync.size} devices (${contentSizeBytes} bytes)")
+            trustManager.syncClipboard(content)
+            
+            // Update last synced content
+            _lastSyncedContent.value = content
+            
+        } catch (e: Exception) {
+            log(TAG, "Failed to manually sync clipboard", e)
         }
     }
     
@@ -204,16 +255,8 @@ class TrustClipboardSyncManager(
             device.permissions - Permission.PERMISSION_CLIPBOARD_SYNC
         }
         
-        val updatedDevice = device.copy(permissions = updatedPermissions)
-        
-        // Update in trust store
-        trustManager.trustStore.addTrustedDevice(updatedDevice)
-        
-        // Broadcast update to other devices
-        trustManager.protocolHandler.broadcastMemberUpdate(
-            com.carlom.klardrop.protos.trust.UpdateAction.UPDATE_ACTION_UPDATE,
-            updatedDevice
-        )
+        // Use the public method to update device permissions
+        trustManager.updateDevicePermissions(deviceId, updatedPermissions)
     }
 }
 
@@ -222,7 +265,7 @@ class TrustClipboardSyncManager(
  */
 data class ClipboardSyncPreferences(
     val enabled: Boolean = false,
-    val syncInterval: Long = MIN_SYNC_INTERVAL_MS,
+    val syncInterval: Long = 30_000L, // 30 seconds
     val showNotifications: Boolean = true,
     val excludedApps: Set<String> = emptySet()
 )

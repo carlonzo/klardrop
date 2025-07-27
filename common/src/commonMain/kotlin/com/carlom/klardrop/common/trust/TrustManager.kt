@@ -323,6 +323,27 @@ class TrustManager(
     }
     
     /**
+     * Update device permissions
+     */
+    suspend fun updateDevicePermissions(deviceId: String, permissions: Set<Permission>) {
+        val device = _trustedDevices.value.find { it.deviceId == deviceId } ?: return
+        
+        val updatedDevice = device.copy(permissions = permissions)
+        
+        // Update in trust store
+        trustStore.addTrustedDevice(updatedDevice)
+        
+        // Broadcast update to other devices
+        protocolHandler.broadcastMemberUpdate(
+            UpdateAction.UPDATE_ACTION_UPDATE,
+            updatedDevice
+        )
+        
+        // Update local state
+        _trustedDevices.value = trustStore.getTrustedDevices()
+    }
+    
+    /**
      * Handle trust events from protocol handler
      */
     private suspend fun handleTrustEvent(event: TrustEvent) {
