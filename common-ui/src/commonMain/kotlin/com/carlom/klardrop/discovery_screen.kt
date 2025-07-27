@@ -54,10 +54,7 @@ fun DiscoveryScreen(
   uiDependencies: UiDependencies // Added
 ) {
 
-<<<<<<< HEAD
   val discoveryState by discoveryController.screenStateFlow.collectAsState() // Moved up
-  val deviceUiClicked = remember<DeviceUi?> { null } // Still used by bottom sheet logic if kept
-=======
   var deviceUiClicked = remember<DeviceUi?> { null }
   val scope = rememberCoroutineScope()
   
@@ -65,7 +62,6 @@ fun DiscoveryScreen(
   var showQuickTrustDialog by remember { mutableStateOf<DeviceUi?>(null) }
   var showPairingProgress by remember { mutableStateOf(false) }
   var pairingResult by remember { mutableStateOf<Pair<Boolean, String?>?>(null) }
->>>>>>> 1b33d42 (feat(trust): implement trusted device groups with secure protocol and storage)
 
   val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
     if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
@@ -83,7 +79,6 @@ fun DiscoveryScreen(
 
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
-<<<<<<< HEAD
   // --- Navigation to Chat Screen ---
   if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
     val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
@@ -98,20 +93,14 @@ fun DiscoveryScreen(
     )
   } else {
     // --- Original Discovery Screen Content (ModalBottomSheet for sending) ---
-    ModalBottomSheetLayout(
-      sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-      sheetBackgroundColor = MaterialTheme.colorScheme.surface,
-      sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
-      sheetContent = {
-        if (deviceUiClicked != null) { // Ensure deviceUiClicked is not null before accessing
-          ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
-=======
   ModalBottomSheetLayout(
     sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
     sheetBackgroundColor = MaterialTheme.colorScheme.surface,
     sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
     sheetContent = {
-      ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
+      if (deviceUiClicked != null) { // Ensure deviceUiClicked is not null before accessing
+        ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
+      }
     },
     sheetState = sheetState,
     content = {
