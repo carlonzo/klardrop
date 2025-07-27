@@ -83,6 +83,7 @@ class CommonComponent(
     TrustModule(
       applicationInfo = applicationInfo,
       coroutines = coroutines,
+      appDatabase = storageModule.appDatabase(),
       internalPlatformDependencies = internalPlatformDependency,
       currentDeviceProvider = currentDeviceProvider,
       clipboardManager = clipboardManager,

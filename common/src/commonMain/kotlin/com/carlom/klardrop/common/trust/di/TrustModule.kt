@@ -9,7 +9,7 @@ import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.trust.clipboard.TrustClipboardSyncManager
-import com.carlom.klardrop.common.trust.db.DatabaseDriverFactory
+import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.discovery.TrustAwareDiscoveryUtils
 import com.carlom.klardrop.common.trust.receiver.withTrustAwareness
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineScope
 class TrustModule(
     private val applicationInfo: ApplicationInfo,
     private val coroutines: Coroutines,
+    private val appDatabase: AppDatabase,
     private val internalPlatformDependencies: InternalPlatformDependencies,
     private val currentDeviceProvider: CurrentDeviceProvider,
     private val clipboardManager: ClipboardManager,
@@ -33,10 +34,6 @@ class TrustModule(
     
     private val trustScope: CoroutineScope by lazy {
         coroutines.newScope(coroutines.ioDispatcher)
-    }
-    
-    private val databaseDriverFactory: DatabaseDriverFactory by lazy {
-        internalPlatformDependencies.databaseDriverFactory()
     }
     
     private val secureKeyStorageFactory: SecureKeyStorageFactory by lazy {
@@ -49,7 +46,7 @@ class TrustModule(
         val deviceType = CommonPlatformDependencies.deviceType()
         
         TrustManager(
-            databaseDriverFactory = databaseDriverFactory,
+            database = appDatabase,
             secureKeyStorageFactory = secureKeyStorageFactory,
             deviceName = deviceName,
             deviceType = mapDeviceType(deviceType),

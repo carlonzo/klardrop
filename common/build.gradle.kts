@@ -121,8 +121,5 @@ sqldelight {
     create("AppDatabase") {
       packageName.set("com.carlom.klardrop.common.database")
     }
-    create("TrustDatabase") {
-      packageName.set("com.carlom.klardrop.common.trust.db")
-    }
   }
 }

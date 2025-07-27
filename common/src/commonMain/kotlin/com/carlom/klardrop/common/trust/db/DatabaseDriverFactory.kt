@@ -1,7 +1,0 @@
-package com.carlom.klardrop.common.trust.db
-
-import app.cash.sqldelight.db.SqlDriver
-
-expect class DatabaseDriverFactory {
-    fun createDriver(): SqlDriver
-}
