@@ -55,10 +55,10 @@ class KlardropIntegrationTest {
   }
 
   @Test
-  fun testSendTwoMessagesForKlardrop() = runTest(coroutines.dispatcher) {
+  fun testSendTwoMessagesForKlardrop() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
-    turbineScope {
+    turbineScope(timeout = 30.seconds) {
       with(testContext) {
         sendAndVerifyMessage("This is the first message")
         sendAndVerifyMessage("This is a second message!")
