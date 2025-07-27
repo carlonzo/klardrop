@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.trust.communication
 
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TrustMessage
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.protos.trust.TrustMessage as ProtoTrustMessage
@@ -33,11 +34,11 @@ class TrustMessageRouter(
         
         // Convert protobuf message to communication TrustMessage
         val trustMessage = TrustMessage(
-            trustMessageBytes = message.toByteArray()
+            trustMessageBytes = message.encode()
         )
         
         // Send as a regular message
-        val messageRequest = SendMessageRequest(trustMessage)
+        val messageRequest = SimpleSendMessageRequest(trustMessage)
         msgr.send(deviceId, messageRequest).collect { progress ->
             when (progress) {
                 is com.carlom.klardrop.common.communication.MessengerSendProgress.Error -> 
@@ -57,7 +58,7 @@ class TrustMessageRouter(
         
         try {
             // Parse the protobuf message
-            val protoMessage = ProtoTrustMessage.parseFrom(message.trustMessageBytes)
+            val protoMessage = ProtoTrustMessage.ADAPTER.decode(message.trustMessageBytes)
             
             // Handle it in the trust manager
             tm.handleTrustMessage(protoMessage, fromDeviceId)
