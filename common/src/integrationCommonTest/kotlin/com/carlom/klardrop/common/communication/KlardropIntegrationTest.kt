@@ -131,10 +131,10 @@ class KlardropIntegrationTest {
   // simple method to parametize the test for reconnection issues. using a boolean to indicate if the client should drop the connection or the server
   @OptIn(ExperimentalTime::class)
   @Suppress("VisibleForTests")
-  private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) = runTest(coroutines.dispatcher) {
+  private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) = runTest(coroutines.dispatcher, timeout = 60.seconds) {
     testContext.setupServerAndClient()
 
-    turbineScope {
+    turbineScope(timeout = 30.seconds) {
       with(testContext) {
         // send first message between client and server
         sendAndVerifyMessage("firstMessage")
@@ -149,6 +149,10 @@ class KlardropIntegrationTest {
 
         // Wait a bit to ensure cleanup
         advanceToCompletion()
+        
+        // Give extra time for connection cleanup
+        coroutines.dispatcher.scheduler.advanceTimeBy(500)
+        coroutines.dispatcher.scheduler.runCurrent()
 
         val messageReceiver = serverCommunicationModule.messageReceiver()
         val clientMessenger = clientCommunicationModule.messenger()
@@ -156,17 +160,31 @@ class KlardropIntegrationTest {
         // Now try to send a second message - this should trigger reconnection
         val secondMessage = textSendRequest("reconnection messenger message")
 
+        // Set up receiver before sending to avoid race conditions
+        val secondReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
+        
+        // Allow receiver to properly set up
+        coroutines.dispatcher.scheduler.runCurrent()
+        coroutines.dispatcher.scheduler.advanceTimeBy(100)
+        coroutines.dispatcher.scheduler.runCurrent()
+
         val secondSendFlow = clientMessenger.send(serverDeviceId, secondMessage)
         val secondSenderChannel = secondSendFlow.testIn(this@turbineScope)
-        val secondReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
-
 
         // Since connections were dropped, this should trigger timeouts and retries
+        // We need to give enough time for reconnection attempts
+        coroutines.dispatcher.scheduler.runCurrent()
+        coroutines.dispatcher.scheduler.advanceUntilIdle()
+        
         // Advance past the ACK timeout (2 seconds) to trigger retry logic
         advanceTimeAndComplete(2100) // Past 2-second ACK timeout
+        
+        // Additional time for reconnection and retry
+        coroutines.dispatcher.scheduler.advanceTimeBy(3000)
+        coroutines.dispatcher.scheduler.runCurrent()
+        coroutines.dispatcher.scheduler.advanceUntilIdle()
 
         // Wait for second message to be sent
-
         try {
           secondSenderChannel.awaitFor {
             it is Completed
