@@ -78,6 +78,10 @@ class StorageModule(
     )
   }
 
+  fun appDatabase(): AppDatabase {
+    return appDatabase
+  }
+
   private inline fun Path.toOkioPath(): okio.Path {
     return this.toString().toPath()
   }
