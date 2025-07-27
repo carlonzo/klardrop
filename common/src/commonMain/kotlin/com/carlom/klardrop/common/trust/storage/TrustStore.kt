@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
+import kotlinx.coroutines.Dispatchers
 
 interface TrustStore {
     // Device keypair operations
@@ -78,7 +81,7 @@ class TrustStoreImpl(
             publicKey = dbKeypair.public_key,
             privateKey = privateKey,
             deviceName = dbKeypair.device_name,
-            deviceType = DeviceType.forNumber(dbKeypair.device_type.toInt()) ?: DeviceType.DEVICE_TYPE_UNKNOWN,
+            deviceType = DeviceType.entries.find { it.number == dbKeypair.device_type.toInt() } ?: DeviceType.DEVICE_TYPE_UNKNOWN,
             createdAt = dbKeypair.created_at
         )
     }
@@ -217,18 +220,18 @@ class TrustStoreImpl(
     override suspend fun isDeviceTrusted(deviceId: String): Boolean {
         return database.trustedDeviceQueries.isDeviceTrusted(
             device_id = deviceId,
-            timestamp = Clock().currentTimeMillis()
+            expires_at = Clock().currentTimeMillis()
         ).executeAsOne()
     }
     
     override suspend fun getDeviceTrustLevel(deviceId: String): TrustLevel? {
         val levelStr = database.trustedDeviceQueries.getDeviceTrustLevel(
             device_id = deviceId,
-            timestamp = Clock().currentTimeMillis()
+            expires_at = Clock().currentTimeMillis()
         ).executeAsOneOrNull()
         
         return levelStr?.let { 
-            TrustLevel.valueOf(it)
+            TrustLevel.entries.find { level -> level.number == it.toInt() } ?: TrustLevel.TRUST_LEVEL_UNKNOWN
         }
     }
     
@@ -273,7 +276,7 @@ class TrustStoreImpl(
     override suspend fun getPairingSession(sessionId: String): PairingSession? {
         return database.pairingSessionQueries.getActivePairingSession(
             session_id = sessionId,
-            timestamp = Clock().currentTimeMillis()
+            expires_at = Clock().currentTimeMillis()
         ).executeAsOneOrNull()?.toPairingSession()
     }
     
@@ -315,7 +318,7 @@ class TrustStoreImpl(
     }
     
     override suspend fun isClipboardContentNew(contentHash: String): Boolean {
-        return !database.clipboardEntryQueries.contentExists(contentHash).executeAsOne().content_exists
+        return !database.clipboardEntryQueries.contentExists(contentHash).executeAsOne()
     }
     
     override suspend fun cleanupExpiredDevices() {
@@ -368,12 +371,14 @@ class TrustStoreImpl(
             groupId = group_id,
             publicKey = public_key,
             deviceName = device_name,
-            deviceType = DeviceType.valueOf(device_type),
+            deviceType = DeviceType.entries.find { it.number == device_type.toInt() } ?: DeviceType.DEVICE_TYPE_UNKNOWN,
             addedAt = added_at,
             addedBy = added_by,
             lastSeen = last_seen,
-            trustLevel = TrustLevel.valueOf(trust_level),
-            permissions = json.decodeFromString<List<String>>(permissions).map { Permission.valueOf(it) }.toSet(),
+            trustLevel = TrustLevel.entries.find { it.number == trust_level.toInt() } ?: TrustLevel.TRUST_LEVEL_UNKNOWN,
+            permissions = json.decodeFromString<List<String>>(permissions).map { 
+                Permission.entries.find { perm -> perm.name == it } ?: Permission.PERMISSION_UNKNOWN 
+            }.toSet(),
             expiresAt = expires_at,
             isActive = is_active == 1L
         )

@@ -11,7 +11,20 @@ import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandlerImpl
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorage
 import com.carlom.klardrop.common.trust.storage.TrustStore
 import com.carlom.klardrop.common.trust.storage.TrustStoreImpl
-import com.carlom.klardrop.protos.trust.*
+import com.carlom.klardrop.protos.trust.TrustMessage as ProtoTrustMessage
+import com.carlom.klardrop.protos.trust.TrustLevel
+import com.carlom.klardrop.protos.trust.Permission
+import com.carlom.klardrop.protos.trust.DeviceType as ProtoDeviceType
+import com.carlom.klardrop.protos.trust.TrustMessageType
+import com.carlom.klardrop.protos.trust.ECDHInitiation
+import com.carlom.klardrop.protos.trust.ECDHResponse
+import com.carlom.klardrop.protos.trust.GroupInvitation
+import com.carlom.klardrop.protos.trust.JoinConfirmation
+import com.carlom.klardrop.protos.trust.MemberUpdate
+import com.carlom.klardrop.protos.trust.ClipboardSync
+import com.carlom.klardrop.protos.trust.DiscoveryAnnouncement
+import com.carlom.klardrop.protos.trust.UpdateAction
+import com.carlom.klardrop.common.communication.message.TrustMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -20,8 +33,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.carlom.klardrop.common.utils.Clock
+import com.carlom.klardrop.common.utils.DeviceType
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -60,6 +76,11 @@ class TrustManager(
     val trustedDevices: StateFlow<List<TrustedDevice>> = _trustedDevices.asStateFlow()
     
     private lateinit var protocolHandler: TrustProtocolHandler
+    
+    private val json = Json {
+        ignoreUnknownKeys = true
+        prettyPrint = true
+    }
     
     init {
         scope.launch {
@@ -122,7 +143,7 @@ class TrustManager(
             publicKey = ecdsaKeyPair.publicKey,
             privateKey = ecdsaKeyPair.privateKey,
             deviceName = deviceName,
-            deviceType = deviceType
+            deviceType = mapDeviceType(deviceType)
         )
     }
     
@@ -202,30 +223,30 @@ class TrustManager(
     /**
      * Handle incoming trust protocol message
      */
-    suspend fun handleTrustMessage(message: TrustMessage, senderAddress: String) {
+    suspend fun handleTrustMessage(message: ProtoTrustMessage, senderAddress: String) {
         when (message.type) {
             TrustMessageType.MESSAGE_TYPE_ECDH_INITIATION -> {
-                val initiation = ECDHInitiation.parseFrom(message.payload)
+                val initiation = ECDHInitiation.ADAPTER.decode(message.payload)
                 protocolHandler.handleECDHInitiation(initiation, senderAddress)
             }
             TrustMessageType.MESSAGE_TYPE_ECDH_RESPONSE -> {
-                val response = ECDHResponse.parseFrom(message.payload)
+                val response = ECDHResponse.ADAPTER.decode(message.payload)
                 protocolHandler.handleECDHResponse(response)
             }
             TrustMessageType.MESSAGE_TYPE_GROUP_INVITATION -> {
-                val invitation = GroupInvitation.parseFrom(message.payload)
+                val invitation = GroupInvitation.ADAPTER.decode(message.payload)
                 protocolHandler.handleGroupInvitation(invitation)
             }
             TrustMessageType.MESSAGE_TYPE_JOIN_CONFIRMATION -> {
-                val confirmation = JoinConfirmation.parseFrom(message.payload)
+                val confirmation = JoinConfirmation.ADAPTER.decode(message.payload)
                 protocolHandler.handleJoinConfirmation(confirmation)
             }
             TrustMessageType.MESSAGE_TYPE_MEMBER_UPDATE -> {
-                val update = MemberUpdate.parseFrom(message.payload)
+                val update = MemberUpdate.ADAPTER.decode(message.payload)
                 protocolHandler.handleMemberUpdate(update)
             }
             TrustMessageType.MESSAGE_TYPE_CLIPBOARD_SYNC -> {
-                val sync = ClipboardSync.parseFrom(message.payload)
+                val sync = ClipboardSync.ADAPTER.decode(message.payload)
                 protocolHandler.handleClipboardSync(sync)
             }
             else -> {
@@ -389,7 +410,7 @@ class TrustManager(
         )
         
         // Serialize and encrypt
-        val serialized = Json.encodeToString(
+        val serialized = json.encodeToString(
             TrustExportData.serializer(),
             exportData
         )
@@ -434,7 +455,7 @@ class TrustManager(
         )
         
         // Deserialize
-        val exportData = Json.decodeFromString<TrustExportData>(
+        val exportData = json.decodeFromString<TrustExportData>(
             String(decrypted)
         )
         
@@ -447,11 +468,20 @@ class TrustManager(
         _currentTrustGroup.value = exportData.trustGroup
         _trustedDevices.value = exportData.trustedDevices
     }
+    
+    private fun mapDeviceType(deviceType: com.carlom.klardrop.common.utils.DeviceType): ProtoDeviceType {
+        return when (deviceType) {
+            com.carlom.klardrop.common.utils.DeviceType.MOBILE -> ProtoDeviceType.DEVICE_TYPE_ANDROID
+            com.carlom.klardrop.common.utils.DeviceType.DESKTOP -> ProtoDeviceType.DEVICE_TYPE_LINUX
+            com.carlom.klardrop.common.utils.DeviceType.UNKNOWN -> ProtoDeviceType.DEVICE_TYPE_UNKNOWN
+        }
+    }
 }
 
 /**
  * Data class for trust export/import
  */
+
 @Serializable
 private data class TrustExportData(
     val version: Int,

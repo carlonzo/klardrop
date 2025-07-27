@@ -50,20 +50,23 @@ actual class PlatformSecureKeyStorage : SecureKeyStorage {
         }
     }
     
-    override suspend fun deletePrivateKey(alias: String) = withContext(Dispatchers.IO) {
-        val file = File(STORAGE_DIR, "$alias.key")
-        file.delete()
-        Unit
+    override suspend fun deletePrivateKey(alias: String) {
+        withContext(Dispatchers.IO) {
+            val file = File(STORAGE_DIR, "$alias.key")
+            file.delete()
+        }
     }
     
     override suspend fun keyExists(alias: String): Boolean = withContext(Dispatchers.IO) {
         File(STORAGE_DIR, "$alias.key").exists()
     }
     
-    override suspend fun clearAll() = withContext(Dispatchers.IO) {
-        STORAGE_DIR.listFiles()?.forEach { file ->
-            if (file.name != MASTER_KEY_FILE) {
-                file.delete()
+    override suspend fun clearAll() {
+        withContext(Dispatchers.IO) {
+            STORAGE_DIR.listFiles()?.forEach { file ->
+                if (file.name != MASTER_KEY_FILE) {
+                    file.delete()
+                }
             }
         }
         Unit

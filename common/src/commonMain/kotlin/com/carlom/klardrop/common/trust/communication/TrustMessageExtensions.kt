@@ -14,43 +14,13 @@ import kotlinx.serialization.Serializable
  * Extension to add trust message support to Messenger
  */
 suspend fun Messenger.sendTrustMessage(deviceId: String, trustMessage: TrustMessage) {
-    // Wrap the trust message in a Klardrop message
-    val wrappedMessage = TrustMessageWrapper(
-        trustMessageType = trustMessage.type,
-        payload = trustMessage.payload.toByteArray()
+    // Convert the trust message to the common TrustMessage type
+    val trustMessageBytes = trustMessage.encode()
+    val commonTrustMessage = com.carlom.klardrop.common.communication.message.TrustMessage(
+        trustMessageBytes = trustMessageBytes
     )
     
     // Send using the existing messenger infrastructure
-    send(deviceId, wrappedMessage.toSimpleSendRequest())
-}
-
-/**
- * Wrapper to send trust messages through the existing Klardrop protocol
- * This allows trust messages to be sent alongside regular messages
- */
-@Serializable
-data class TrustMessageWrapper(
-    val trustMessageType: com.carlom.klardrop.protos.trust.TrustMessageType,
-    val payload: ByteArray
-) : Message() {
-    override val type: MessageType = MessageType.TEXT // Reuse TEXT type for now
-    override val hasPayload: Boolean = false
-    
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other == null || this::class != other::class) return false
-        
-        other as TrustMessageWrapper
-        
-        if (trustMessageType != other.trustMessageType) return false
-        if (!payload.contentEquals(other.payload)) return false
-        
-        return true
-    }
-    
-    override fun hashCode(): Int {
-        var result = trustMessageType.hashCode()
-        result = 31 * result + payload.contentHashCode()
-        return result
-    }
+    val request = com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest(commonTrustMessage)
+    send(deviceId, request)
 }

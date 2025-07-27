@@ -15,51 +15,45 @@ class TrustMessageHandler(
     private val trustManagerProvider: () -> TrustManager?
 ) : MessageHandler<TrustMessage, SendMessageRequest> {
     
-    override suspend fun handleSend(
-        message: TrustMessage,
+    override suspend fun handleOutgoing(
+        toDeviceId: String,
+        request: SendMessageRequest,
         writeChannel: ByteWriteChannel,
-        progress: MutableSharedFlow<MessengerSendProgress>
+        progressFlow: MutableSharedFlow<MessengerSendProgress>
     ) {
         // Trust messages are serialized normally like other messages
-        progress.emit(MessengerSendProgress.Completed)
+        progressFlow.emit(MessengerSendProgress.Completed)
     }
     
-    override suspend fun handleReceive(
+    override suspend fun handleIncoming(
         message: TrustMessage,
-        deviceId: String,
-        status: MutableStateFlow<ReceiveMessageUpdate>
+        readChannel: ByteReadChannel,
+        receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
     ) {
         val trustManager = trustManagerProvider()
         if (trustManager == null) {
-            status.value = ReceiveMessageUpdate(
-                status = ReceiveMessageStatus.ERROR,
-                error = "Trust system not initialized"
+            receiveFlow.value = ReceiveMessageUpdate(
+                status = ReceiveMessageStatus.Failed("Trust system not initialized")
             )
             return
         }
         
         try {
             // Parse the trust protocol message
-            val trustProtocolMessage = com.carlom.klardrop.protos.trust.TrustMessage.parseFrom(message.trustMessageBytes)
+            val trustProtocolMessage = com.carlom.klardrop.protos.trust.TrustMessage.ADAPTER.decode(message.trustMessageBytes)
             
             // Handle the trust message
-            trustManager.handleTrustMessage(trustProtocolMessage, deviceId)
+            trustManager.handleTrustMessage(trustProtocolMessage, "")  // TODO: get deviceId from somewhere
             
             // Update status
-            status.value = ReceiveMessageUpdate(
-                status = ReceiveMessageStatus.COMPLETED,
-                message = message
+            receiveFlow.value = ReceiveMessageUpdate(
+                messages = listOf(message),
+                status = ReceiveMessageStatus.Completed
             )
         } catch (e: Exception) {
-            status.value = ReceiveMessageUpdate(
-                status = ReceiveMessageStatus.ERROR,
-                error = "Failed to handle trust message: ${e.message}"
+            receiveFlow.value = ReceiveMessageUpdate(
+                status = ReceiveMessageStatus.Failed("Failed to handle trust message: ${e.message}")
             )
         }
-    }
-    
-    override suspend fun onWriteReady(message: TrustMessage, channel: ByteWriteChannel): Boolean {
-        // Trust messages are always ready to write
-        return true
     }
 }
