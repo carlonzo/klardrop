@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.tween
 import com.carlom.klardrop.chat.DeviceChatScreen
 import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.utils.DeviceType
@@ -51,10 +54,10 @@ fun DiscoveryScreen(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
   discoveryController: DiscoveryController,
-  uiDependencies: UiDependencies // Added
+  uiDependencies: UiDependencies
 ) {
 
-  val discoveryState by discoveryController.screenStateFlow.collectAsState() // Moved up
+  val discoveryState by discoveryController.screenStateFlow.collectAsState()
   var deviceUiClicked = remember<DeviceUi?> { null }
   val scope = rememberCoroutineScope()
   
@@ -79,7 +82,6 @@ fun DiscoveryScreen(
 
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
-<<<<<<< HEAD
   // --- Navigation to Chat Screen ---
   if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
     val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
@@ -90,7 +92,7 @@ fun DiscoveryScreen(
       deviceName = discoveryState.navigateToChatDeviceName!!,
       viewModel = chatViewModel,
       onBackClicked = { discoveryController.onBackFromChat() },
-      onOpenFileRequest = { filePath -> chatViewModel.openFileClicked(filePath) } // Added
+      onOpenFileRequest = { filePath -> chatViewModel.openFileClicked(filePath) }
     )
   } else {
     // --- Original Discovery Screen Content (ModalBottomSheet for sending) ---
@@ -99,62 +101,53 @@ fun DiscoveryScreen(
       sheetBackgroundColor = MaterialTheme.colorScheme.surface,
       sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
       sheetContent = {
-        if (deviceUiClicked != null) { // Ensure deviceUiClicked is not null before accessing
+        if (deviceUiClicked != null) {
           ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
-=======
-  ModalBottomSheetLayout(
-    sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-    sheetBackgroundColor = MaterialTheme.colorScheme.surface,
-    sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
-    sheetContent = {
-      ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
-    },
-    sheetState = sheetState,
-    content = {
-
-      val discoveryState by discoveryController.screenStateFlow
-        .collectAsState()
-
-      discoveryController.actionsFlow.collectAsEffect {
-        when (it) {
-          is ActionUi.OnDeviceClicked -> {
-            val device = it.deviceUi
-            
-            // Check if device is untrusted and show trust dialog
-            if (device.trustStatus == com.carlom.klardrop.common.trust.model.TrustStatus.UNTRUSTED) {
-              showQuickTrustDialog = device
-            } else {
-              // For trusted devices, show the share sheet
-              deviceUiClicked = device
-              scope.launch {
-                sheetState.show()
-              }
-            }
-          }
-          is ActionUi.TrustNotification -> {
-            // Handle trust notifications - this will be implemented when we update the controller
-          }
-          is ActionUi.PairingStarted -> {
-            showPairingProgress = true
-          }
-          is ActionUi.PairingCompleted -> {
-            showPairingProgress = false
-            pairingResult = it.success to it.errorMessage
-          }
         }
       },
       sheetState = sheetState,
       content = {
+        
+        // Handle actions from the controller
+        LaunchedEffect(Unit) {
+          discoveryController.actionsFlow.collect {
+            when (it) {
+              is ActionUi.OnDeviceClicked -> {
+                val device = it.deviceUi
+                
+                // Check if device is untrusted and show trust dialog
+                if (device.trustStatus == com.carlom.klardrop.common.trust.model.TrustStatus.UNTRUSTED) {
+                  showQuickTrustDialog = device
+                } else {
+                  // For trusted devices, show the share sheet
+                  deviceUiClicked = device
+                  scope.launch {
+                    sheetState.show()
+                  }
+                }
+              }
+              is ActionUi.TrustNotification -> {
+                // Handle trust notifications
+              }
+              is ActionUi.PairingStarted -> {
+                showPairingProgress = true
+              }
+              is ActionUi.PairingCompleted -> {
+                showPairingProgress = false
+                pairingResult = it.success to it.errorMessage
+              }
+            }
+          }
+        }
 
         DiscoveryDashboard(
           modifier = modifier,
           isLargeScreen = isLargeScreen,
           devices = discoveryState.devices,
-          onDeviceActionListener = discoveryController // This now triggers chat navigation
+          onDeviceActionListener = discoveryController
         )
 
         LazyColumn(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
-
           items(
             items = discoveryState.receivingMessages.toList(),
             key = { it.first },
@@ -165,7 +158,6 @@ fun DiscoveryScreen(
               discoveryController
             )
           }
-
         }
         
         // Trust notifications
@@ -177,10 +169,8 @@ fun DiscoveryScreen(
               .padding(top = 8.dp)
           )
         }
-
       }
-
-    })
+    )
     
     // Quick trust dialog
     showQuickTrustDialog?.let { device ->
@@ -212,7 +202,7 @@ fun DiscoveryScreen(
         errorMessage = errorMessage,
         onDismiss = { pairingResult = null }
       )
-    )
+    }
   }
 }
 

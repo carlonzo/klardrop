@@ -10,7 +10,7 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
-class DesktopSecureKeyStorage : SecureKeyStorage {
+actual class PlatformSecureKeyStorage : SecureKeyStorage {
     companion object {
         private const val ALGORITHM = "AES"
         private const val TRANSFORMATION = "AES/CBC/PKCS5Padding"
@@ -69,6 +69,7 @@ class DesktopSecureKeyStorage : SecureKeyStorage {
                 }
             }
         }
+        Unit
     }
     
     private fun loadOrCreateMasterKey(): ByteArray {
@@ -132,6 +133,3 @@ class DesktopSecureKeyStorage : SecureKeyStorage {
     }
 }
 
-actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = DesktopSecureKeyStorage()
-}

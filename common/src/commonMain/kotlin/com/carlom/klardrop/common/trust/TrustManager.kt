@@ -8,7 +8,7 @@ import com.carlom.klardrop.common.trust.crypto.EncryptedPayload
 import com.carlom.klardrop.common.trust.protocol.TrustEvent
 import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandler
 import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandlerImpl
-import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
+import com.carlom.klardrop.common.trust.storage.SecureKeyStorage
 import com.carlom.klardrop.common.trust.storage.TrustStore
 import com.carlom.klardrop.common.trust.storage.TrustStoreImpl
 import com.carlom.klardrop.protos.trust.TrustMessage as ProtoTrustMessage
@@ -54,14 +54,12 @@ import kotlin.uuid.Uuid
  */
 class TrustManager(
     private val database: AppDatabase,
-    private val secureKeyStorageFactory: SecureKeyStorageFactory,
+    private val secureKeyStorage: SecureKeyStorage,
     private val deviceName: String,
     private val deviceType: DeviceType,
     private val scope: CoroutineScope,
     private val sendTrustMessage: suspend (deviceId: String, message: TrustMessage) -> Unit
 ) {
-    
-    private val secureKeyStorage = secureKeyStorageFactory.create()
     private val cryptoProvider: CryptoProvider = CryptoProviderImpl()
     private val trustStore: TrustStore = TrustStoreImpl(database, secureKeyStorage)
     

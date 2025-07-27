@@ -4,11 +4,10 @@ import TestCoroutines
 import app.cash.turbine.test
 import com.carlom.klardrop.common.trust.crypto.CryptoProvider
 import com.carlom.klardrop.common.trust.crypto.CryptoProviderImpl
-import com.carlom.klardrop.common.trust.db.DatabaseDriverFactory
-import com.carlom.klardrop.common.trust.db.TrustDatabase
+import com.carlom.klardrop.common.database.DriverFactory
+import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorage
-import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.protos.trust.*
 import kotlinx.coroutines.delay
@@ -20,7 +19,7 @@ class TrustManagerTest {
     
     private val testCoroutines = TestCoroutines()
     private val fakeDatabaseDriverFactory = FakeDatabaseDriverFactory()
-    private val fakeSecureKeyStorageFactory = FakeSecureKeyStorageFactory()
+    private val fakeSecureKeyStorage = FakeSecureKeyStorage()
     private val sentMessages = mutableListOf<Pair<String, TrustMessage>>()
     
     private lateinit var trustManager: TrustManager
@@ -36,7 +35,7 @@ class TrustManagerTest {
     ): TrustManager {
         return TrustManager(
             databaseDriverFactory = fakeDatabaseDriverFactory,
-            secureKeyStorageFactory = fakeSecureKeyStorageFactory,
+            secureKeyStorage = fakeSecureKeyStorage,
             deviceName = deviceName,
             deviceType = deviceType,
             scope = testCoroutines.newScope(),
@@ -427,11 +426,6 @@ class FakeDatabaseDriverFactory : DatabaseDriverFactory {
     }
 }
 
-class FakeSecureKeyStorageFactory : SecureKeyStorageFactory {
-    private val storage = FakeSecureKeyStorage()
-    
-    override fun create(): SecureKeyStorage = storage
-}
 
 class FakeSecureKeyStorage : SecureKeyStorage {
     private val storage = mutableMapOf<String, ByteArray>()
@@ -525,14 +519,14 @@ class FakeInMemoryDatabase {
 // Extended TrustManager for testing that exposes internal components
 class TrustManagerWithTestAccess(
     databaseDriverFactory: DatabaseDriverFactory,
-    secureKeyStorageFactory: SecureKeyStorageFactory,
+    secureKeyStorage: SecureKeyStorage,
     deviceName: String,
     deviceType: DeviceType,
     scope: kotlinx.coroutines.CoroutineScope,
     sendTrustMessage: suspend (deviceId: String, message: TrustMessage) -> Unit
 ) : TrustManager(
     databaseDriverFactory,
-    secureKeyStorageFactory,
+    secureKeyStorage,
     deviceName,
     deviceType,
     scope,

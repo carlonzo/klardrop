@@ -4,7 +4,7 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
-import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
+import com.carlom.klardrop.common.trust.storage.PlatformSecureKeyStorage
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.downloadDir
 import io.github.vinceglb.filekit.toKotlinxIoPath
@@ -28,11 +28,15 @@ actual class InternalPlatformDependencies {
     return ClipboardReaderWriter()
   }
   
-  actual fun secureKeyStorageFactory(): SecureKeyStorageFactory {
-    return SecureKeyStorageFactory()
+  actual fun platformSecureKeyStorage(): PlatformSecureKeyStorage {
+    return PlatformSecureKeyStorage()
   }
 
   actual fun driverFactory(): DriverFactory {
+    return DriverFactory()
+  }
+
+  actual fun databaseDriverFactory(): DriverFactory {
     return DriverFactory()
   }
 
