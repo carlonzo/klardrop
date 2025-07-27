@@ -4,8 +4,8 @@ import TestCoroutines
 import app.cash.turbine.test
 import com.carlom.klardrop.common.trust.crypto.CryptoProvider
 import com.carlom.klardrop.common.trust.crypto.CryptoProviderImpl
-import com.carlom.klardrop.common.trust.db.DatabaseDriverFactory
-import com.carlom.klardrop.common.trust.db.TrustDatabase
+import com.carlom.klardrop.common.database.DriverFactory
+import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorage
 import com.carlom.klardrop.common.utils.Clock

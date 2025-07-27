@@ -3,7 +3,6 @@ package com.carlom.klardrop.common
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
-import com.carlom.klardrop.common.trust.db.DatabaseDriverFactory
 import com.carlom.klardrop.common.trust.storage.PlatformSecureKeyStorage
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
@@ -14,7 +13,7 @@ expect class InternalPlatformDependencies {
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun clipboardReaderWriter(): ClipboardReaderWriter
   fun driverFactory(): DriverFactory
-  fun databaseDriverFactory(): DatabaseDriverFactory
+  fun databaseDriverFactory(): DriverFactory
   fun platformSecureKeyStorage(): PlatformSecureKeyStorage
   suspend fun openFile(filePath: String): Boolean
 }

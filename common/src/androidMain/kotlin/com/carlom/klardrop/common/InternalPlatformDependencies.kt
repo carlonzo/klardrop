@@ -5,11 +5,6 @@ import android.os.Environment
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
-<<<<<<< HEAD
-import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
-=======
-import com.carlom.klardrop.common.trust.db.DatabaseDriverFactory
->>>>>>> 5e89d39 (refactor(trust/storage): remove SecureKeyStorageFactory and use PlatformSecureKeyStorage directly)
 import com.carlom.klardrop.common.trust.storage.PlatformSecureKeyStorage
 import kotlinx.io.files.Path
 
@@ -32,6 +27,10 @@ actual class InternalPlatformDependencies(private val context: Context) {
   }
 
   actual fun driverFactory(): DriverFactory {
+    return DriverFactory(context)
+  }
+
+  actual fun databaseDriverFactory(): DriverFactory {
     return DriverFactory(context)
   }
 

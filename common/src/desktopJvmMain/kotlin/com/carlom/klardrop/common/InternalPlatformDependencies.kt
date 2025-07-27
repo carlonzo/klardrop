@@ -4,11 +4,6 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
-<<<<<<< HEAD
-import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
-=======
-import com.carlom.klardrop.common.trust.db.DatabaseDriverFactory
->>>>>>> 5e89d39 (refactor(trust/storage): remove SecureKeyStorageFactory and use PlatformSecureKeyStorage directly)
 import com.carlom.klardrop.common.trust.storage.PlatformSecureKeyStorage
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.downloadDir
@@ -38,6 +33,10 @@ actual class InternalPlatformDependencies {
   }
 
   actual fun driverFactory(): DriverFactory {
+    return DriverFactory()
+  }
+
+  actual fun databaseDriverFactory(): DriverFactory {
     return DriverFactory()
   }
 
