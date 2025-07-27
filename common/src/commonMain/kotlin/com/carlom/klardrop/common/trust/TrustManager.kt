@@ -34,10 +34,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.DeviceType
+import io.ktor.utils.io.core.toByteArray
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -79,10 +81,7 @@ class TrustManager(
     
     private lateinit var protocolHandler: TrustProtocolHandler
     
-    private val json = Json {
-        ignoreUnknownKeys = true
-        prettyPrint = true
-    }
+    private val proto = ProtoBuf { }
     
     init {
         scope.launch {
@@ -412,7 +411,7 @@ class TrustManager(
         )
         
         // Serialize and encrypt
-        val serialized = json.encodeToString(
+        val serialized = proto.encodeToByteArray(
             TrustExportData.serializer(),
             exportData
         )
@@ -425,7 +424,7 @@ class TrustManager(
             info = "klardrop-trust-export".toByteArray()
         )
         
-        val encrypted = cryptoProvider.encryptAESGCM(serialized.toByteArray(), key)
+        val encrypted = cryptoProvider.encryptAESGCM(serialized, key)
         
         // Combine salt + encrypted data
         return salt + encrypted.ciphertext + encrypted.nonce + encrypted.tag
@@ -457,9 +456,7 @@ class TrustManager(
         )
         
         // Deserialize
-        val exportData = json.decodeFromString<TrustExportData>(
-            String(decrypted)
-        )
+        val exportData = proto.decodeFromByteArray<TrustExportData>(decrypted)
         
         // Import data
         trustStore.saveDeviceKeypair(exportData.deviceKeypair)
