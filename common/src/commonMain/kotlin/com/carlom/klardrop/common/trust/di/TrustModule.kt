@@ -79,15 +79,18 @@ class TrustModule(
     
     private fun mapDeviceType(deviceType: com.carlom.klardrop.common.utils.DeviceType): com.carlom.klardrop.protos.trust.DeviceType {
         return when (deviceType) {
-            com.carlom.klardrop.common.utils.DeviceType.PHONE -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_ANDROID
-            com.carlom.klardrop.common.utils.DeviceType.TABLET -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_ANDROID
-            com.carlom.klardrop.common.utils.DeviceType.LAPTOP -> when (CommonPlatformDependencies.osType()) {
+            com.carlom.klardrop.common.utils.DeviceType.MOBILE -> when (CommonPlatformDependencies.osType()) {
+                OsType.ANDROID -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_ANDROID
+                OsType.APPLE -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_IOS
+                else -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_ANDROID
+            }
+            com.carlom.klardrop.common.utils.DeviceType.DESKTOP -> when (CommonPlatformDependencies.osType()) {
                 OsType.WINDOWS -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_WINDOWS
                 OsType.LINUX -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_LINUX
-                OsType.MAC -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_MACOS
+                OsType.APPLE -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_MACOS
                 else -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_UNKNOWN
             }
-            else -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_UNKNOWN
+            com.carlom.klardrop.common.utils.DeviceType.UNKNOWN -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_UNKNOWN
         }
     }
 }

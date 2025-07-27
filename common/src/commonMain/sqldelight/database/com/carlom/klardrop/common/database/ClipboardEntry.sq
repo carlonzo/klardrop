@@ -9,10 +9,6 @@ CREATE TABLE clipboard_entries (
     synced INTEGER NOT NULL DEFAULT 0
 );
 
--- Create index for faster queries
-CREATE INDEX idx_clipboard_timestamp ON clipboard_entries(timestamp DESC);
-CREATE INDEX idx_clipboard_hash ON clipboard_entries(content_hash);
-
 -- Insert clipboard entry
 insertClipboardEntry:
 INSERT INTO clipboard_entries (device_id, content, content_hash, timestamp, signature)

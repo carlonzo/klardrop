@@ -4,8 +4,10 @@ import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.protos.trust.DeviceType
 import com.carlom.klardrop.protos.trust.Permission
 import com.carlom.klardrop.protos.trust.TrustLevel
+import kotlinx.serialization.Serializable
 
 // Device identity and keypair
+@Serializable
 data class DeviceKeypair(
     val deviceId: String,
     val publicKey: ByteArray,
@@ -38,6 +40,7 @@ data class DeviceKeypair(
 }
 
 // Trust group
+@Serializable
 data class TrustGroup(
     val groupId: String,
     val groupKey: ByteArray,
@@ -76,6 +79,7 @@ data class TrustGroup(
 }
 
 // Trusted device
+@Serializable
 data class TrustedDevice(
     val deviceId: String,
     val groupId: String,
