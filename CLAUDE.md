@@ -120,6 +120,34 @@ If running on Terragon cloud provider, execute `./terragon-async-setup.sh` befor
 - Run unit tests for common and jvm platform: run the `:jvmTest` gradle task.
 - To Run the desktop application: run the `:desktop:run` gradle task.
 
+## Documentation
+
+### Project Documentation Structure
+
+The `docs/` folder contains project documentation organized by feature area:
+
+- **`docs/trusted-group/`** - Documentation for the trusted device groups feature
+  - `device-addition-flow.md` - Step-by-step explanation of device addition process
+  - `device-addition-diagram.md` - Sequence diagrams and visual flow documentation
+  - Additional feature-specific documentation
+
+### Documentation Guidelines
+
+When working on new features or architectural changes:
+
+1. **Architecture Documents**: Create comprehensive architecture documents in the appropriate `docs/` subfolder
+2. **Feature Documentation**: Document complex features with both textual explanations and visual diagrams
+3. **Process Flows**: Use Mermaid diagrams to illustrate multi-step processes and component interactions
+4. **API Documentation**: Document public APIs and integration points
+5. **Organization**: Create feature-specific folders under `docs/` for better organization
+
+All documentation should be written in Markdown format and include:
+- Clear explanations of the feature or architecture
+- Visual diagrams where appropriate (Mermaid, PlantUML, etc.)
+- Code examples and references to implementation files
+- Security considerations for trust and communication features
+- Testing requirements and validation steps
+
 ## Development Best Practices
 
 - After you completed your work, ensure that the project compiles and tests are passing
