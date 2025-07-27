@@ -1,6 +1,6 @@
 package com.carlom.klardrop.common.trust.storage
 
-import com.carlom.klardrop.common.trust.db.TrustDatabase
+import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.protos.trust.DeviceType
@@ -60,7 +60,7 @@ interface TrustStore {
 }
 
 class TrustStoreImpl(
-    private val database: TrustDatabase,
+    private val database: AppDatabase,
     private val secureKeyStorage: SecureKeyStorage
 ) : TrustStore {
     
@@ -362,7 +362,7 @@ class TrustStoreImpl(
     
     // Extension functions for data conversion
     
-    private fun com.carlom.klardrop.common.trust.db.Trusted_devices.toTrustedDevice(): TrustedDevice {
+    private fun com.carlom.klardrop.common.database.Trusted_devices.toTrustedDevice(): TrustedDevice {
         return TrustedDevice(
             deviceId = device_id,
             groupId = group_id,
@@ -379,7 +379,7 @@ class TrustStoreImpl(
         )
     }
     
-    private fun com.carlom.klardrop.common.trust.db.Security_events.toSecurityEvent(): SecurityEvent {
+    private fun com.carlom.klardrop.common.database.Security_events.toSecurityEvent(): SecurityEvent {
         return SecurityEvent(
             id = id,
             eventType = SecurityEventType.valueOf(event_type),
@@ -390,7 +390,7 @@ class TrustStoreImpl(
         )
     }
     
-    private fun com.carlom.klardrop.common.trust.db.Pairing_sessions.toPairingSession(): PairingSession {
+    private fun com.carlom.klardrop.common.database.Pairing_sessions.toPairingSession(): PairingSession {
         return PairingSession(
             sessionId = session_id,
             deviceId = device_id,
@@ -401,7 +401,7 @@ class TrustStoreImpl(
         )
     }
     
-    private fun com.carlom.klardrop.common.trust.db.Clipboard_entries.toClipboardEntry(): ClipboardEntry {
+    private fun com.carlom.klardrop.common.database.Clipboard_entries.toClipboardEntry(): ClipboardEntry {
         return ClipboardEntry(
             id = id,
             deviceId = device_id,

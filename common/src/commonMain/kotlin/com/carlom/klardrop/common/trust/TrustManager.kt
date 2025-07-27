@@ -2,8 +2,7 @@ package com.carlom.klardrop.common.trust
 
 import com.carlom.klardrop.common.trust.crypto.CryptoProvider
 import com.carlom.klardrop.common.trust.crypto.CryptoProviderImpl
-import com.carlom.klardrop.common.trust.db.DatabaseDriverFactory
-import com.carlom.klardrop.common.trust.db.TrustDatabase
+import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.trust.crypto.EncryptedPayload
 import com.carlom.klardrop.common.trust.protocol.TrustEvent
@@ -38,17 +37,13 @@ import kotlin.uuid.Uuid
  * - Security event logging
  */
 class TrustManager(
-    private val databaseDriverFactory: DatabaseDriverFactory,
+    private val database: AppDatabase,
     private val secureKeyStorageFactory: SecureKeyStorageFactory,
     private val deviceName: String,
     private val deviceType: DeviceType,
     private val scope: CoroutineScope,
     private val sendTrustMessage: suspend (deviceId: String, message: TrustMessage) -> Unit
 ) {
-    
-    private val database: TrustDatabase by lazy {
-        TrustDatabase(databaseDriverFactory.createDriver())
-    }
     
     private val secureKeyStorage = secureKeyStorageFactory.create()
     private val cryptoProvider: CryptoProvider = CryptoProviderImpl()
