@@ -8,9 +8,7 @@ import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
 import com.klardrop.common.BugsnagWrapper
 import io.github.vinceglb.filekit.FileKit
-import kotlinx.serialization.ExperimentalSerializationApi
 
-@OptIn(ExperimentalSerializationApi::class)
 fun main(args: Array<String>) {
 
   println("Args: ${args.joinToString(", ")}")
