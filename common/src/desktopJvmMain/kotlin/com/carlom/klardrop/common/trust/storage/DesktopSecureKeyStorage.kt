@@ -10,7 +10,7 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
-class DesktopSecureKeyStorage : SecureKeyStorage {
+actual class PlatformSecureKeyStorage : SecureKeyStorage {
     companion object {
         private const val ALGORITHM = "AES"
         private const val TRANSFORMATION = "AES/CBC/PKCS5Padding"
@@ -53,6 +53,7 @@ class DesktopSecureKeyStorage : SecureKeyStorage {
     override suspend fun deletePrivateKey(alias: String) = withContext(Dispatchers.IO) {
         val file = File(STORAGE_DIR, "$alias.key")
         file.delete()
+        Unit
     }
     
     override suspend fun keyExists(alias: String): Boolean = withContext(Dispatchers.IO) {
@@ -65,6 +66,7 @@ class DesktopSecureKeyStorage : SecureKeyStorage {
                 file.delete()
             }
         }
+        Unit
     }
     
     private fun loadOrCreateMasterKey(): ByteArray {
@@ -128,6 +130,9 @@ class DesktopSecureKeyStorage : SecureKeyStorage {
     }
 }
 
+// Keep the old DesktopSecureKeyStorage class as an alias for backward compatibility
+typealias DesktopSecureKeyStorage = PlatformSecureKeyStorage
+
 actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = DesktopSecureKeyStorage()
+    actual fun create(): SecureKeyStorage = PlatformSecureKeyStorage()
 }

@@ -6,7 +6,7 @@ import platform.Security.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class IOSSecureKeyStorage : SecureKeyStorage {
+actual class PlatformSecureKeyStorage : SecureKeyStorage {
     companion object {
         private const val SERVICE_NAME = "com.klardrop.trust"
         private const val KEY_PREFIX = "trust_key_"
@@ -101,6 +101,9 @@ private fun NSData.toByteArray(): ByteArray {
 
 class SecurityException(message: String) : Exception(message)
 
+// Keep the old IOSSecureKeyStorage class as an alias for backward compatibility
+typealias IOSSecureKeyStorage = PlatformSecureKeyStorage
+
 actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = IOSSecureKeyStorage()
+    actual fun create(): SecureKeyStorage = PlatformSecureKeyStorage()
 }

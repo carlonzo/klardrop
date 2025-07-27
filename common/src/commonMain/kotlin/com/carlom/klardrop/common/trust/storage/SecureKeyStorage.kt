@@ -34,6 +34,13 @@ interface SecureKeyStorage {
     suspend fun clearAll()
 }
 
+/**
+ * Platform-specific implementation of SecureKeyStorage using expect/actual pattern.
+ * Implements the SecureKeyStorage interface for easy testing and mocking.
+ */
+expect class PlatformSecureKeyStorage() : SecureKeyStorage
+
+@Deprecated("Use PlatformSecureKeyStorage directly instead of factory pattern", ReplaceWith("PlatformSecureKeyStorage()"))
 expect class SecureKeyStorageFactory {
     fun create(): SecureKeyStorage
 }

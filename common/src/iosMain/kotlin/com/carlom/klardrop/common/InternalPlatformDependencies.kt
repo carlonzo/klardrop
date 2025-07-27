@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
+import com.carlom.klardrop.common.trust.storage.PlatformSecureKeyStorage
 import io.github.vinceglb.filekit.FileKit
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
@@ -44,6 +45,10 @@ actual class InternalPlatformDependencies {
   
   actual fun secureKeyStorageFactory(): SecureKeyStorageFactory {
     return SecureKeyStorageFactory()
+  }
+  
+  actual fun platformSecureKeyStorage(): PlatformSecureKeyStorage {
+    return PlatformSecureKeyStorage()
   }
 
   actual fun driverFactory(): DriverFactory {

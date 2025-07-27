@@ -10,7 +10,7 @@ import javax.crypto.spec.GCMParameterSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class AndroidSecureKeyStorage : SecureKeyStorage {
+actual class PlatformSecureKeyStorage : SecureKeyStorage {
     companion object {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
@@ -120,6 +120,9 @@ class AndroidSecureKeyStorage : SecureKeyStorage {
     }
 }
 
+// Keep the old AndroidSecureKeyStorage class as an alias for backward compatibility
+typealias AndroidSecureKeyStorage = PlatformSecureKeyStorage
+
 actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = AndroidSecureKeyStorage()
+    actual fun create(): SecureKeyStorage = PlatformSecureKeyStorage()
 }
