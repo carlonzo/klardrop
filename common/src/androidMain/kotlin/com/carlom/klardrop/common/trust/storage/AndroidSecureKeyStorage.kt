@@ -120,9 +120,3 @@ actual class PlatformSecureKeyStorage : SecureKeyStorage {
     }
 }
 
-// Keep the old AndroidSecureKeyStorage class as an alias for backward compatibility
-typealias AndroidSecureKeyStorage = PlatformSecureKeyStorage
-
-actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = PlatformSecureKeyStorage()
-}

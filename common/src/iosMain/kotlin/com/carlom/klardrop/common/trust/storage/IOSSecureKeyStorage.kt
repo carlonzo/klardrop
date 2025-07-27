@@ -101,9 +101,3 @@ private fun NSData.toByteArray(): ByteArray {
 
 class SecurityException(message: String) : Exception(message)
 
-// Keep the old IOSSecureKeyStorage class as an alias for backward compatibility
-typealias IOSSecureKeyStorage = PlatformSecureKeyStorage
-
-actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = PlatformSecureKeyStorage()
-}

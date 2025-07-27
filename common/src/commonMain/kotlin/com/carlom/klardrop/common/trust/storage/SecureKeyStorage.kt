@@ -39,8 +39,3 @@ interface SecureKeyStorage {
  * Implements the SecureKeyStorage interface for easy testing and mocking.
  */
 expect class PlatformSecureKeyStorage() : SecureKeyStorage
-
-@Deprecated("Use PlatformSecureKeyStorage directly instead of factory pattern", ReplaceWith("PlatformSecureKeyStorage()"))
-expect class SecureKeyStorageFactory {
-    fun create(): SecureKeyStorage
-}
