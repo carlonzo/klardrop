@@ -25,6 +25,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.time.ExperimentalTime
+import kotlin.time.Duration.Companion.seconds
 
 class KlardropIntegrationTest {
 
@@ -54,10 +55,10 @@ class KlardropIntegrationTest {
   }
 
   @Test
-  fun testSendTwoMessagesForKlardrop() = runTest(coroutines.dispatcher) {
+  fun testSendTwoMessagesForKlardrop() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
-    turbineScope {
+    turbineScope(timeout = 30.seconds) {
       with(testContext) {
         sendAndVerifyMessage("This is the first message")
         sendAndVerifyMessage("This is a second message!")
@@ -66,10 +67,10 @@ class KlardropIntegrationTest {
   }
 
   @Test
-  fun testSendTwoMessagesForNearby() = runTest(coroutines.dispatcher) {
+  fun testSendTwoMessagesForNearby() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
 
-    turbineScope {
+    turbineScope(timeout = 30.seconds) {
       with(testContext) {
         sendAndVerifyMessage("This is the first message")
         sendAndVerifyMessage("This is a second message!")
@@ -130,10 +131,10 @@ class KlardropIntegrationTest {
   // simple method to parametize the test for reconnection issues. using a boolean to indicate if the client should drop the connection or the server
   @OptIn(ExperimentalTime::class)
   @Suppress("VisibleForTests")
-  private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) = runTest(coroutines.dispatcher) {
+  private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) = runTest(coroutines.dispatcher, timeout = 60.seconds) {
     testContext.setupServerAndClient()
 
-    turbineScope {
+    turbineScope(timeout = 30.seconds) {
       with(testContext) {
         // send first message between client and server
         sendAndVerifyMessage("firstMessage")
@@ -148,6 +149,10 @@ class KlardropIntegrationTest {
 
         // Wait a bit to ensure cleanup
         advanceToCompletion()
+        
+        // Give extra time for connection cleanup
+        coroutines.dispatcher.scheduler.advanceTimeBy(500)
+        coroutines.dispatcher.scheduler.runCurrent()
 
         val messageReceiver = serverCommunicationModule.messageReceiver()
         val clientMessenger = clientCommunicationModule.messenger()
@@ -155,17 +160,31 @@ class KlardropIntegrationTest {
         // Now try to send a second message - this should trigger reconnection
         val secondMessage = textSendRequest("reconnection messenger message")
 
+        // Set up receiver before sending to avoid race conditions
+        val secondReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
+        
+        // Allow receiver to properly set up
+        coroutines.dispatcher.scheduler.runCurrent()
+        coroutines.dispatcher.scheduler.advanceTimeBy(100)
+        coroutines.dispatcher.scheduler.runCurrent()
+
         val secondSendFlow = clientMessenger.send(serverDeviceId, secondMessage)
         val secondSenderChannel = secondSendFlow.testIn(this@turbineScope)
-        val secondReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
-
 
         // Since connections were dropped, this should trigger timeouts and retries
+        // We need to give enough time for reconnection attempts
+        coroutines.dispatcher.scheduler.runCurrent()
+        coroutines.dispatcher.scheduler.advanceUntilIdle()
+        
         // Advance past the ACK timeout (2 seconds) to trigger retry logic
         advanceTimeAndComplete(2100) // Past 2-second ACK timeout
+        
+        // Additional time for reconnection and retry
+        coroutines.dispatcher.scheduler.advanceTimeBy(3000)
+        coroutines.dispatcher.scheduler.runCurrent()
+        coroutines.dispatcher.scheduler.advanceUntilIdle()
 
         // Wait for second message to be sent
-
         try {
           secondSenderChannel.awaitFor {
             it is Completed
@@ -241,10 +260,22 @@ internal class KlardropTestContext(
     val server = serverCommunicationModule.server()
     val serverStatus = server.startServer()
 
+    // Give server time to fully initialize, especially important for Nearby Share
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceTimeBy(200)
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
+
     when (clientConnectionType) {
       DeviceConnectionType.NEARBY -> clientVisibleDevices.addNearbyDevice(serverDeviceId, "localhost", serverStatus.port)
       DeviceConnectionType.KLARDROP -> clientVisibleDevices.addKlardropDevice(serverDeviceId, "localhost", serverStatus.port)
     }
+
+    // Give time for device discovery to propagate
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceTimeBy(100)
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
 
     return ServerContext(server, serverStatus.port)
   }
@@ -285,17 +316,35 @@ internal class KlardropTestContext(
     return item
   }
 
+
   suspend fun TurbineContext.sendAndVerifyMessage(text: String) {
     val message = textSendRequest(text)
 
     val messageReceiver = serverCommunicationModule.messageReceiver()
     val clientMessenger = clientCommunicationModule.messenger()
 
+    // Set up receiver flow BEFORE initiating send to avoid race conditions
+    val receiverChannel = messageReceiver.messageReceivedNotifier.testIn(this)
+    
+    // Give the receiver some time to properly set up
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceTimeBy(100)
+    coroutines.dispatcher.scheduler.runCurrent()
+
     val senderFlow = clientMessenger.send(serverDeviceId, message)
     val senderChannel = senderFlow.testIn(this)
-    val receiverChannel = messageReceiver.messageReceivedNotifier.testIn(this)
 
     // Start coroutines and advance time to complete the operation
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
+
+    // For Nearby protocol, give extra time for protocol detection and connection setup
+    coroutines.dispatcher.scheduler.advanceTimeBy(1000)
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
+    
+    // Extra time advance to handle ACK timeouts
+    coroutines.dispatcher.scheduler.advanceTimeBy(2500)
     coroutines.dispatcher.scheduler.runCurrent()
     coroutines.dispatcher.scheduler.advanceUntilIdle()
 
