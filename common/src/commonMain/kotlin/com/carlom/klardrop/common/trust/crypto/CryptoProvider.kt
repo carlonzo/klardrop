@@ -1,7 +1,14 @@
 package com.carlom.klardrop.common.trust.crypto
 
-import io.ktor.utils.io.core.toByteArray
-import kotlin.random.Random
+import dev.whyoleg.cryptography.CryptographyProvider
+import dev.whyoleg.cryptography.random.CryptographyRandom
+import dev.whyoleg.cryptography.algorithms.AES
+import dev.whyoleg.cryptography.algorithms.EC
+import dev.whyoleg.cryptography.algorithms.ECDH
+import dev.whyoleg.cryptography.algorithms.ECDSA
+import dev.whyoleg.cryptography.algorithms.HKDF
+import dev.whyoleg.cryptography.algorithms.digest.SHA256
+import dev.whyoleg.cryptography.algorithms.digest.SHA512
 
 interface CryptoProvider {
     // Key generation
@@ -95,38 +102,51 @@ data class EncryptedPayload(
 }
 
 /**
- * Mock implementation of CryptoProvider for development.
- * This implementation is NOT secure and should only be used for testing.
- * 
- * TODO: Replace with a proper implementation using cryptography-kotlin 
- * when upgrading to a version that supports ECDH (0.4.0+)
+ * Real implementation of CryptoProvider using cryptography-kotlin library.
+ * This implementation provides secure cryptographic operations.
  */
 class CryptoProviderImpl : CryptoProvider {
     
+    private val provider = CryptographyProvider.Default
+    
     override suspend fun generateECDSAKeypair(): ECDSAKeyPair {
-        // Mock implementation - generates random bytes
+        val ecdsa = provider.get(ECDSA)
+        val keyPairGenerator = ecdsa.keyPairGenerator(EC.Curve.P256)
+        val keyPair = keyPairGenerator.generateKey()
+        
         return ECDSAKeyPair(
-            publicKey = generateRandomBytes(64),
-            privateKey = generateRandomBytes(32)
+            publicKey = keyPair.publicKey.encodeToByteArray(EC.PublicKey.Format.RAW),
+            privateKey = keyPair.privateKey.encodeToByteArray(EC.PrivateKey.Format.RAW)
         )
     }
     
     override suspend fun generateECDHKeypair(): ECDHKeyPair {
-        // Mock implementation - generates random bytes
+        val ecdh = provider.get(ECDH)
+        val keyPairGenerator = ecdh.keyPairGenerator(EC.Curve.P256)
+        val keyPair = keyPairGenerator.generateKey()
+        
         return ECDHKeyPair(
-            publicKey = generateRandomBytes(64),
-            privateKey = generateRandomBytes(32)
+            publicKey = keyPair.publicKey.encodeToByteArray(EC.PublicKey.Format.RAW),
+            privateKey = keyPair.privateKey.encodeToByteArray(EC.PrivateKey.Format.RAW)
         )
     }
     
     override suspend fun generateAESKey(): ByteArray {
-        // Generate 256-bit key
-        return generateRandomBytes(32)
+        val aesGcm = provider.get(AES.GCM)
+        val keyGenerator = aesGcm.keyGenerator(keySize = AES.Key.Size.B256)
+        val key = keyGenerator.generateKey()
+        return key.encodeToByteArray(AES.Key.Format.RAW)
     }
     
     override suspend fun signECDSA(data: ByteArray, privateKey: ByteArray): ByteArray {
-        // Mock signature - just hash the data with the key
-        return hash(data + privateKey)
+        val ecdsa = provider.get(ECDSA)
+        val ecdsaPrivateKey = ecdsa.privateKeyDecoder(EC.Curve.P256)
+            .decodeFromByteArray(EC.PrivateKey.Format.RAW, privateKey)
+        
+        return ecdsaPrivateKey.signatureGenerator(
+            digest = SHA256,
+            format = ECDSA.SignatureFormat.DER
+        ).generateSignature(data)
     }
     
     override suspend fun verifyECDSA(
@@ -134,40 +154,64 @@ class CryptoProviderImpl : CryptoProvider {
         signature: ByteArray,
         publicKey: ByteArray
     ): Boolean {
-        // Mock verification - always returns true for testing
-        // In production, this would verify the signature using the public key
-        return signature.isNotEmpty()
+        return try {
+            val ecdsa = provider.get(ECDSA)
+            val ecdsaPublicKey = ecdsa.publicKeyDecoder(EC.Curve.P256)
+                .decodeFromByteArray(EC.PublicKey.Format.RAW, publicKey)
+            
+            ecdsaPublicKey.signatureVerifier(
+                digest = SHA256,
+                format = ECDSA.SignatureFormat.DER
+            ).tryVerifySignature(data, signature)
+        } catch (e: Exception) {
+            false
+        }
     }
     
     override suspend fun computeECDHSecret(
         privateKey: ByteArray,
         publicKey: ByteArray
     ): ByteArray {
-        // Mock ECDH - combines and hashes the keys
-        return hash(privateKey + publicKey)
+        val ecdh = provider.get(ECDH)
+        val ecdhPrivateKey = ecdh.privateKeyDecoder(EC.Curve.P256)
+            .decodeFromByteArray(EC.PrivateKey.Format.RAW, privateKey)
+        val ecdhPublicKey = ecdh.publicKeyDecoder(EC.Curve.P256)
+            .decodeFromByteArray(EC.PublicKey.Format.RAW, publicKey)
+        
+        return ecdhPrivateKey.sharedSecretDerivation().deriveSharedSecret(ecdhPublicKey)
     }
     
     override suspend fun encryptAESGCM(data: ByteArray, key: ByteArray): EncryptedPayload {
-        // Mock encryption - XORs data with key (NOT SECURE!)
+        val aesGcm = provider.get(AES.GCM)
+        val aesKey = aesGcm.keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, key)
+        
+        val cipher = aesKey.cipher()
         val nonce = generateNonce()
-        val keyStream = generateKeyStream(key, nonce, data.size)
-        val ciphertext = data.mapIndexed { index, byte ->
-            (byte.toInt() xor keyStream[index].toInt()).toByte()
-        }.toByteArray()
+        
+        // AES-GCM with authenticated encryption returns ciphertext + tag combined
+        val encryptedData = cipher.encrypt(data, nonce)
+        
+        // Split the result - last 16 bytes are the tag, rest is ciphertext
+        val ciphertext = encryptedData.dropLast(16).toByteArray()
+        val tag = encryptedData.takeLast(16).toByteArray()
         
         return EncryptedPayload(
             ciphertext = ciphertext,
             nonce = nonce,
-            tag = hash(ciphertext + nonce).take(16).toByteArray()
+            tag = tag
         )
     }
     
     override suspend fun decryptAESGCM(payload: EncryptedPayload, key: ByteArray): ByteArray {
-        // Mock decryption - XORs ciphertext with key (NOT SECURE!)
-        val keyStream = generateKeyStream(key, payload.nonce, payload.ciphertext.size)
-        return payload.ciphertext.mapIndexed { index, byte ->
-            (byte.toInt() xor keyStream[index].toInt()).toByte()
-        }.toByteArray()
+        val aesGcm = provider.get(AES.GCM)
+        val aesKey = aesGcm.keyDecoder().decodeFromByteArray(AES.Key.Format.RAW, key)
+        
+        val cipher = aesKey.cipher()
+        
+        // Combine ciphertext and tag for decryption
+        val encryptedData = payload.ciphertext + payload.tag
+        
+        return cipher.decrypt(encryptedData, payload.nonce)
     }
     
     override suspend fun deriveKey(
@@ -176,51 +220,25 @@ class CryptoProviderImpl : CryptoProvider {
         info: ByteArray,
         length: Int
     ): ByteArray {
-        // Mock HKDF implementation
-        val combined = secret + salt + info
-        var derived = hash(combined)
+        val hkdf = provider.get(HKDF)
+        val secretDerivation = hkdf.secretDerivation(SHA256)
         
-        while (derived.size < length) {
-            derived = derived + hash(derived)
-        }
-        
-        return derived.take(length).toByteArray()
+        return secretDerivation.deriveSecret(
+            sharedSecret = secret,
+            keyLength = length,
+            salt = salt,
+            info = info
+        )
     }
     
-    override fun generateNonce(): ByteArray = generateRandomBytes(12)
+    override fun generateNonce(): ByteArray = CryptographyRandom.nextBytes(12)
     
     override fun generateRandomBytes(length: Int): ByteArray {
-        return Random.nextBytes(length)
+        return CryptographyRandom.nextBytes(length)
     }
     
     override fun hash(data: ByteArray): ByteArray {
-        // Mock hash function - uses a simple checksum (NOT SECURE!)
-        var hash = 0L
-        for (byte in data) {
-            hash = hash * 31 + byte.toLong()
-        }
-        
-        // Convert to byte array
-        val result = ByteArray(32)
-        for (i in 0 until 32) {
-            result[i] = (hash shr (i * 8)).toByte()
-            hash = hash * 31 + i
-        }
-        
-        return result
-    }
-    
-    private fun generateKeyStream(key: ByteArray, nonce: ByteArray, length: Int): ByteArray {
-        // Generate a key stream for XOR operation
-        val stream = mutableListOf<Byte>()
-        var counter = 0
-        
-        while (stream.size < length) {
-            val block = hash(key + nonce + counter.toString().toByteArray())
-            stream.addAll(block.toList())
-            counter++
-        }
-        
-        return stream.take(length).toByteArray()
+        val sha256 = provider.get(SHA256)
+        return sha256.hasher().hash(data)
     }
 }
