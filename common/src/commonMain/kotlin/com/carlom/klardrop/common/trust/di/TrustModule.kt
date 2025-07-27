@@ -12,7 +12,6 @@ import com.carlom.klardrop.common.trust.clipboard.TrustClipboardSyncManager
 import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.discovery.TrustAwareDiscoveryUtils
 import com.carlom.klardrop.common.trust.receiver.withTrustAwareness
-import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorage
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
@@ -37,9 +36,8 @@ class TrustModule(
         coroutines.newScope(coroutines.ioDispatcher)
     }
     
-    // TODO: Update TrustManager to accept SecureKeyStorage directly instead of factory
-    private val secureKeyStorageFactory: SecureKeyStorageFactory by lazy {
-        internalPlatformDependencies.secureKeyStorageFactory()
+    private val secureKeyStorage: SecureKeyStorage by lazy {
+        internalPlatformDependencies.platformSecureKeyStorage()
     }
     
     val trustManager: TrustManager by lazy {
@@ -49,7 +47,7 @@ class TrustModule(
         
         TrustManager(
             database = appDatabase,
-            secureKeyStorageFactory = secureKeyStorageFactory,
+            secureKeyStorage = secureKeyStorage,
             deviceName = deviceName,
             deviceType = mapDeviceType(deviceType),
             scope = trustScope,
