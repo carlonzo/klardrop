@@ -46,6 +46,7 @@ kotlin {
         
         // Cryptography
         implementation(deps.cryptography.core)
+        implementation(deps.cryptography.provider)
       }
     }
 

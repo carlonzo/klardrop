@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.trust.crypto
 
+import io.ktor.utils.io.core.toByteArray
 import kotlin.random.Random
 
 interface CryptoProvider {

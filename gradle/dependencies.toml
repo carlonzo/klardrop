@@ -15,6 +15,7 @@ bugsnag-android = "6.15.0"
 bugsnag-jvm = "3.8.0"
 filekit = "0.10.0-beta04"
 sqldelight = "2.1.0"
+cryptography-kotlin = "0.5.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -61,6 +62,7 @@ sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", versi
 
 # Cryptography
 cryptography-core = { module = "dev.whyoleg.cryptography:cryptography-core", version.ref = "cryptography-kotlin" }
+cryptography-provider = { module = "dev.whyoleg.cryptography:cryptography-provider-optimal", version.ref = "cryptography-kotlin" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
