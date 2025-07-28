@@ -277,7 +277,6 @@ class CryptoProviderImpl : CryptoProvider {
     }
     
     override fun hash(data: ByteArray): ByteArray {
-        // For non-suspend hash, use a synchronous wrapper or blocking call
-        return runBlocking { sha256.hasher().hash(data) }
+        return sha256.hasher().hash(data)
     }
 }
