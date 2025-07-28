@@ -13,7 +13,7 @@ kotlinx-io = "0.8.0"
 bugsnag-kmp = "1.0.0-beta03"
 bugsnag-android = "6.15.0"
 bugsnag-jvm = "3.8.0"
-filekit = "0.10.0-beta04"
+filekit = "0.10.0"
 sqldelight = "2.1.0"
 
 [libraries]
