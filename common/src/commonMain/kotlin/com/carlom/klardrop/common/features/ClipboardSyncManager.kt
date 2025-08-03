@@ -3,8 +3,7 @@ package com.carlom.klardrop.common.features
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
 /**
@@ -18,23 +17,22 @@ class ClipboardSyncManager(
         private const val TAG = "ClipboardSyncManager"
         private const val MIN_SYNC_INTERVAL_MS = 30_000L // 30 seconds minimum
         private const val DEBOUNCE_DELAY_MS = 1000L // 1 second debounce
-        private const val MAX_AUTO_SYNC_SIZE_BYTES = 1024 // 1KB limit for automatic sync
+        private const val MAX_AUTO_SYNC_SIZE_CHARS = 1000 // 1000 chars limit for automatic sync
     }
     
-    private val _syncEnabled = MutableStateFlow(false)
-    val syncEnabled: StateFlow<Boolean> = _syncEnabled.asStateFlow()
-    
-    private val _lastSyncedContent = MutableStateFlow<String?>(null)
-    private val lastSyncedContent: StateFlow<String?> = _lastSyncedContent.asStateFlow()
-    
     private var clipboardMonitorJob: Job? = null
+    private var lastSyncedContent: String? = null
+    
+    /**
+     * Check if clipboard sync is enabled
+     */
+    val syncEnabled: Boolean
+        get() = clipboardMonitorJob != null
     
     /**
      * Enable or disable clipboard sync
      */
     fun setSyncEnabled(enabled: Boolean) {
-        _syncEnabled.value = enabled
-        
         if (enabled) {
             startClipboardMonitoring()
         } else {
@@ -82,24 +80,23 @@ class ClipboardSyncManager(
      */
     private suspend fun handleLocalClipboardChange(content: String) {
         // Check if content is different from last synced
-        if (content == _lastSyncedContent.value) {
+        if (content == lastSyncedContent) {
             return
         }
         
-        // Check payload size - only auto-sync if under 1KB
-        val contentSizeBytes = content.toByteArray(Charsets.UTF_8).size
-        if (contentSizeBytes > MAX_AUTO_SYNC_SIZE_BYTES) {
-            log(TAG, "Clipboard content too large for auto-sync (${contentSizeBytes} bytes > ${MAX_AUTO_SYNC_SIZE_BYTES} bytes), skipping")
+        // Check payload size - only auto-sync if under 1000 chars
+        if (content.length > MAX_AUTO_SYNC_SIZE_CHARS) {
+            log(TAG, "Clipboard content too large for auto-sync (${content.length} chars > $MAX_AUTO_SYNC_SIZE_CHARS chars), skipping")
             return
         }
         
         try {
             // Sync to devices (placeholder for now)
-            log(TAG, "Syncing clipboard content (${contentSizeBytes} bytes)")
+            log(TAG, "Syncing clipboard content (${content.length} chars)")
             syncClipboardToDevices(content)
             
             // Update last synced content
-            _lastSyncedContent.value = content
+            lastSyncedContent = content
             
         } catch (e: Exception) {
             log(TAG, "Failed to sync clipboard", e)
@@ -110,16 +107,15 @@ class ClipboardSyncManager(
      * Manually sync current clipboard content
      */
     suspend fun syncNow() {
-        if (!_syncEnabled.value) {
+        if (!syncEnabled) {
             log(TAG, "Clipboard sync is disabled")
             return
         }
         
         val content = clipboardManager.read()
         if (content.isNotEmpty()) {
-            val contentSizeBytes = content.toByteArray(Charsets.UTF_8).size
-            if (contentSizeBytes > MAX_AUTO_SYNC_SIZE_BYTES) {
-                log(TAG, "Warning: Manual sync of large clipboard content (${contentSizeBytes} bytes > ${MAX_AUTO_SYNC_SIZE_BYTES} bytes)")
+            if (content.length > MAX_AUTO_SYNC_SIZE_CHARS) {
+                log(TAG, "Warning: Manual sync of large clipboard content (${content.length} chars > $MAX_AUTO_SYNC_SIZE_CHARS chars)")
                 // For manual sync, we allow larger content but with a warning
                 manualSyncContent(content)
             } else {
@@ -133,13 +129,12 @@ class ClipboardSyncManager(
      */
     private suspend fun manualSyncContent(content: String) {
         try {
-            val contentSizeBytes = content.toByteArray(Charsets.UTF_8).size
             // Sync to devices
-            log(TAG, "Manually syncing clipboard content (${contentSizeBytes} bytes)")
+            log(TAG, "Manually syncing clipboard content (${content.length} chars)")
             syncClipboardToDevices(content)
             
             // Update last synced content
-            _lastSyncedContent.value = content
+            lastSyncedContent = content
             
         } catch (e: Exception) {
             log(TAG, "Failed to manually sync clipboard", e)
@@ -160,7 +155,7 @@ class ClipboardSyncManager(
      * Handle clipboard update from remote device
      */
     suspend fun handleRemoteClipboardUpdate(content: String, fromDevice: String) {
-        if (!_syncEnabled.value) {
+        if (!syncEnabled) {
             log(TAG, "Clipboard sync disabled, ignoring update from $fromDevice")
             return
         }
@@ -168,7 +163,7 @@ class ClipboardSyncManager(
         // Update local clipboard
         try {
             clipboardManager.write(content)
-            _lastSyncedContent.value = content
+            lastSyncedContent = content
             log(TAG, "Updated clipboard from device: $fromDevice")
             
         } catch (e: Exception) {
