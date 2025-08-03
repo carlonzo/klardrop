@@ -87,17 +87,5 @@ class ShowDevicesControllerHelper(
     }
   }
   
-  /**
-   * Force refresh of all visible devices
-   * This is useful when trust status changes and we need to re-evaluate all devices
-   */
-  fun refreshDevices() {
-    // Simply re-emit the current visible devices which will trigger
-    // the trust status evaluation in DiscoveryController
-    coroutineScope.launch {
-      val currentDevices = _devicesFlow.value
-      _devicesFlow.emit(currentDevices)
-    }
-  }
 
 }

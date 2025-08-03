@@ -1,0 +1,28 @@
+-- Encrypted keys table for secure storage
+CREATE TABLE encrypted_keys (
+    alias TEXT PRIMARY KEY,
+    iv BLOB NOT NULL,
+    encrypted_data BLOB NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+-- Get encrypted key data
+getEncryptedKey:
+SELECT iv, encrypted_data FROM encrypted_keys WHERE alias = ?;
+
+-- Store encrypted key data
+storeEncryptedKey:
+INSERT OR REPLACE INTO encrypted_keys (alias, iv, encrypted_data, created_at)
+VALUES (?, ?, ?, ?);
+
+-- Delete encrypted key
+deleteEncryptedKey:
+DELETE FROM encrypted_keys WHERE alias = ?;
+
+-- Clear all encrypted keys
+clearAllEncryptedKeys:
+DELETE FROM encrypted_keys;
+
+-- Get all aliases (for cleanup)
+getAllAliases:
+SELECT alias FROM encrypted_keys;

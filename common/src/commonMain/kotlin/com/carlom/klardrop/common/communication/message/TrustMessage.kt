@@ -10,7 +10,7 @@ data class TrustMessage(
     val trustMessageBytes: ByteArray, // The serialized TrustMessage protobuf
     override val id: Int = kotlin.random.Random.nextInt()
 ) : Message() {
-    override val type: MessageType = MessageType.TRUST
+    override val type: MessageType = MessageType.PAIRING
     override val hasPayload: Boolean = false
     
     override fun equals(other: Any?): Boolean {

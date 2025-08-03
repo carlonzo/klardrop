@@ -63,12 +63,21 @@ class TrustManager(
     private val sendTrustMessage: suspend (deviceId: String, message: TrustMessage) -> Unit
 ) {
     
-    private val secureKeyStorage = secureKeyStorageFactory.create()
+    private val secureKeyStorage by lazy {
+        // Set database on factory before creating storage (Android specific)
+        if (secureKeyStorageFactory::class.simpleName == "SecureKeyStorageFactory") {
+            try {
+                val setDatabaseMethod = secureKeyStorageFactory::class.java.getMethod("setDatabase", AppDatabase::class.java)
+                setDatabaseMethod.invoke(secureKeyStorageFactory, database)
+            } catch (e: Exception) {
+                // Ignore if method doesn't exist (other platforms)
+            }
+        }
+        secureKeyStorageFactory.create()
+    }
     private val cryptoProvider: CryptoProvider = CryptoProviderImpl()
-    private val trustStore: TrustStore = TrustStoreImpl(database, secureKeyStorage)
+    private val trustStore: TrustStore by lazy { TrustStoreImpl(database, secureKeyStorage) }
     
-    private val _isInitialized = MutableStateFlow(false)
-    val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
     
     private val _currentDeviceKeypair = MutableStateFlow<DeviceKeypair?>(null)
     val currentDeviceKeypair: StateFlow<DeviceKeypair?> = _currentDeviceKeypair.asStateFlow()
@@ -78,6 +87,9 @@ class TrustManager(
     
     private val _trustedDevices = MutableStateFlow<List<TrustedDevice>>(emptyList())
     val trustedDevices: StateFlow<List<TrustedDevice>> = _trustedDevices.asStateFlow()
+    
+    private val _trustEvents = MutableStateFlow<TrustEvent?>(null)
+    val trustEvents: StateFlow<TrustEvent?> = _trustEvents.asStateFlow()
     
     private lateinit var protocolHandler: TrustProtocolHandler
     
@@ -128,7 +140,6 @@ class TrustManager(
         // Start periodic cleanup
         startPeriodicCleanup()
         
-        _isInitialized.value = true
     }
     
     /**
@@ -327,6 +338,9 @@ class TrustManager(
      * Handle trust events from protocol handler
      */
     private suspend fun handleTrustEvent(event: TrustEvent) {
+        // Always emit the event to external listeners
+        _trustEvents.value = event
+        
         when (event) {
             is TrustEvent.DeviceJoined -> {
                 _trustedDevices.value = trustStore.getTrustedDevices()

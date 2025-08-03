@@ -1,7 +1,10 @@
 package com.carlom.klardrop.common.trust.storage
 
+import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import com.carlom.klardrop.common.database.AppDatabase
+import com.carlom.klardrop.common.utils.Clock
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -10,7 +13,7 @@ import javax.crypto.spec.GCMParameterSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class AndroidSecureKeyStorage : SecureKeyStorage {
+class AndroidSecureKeyStorage(private val database: AppDatabase) : SecureKeyStorage {
     companion object {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
@@ -33,9 +36,7 @@ class AndroidSecureKeyStorage : SecureKeyStorage {
         val iv = cipher.iv
         val encryptedKey = cipher.doFinal(key)
         
-        // Store encrypted key with IV in SharedPreferences or DataStore
-        // For now, we'll use the key alias as a reference
-        // In production, you'd store the encrypted data in SharedPreferences
+        // Store encrypted key with IV in database
         storeEncryptedData(alias, iv, encryptedKey)
     }
     
@@ -44,7 +45,7 @@ class AndroidSecureKeyStorage : SecureKeyStorage {
             val secretKey = keyStore.getKey(KEY_ALIAS_PREFIX + alias, null) as? SecretKey
                 ?: return@withContext null
             
-            // Retrieve encrypted data (in production from SharedPreferences)
+            // Retrieve encrypted data from database
             val (iv, encryptedKey) = getEncryptedData(alias) ?: return@withContext null
             
             // Decrypt the private key
@@ -100,26 +101,48 @@ class AndroidSecureKeyStorage : SecureKeyStorage {
         }
     }
     
-    // Temporary in-memory storage - in production use SharedPreferences or DataStore
-    private val encryptedDataStore = mutableMapOf<String, Pair<ByteArray, ByteArray>>()
-    
-    private fun storeEncryptedData(alias: String, iv: ByteArray, encryptedKey: ByteArray) {
-        encryptedDataStore[alias] = iv to encryptedKey
+    private suspend fun storeEncryptedData(alias: String, iv: ByteArray, encryptedKey: ByteArray) {
+        withContext(Dispatchers.IO) {
+            database.encryptedKeyQueries.storeEncryptedKey(
+                alias = alias,
+                iv = iv,
+                encrypted_data = encryptedKey,
+                created_at = Clock().currentTimeMillis()
+            )
+        }
     }
     
-    private fun getEncryptedData(alias: String): Pair<ByteArray, ByteArray>? {
-        return encryptedDataStore[alias]
+    private suspend fun getEncryptedData(alias: String): Pair<ByteArray, ByteArray>? {
+        return withContext(Dispatchers.IO) {
+            database.encryptedKeyQueries.getEncryptedKey(alias).executeAsOneOrNull()?.let { row ->
+                row.iv to row.encrypted_data
+            }
+        }
     }
     
-    private fun deleteEncryptedData(alias: String) {
-        encryptedDataStore.remove(alias)
+    private suspend fun deleteEncryptedData(alias: String) {
+        withContext(Dispatchers.IO) {
+            database.encryptedKeyQueries.deleteEncryptedKey(alias)
+        }
     }
     
-    private fun clearAllEncryptedData() {
-        encryptedDataStore.clear()
+    private suspend fun clearAllEncryptedData() {
+        withContext(Dispatchers.IO) {
+            database.encryptedKeyQueries.clearAllEncryptedKeys()
+        }
     }
 }
 
-actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = AndroidSecureKeyStorage()
+actual class SecureKeyStorageFactory(private val context: Context) {
+    // Keep the database reference to pass to storage
+    private var database: AppDatabase? = null
+    
+    actual fun create(): SecureKeyStorage {
+        return database?.let { AndroidSecureKeyStorage(it) }
+            ?: throw IllegalStateException("Database not set. Call setDatabase() first.")
+    }
+    
+    fun setDatabase(database: AppDatabase) {
+        this.database = database
+    }
 }

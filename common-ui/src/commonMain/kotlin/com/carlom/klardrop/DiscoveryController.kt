@@ -105,7 +105,7 @@ class DiscoveryController(
     // Listen for trust events
     trustManager?.let { tm ->
       controllerScope.launch {
-        tm.getTrustEvents().collect { event ->
+        tm.trustEvents.filterNotNull().collect { event ->
           handleTrustEvent(event)
         }
       }
@@ -259,25 +259,11 @@ class DiscoveryController(
         try {
           actionsFlow.emit(ActionUi.PairingStarted)
           
-          // Initiate pairing
+          // Initiate pairing - completion will be handled via trust events
           tm.initiatePairing(deviceId)
           
-          // Wait a bit for pairing to complete (in real implementation, this would be event-driven)
-          kotlinx.coroutines.delay(2000)
-          
-          // Check if pairing succeeded
-          val isTrusted = tm.isDeviceTrusted(deviceId)
-          
-          actionsFlow.emit(ActionUi.PairingCompleted(
-            success = isTrusted,
-            errorMessage = if (!isTrusted) "Failed to establish trust" else null
-          ))
-          
-          // Update device list to reflect new trust status
-          showDevicesHelper.refreshDevices()
-          
         } catch (e: Exception) {
-          log("DiscoveryController", "Failed to trust device", e)
+          log("DiscoveryController", "Failed to initiate device pairing", e)
           actionsFlow.emit(ActionUi.PairingCompleted(
             success = false,
             errorMessage = e.message ?: "Unknown error"
@@ -322,16 +308,30 @@ class DiscoveryController(
         actionsFlow.emit(ActionUi.TrustNotification(notification))
       }
       
-      is com.carlom.klardrop.common.trust.protocol.TrustEvent.DeviceJoined,
+      is com.carlom.klardrop.common.trust.protocol.TrustEvent.DeviceJoined -> {
+        // Pairing succeeded - emit completion event
+        actionsFlow.emit(ActionUi.PairingCompleted(
+          success = true,
+          errorMessage = null
+        ))
+      }
+      
       is com.carlom.klardrop.common.trust.protocol.TrustEvent.DeviceRemoved,
       is com.carlom.klardrop.common.trust.protocol.TrustEvent.DeviceUpdated -> {
-        // Refresh device list when trust relationships change
-        showDevicesHelper.refreshDevices()
+        // Trust relationships changed - devices will be updated via flow
+      }
+      
+      is com.carlom.klardrop.common.trust.protocol.TrustEvent.TrustError -> {
+        // Pairing failed - emit completion event with error
+        actionsFlow.emit(ActionUi.PairingCompleted(
+          success = false,
+          errorMessage = event.message
+        ))
       }
       
       is com.carlom.klardrop.common.trust.protocol.TrustEvent.ClipboardUpdate -> {
         // Handle clipboard sync updates
-        if (event.deviceId != trustManager?.currentDeviceKeypair?.value?.deviceId) {
+        if (event.fromDevice != trustManager?.currentDeviceKeypair?.value?.deviceId) {
           clipboardManager.write(event.content)
         }
       }

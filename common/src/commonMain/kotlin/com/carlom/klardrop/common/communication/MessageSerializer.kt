@@ -49,7 +49,7 @@ class MessageSerializer(
       MessageType.FILE -> FileMessage.serializer() as KSerializer<E>
       MessageType.ACK_READY -> MessageAcknowledgment.serializer() as KSerializer<E>
       MessageType.ACK_RECEIVED -> MessageAcknowledgment.serializer() as KSerializer<E>
-      MessageType.TRUST -> TrustMessage.serializer() as KSerializer<E>
+      MessageType.PAIRING -> TrustMessage.serializer() as KSerializer<E>
     }
   }
 }

@@ -52,7 +52,7 @@ class CommunicationModule(
         MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
         MessageType.ACK_READY to AckMessageHandler(),
         MessageType.ACK_RECEIVED to AckMessageHandler(),
-        MessageType.TRUST to com.carlom.klardrop.common.communication.message.TrustMessageHandler { 
+        MessageType.PAIRING to com.carlom.klardrop.common.communication.message.TrustMessageHandler { 
           trustManagerProvider?.invoke()
         }
       )

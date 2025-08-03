@@ -81,7 +81,7 @@ class TrustStoreImpl(
             publicKey = dbKeypair.public_key,
             privateKey = privateKey,
             deviceName = dbKeypair.device_name,
-            deviceType = DeviceType.entries.find { it.number == dbKeypair.device_type.toInt() } ?: DeviceType.DEVICE_TYPE_UNKNOWN,
+            deviceType = DeviceType.entries.find { it.value == dbKeypair.device_type.toInt() } ?: DeviceType.DEVICE_TYPE_UNKNOWN,
             createdAt = dbKeypair.created_at
         )
     }
@@ -98,7 +98,7 @@ class TrustStoreImpl(
             public_key = keypair.publicKey,
             private_key_alias = alias,
             device_name = keypair.deviceName,
-            device_type = keypair.deviceType.number.toString(),
+            device_type = keypair.deviceType.value.toString(),
             created_at = keypair.createdAt
         )
     }
@@ -231,18 +231,24 @@ class TrustStoreImpl(
         ).executeAsOneOrNull()
         
         return levelStr?.let { 
-            TrustLevel.entries.find { level -> level.number == it.toInt() } ?: TrustLevel.TRUST_LEVEL_UNKNOWN
+            TrustLevel.entries.find { level -> level.value == it.toInt() } ?: TrustLevel.TRUST_LEVEL_UNKNOWN
         }
     }
     
     override fun observeTrustedDevices(): Flow<List<TrustedDevice>> {
-        // This would need to be implemented based on your specific requirements
-        // For now, returning a simple flow
-        return database.trustedDeviceQueries.getTrustedDevicesByGroup("")
+        // Get active group and observe its trusted devices
+        return database.trustGroupQueries.getActiveTrustGroup()
             .asFlow()
-            .mapToList()
-            .map { devices ->
-                devices.map { it.toTrustedDevice() }
+            .mapToList(Dispatchers.IO)
+            .map { groups ->
+                val activeGroup = groups.firstOrNull()
+                if (activeGroup != null) {
+                    database.trustedDeviceQueries.getTrustedDevicesByGroup(activeGroup.group_id)
+                        .executeAsList()
+                        .map { it.toTrustedDevice() }
+                } else {
+                    emptyList()
+                }
             }
     }
     
@@ -371,11 +377,11 @@ class TrustStoreImpl(
             groupId = group_id,
             publicKey = public_key,
             deviceName = device_name,
-            deviceType = DeviceType.entries.find { it.number == device_type.toInt() } ?: DeviceType.DEVICE_TYPE_UNKNOWN,
+            deviceType = DeviceType.entries.find { it.value == device_type.toInt() } ?: DeviceType.DEVICE_TYPE_UNKNOWN,
             addedAt = added_at,
             addedBy = added_by,
             lastSeen = last_seen,
-            trustLevel = TrustLevel.entries.find { it.number == trust_level.toInt() } ?: TrustLevel.TRUST_LEVEL_UNKNOWN,
+            trustLevel = TrustLevel.entries.find { it.value == trust_level.toInt() } ?: TrustLevel.TRUST_LEVEL_UNKNOWN,
             permissions = json.decodeFromString<List<String>>(permissions).map { 
                 Permission.entries.find { perm -> perm.name == it } ?: Permission.PERMISSION_UNKNOWN 
             }.toSet(),

@@ -14,9 +14,6 @@ CREATE TABLE trust_groups (
 getActiveTrustGroup:
 SELECT * FROM trust_groups WHERE is_active = 1 LIMIT 1;
 
--- Get trust group by ID
-getTrustGroupById:
-SELECT * FROM trust_groups WHERE group_id = ?;
 
 -- Insert or replace trust group
 upsertTrustGroup:
