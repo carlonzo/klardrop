@@ -102,5 +102,5 @@ private fun NSData.toByteArray(): ByteArray {
 class SecurityException(message: String) : Exception(message)
 
 actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = IOSSecureKeyStorage()
+    actual fun create(database: com.carlom.klardrop.common.database.AppDatabase): SecureKeyStorage = IOSSecureKeyStorage()
 }

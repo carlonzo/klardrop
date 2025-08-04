@@ -26,6 +26,9 @@ class AndroidSecureKeyStorage(private val database: AppDatabase) : SecureKeyStor
     }
     
     override suspend fun storePrivateKey(alias: String, key: ByteArray) = withContext(Dispatchers.IO) {
+        require(alias.isNotBlank()) { "Alias cannot be empty" }
+        require(key.isNotEmpty()) { "Key cannot be empty" }
+        
         // First, generate or get the encryption key
         val secretKey = getOrCreateSecretKey(alias)
         
@@ -41,6 +44,8 @@ class AndroidSecureKeyStorage(private val database: AppDatabase) : SecureKeyStor
     }
     
     override suspend fun retrievePrivateKey(alias: String): ByteArray? = withContext(Dispatchers.IO) {
+        require(alias.isNotBlank()) { "Alias cannot be empty" }
+        
         try {
             val secretKey = keyStore.getKey(KEY_ALIAS_PREFIX + alias, null) as? SecretKey
                 ?: return@withContext null
@@ -60,11 +65,15 @@ class AndroidSecureKeyStorage(private val database: AppDatabase) : SecureKeyStor
     }
     
     override suspend fun deletePrivateKey(alias: String) = withContext(Dispatchers.IO) {
+        require(alias.isNotBlank()) { "Alias cannot be empty" }
+        
         keyStore.deleteEntry(KEY_ALIAS_PREFIX + alias)
         deleteEncryptedData(alias)
     }
     
     override suspend fun keyExists(alias: String): Boolean = withContext(Dispatchers.IO) {
+        require(alias.isNotBlank()) { "Alias cannot be empty" }
+        
         keyStore.containsAlias(KEY_ALIAS_PREFIX + alias)
     }
     
@@ -103,6 +112,7 @@ class AndroidSecureKeyStorage(private val database: AppDatabase) : SecureKeyStor
     
     private suspend fun storeEncryptedData(alias: String, iv: ByteArray, encryptedKey: ByteArray) {
         withContext(Dispatchers.IO) {
+            // SQLDelight handles single-statement transactions automatically
             database.encryptedKeyQueries.storeEncryptedKey(
                 alias = alias,
                 iv = iv,
@@ -134,15 +144,7 @@ class AndroidSecureKeyStorage(private val database: AppDatabase) : SecureKeyStor
 }
 
 actual class SecureKeyStorageFactory(private val context: Context) {
-    // Keep the database reference to pass to storage
-    private var database: AppDatabase? = null
-    
-    actual fun create(): SecureKeyStorage {
-        return database?.let { AndroidSecureKeyStorage(it) }
-            ?: throw IllegalStateException("Database not set. Call setDatabase() first.")
-    }
-    
-    fun setDatabase(database: AppDatabase) {
-        this.database = database
+    actual fun create(database: AppDatabase): SecureKeyStorage {
+        return AndroidSecureKeyStorage(database)
     }
 }

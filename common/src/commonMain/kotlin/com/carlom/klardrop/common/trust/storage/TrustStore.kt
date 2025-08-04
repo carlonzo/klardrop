@@ -36,6 +36,7 @@ interface TrustStore {
     suspend fun updateDeviceLastSeen(deviceId: String)
     suspend fun isDeviceTrusted(deviceId: String): Boolean
     suspend fun getDeviceTrustLevel(deviceId: String): TrustLevel?
+    suspend fun getDevicesTrustInfo(deviceIds: List<String>): Map<String, Pair<Boolean, TrustLevel?>>
     fun observeTrustedDevices(): Flow<List<TrustedDevice>>
     
     // Security event logging
@@ -233,6 +234,32 @@ class TrustStoreImpl(
         return levelStr?.let { 
             TrustLevel.entries.find { level -> level.value == it.toInt() } ?: TrustLevel.TRUST_LEVEL_UNKNOWN
         }
+    }
+    
+    override suspend fun getDevicesTrustInfo(deviceIds: List<String>): Map<String, Pair<Boolean, TrustLevel?>> {
+        if (deviceIds.isEmpty()) return emptyMap()
+        
+        val currentTime = Clock().currentTimeMillis()
+        val result = mutableMapOf<String, Pair<Boolean, TrustLevel?>>()
+        
+        // Get all trusted devices info in a single query
+        val trustedDevices = database.trustedDeviceQueries.getTrustedDevicesInfo(currentTime).executeAsList()
+        val trustedDeviceMap = trustedDevices.associateBy { it.device_id }
+        
+        // Build result map
+        for (deviceId in deviceIds) {
+            val trustedDevice = trustedDeviceMap[deviceId]
+            if (trustedDevice != null) {
+                val trustLevel = TrustLevel.entries.find { level -> 
+                    level.value == trustedDevice.trust_level.toInt() 
+                } ?: TrustLevel.TRUST_LEVEL_UNKNOWN
+                result[deviceId] = Pair(true, trustLevel)
+            } else {
+                result[deviceId] = Pair(false, null)
+            }
+        }
+        
+        return result
     }
     
     override fun observeTrustedDevices(): Flow<List<TrustedDevice>> {

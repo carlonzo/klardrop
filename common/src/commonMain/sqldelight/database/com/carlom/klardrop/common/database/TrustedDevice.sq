@@ -54,3 +54,9 @@ getDeviceTrustLevel:
 SELECT trust_level FROM trusted_devices 
 WHERE device_id = ? AND is_active = 1 
 AND (expires_at IS NULL OR expires_at > ?);
+
+-- Get trusted devices info for batch operations
+getTrustedDevicesInfo:
+SELECT device_id, trust_level FROM trusted_devices 
+WHERE is_active = 1 
+AND (expires_at IS NULL OR expires_at > ?);

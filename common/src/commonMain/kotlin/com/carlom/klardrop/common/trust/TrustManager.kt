@@ -27,6 +27,7 @@ import com.carlom.klardrop.protos.trust.UpdateAction
 import com.carlom.klardrop.common.communication.message.TrustMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import com.carlom.klardrop.common.utils.log
 
 /**
  * TrustManager - Central coordinator for all trust-related functionality
@@ -63,17 +65,12 @@ class TrustManager(
     private val sendTrustMessage: suspend (deviceId: String, message: TrustMessage) -> Unit
 ) {
     
+    companion object {
+        private const val CLEANUP_INTERVAL_MS = 60 * 60 * 1000L // 1 hour
+    }
+    
     private val secureKeyStorage by lazy {
-        // Set database on factory before creating storage (Android specific)
-        if (secureKeyStorageFactory::class.simpleName == "SecureKeyStorageFactory") {
-            try {
-                val setDatabaseMethod = secureKeyStorageFactory::class.java.getMethod("setDatabase", AppDatabase::class.java)
-                setDatabaseMethod.invoke(secureKeyStorageFactory, database)
-            } catch (e: Exception) {
-                // Ignore if method doesn't exist (other platforms)
-            }
-        }
-        secureKeyStorageFactory.create()
+        secureKeyStorageFactory.create(database)
     }
     private val cryptoProvider: CryptoProvider = CryptoProviderImpl()
     private val trustStore: TrustStore by lazy { TrustStoreImpl(database, secureKeyStorage) }
@@ -94,6 +91,9 @@ class TrustManager(
     private lateinit var protocolHandler: TrustProtocolHandler
     
     private val proto = ProtoBuf { }
+    
+    // Track initialization completion to prevent race conditions
+    private val initializationComplete = CompletableDeferred<Unit>()
     
     init {
         scope.launch {
@@ -140,6 +140,15 @@ class TrustManager(
         // Start periodic cleanup
         startPeriodicCleanup()
         
+        // Mark initialization as complete
+        initializationComplete.complete(Unit)
+    }
+    
+    /**
+     * Ensure initialization is complete before proceeding
+     */
+    private suspend fun ensureInitialized() {
+        initializationComplete.await()
     }
     
     /**
@@ -164,6 +173,7 @@ class TrustManager(
      */
     @OptIn(ExperimentalUuidApi::class)
     suspend fun createTrustGroup(groupName: String? = null): TrustGroup {
+        ensureInitialized()
         val groupId = Uuid.random().toString()
         val groupKey = cryptoProvider.generateAESKey()
         val device = _currentDeviceKeypair.value ?: throw IllegalStateException("Device not initialized")
@@ -198,6 +208,7 @@ class TrustManager(
      * Get or create a trust group
      */
     suspend fun getOrCreateTrustGroup(): TrustGroup {
+        ensureInitialized()
         return _currentTrustGroup.value ?: createTrustGroup()
     }
     
@@ -236,6 +247,7 @@ class TrustManager(
      * Handle incoming trust protocol message
      */
     suspend fun handleTrustMessage(message: ProtoTrustMessage, senderAddress: String) {
+        ensureInitialized()
         when (message.type) {
             TrustMessageType.MESSAGE_TYPE_ECDH_INITIATION -> {
                 val initiation = ECDHInitiation.ADAPTER.decode(message.payload)
@@ -271,6 +283,7 @@ class TrustManager(
      * Check if a device is trusted
      */
     suspend fun isDeviceTrusted(deviceId: String): Boolean {
+        ensureInitialized()
         return trustStore.isDeviceTrusted(deviceId)
     }
     
@@ -279,6 +292,14 @@ class TrustManager(
      */
     suspend fun getDeviceTrustLevel(deviceId: String): TrustLevel? {
         return trustStore.getDeviceTrustLevel(deviceId)
+    }
+    
+    /**
+     * Get trust information for multiple devices in a single query
+     */
+    suspend fun getDevicesTrustInfo(deviceIds: List<String>): Map<String, Pair<Boolean, TrustLevel?>> {
+        ensureInitialized()
+        return trustStore.getDevicesTrustInfo(deviceIds)
     }
     
     /**
@@ -394,7 +415,7 @@ class TrustManager(
         scope.launch {
             // Run cleanup every hour
             while (true) {
-                kotlinx.coroutines.delay(60 * 60 * 1000) // 1 hour
+                kotlinx.coroutines.delay(CLEANUP_INTERVAL_MS)
                 
                 try {
                     trustStore.cleanExpiredPairingSessions()
@@ -402,7 +423,7 @@ class TrustManager(
                     trustStore.cleanupOldSecurityEvents()
                     trustStore.cleanupOldClipboardEntries()
                 } catch (e: Exception) {
-                    // Log error but don't crash
+                    log("TrustManager", "Failed to run periodic cleanup: ${e.message}")
                 }
             }
         }

@@ -73,17 +73,14 @@ class DiscoveryController(
     controllerScope.launch {
       showDevicesHelper.devicesFlow.collect { devices ->
         screenStateFlow.update { state ->
-          // Enhance devices with trust information
-          val enhancedDevices = devices.map { deviceUi ->
-            trustManager?.let { tm ->
-              val trustStatus = runCatching {
-                val isTrusted = tm.isDeviceTrusted(deviceUi.deviceId).let { 
-                  coroutines.mainDispatcher { it }
-                }
-                val trustLevel = tm.getDeviceTrustLevel(deviceUi.deviceId).let {
-                  coroutines.mainDispatcher { it }
-                }
-                
+          // Enhance devices with trust information using batch query
+          val enhancedDevices = trustManager?.let { tm ->
+            runCatching {
+              val deviceIds = devices.map { it.deviceId }
+              val trustInfo = tm.getDevicesTrustInfo(deviceIds) // Keep on IO dispatcher
+              
+              devices.map { deviceUi ->
+                val (isTrusted, trustLevel) = trustInfo[deviceUi.deviceId] ?: Pair(false, null)
                 deviceUi.copy(
                   trustStatus = if (isTrusted) {
                     com.carlom.klardrop.common.trust.model.TrustStatus.TRUSTED
@@ -93,9 +90,9 @@ class DiscoveryController(
                   trustLevel = trustLevel,
                   isTrustGroupMember = isTrusted
                 )
-              }.getOrNull() ?: deviceUi
-            } ?: deviceUi
-          }
+              }
+            }.getOrNull() ?: devices
+          } ?: devices
           
           state.copy(devices = enhancedDevices.toList())
         }
@@ -188,7 +185,10 @@ class DiscoveryController(
           messagesMap[receiveId] = receiveMessageUpdate
 
           var updatedDevices = currentState.devices
-          if (!messageProcessedForUnreadUpdate && receiveMessageUpdate.status.isFinished() && !(receiveMessageUpdate.status is ReceiveMessageStatus.Failed)) {
+          val messageNotProcessedYet = !messageProcessedForUnreadUpdate
+          val messageFinishedSuccessfully = receiveMessageUpdate.status.isFinished() && !(receiveMessageUpdate.status is ReceiveMessageStatus.Failed)
+          
+          if (messageNotProcessedYet && messageFinishedSuccessfully) {
             if (remoteDeviceId != currentState.navigateToChatDeviceId) {
               updatedDevices = currentState.devices.map { deviceUi ->
                 if (deviceUi.deviceId == remoteDeviceId) {
@@ -276,36 +276,39 @@ class DiscoveryController(
   /**
    * Handle trust events from TrustManager
    */
+  private suspend fun handleNewDeviceNearby(event: com.carlom.klardrop.common.trust.protocol.TrustEvent.NewDeviceNearby) {
+    // Create a trust notification
+    val notification = com.carlom.klardrop.common.trust.model.TrustNotification.NewDeviceNearby(
+      device = event.device,
+      onAccept = { onTrustDevice(event.device.deviceId) },
+      onDecline = { removeDeviceNotification(event.device.deviceId) }
+    )
+    
+    // Add notification to screen state
+    screenStateFlow.update { state ->
+      state.copy(
+        trustNotifications = state.trustNotifications + notification
+      )
+    }
+    
+    // Also emit as action for immediate handling
+    actionsFlow.emit(ActionUi.TrustNotification(notification))
+  }
+  
+  private fun removeDeviceNotification(deviceId: String) {
+    screenStateFlow.update { state ->
+      state.copy(
+        trustNotifications = state.trustNotifications.filterNot { 
+          it.device.deviceId == deviceId 
+        }
+      )
+    }
+  }
+  
   private suspend fun handleTrustEvent(event: com.carlom.klardrop.common.trust.protocol.TrustEvent) {
     when (event) {
       is com.carlom.klardrop.common.trust.protocol.TrustEvent.NewDeviceNearby -> {
-        // Create a trust notification
-        val notification = com.carlom.klardrop.common.trust.model.TrustNotification.NewDeviceNearby(
-          device = event.device,
-          onAccept = {
-            onTrustDevice(event.device.deviceId)
-          },
-          onDecline = {
-            // Remove notification from UI
-            screenStateFlow.update { state ->
-              state.copy(
-                trustNotifications = state.trustNotifications.filterNot { 
-                  it.device.deviceId == event.device.deviceId 
-                }
-              )
-            }
-          }
-        )
-        
-        // Add notification to screen state
-        screenStateFlow.update { state ->
-          state.copy(
-            trustNotifications = state.trustNotifications + notification
-          )
-        }
-        
-        // Also emit as action for immediate handling
-        actionsFlow.emit(ActionUi.TrustNotification(notification))
+        handleNewDeviceNearby(event)
       }
       
       is com.carlom.klardrop.common.trust.protocol.TrustEvent.DeviceJoined -> {
@@ -327,13 +330,6 @@ class DiscoveryController(
           success = false,
           errorMessage = event.message
         ))
-      }
-      
-      is com.carlom.klardrop.common.trust.protocol.TrustEvent.ClipboardUpdate -> {
-        // Handle clipboard sync updates
-        if (event.fromDevice != trustManager?.currentDeviceKeypair?.value?.deviceId) {
-          clipboardManager.write(event.content)
-        }
       }
       
       else -> {

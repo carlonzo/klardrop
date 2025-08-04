@@ -133,5 +133,5 @@ class DesktopSecureKeyStorage : SecureKeyStorage {
 }
 
 actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = DesktopSecureKeyStorage()
+    actual fun create(database: com.carlom.klardrop.common.database.AppDatabase): SecureKeyStorage = DesktopSecureKeyStorage()
 }

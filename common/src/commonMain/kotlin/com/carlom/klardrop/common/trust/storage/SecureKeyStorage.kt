@@ -35,5 +35,5 @@ interface SecureKeyStorage {
 }
 
 expect class SecureKeyStorageFactory {
-    fun create(): SecureKeyStorage
+    fun create(database: com.carlom.klardrop.common.database.AppDatabase): SecureKeyStorage
 }
