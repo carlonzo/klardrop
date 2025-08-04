@@ -22,7 +22,7 @@ class TrustClipboardSyncManager(
 ) {
     companion object {
         private const val TAG = "TrustClipboardSyncManager"
-        private const val MIN_SYNC_INTERVAL_MS = 30_000L // 30 seconds minimum
+        const val MIN_SYNC_INTERVAL_MS = 30_000L // 30 seconds minimum
         private const val DEBOUNCE_DELAY_MS = 1000L // 1 second debounce
     }
     
@@ -222,7 +222,7 @@ class TrustClipboardSyncManager(
  */
 data class ClipboardSyncPreferences(
     val enabled: Boolean = false,
-    val syncInterval: Long = MIN_SYNC_INTERVAL_MS,
+    val syncInterval: Long = TrustClipboardSyncManager.MIN_SYNC_INTERVAL_MS,
     val showNotifications: Boolean = true,
     val excludedApps: Set<String> = emptySet()
 )

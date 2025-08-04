@@ -7,7 +7,7 @@ import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.trust.crypto.EncryptedPayload
 import com.carlom.klardrop.common.trust.protocol.TrustEvent
 import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandler
-import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandlerImpl
+import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandlerStub
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
 import com.carlom.klardrop.common.trust.storage.TrustStore
 import com.carlom.klardrop.common.trust.storage.TrustStoreImpl
@@ -60,12 +60,12 @@ class TrustManager(
     private val deviceName: String,
     private val deviceType: DeviceType,
     private val scope: CoroutineScope,
-    private val sendTrustMessage: suspend (deviceId: String, message: TrustMessage) -> Unit
+    private val sendTrustMessage: suspend (deviceId: String, message: ProtoTrustMessage) -> Unit
 ) {
     
     private val secureKeyStorage = secureKeyStorageFactory.create()
     private val cryptoProvider: CryptoProvider = CryptoProviderImpl()
-    private val trustStore: TrustStore = TrustStoreImpl(database, secureKeyStorage)
+    val trustStore: TrustStore = TrustStoreImpl(database, secureKeyStorage)
     
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
@@ -79,7 +79,7 @@ class TrustManager(
     private val _trustedDevices = MutableStateFlow<List<TrustedDevice>>(emptyList())
     val trustedDevices: StateFlow<List<TrustedDevice>> = _trustedDevices.asStateFlow()
     
-    private lateinit var protocolHandler: TrustProtocolHandler
+    lateinit var protocolHandler: TrustProtocolHandler
     
     private val proto = ProtoBuf { }
     
@@ -111,7 +111,7 @@ class TrustManager(
         }
         
         // Initialize protocol handler
-        protocolHandler = TrustProtocolHandlerImpl(
+        protocolHandler = TrustProtocolHandlerStub(
             trustStore = trustStore,
             cryptoProvider = cryptoProvider,
             deviceInfo = { keypair },

@@ -16,7 +16,7 @@ import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
-import com.carlom.klardrop.protos.trust.TrustMessage
+import com.carlom.klardrop.protos.trust.TrustMessage as ProtoTrustMessage
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -29,7 +29,7 @@ class TrustModule(
     private val internalPlatformDependencies: InternalPlatformDependencies,
     private val currentDeviceProvider: CurrentDeviceProvider,
     private val clipboardManager: ClipboardManager,
-    private val sendTrustMessage: suspend (deviceId: String, message: TrustMessage) -> Unit
+    private val sendTrustMessage: suspend (deviceId: String, message: ProtoTrustMessage) -> Unit
 ) {
     
     private val trustScope: CoroutineScope by lazy {
@@ -49,7 +49,7 @@ class TrustModule(
             database = appDatabase,
             secureKeyStorageFactory = secureKeyStorageFactory,
             deviceName = deviceName,
-            deviceType = mapDeviceType(deviceType),
+            deviceType = deviceType,
             scope = trustScope,
             sendTrustMessage = sendTrustMessage
         )
