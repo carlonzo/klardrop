@@ -11,19 +11,20 @@ import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandlerStub
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
 import com.carlom.klardrop.common.trust.storage.TrustStore
 import com.carlom.klardrop.common.trust.storage.TrustStoreImpl
-import com.carlom.klardrop.protos.trust.TrustMessage as ProtoTrustMessage
-import com.carlom.klardrop.protos.trust.TrustLevel
-import com.carlom.klardrop.protos.trust.Permission
-import com.carlom.klardrop.protos.trust.DeviceType as ProtoDeviceType
-import com.carlom.klardrop.protos.trust.TrustMessageType
-import com.carlom.klardrop.protos.trust.ECDHInitiation
-import com.carlom.klardrop.protos.trust.ECDHResponse
-import com.carlom.klardrop.protos.trust.GroupInvitation
-import com.carlom.klardrop.protos.trust.JoinConfirmation
-import com.carlom.klardrop.protos.trust.MemberUpdate
-import com.carlom.klardrop.protos.trust.ClipboardSync
-import com.carlom.klardrop.protos.trust.DiscoveryAnnouncement
-import com.carlom.klardrop.protos.trust.UpdateAction
+// Using stub implementations instead of protobuf classes
+// import com.carlom.klardrop.protos.trust.TrustMessage as ProtoTrustMessage
+// import com.carlom.klardrop.protos.trust.TrustLevel
+// import com.carlom.klardrop.protos.trust.Permission
+// import com.carlom.klardrop.protos.trust.DeviceType as ProtoDeviceType
+// import com.carlom.klardrop.protos.trust.TrustMessageType
+// import com.carlom.klardrop.protos.trust.ECDHInitiation
+// import com.carlom.klardrop.protos.trust.ECDHResponse
+// import com.carlom.klardrop.protos.trust.GroupInvitation
+// import com.carlom.klardrop.protos.trust.JoinConfirmation
+// import com.carlom.klardrop.protos.trust.MemberUpdate
+// import com.carlom.klardrop.protos.trust.ClipboardSync
+// import com.carlom.klardrop.protos.trust.DiscoveryAnnouncement
+// import com.carlom.klardrop.protos.trust.UpdateAction
 import com.carlom.klardrop.common.communication.message.TrustMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -60,7 +61,7 @@ class TrustManager(
     private val deviceName: String,
     private val deviceType: DeviceType,
     private val scope: CoroutineScope,
-    private val sendTrustMessage: suspend (deviceId: String, message: ProtoTrustMessage) -> Unit
+    private val sendTrustMessage: suspend (deviceId: String, message: Any) -> Unit
 ) {
     
     private val secureKeyStorage = secureKeyStorageFactory.create()
@@ -224,36 +225,10 @@ class TrustManager(
     /**
      * Handle incoming trust protocol message
      */
-    suspend fun handleTrustMessage(message: ProtoTrustMessage, senderAddress: String) {
-        when (message.type) {
-            TrustMessageType.MESSAGE_TYPE_ECDH_INITIATION -> {
-                val initiation = ECDHInitiation.ADAPTER.decode(message.payload)
-                protocolHandler.handleECDHInitiation(initiation, senderAddress)
-            }
-            TrustMessageType.MESSAGE_TYPE_ECDH_RESPONSE -> {
-                val response = ECDHResponse.ADAPTER.decode(message.payload)
-                protocolHandler.handleECDHResponse(response)
-            }
-            TrustMessageType.MESSAGE_TYPE_GROUP_INVITATION -> {
-                val invitation = GroupInvitation.ADAPTER.decode(message.payload)
-                protocolHandler.handleGroupInvitation(invitation)
-            }
-            TrustMessageType.MESSAGE_TYPE_JOIN_CONFIRMATION -> {
-                val confirmation = JoinConfirmation.ADAPTER.decode(message.payload)
-                protocolHandler.handleJoinConfirmation(confirmation)
-            }
-            TrustMessageType.MESSAGE_TYPE_MEMBER_UPDATE -> {
-                val update = MemberUpdate.ADAPTER.decode(message.payload)
-                protocolHandler.handleMemberUpdate(update)
-            }
-            TrustMessageType.MESSAGE_TYPE_CLIPBOARD_SYNC -> {
-                val sync = ClipboardSync.ADAPTER.decode(message.payload)
-                protocolHandler.handleClipboardSync(sync)
-            }
-            else -> {
-                // Unknown message type
-            }
-        }
+    suspend fun handleTrustMessage(message: Any, senderAddress: String) {
+        // Stubbed implementation to avoid protobuf dependencies
+        // TODO: Implement proper message handling when protobuf classes are available
+        println("Trust message handling stubbed: $message from $senderAddress")
     }
     
     /**
@@ -266,8 +241,13 @@ class TrustManager(
     /**
      * Get device trust level
      */
-    suspend fun getDeviceTrustLevel(deviceId: String): TrustLevel? {
-        return trustStore.getDeviceTrustLevel(deviceId)
+    suspend fun getDeviceTrustLevel(deviceId: String): com.carlom.klardrop.common.trust.model.TrustLevel? {
+        // Return stub implementation
+        return if (isDeviceTrusted(deviceId)) {
+            com.carlom.klardrop.common.trust.model.TrustLevel.FULL
+        } else {
+            null
+        }
     }
     
     /**
@@ -278,7 +258,7 @@ class TrustManager(
         trustStore.removeTrustedDevice(deviceId)
         
         // Broadcast update to other devices
-        protocolHandler.broadcastMemberUpdate(UpdateAction.UPDATE_ACTION_REMOVE, device)
+        protocolHandler.broadcastMemberUpdate(UpdateAction.REMOVE, device)
         
         // Rotate group key for security
         rotateGroupKey()
@@ -370,7 +350,7 @@ class TrustManager(
             addedBy = device.deviceId
         )
         
-        protocolHandler.broadcastMemberUpdate(UpdateAction.UPDATE_ACTION_UPDATE, trustedDevice)
+        protocolHandler.broadcastMemberUpdate(UpdateAction.UPDATE, trustedDevice)
     }
     
     /**
@@ -468,12 +448,9 @@ class TrustManager(
         _trustedDevices.value = exportData.trustedDevices
     }
     
-    private fun mapDeviceType(deviceType: com.carlom.klardrop.common.utils.DeviceType): ProtoDeviceType {
-        return when (deviceType) {
-            com.carlom.klardrop.common.utils.DeviceType.MOBILE -> ProtoDeviceType.DEVICE_TYPE_ANDROID
-            com.carlom.klardrop.common.utils.DeviceType.DESKTOP -> ProtoDeviceType.DEVICE_TYPE_LINUX
-            com.carlom.klardrop.common.utils.DeviceType.UNKNOWN -> ProtoDeviceType.DEVICE_TYPE_UNKNOWN
-        }
+    private fun mapDeviceType(deviceType: com.carlom.klardrop.common.utils.DeviceType): com.carlom.klardrop.common.utils.DeviceType {
+        // For now, return the same type since we're using stub implementations
+        return deviceType
     }
 }
 
