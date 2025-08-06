@@ -3,9 +3,10 @@ package com.carlom.klardrop.common.trust.storage
 import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.utils.Clock
-import com.carlom.klardrop.protos.trust.DeviceType
-import com.carlom.klardrop.protos.trust.Permission
-import com.carlom.klardrop.protos.trust.TrustLevel
+import com.carlom.klardrop.common.utils.DeviceType as LocalDeviceType
+import com.carlom.klardrop.protos.trust.DeviceType as ProtoDeviceType
+import com.carlom.klardrop.protos.trust.Permission as ProtoPermission
+import com.carlom.klardrop.protos.trust.TrustLevel as ProtoTrustLevel
 import com.carlom.klardrop.protos.trust.UpdateAction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -81,7 +82,11 @@ class TrustStoreImpl(
             publicKey = dbKeypair.public_key,
             privateKey = privateKey,
             deviceName = dbKeypair.device_name,
-            deviceType = DeviceType.entries.find { it.value == dbKeypair.device_type.toInt() } ?: DeviceType.DEVICE_TYPE_UNKNOWN,
+            deviceType = when (dbKeypair.device_type) {
+                "MOBILE" -> LocalDeviceType.MOBILE
+                "DESKTOP" -> LocalDeviceType.DESKTOP
+                else -> LocalDeviceType.UNKNOWN
+            },
             createdAt = dbKeypair.created_at
         )
     }
@@ -98,7 +103,7 @@ class TrustStoreImpl(
             public_key = keypair.publicKey,
             private_key_alias = alias,
             device_name = keypair.deviceName,
-            device_type = keypair.deviceType.value.toString(),
+            device_type = keypair.deviceType.name,
             created_at = keypair.createdAt
         )
     }
@@ -231,7 +236,12 @@ class TrustStoreImpl(
         ).executeAsOneOrNull()
         
         return levelStr?.let { 
-            TrustLevel.entries.find { level -> level.value == it.toInt() } ?: TrustLevel.TRUST_LEVEL_UNKNOWN
+            when (it) {
+                "FULL" -> TrustLevel.FULL
+                "LIMITED" -> TrustLevel.LIMITED
+                "MINIMAL" -> TrustLevel.MINIMAL
+                else -> TrustLevel.FULL
+            }
         }
     }
     
@@ -371,13 +381,27 @@ class TrustStoreImpl(
             groupId = group_id,
             publicKey = public_key,
             deviceName = device_name,
-            deviceType = DeviceType.entries.find { it.value == device_type.toInt() } ?: DeviceType.DEVICE_TYPE_UNKNOWN,
+            deviceType = when (device_type) {
+                "MOBILE" -> LocalDeviceType.MOBILE
+                "DESKTOP" -> LocalDeviceType.DESKTOP
+                else -> LocalDeviceType.UNKNOWN
+            },
             addedAt = added_at,
             addedBy = added_by,
             lastSeen = last_seen,
-            trustLevel = TrustLevel.entries.find { it.value == trust_level.toInt() } ?: TrustLevel.TRUST_LEVEL_UNKNOWN,
+            trustLevel = when (trust_level) {
+                "FULL" -> TrustLevel.FULL
+                "LIMITED" -> TrustLevel.LIMITED
+                "MINIMAL" -> TrustLevel.MINIMAL
+                else -> TrustLevel.FULL
+            },
             permissions = json.decodeFromString<List<String>>(permissions).map { 
-                Permission.entries.find { perm -> perm.name == it } ?: Permission.PERMISSION_UNKNOWN 
+                when (it) {
+                    "FILE_SEND" -> Permission.FILE_SEND
+                    "FILE_RECEIVE" -> Permission.FILE_RECEIVE
+                    "CLIPBOARD_SYNC" -> Permission.CLIPBOARD_SYNC
+                    else -> Permission.FILE_SEND
+                }
             }.toSet(),
             expiresAt = expires_at,
             isActive = is_active == 1L

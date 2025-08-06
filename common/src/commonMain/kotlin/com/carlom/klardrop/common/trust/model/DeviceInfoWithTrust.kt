@@ -3,7 +3,7 @@ package com.carlom.klardrop.common.trust.model
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
-import com.carlom.klardrop.protos.trust.TrustLevel
+import com.carlom.klardrop.common.trust.model.TrustLevel
 
 /**
  * Enhanced device information that includes trust status
@@ -18,7 +18,7 @@ data class DeviceInfoWithTrust(
     val lastSeen: Long? = null,
     val addedAt: Long? = null,
     val addedBy: String? = null,
-    val permissions: Set<com.carlom.klardrop.protos.trust.Permission>? = null,
+    val permissions: Set<Permission>? = null,
     val expiresAt: Long? = null
 ) {
     val deviceId: String get() = deviceInfo.deviceId
@@ -30,21 +30,21 @@ data class DeviceInfoWithTrust(
      * Check if device has clipboard sync permission
      */
     fun hasClipboardSyncPermission(): Boolean {
-        return permissions?.contains(com.carlom.klardrop.protos.trust.Permission.PERMISSION_CLIPBOARD_SYNC) == true
+        return permissions?.contains(Permission.CLIPBOARD_SYNC) == true
     }
     
     /**
      * Check if device has file send permission
      */
     fun hasFileSendPermission(): Boolean {
-        return permissions?.contains(com.carlom.klardrop.protos.trust.Permission.PERMISSION_FILE_SEND) == true
+        return permissions?.contains(Permission.FILE_SEND) == true
     }
     
     /**
      * Check if device has file receive permission
      */
     fun hasFileReceivePermission(): Boolean {
-        return permissions?.contains(com.carlom.klardrop.protos.trust.Permission.PERMISSION_FILE_RECEIVE) == true
+        return permissions?.contains(Permission.FILE_RECEIVE) == true
     }
     
     /**

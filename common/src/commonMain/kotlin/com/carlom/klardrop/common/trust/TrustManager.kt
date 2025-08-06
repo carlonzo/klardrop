@@ -7,7 +7,7 @@ import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.trust.crypto.EncryptedPayload
 import com.carlom.klardrop.common.trust.protocol.TrustEvent
 import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandler
-import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandlerStub
+import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandlerImpl
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
 import com.carlom.klardrop.common.trust.storage.TrustStore
 import com.carlom.klardrop.common.trust.storage.TrustStoreImpl
@@ -112,7 +112,7 @@ class TrustManager(
         }
         
         // Initialize protocol handler
-        protocolHandler = TrustProtocolHandlerStub(
+        protocolHandler = TrustProtocolHandlerImpl(
             trustStore = trustStore,
             cryptoProvider = cryptoProvider,
             deviceInfo = { keypair },
