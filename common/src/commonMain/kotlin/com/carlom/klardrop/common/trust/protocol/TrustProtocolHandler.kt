@@ -1,7 +1,6 @@
 package com.carlom.klardrop.common.trust.protocol
 
 import com.carlom.klardrop.common.trust.model.*
-import com.carlom.klardrop.protos.trust.*
 import kotlinx.coroutines.flow.*
 
 interface TrustProtocolHandler {
@@ -33,6 +32,10 @@ interface TrustProtocolHandler {
 }
 
 sealed class TrustEvent {
+    data class NewDeviceNearby(
+        val device: DeviceIdentity
+    ) : TrustEvent()
+    
     data class PairingRequest(
         val device: DeviceIdentity,
         val sessionId: String,
@@ -43,6 +46,6 @@ sealed class TrustEvent {
     data class DeviceJoined(val device: com.carlom.klardrop.common.trust.model.TrustedDevice) : TrustEvent()
     data class DeviceRemoved(val deviceId: String) : TrustEvent()
     data class DeviceUpdated(val device: com.carlom.klardrop.common.trust.model.TrustedDevice) : TrustEvent()
-    data class ClipboardUpdate(val content: String, val fromDevice: String) : TrustEvent()
+    data class ClipboardUpdate(val content: String, val deviceId: String) : TrustEvent()
     data class TrustError(val message: String, val deviceId: String? = null) : TrustEvent()
 }

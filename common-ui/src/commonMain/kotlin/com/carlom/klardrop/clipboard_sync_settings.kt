@@ -86,7 +86,7 @@ fun ClipboardSyncSettingsScreen(
                     )
                 }
                 
-                items(devices.filter { it.permissions.contains(com.carlom.klardrop.protos.trust.Permission.PERMISSION_CLIPBOARD_SYNC) }) { device ->
+                items(devices.filter { it.permissions.contains(com.carlom.klardrop.common.trust.model.UiPermission.CLIPBOARD_SYNC) }) { device ->
                     DeviceClipboardSettingCard(
                         device = device,
                         onToggleSync = { enabled ->
@@ -234,10 +234,10 @@ private fun DeviceClipboardSettingCard(
             ) {
                 Icon(
                     imageVector = when (device.deviceType) {
-                        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_PHONE -> Icons.Default.PhoneAndroid
-                        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_TABLET -> Icons.Default.Tablet
-                        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_LAPTOP -> Icons.Default.Computer
-                        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_DESKTOP -> Icons.Default.DesktopWindows
+                        com.carlom.klardrop.common.utils.DeviceType.PHONE -> Icons.Default.PhoneAndroid
+                        com.carlom.klardrop.common.utils.DeviceType.TABLET -> Icons.Default.Tablet
+                        com.carlom.klardrop.common.utils.DeviceType.LAPTOP -> Icons.Default.Computer
+                        com.carlom.klardrop.common.utils.DeviceType.DESKTOP -> Icons.Default.DesktopWindows
                         else -> Icons.Default.Devices
                     },
                     contentDescription = null,

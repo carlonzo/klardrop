@@ -404,14 +404,14 @@ private fun PermissionChip(
  */
 @Composable
 private fun PermissionEditDialog(
-    currentPermissions: Set<Permission>,
+    currentPermissions: Set<com.carlom.klardrop.common.trust.model.UiPermission>,
     onDismiss: () -> Unit,
-    onConfirm: (Set<Permission>) -> Unit
+    onConfirm: (Set<com.carlom.klardrop.common.trust.model.UiPermission>) -> Unit
 ) {
-    val permissions = remember { mutableStateMapOf<Permission, Boolean>().apply {
-        put(Permission.PERMISSION_FILE_SEND, currentPermissions.contains(Permission.PERMISSION_FILE_SEND))
-        put(Permission.PERMISSION_FILE_RECEIVE, currentPermissions.contains(Permission.PERMISSION_FILE_RECEIVE))
-        put(Permission.PERMISSION_CLIPBOARD_SYNC, currentPermissions.contains(Permission.PERMISSION_CLIPBOARD_SYNC))
+    val permissions = remember { mutableStateMapOf<com.carlom.klardrop.common.trust.model.UiPermission, Boolean>().apply {
+        put(com.carlom.klardrop.common.trust.model.UiPermission.FILE_SEND, currentPermissions.contains(com.carlom.klardrop.common.trust.model.UiPermission.FILE_SEND))
+        put(com.carlom.klardrop.common.trust.model.UiPermission.FILE_RECEIVE, currentPermissions.contains(com.carlom.klardrop.common.trust.model.UiPermission.FILE_RECEIVE))
+        put(com.carlom.klardrop.common.trust.model.UiPermission.CLIPBOARD_SYNC, currentPermissions.contains(com.carlom.klardrop.common.trust.model.UiPermission.CLIPBOARD_SYNC))
     }}
     
     AlertDialog(
@@ -432,10 +432,9 @@ private fun PermissionEditDialog(
                     ) {
                         Text(
                             text = when (permission) {
-                                Permission.PERMISSION_FILE_SEND -> "Send Files"
-                                Permission.PERMISSION_FILE_RECEIVE -> "Receive Files"
-                                Permission.PERMISSION_CLIPBOARD_SYNC -> "Clipboard Sync"
-                                else -> "Unknown"
+                                com.carlom.klardrop.common.trust.model.UiPermission.FILE_SEND -> "Send Files"
+                                com.carlom.klardrop.common.trust.model.UiPermission.FILE_RECEIVE -> "Receive Files"
+                                com.carlom.klardrop.common.trust.model.UiPermission.CLIPBOARD_SYNC -> "Clipboard Sync"
                             }
                         )
                         
@@ -453,6 +452,7 @@ private fun PermissionEditDialog(
                     val selectedPermissions = permissions
                         .filter { it.value }
                         .keys
+                        .toSet()
                     onConfirm(selectedPermissions)
                 }
             ) {

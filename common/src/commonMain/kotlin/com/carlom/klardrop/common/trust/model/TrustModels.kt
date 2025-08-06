@@ -1,9 +1,7 @@
 package com.carlom.klardrop.common.trust.model
 
 import com.carlom.klardrop.common.utils.Clock
-import com.carlom.klardrop.protos.trust.DeviceType
-import com.carlom.klardrop.protos.trust.Permission
-import com.carlom.klardrop.protos.trust.TrustLevel
+import com.carlom.klardrop.common.utils.DeviceType
 import kotlinx.serialization.Serializable
 
 // Device identity and keypair
@@ -89,11 +87,11 @@ data class TrustedDevice(
     val addedAt: Long,
     val addedBy: String,
     val lastSeen: Long? = null,
-    val trustLevel: TrustLevel = TrustLevel.TRUST_LEVEL_FULL,
+    val trustLevel: TrustLevel = TrustLevel.FULL,
     val permissions: Set<Permission> = setOf(
-        Permission.PERMISSION_FILE_SEND,
-        Permission.PERMISSION_FILE_RECEIVE,
-        Permission.PERMISSION_CLIPBOARD_SYNC
+        Permission.FILE_SEND,
+        Permission.FILE_RECEIVE,
+        Permission.CLIPBOARD_SYNC
     ),
     val expiresAt: Long? = null,
     val isActive: Boolean = true
@@ -241,17 +239,17 @@ enum class TrustStatus {
 // Trust notification types
 sealed class TrustNotification {
     data class NewDeviceNearby(
-        val device: com.carlom.klardrop.protos.trust.DeviceIdentity,
+        val device: DeviceIdentity,
         val onAccept: () -> Unit,
         val onDecline: () -> Unit,
         val timeoutSeconds: Int = 30
     ) : TrustNotification()
     
     data class DeviceJoined(
-        val device: com.carlom.klardrop.protos.trust.DeviceIdentity
+        val device: DeviceIdentity
     ) : TrustNotification()
     
     data class TrustedDeviceOnline(
-        val device: com.carlom.klardrop.protos.trust.DeviceIdentity
+        val device: DeviceIdentity
     ) : TrustNotification()
 }

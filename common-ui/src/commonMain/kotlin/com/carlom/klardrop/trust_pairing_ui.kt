@@ -374,19 +374,6 @@ private fun PairingAnimation() {
     }
 }
 
-/**
- * Helper function to get device type label
- */
-private fun getDeviceTypeLabel(deviceType: com.carlom.klardrop.protos.trust.DeviceType): String {
-    return when (deviceType) {
-        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_PHONE -> "Phone"
-        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_TABLET -> "Tablet"
-        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_LAPTOP -> "Laptop"
-        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_DESKTOP -> "Desktop"
-        else -> "Unknown Device"
-    }
-}
-
 private fun getDeviceTypeLabel(deviceType: DeviceType): String {
     return when (deviceType) {
         DeviceType.MOBILE -> "Mobile"
