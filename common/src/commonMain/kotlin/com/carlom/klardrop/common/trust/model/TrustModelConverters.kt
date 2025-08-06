@@ -16,7 +16,7 @@ fun DeviceType.toLocalDeviceType(): LocalDeviceType {
     return when (this) {
         DeviceType.DEVICE_TYPE_ANDROID, DeviceType.DEVICE_TYPE_IOS -> LocalDeviceType.MOBILE
         DeviceType.DEVICE_TYPE_MACOS, DeviceType.DEVICE_TYPE_WINDOWS, DeviceType.DEVICE_TYPE_LINUX -> LocalDeviceType.DESKTOP
-        DeviceType.DEVICE_TYPE_UNKNOWN, DeviceType.UNRECOGNIZED -> LocalDeviceType.UNKNOWN
+        DeviceType.DEVICE_TYPE_UNKNOWN -> LocalDeviceType.UNKNOWN
     }
 }
 
@@ -34,7 +34,7 @@ fun com.carlom.klardrop.protos.trust.TrustLevel.toLocalTrustLevel(): TrustLevel 
         com.carlom.klardrop.protos.trust.TrustLevel.TRUST_LEVEL_READ_ONLY -> TrustLevel.MINIMAL
         com.carlom.klardrop.protos.trust.TrustLevel.TRUST_LEVEL_FILE_ONLY -> TrustLevel.LIMITED
         com.carlom.klardrop.protos.trust.TrustLevel.TRUST_LEVEL_FULL -> TrustLevel.FULL
-        com.carlom.klardrop.protos.trust.TrustLevel.TRUST_LEVEL_UNKNOWN, com.carlom.klardrop.protos.trust.TrustLevel.UNRECOGNIZED -> TrustLevel.FULL
+        com.carlom.klardrop.protos.trust.TrustLevel.TRUST_LEVEL_UNKNOWN -> TrustLevel.FULL
     }
 }
 
@@ -52,7 +52,7 @@ fun com.carlom.klardrop.protos.trust.Permission.toLocalPermission(): Permission 
         com.carlom.klardrop.protos.trust.Permission.PERMISSION_FILE_SEND -> Permission.FILE_SEND
         com.carlom.klardrop.protos.trust.Permission.PERMISSION_FILE_RECEIVE -> Permission.FILE_RECEIVE
         com.carlom.klardrop.protos.trust.Permission.PERMISSION_CLIPBOARD_SYNC -> Permission.CLIPBOARD_SYNC
-        com.carlom.klardrop.protos.trust.Permission.PERMISSION_UNKNOWN, com.carlom.klardrop.protos.trust.Permission.UNRECOGNIZED -> Permission.FILE_SEND
+        com.carlom.klardrop.protos.trust.Permission.PERMISSION_UNKNOWN -> Permission.FILE_SEND
     }
 }
 

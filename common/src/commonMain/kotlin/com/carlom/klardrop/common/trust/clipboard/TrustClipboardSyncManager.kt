@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.trust.model.ClipboardEntry
 import com.carlom.klardrop.common.trust.model.Permission
+import com.carlom.klardrop.common.trust.model.UpdateAction
 import com.carlom.klardrop.common.trust.protocol.TrustEvent
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
