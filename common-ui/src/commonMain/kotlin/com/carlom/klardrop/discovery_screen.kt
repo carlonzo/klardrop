@@ -137,7 +137,7 @@ fun DiscoveryScreen(
         }
       },
       sheetState = sheetState,
-      content = {
+      content =  {
 
         DiscoveryDashboard(
           modifier = modifier,
@@ -207,6 +207,7 @@ fun DiscoveryScreen(
       )
     )
   }
+}
 }
 
 

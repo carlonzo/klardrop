@@ -17,8 +17,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.trust.model.TrustGroup
 import kotlinx.coroutines.flow.StateFlow
-import java.text.SimpleDateFormat
-import java.util.*
 
 /**
  * Trust group settings screen
@@ -329,8 +327,8 @@ private fun GroupInfoSection(
             // Group stats
             InfoRow("Group ID", group.groupId.take(8) + "...")
             InfoRow("Devices", "${group.devices.size} connected")
-            InfoRow("Created", formatDate(group.createdAt))
-            InfoRow("Last Updated", formatDate(group.updatedAt))
+            InfoRow("Created", formatRelativeTime(group.createdAt))
+            InfoRow("Last Updated", formatRelativeTime(group.updatedAt))
             InfoRow("Protocol Version", "v${group.protocolVersion}")
         }
     }
@@ -549,9 +547,3 @@ private fun PasswordDialog(
     )
 }
 
-/**
- * Format date helper
- */
-private fun formatDate(timestamp: Long): String {
-    return SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault()).format(Date(timestamp))
-}

@@ -22,7 +22,7 @@ class ShowDevicesControllerHelper(
 ) {
 
   private val _devicesFlow = MutableStateFlow<Map<String, DeviceUi>>(mapOf())
-  val devicesFlow: Flow<Collection<DeviceUi>> = _devicesFlow.map { it.values }
+  val devicesFlow: Flow<List<DeviceUi>> = _devicesFlow.map { it.values.toList() }
 
   init {
     coroutineScope.launch {

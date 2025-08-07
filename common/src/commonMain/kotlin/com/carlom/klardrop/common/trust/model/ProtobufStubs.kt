@@ -1,5 +1,7 @@
 package com.carlom.klardrop.common.trust.model
 
+import com.carlom.klardrop.common.utils.DeviceType
+
 /**
  * Stub implementations for protobuf classes to resolve compilation issues.
  * These should be replaced with proper protobuf implementations when available.
@@ -9,7 +11,7 @@ package com.carlom.klardrop.common.trust.model
 data class DeviceIdentity(
     val deviceId: String,
     val deviceName: String,
-    val deviceType: com.carlom.klardrop.common.utils.DeviceType,
+    val deviceType: DeviceType,
     val publicKey: ByteArray? = null
 ) {
     override fun equals(other: Any?): Boolean {
@@ -47,10 +49,10 @@ enum class TrustLevel {
 
 // Protocol message stubs
 data class DiscoveryAnnouncement(
-    val deviceId: String = "",
-    val deviceName: String = "",
-    val deviceType: com.carlom.klardrop.common.utils.DeviceType = com.carlom.klardrop.common.utils.DeviceType.UNKNOWN,
-    val publicKey: ByteArray = byteArrayOf()
+  val deviceId: String = "",
+  val deviceName: String = "",
+  val deviceType: DeviceType = DeviceType.UNKNOWN,
+  val publicKey: ByteArray = byteArrayOf()
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
