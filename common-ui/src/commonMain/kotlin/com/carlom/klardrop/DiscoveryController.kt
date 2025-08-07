@@ -264,7 +264,7 @@ data class DiscoveryScreenState(
   val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap(),
   val navigateToChatDeviceId: String? = null,    // New
   val navigateToChatDeviceName: String? = null,   // New
-  val trustNotifications: List<com.carlom.klardrop.common.trust.model.UiNewDeviceNearby> = emptyList()
+  val trustNotifications: List<com.carlom.klardrop.common.trust.model.TrustNotification> = emptyList()
 )
 
 // ActionUi might not be needed anymore if onDeviceClick directly updates state for navigation
@@ -272,7 +272,7 @@ data class DiscoveryScreenState(
 sealed interface ActionUi {
   class OnDeviceClicked(val deviceUi: DeviceUi) : ActionUi
   
-  class TrustNotification(val notification: com.carlom.klardrop.common.trust.model.UiNewDeviceNearby) : ActionUi
+  class TrustNotification(val notification: com.carlom.klardrop.common.trust.model.TrustNotification) : ActionUi
   
   object PairingStarted : ActionUi
   
@@ -287,7 +287,7 @@ data class DeviceUi(
   val connectionTypes: List<DeviceConnection.DeviceConnectionType>,
   val hasUnreadMessages: Boolean = false, // New
   val trustStatus: com.carlom.klardrop.common.trust.model.TrustStatus = com.carlom.klardrop.common.trust.model.TrustStatus.UNTRUSTED,
-  val trustLevel: com.carlom.klardrop.common.trust.model.UiTrustLevel? = null,
+  val trustLevel: com.carlom.klardrop.common.trust.model.TrustLevel? = null,
   val isTrustGroupMember: Boolean = false,
   val hasClipboardSyncPermission: Boolean = false,
   val hasFileSendPermission: Boolean = true,

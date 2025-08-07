@@ -14,9 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.trust.model.TrustedDevice
+import com.carlom.klardrop.utils.TimeFormatUtils
 import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.protos.trust.Permission
-import com.carlom.klardrop.protos.trust.TrustLevel
+import com.carlom.klardrop.common.trust.model.Permission
+import com.carlom.klardrop.common.trust.model.TrustLevel
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -216,14 +217,14 @@ private fun TrustedDeviceCard(
           Spacer(modifier = Modifier.height(8.dp))
 
           Text(
-            text = "Added ${formatRelativeTime(device.addedAt)}",
+            text = "Added ${TimeFormatUtils.formatRelativeTime(device.addedAt)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
 
           device.lastSeen?.let { lastSeen ->
             Text(
-              text = "Last seen ${formatRelativeTime(lastSeen)}",
+              text = "Last seen ${TimeFormatUtils.formatRelativeTime(lastSeen)}",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -231,7 +232,7 @@ private fun TrustedDeviceCard(
 
           device.expiresAt?.let { expiresAt ->
             Text(
-              text = "Expires ${formatRelativeTime(expiresAt)}",
+              text = "Expires ${TimeFormatUtils.formatRelativeTime(expiresAt)}",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.error
             )
@@ -259,13 +260,13 @@ private fun TrustedDeviceCard(
       Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        if (device.permissions.contains(Permission.PERMISSION_FILE_SEND)) {
+        if (device.permissions.contains(Permission.FILE_SEND)) {
           PermissionChip("Send Files", Icons.Default.Send)
         }
-        if (device.permissions.contains(Permission.PERMISSION_FILE_RECEIVE)) {
+        if (device.permissions.contains(Permission.FILE_RECEIVE)) {
           PermissionChip("Receive Files", Icons.Default.MoveToInbox)
         }
-        if (device.permissions.contains(Permission.PERMISSION_CLIPBOARD_SYNC)) {
+        if (device.permissions.contains(Permission.CLIPBOARD_SYNC)) {
           PermissionChip("Clipboard Sync", Icons.Default.ContentCopy)
         }
       }
@@ -343,10 +344,11 @@ private fun DeviceTypeChip(deviceType: com.carlom.klardrop.common.utils.DeviceTy
 @Composable
 private fun TrustLevelChip(trustLevel: TrustLevel) {
   val (label, color) = when (trustLevel) {
-    TrustLevel.TRUST_LEVEL_FULL -> "Full Trust" to MaterialTheme.colorScheme.primary
-    TrustLevel.TRUST_LEVEL_LIMITED -> "Limited" to MaterialTheme.colorScheme.secondary
-    TrustLevel.TRUST_LEVEL_REVOKED -> "Revoked" to MaterialTheme.colorScheme.error
-    else -> "Unknown" to MaterialTheme.colorScheme.onSurfaceVariant
+    TrustLevel.TRUSTED -> "Trusted" to MaterialTheme.colorScheme.primary
+    TrustLevel.FULL -> "Full Trust" to MaterialTheme.colorScheme.primary
+    TrustLevel.LIMITED -> "Limited" to MaterialTheme.colorScheme.secondary
+    TrustLevel.MINIMAL -> "Minimal" to MaterialTheme.colorScheme.secondary
+    TrustLevel.UNTRUSTED -> "Untrusted" to MaterialTheme.colorScheme.error
   }
 
   Surface(
@@ -399,23 +401,23 @@ private fun PermissionChip(
  */
 @Composable
 private fun PermissionEditDialog(
-  currentPermissions: Set<com.carlom.klardrop.common.trust.model.UiPermission>,
+  currentPermissions: Set<Permission>,
   onDismiss: () -> Unit,
-  onConfirm: (Set<com.carlom.klardrop.common.trust.model.UiPermission>) -> Unit
+  onConfirm: (Set<Permission>) -> Unit
 ) {
   val permissions = remember {
-    mutableStateMapOf<com.carlom.klardrop.common.trust.model.UiPermission, Boolean>().apply {
+    mutableStateMapOf<Permission, Boolean>().apply {
       put(
-        com.carlom.klardrop.common.trust.model.UiPermission.FILE_SEND,
-        currentPermissions.contains(com.carlom.klardrop.common.trust.model.UiPermission.FILE_SEND)
+        Permission.FILE_SEND,
+        currentPermissions.contains(Permission.FILE_SEND)
       )
       put(
-        com.carlom.klardrop.common.trust.model.UiPermission.FILE_RECEIVE,
-        currentPermissions.contains(com.carlom.klardrop.common.trust.model.UiPermission.FILE_RECEIVE)
+        Permission.FILE_RECEIVE,
+        currentPermissions.contains(Permission.FILE_RECEIVE)
       )
       put(
-        com.carlom.klardrop.common.trust.model.UiPermission.CLIPBOARD_SYNC,
-        currentPermissions.contains(com.carlom.klardrop.common.trust.model.UiPermission.CLIPBOARD_SYNC)
+        Permission.CLIPBOARD_SYNC,
+        currentPermissions.contains(Permission.CLIPBOARD_SYNC)
       )
     }
   }
@@ -438,9 +440,9 @@ private fun PermissionEditDialog(
           ) {
             Text(
               text = when (permission) {
-                com.carlom.klardrop.common.trust.model.UiPermission.FILE_SEND -> "Send Files"
-                com.carlom.klardrop.common.trust.model.UiPermission.FILE_RECEIVE -> "Receive Files"
-                com.carlom.klardrop.common.trust.model.UiPermission.CLIPBOARD_SYNC -> "Clipboard Sync"
+                Permission.FILE_SEND -> "Send Files"
+                Permission.FILE_RECEIVE -> "Receive Files"
+                Permission.CLIPBOARD_SYNC -> "Clipboard Sync"
               }
             )
 

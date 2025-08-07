@@ -6,6 +6,8 @@ import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.features.ClipboardMonitor
+import com.carlom.klardrop.common.features.createClipboardMonitor
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.trust.clipboard.TrustClipboardSyncManager
@@ -16,7 +18,6 @@ import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
-import com.carlom.klardrop.protos.trust.TrustMessage as ProtoTrustMessage
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -62,9 +63,14 @@ class TrustModule(
         )
     }
     
+    private val clipboardMonitor: ClipboardMonitor by lazy {
+        createClipboardMonitor(internalPlatformDependencies.clipboardReaderWriter())
+    }
+    
     val trustClipboardSyncManager: TrustClipboardSyncManager by lazy {
         TrustClipboardSyncManager(
             clipboardManager = clipboardManager,
+            clipboardMonitor = clipboardMonitor,
             trustManager = trustManager,
             scope = trustScope
         )
@@ -77,20 +83,5 @@ class TrustModule(
         return baseReceiver.withTrustAwareness(trustManager, trustScope)
     }
     
-    private fun mapDeviceType(deviceType: com.carlom.klardrop.common.utils.DeviceType): com.carlom.klardrop.protos.trust.DeviceType {
-        return when (deviceType) {
-            com.carlom.klardrop.common.utils.DeviceType.MOBILE -> when (CommonPlatformDependencies.osType()) {
-                OsType.ANDROID -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_ANDROID
-                OsType.APPLE -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_IOS
-                else -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_ANDROID
-            }
-            com.carlom.klardrop.common.utils.DeviceType.DESKTOP -> when (CommonPlatformDependencies.osType()) {
-                OsType.WINDOWS -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_WINDOWS
-                OsType.LINUX -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_LINUX
-                OsType.APPLE -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_MACOS
-                else -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_UNKNOWN
-            }
-            com.carlom.klardrop.common.utils.DeviceType.UNKNOWN -> com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_UNKNOWN
-        }
-    }
+    // mapDeviceType function removed - no longer needed since we're using the same DeviceType enum
 }

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.trust.model.TrustGroup
 import kotlinx.coroutines.flow.StateFlow
+import com.carlom.klardrop.utils.TimeFormatUtils
 
 /**
  * Trust group settings screen
@@ -327,8 +328,8 @@ private fun GroupInfoSection(
             // Group stats
             InfoRow("Group ID", group.groupId.take(8) + "...")
             InfoRow("Devices", "${group.devices.size} connected")
-            InfoRow("Created", formatRelativeTime(group.createdAt))
-            InfoRow("Last Updated", formatRelativeTime(group.updatedAt))
+            InfoRow("Created", TimeFormatUtils.formatRelativeTime(group.createdAt))
+            InfoRow("Last Updated", TimeFormatUtils.formatRelativeTime(group.updatedAt))
             InfoRow("Protocol Version", "v${group.protocolVersion}")
         }
     }
@@ -545,5 +546,21 @@ private fun PasswordDialog(
             }
         }
     )
+}
+
+/**
+ * Format relative time
+ */
+@OptIn(kotlin.time.ExperimentalTime::class)
+private fun TimeFormatUtils.formatRelativeTime(timestamp: Long): String {
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val diff = now - timestamp
+    
+    return when {
+        diff < 60_000 -> "just now"
+        diff < 3600_000 -> "${diff / 60_000} minutes ago"
+        diff < 86400_000 -> "${diff / 3600_000} hours ago"
+        else -> "${diff / 86400_000} days ago"
+    }
 }
 

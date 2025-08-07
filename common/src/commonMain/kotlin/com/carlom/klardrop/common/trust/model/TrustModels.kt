@@ -4,6 +4,311 @@ import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.DeviceType
 import kotlinx.serialization.Serializable
 
+// Simplified TrustLevel enum - keeping compatibility with existing code
+enum class TrustLevel {
+    TRUSTED,    // Device is in trust group (was FULL)
+    UNTRUSTED,  // Device is not in trust group
+    // Keep old values for compatibility during migration
+    FULL,
+    LIMITED,
+    MINIMAL
+}
+
+// Keep Permission enum as is
+enum class Permission {
+    FILE_SEND,
+    FILE_RECEIVE,
+    CLIPBOARD_SYNC
+}
+
+// Device identity with @Serializable for protobuf support
+@Serializable
+data class DeviceIdentity(
+    val deviceId: String,
+    val deviceName: String,
+    val deviceType: DeviceType,
+    val publicKey: ByteArray? = null
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as DeviceIdentity
+        return deviceId == other.deviceId &&
+                deviceName == other.deviceName &&
+                deviceType == other.deviceType &&
+                publicKey?.contentEquals(other.publicKey) == true
+    }
+    
+    override fun hashCode(): Int {
+        var result = deviceId.hashCode()
+        result = 31 * result + deviceName.hashCode()
+        result = 31 * result + deviceType.hashCode()
+        result = 31 * result + (publicKey?.contentHashCode() ?: 0)
+        return result
+    }
+}
+
+// Protocol message classes from ProtobufStubs.kt
+@Serializable
+data class DiscoveryAnnouncement(
+    val deviceId: String,
+    val deviceName: String,
+    val deviceType: DeviceType,
+    val publicKey: ByteArray,
+    val isInTrustGroup: Boolean = false,
+    val supportsAutoTrust: Boolean = false,
+    val timestamp: Long = Clock().currentTimeMillis(),
+    val signature: ByteArray = byteArrayOf()
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as DiscoveryAnnouncement
+        return deviceId == other.deviceId &&
+                deviceName == other.deviceName &&
+                deviceType == other.deviceType &&
+                publicKey.contentEquals(other.publicKey) &&
+                isInTrustGroup == other.isInTrustGroup &&
+                supportsAutoTrust == other.supportsAutoTrust &&
+                timestamp == other.timestamp &&
+                signature.contentEquals(other.signature)
+    }
+    
+    override fun hashCode(): Int {
+        var result = deviceId.hashCode()
+        result = 31 * result + deviceName.hashCode()
+        result = 31 * result + deviceType.hashCode()
+        result = 31 * result + publicKey.contentHashCode()
+        result = 31 * result + isInTrustGroup.hashCode()
+        result = 31 * result + supportsAutoTrust.hashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + signature.contentHashCode()
+        return result
+    }
+}
+
+@Serializable
+data class ECDHInitiation(
+    val sessionId: String,
+    val deviceId: String,
+    val ephemeralPublicKey: ByteArray,
+    val encryptedGroupId: ByteArray,
+    val timestamp: Long,
+    val nonce: ByteArray,
+    val signature: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as ECDHInitiation
+        return sessionId == other.sessionId &&
+                deviceId == other.deviceId &&
+                ephemeralPublicKey.contentEquals(other.ephemeralPublicKey) &&
+                encryptedGroupId.contentEquals(other.encryptedGroupId) &&
+                timestamp == other.timestamp &&
+                nonce.contentEquals(other.nonce) &&
+                signature.contentEquals(other.signature)
+    }
+    
+    override fun hashCode(): Int {
+        var result = sessionId.hashCode()
+        result = 31 * result + deviceId.hashCode()
+        result = 31 * result + ephemeralPublicKey.contentHashCode()
+        result = 31 * result + encryptedGroupId.contentHashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + nonce.contentHashCode()
+        result = 31 * result + signature.contentHashCode()
+        return result
+    }
+}
+
+@Serializable
+data class ECDHResponse(
+    val sessionId: String,
+    val deviceId: String,
+    val ephemeralPublicKey: ByteArray,
+    val encryptedDeviceInfo: ByteArray,
+    val timestamp: Long,
+    val signature: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as ECDHResponse
+        return sessionId == other.sessionId &&
+                deviceId == other.deviceId &&
+                ephemeralPublicKey.contentEquals(other.ephemeralPublicKey) &&
+                encryptedDeviceInfo.contentEquals(other.encryptedDeviceInfo) &&
+                timestamp == other.timestamp &&
+                signature.contentEquals(other.signature)
+    }
+    
+    override fun hashCode(): Int {
+        var result = sessionId.hashCode()
+        result = 31 * result + deviceId.hashCode()
+        result = 31 * result + ephemeralPublicKey.contentHashCode()
+        result = 31 * result + encryptedDeviceInfo.contentHashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + signature.contentHashCode()
+        return result
+    }
+}
+
+@Serializable
+data class GroupInvitation(
+    val sessionId: String,
+    val encryptedPayload: ByteArray,
+    val signature: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as GroupInvitation
+        return sessionId == other.sessionId &&
+                encryptedPayload.contentEquals(other.encryptedPayload) &&
+                signature.contentEquals(other.signature)
+    }
+    
+    override fun hashCode(): Int {
+        var result = sessionId.hashCode()
+        result = 31 * result + encryptedPayload.contentHashCode()
+        result = 31 * result + signature.contentHashCode()
+        return result
+    }
+}
+
+@Serializable
+data class JoinConfirmation(
+    val sessionId: String,
+    val deviceId: String,
+    val accepted: Boolean,
+    val timestamp: Long,
+    val signature: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as JoinConfirmation
+        return sessionId == other.sessionId &&
+                deviceId == other.deviceId &&
+                accepted == other.accepted &&
+                timestamp == other.timestamp &&
+                signature.contentEquals(other.signature)
+    }
+    
+    override fun hashCode(): Int {
+        var result = sessionId.hashCode()
+        result = 31 * result + deviceId.hashCode()
+        result = 31 * result + accepted.hashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + signature.contentHashCode()
+        return result
+    }
+}
+
+enum class UpdateAction {
+    ADD,
+    REMOVE,
+    UPDATE
+}
+
+@Serializable
+data class MemberUpdate(
+    val groupId: String,
+    val action: UpdateAction,
+    val device: TrustedDevice,
+    val version: Int,
+    val timestamp: Long,
+    val signature: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as MemberUpdate
+        return groupId == other.groupId &&
+                action == other.action &&
+                device == other.device &&
+                version == other.version &&
+                timestamp == other.timestamp &&
+                signature.contentEquals(other.signature)
+    }
+    
+    override fun hashCode(): Int {
+        var result = groupId.hashCode()
+        result = 31 * result + action.hashCode()
+        result = 31 * result + device.hashCode()
+        result = 31 * result + version.hashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + signature.contentHashCode()
+        return result
+    }
+}
+
+@Serializable
+data class ClipboardSyncMessage(
+    val deviceId: String,
+    val encryptedContent: ByteArray,
+    val timestamp: Long,
+    val signature: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as ClipboardSyncMessage
+        return deviceId == other.deviceId &&
+                encryptedContent.contentEquals(other.encryptedContent) &&
+                timestamp == other.timestamp &&
+                signature.contentEquals(other.signature)
+    }
+    
+    override fun hashCode(): Int {
+        var result = deviceId.hashCode()
+        result = 31 * result + encryptedContent.contentHashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + signature.contentHashCode()
+        return result
+    }
+}
+
+// Simple ClipboardSync for backward compatibility
+@Serializable
+data class ClipboardSync(
+    val content: String,
+    val deviceId: String
+)
+
+// Trust message types
+enum class TrustMessageType {
+    DISCOVERY_ANNOUNCEMENT,
+    ECDH_INITIATION,
+    ECDH_RESPONSE,
+    GROUP_INVITATION,
+    JOIN_CONFIRMATION,
+    MEMBER_UPDATE,
+    CLIPBOARD_SYNC,
+    HEARTBEAT
+}
+
+// Trust protocol wrapper message
+@Serializable
+data class TrustMessage(
+    val type: TrustMessageType,
+    val payload: ByteArray // Serialized message based on type
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as TrustMessage
+        return type == other.type && payload.contentEquals(other.payload)
+    }
+    
+    override fun hashCode(): Int {
+        var result = type.hashCode()
+        result = 31 * result + payload.contentHashCode()
+        return result
+    }
+}
+
 // Device identity and keypair
 @Serializable
 data class DeviceKeypair(
@@ -88,11 +393,7 @@ data class TrustedDevice(
     val addedBy: String,
     val lastSeen: Long? = null,
     val trustLevel: TrustLevel = TrustLevel.FULL,
-    val permissions: Set<Permission> = setOf(
-        Permission.FILE_SEND,
-        Permission.FILE_RECEIVE,
-        Permission.CLIPBOARD_SYNC
-    ),
+    val permissions: Set<Permission> = setOf(Permission.FILE_SEND), // Minimal default permission
     val expiresAt: Long? = null,
     val isActive: Boolean = true
 ) {

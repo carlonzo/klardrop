@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.trust.clipboard
 
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.features.ClipboardMonitor
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.trust.model.ClipboardEntry
 import com.carlom.klardrop.common.trust.model.Permission
@@ -9,22 +10,25 @@ import com.carlom.klardrop.common.trust.protocol.TrustEvent
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.launch
 
 /**
  * Manages clipboard synchronization between trusted devices
+ * Uses efficient platform-specific clipboard monitoring instead of polling
  */
+@OptIn(FlowPreview::class)
 class TrustClipboardSyncManager(
     private val clipboardManager: ClipboardManager,
+    private val clipboardMonitor: ClipboardMonitor,
     private val trustManager: TrustManager,
     private val scope: CoroutineScope
 ) {
     companion object {
         private const val TAG = "TrustClipboardSyncManager"
         const val MIN_SYNC_INTERVAL_MS = 30_000L // 30 seconds minimum
-        private const val DEBOUNCE_DELAY_MS = 1000L // 1 second debounce
+        private const val DEBOUNCE_DELAY_MS = 500L // Reduced debounce for event-based monitoring
     }
     
     private val _syncEnabled = MutableStateFlow(false)
@@ -74,26 +78,21 @@ class TrustClipboardSyncManager(
     }
     
     /**
-     * Start monitoring local clipboard for changes
+     * Start monitoring local clipboard for changes using efficient platform-specific monitoring
      */
     private fun startClipboardMonitoring() {
         clipboardMonitorJob?.cancel()
         
         clipboardMonitorJob = scope.launch {
-            // Create a flow that polls clipboard periodically
-            flow {
-                while (true) {
-                    emit(clipboardManager.read())
-                    delay(DEBOUNCE_DELAY_MS)
+            // Use efficient platform-specific clipboard monitoring
+            clipboardMonitor.observeChanges()
+                .debounce(DEBOUNCE_DELAY_MS) // Debounce rapid changes
+                .collect { content ->
+                    handleLocalClipboardChange(content)
                 }
-            }
-            .distinctUntilChanged()
-            .collect { content ->
-                handleLocalClipboardChange(content)
-            }
         }
         
-        log(TAG, "Started clipboard monitoring")
+        log(TAG, "Started efficient clipboard monitoring")
     }
     
     /**
@@ -102,6 +101,7 @@ class TrustClipboardSyncManager(
     private fun stopClipboardMonitoring() {
         clipboardMonitorJob?.cancel()
         clipboardMonitorJob = null
+        clipboardMonitor.stopMonitoring()
         log(TAG, "Stopped clipboard monitoring")
     }
     

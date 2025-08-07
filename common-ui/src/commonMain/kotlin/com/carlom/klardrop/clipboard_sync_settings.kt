@@ -23,6 +23,7 @@ import com.carlom.klardrop.common.trust.model.TrustedDevice
 import com.carlom.klardrop.common.utils.Clock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import com.carlom.klardrop.utils.TimeFormatUtils
 import kotlin.time.ExperimentalTime
 
 /**
@@ -253,7 +254,7 @@ private fun DeviceClipboardSettingCard(
                     
                     device.lastSeen?.let { lastSeen ->
                         Text(
-                            text = "Last seen ${formatRelativeTime(lastSeen)}",
+                            text = "Last seen ${TimeFormatUtils.formatRelativeTime(lastSeen)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -318,7 +319,7 @@ private fun ClipboardHistoryItem(entry: ClipboardEntry) {
                         )
                         
                         Text(
-                            text = formatRelativeTime(entry.timestamp),
+                            text = TimeFormatUtils.formatRelativeTime(entry.timestamp),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -375,14 +376,3 @@ private fun EmptyDevicesState() {
 /**
  * Format relative time
  */
-private fun formatRelativeTime(timestamp: Long): String {
-    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-    val diff = now - timestamp
-    
-    return when {
-        diff < 60_000 -> "just now"
-        diff < 3600_000 -> "${diff / 60_000} minutes ago"
-        diff < 86400_000 -> "${diff / 3600_000} hours ago"
-        else -> "${diff / 86400_000} days ago"
-    }
-}

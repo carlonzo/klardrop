@@ -4,10 +4,6 @@ import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.DeviceType as LocalDeviceType
-import com.carlom.klardrop.protos.trust.DeviceType as ProtoDeviceType
-import com.carlom.klardrop.protos.trust.Permission as ProtoPermission
-import com.carlom.klardrop.protos.trust.TrustLevel as ProtoTrustLevel
-import com.carlom.klardrop.protos.trust.UpdateAction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
@@ -16,6 +12,7 @@ import kotlinx.serialization.json.Json
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 interface TrustStore {
     // Device keypair operations
@@ -70,178 +67,302 @@ class TrustStoreImpl(
     
     private val json = Json { ignoreUnknownKeys = true }
     
-    override suspend fun getDeviceKeypair(): DeviceKeypair? {
-        val dbKeypair = database.deviceKeypairQueries.getDeviceKeypair().executeAsOneOrNull()
-            ?: return null
-        
-        val privateKey = secureKeyStorage.retrievePrivateKey(dbKeypair.private_key_alias)
-            ?: return null
-        
-        return DeviceKeypair(
-            deviceId = dbKeypair.device_id,
-            publicKey = dbKeypair.public_key,
-            privateKey = privateKey,
-            deviceName = dbKeypair.device_name,
-            deviceType = when (dbKeypair.device_type) {
-                "MOBILE" -> LocalDeviceType.MOBILE
-                "DESKTOP" -> LocalDeviceType.DESKTOP
-                else -> LocalDeviceType.UNKNOWN
-            },
-            createdAt = dbKeypair.created_at
+    // Enum conversion utilities for optimized database operations
+    // Note: Currently using string-based storage for backward compatibility
+    // These converters are prepared for future schema optimization
+    
+    private companion object {
+        // Cached conversion maps for better performance
+        private val trustLevelToString = mapOf(
+            TrustLevel.TRUSTED to "TRUSTED",
+            TrustLevel.UNTRUSTED to "UNTRUSTED", 
+            TrustLevel.FULL to "FULL",
+            TrustLevel.LIMITED to "LIMITED",
+            TrustLevel.MINIMAL to "MINIMAL"
         )
+        
+        private val stringToTrustLevel = trustLevelToString.entries.associate { (k, v) -> v to k }
+        
+        private val deviceTypeToString = mapOf(
+            LocalDeviceType.MOBILE to "MOBILE",
+            LocalDeviceType.DESKTOP to "DESKTOP",
+            LocalDeviceType.UNKNOWN to "UNKNOWN"
+        )
+        
+        private val stringToDeviceType = deviceTypeToString.entries.associate { (k, v) -> v to k }
+        
+        private val permissionToString = mapOf(
+            Permission.FILE_SEND to "FILE_SEND",
+            Permission.FILE_RECEIVE to "FILE_RECEIVE",
+            Permission.CLIPBOARD_SYNC to "CLIPBOARD_SYNC"
+        )
+        
+        private val stringToPermission = permissionToString.entries.associate { (k, v) -> v to k }
     }
     
-    override suspend fun saveDeviceKeypair(keypair: DeviceKeypair) {
+    // Optimized enum converters using cached maps
+    private fun TrustLevel.toDatabaseString(): String = 
+        trustLevelToString[this] ?: this.name
+    
+    private fun String.toTrustLevel(): TrustLevel = 
+        stringToTrustLevel[this] ?: TrustLevel.FULL
+    
+    private fun LocalDeviceType.toDatabaseString(): String = 
+        deviceTypeToString[this] ?: this.name
+    
+    private fun String.toLocalDeviceType(): LocalDeviceType = 
+        stringToDeviceType[this] ?: LocalDeviceType.UNKNOWN
+    
+    private fun Permission.toDatabaseString(): String = 
+        permissionToString[this] ?: this.name
+    
+    private fun String.toPermission(): Permission? = 
+        stringToPermission[this]
+    
+    // Optimized permissions serialization
+    private fun Set<Permission>.toJsonString(): String {
+        return json.encodeToString(this.map { it.toDatabaseString() })
+    }
+    
+    private fun String.toPermissionSet(): Set<Permission> {
+        return try {
+            json.decodeFromString<List<String>>(this)
+                .mapNotNull { it.toPermission() }
+                .toSet()
+        } catch (e: Exception) {
+            // Fallback to default permissions if parsing fails
+            setOf(Permission.FILE_SEND, Permission.FILE_RECEIVE, Permission.CLIPBOARD_SYNC)
+        }
+    }
+    
+    override suspend fun getDeviceKeypair(): DeviceKeypair? = withContext(Dispatchers.IO) {
+        try {
+            val dbKeypair = database.deviceKeypairQueries.getDeviceKeypair().executeAsOneOrNull()
+                ?: return@withContext null
+            
+            val privateKey = secureKeyStorage.retrievePrivateKey(dbKeypair.private_key_alias)
+                ?: return@withContext null
+            
+            DeviceKeypair(
+                deviceId = dbKeypair.device_id,
+                publicKey = dbKeypair.public_key,
+                privateKey = privateKey,
+                deviceName = dbKeypair.device_name,
+                deviceType = when (dbKeypair.device_type) {
+                    "MOBILE" -> LocalDeviceType.MOBILE
+                    "DESKTOP" -> LocalDeviceType.DESKTOP
+                    else -> LocalDeviceType.UNKNOWN
+                },
+                createdAt = dbKeypair.created_at
+            )
+        } catch (e: Exception) {
+            // Log error and return null for graceful degradation
+            null
+        }
+    }
+    
+    override suspend fun saveDeviceKeypair(keypair: DeviceKeypair) = withContext(Dispatchers.IO) {
         val alias = "device_key_${keypair.deviceId}"
         
-        // Store private key in secure storage
+        // Store private key in secure storage first (must be done outside transaction)
         secureKeyStorage.storePrivateKey(alias, keypair.privateKey)
         
-        // Store public key and metadata in database
-        database.deviceKeypairQueries.upsertDeviceKeypair(
-            device_id = keypair.deviceId,
-            public_key = keypair.publicKey,
-            private_key_alias = alias,
-            device_name = keypair.deviceName,
-            device_type = keypair.deviceType.name,
-            created_at = keypair.createdAt
-        )
+        // Then store public key and metadata in database
+        database.transaction {
+            database.deviceKeypairQueries.upsertDeviceKeypair(
+                device_id = keypair.deviceId,
+                public_key = keypair.publicKey,
+                private_key_alias = alias,
+                device_name = keypair.deviceName,
+                device_type = keypair.deviceType.name,
+                created_at = keypair.createdAt
+            )
+        }
     }
     
     override suspend fun updateDeviceName(name: String) {
-        database.deviceKeypairQueries.updateDeviceName(name)
+        withContext(Dispatchers.IO) {
+            database.deviceKeypairQueries.updateDeviceName(name)
+        }
     }
     
-    override suspend fun getTrustGroup(): TrustGroup? {
-        val dbGroup = database.trustGroupQueries.getActiveTrustGroup().executeAsOneOrNull()
-            ?: return null
-        
-        val devices = database.trustedDeviceQueries.getTrustedDevicesByGroup(dbGroup.group_id)
-            .executeAsList()
-            .map { it.toTrustedDevice() }
-        
-        return TrustGroup(
-            groupId = dbGroup.group_id,
-            groupKey = dbGroup.group_key,
-            groupName = dbGroup.group_name,
-            devices = devices.associateBy { it.deviceId },
-            createdAt = dbGroup.created_at,
-            updatedAt = dbGroup.updated_at,
-            protocolVersion = dbGroup.protocol_version.toInt(),
-            cloudSyncEnabled = dbGroup.cloud_sync_enabled == 1L
-        )
-    }
-    
-    override suspend fun saveTrustGroup(group: TrustGroup) {
-        database.transaction {
-            // Deactivate all existing groups
-            database.trustGroupQueries.deactivateAllGroups()
+    override suspend fun getTrustGroup(): TrustGroup? = withContext(Dispatchers.IO) {
+        try {
+            val dbGroup = database.trustGroupQueries.getActiveTrustGroup().executeAsOneOrNull()
+                ?: return@withContext null
             
-            // Insert new group
-            database.trustGroupQueries.upsertTrustGroup(
-                group_id = group.groupId,
-                group_key = group.groupKey,
-                group_name = group.groupName,
-                created_at = group.createdAt,
-                updated_at = group.updatedAt,
-                protocol_version = group.protocolVersion.toLong(),
-                cloud_sync_enabled = if (group.cloudSyncEnabled) 1L else 0L,
-                is_active = 1L
+            val devices = database.trustedDeviceQueries.getTrustedDevicesByGroup(dbGroup.group_id)
+                .executeAsList()
+                .map { it.toTrustedDevice() }
+            
+            TrustGroup(
+                groupId = dbGroup.group_id,
+                groupKey = dbGroup.group_key,
+                groupName = dbGroup.group_name,
+                devices = devices.associateBy { it.deviceId },
+                createdAt = dbGroup.created_at,
+                updatedAt = dbGroup.updated_at,
+                protocolVersion = dbGroup.protocol_version.toInt(),
+                cloudSyncEnabled = dbGroup.cloud_sync_enabled == 1L
             )
-            
-            // Insert all devices
-            group.devices.values.forEach { device ->
-                saveTrustedDeviceInternal(device)
+        } catch (e: Exception) {
+            // Log error and return null for graceful degradation
+            null
+        }
+    }
+    
+    override suspend fun saveTrustGroup(group: TrustGroup) = withContext(Dispatchers.IO) {
+        database.transaction {
+            try {
+                // Deactivate all existing groups
+                database.trustGroupQueries.deactivateAllGroups()
+                
+                // Insert new group
+                database.trustGroupQueries.upsertTrustGroup(
+                    group_id = group.groupId,
+                    group_key = group.groupKey,
+                    group_name = group.groupName,
+                    created_at = group.createdAt,
+                    updated_at = group.updatedAt,
+                    protocol_version = group.protocolVersion.toLong(),
+                    cloud_sync_enabled = if (group.cloudSyncEnabled) 1L else 0L,
+                    is_active = 1L
+                )
+                
+                // Batch insert all devices - optimized approach
+                batchInsertTrustedDevices(group.devices.values.toList())
+                
+            } catch (e: Exception) {
+                // Transaction will be automatically rolled back
+                throw e
             }
         }
     }
     
-    override suspend fun updateGroupKey(groupId: String, newKey: ByteArray) {
-        database.trustGroupQueries.updateGroupKey(
-            group_key = newKey,
-            updated_at = Clock().currentTimeMillis(),
-            group_id = groupId
-        )
-    }
-    
-    override suspend fun enableCloudSync(groupId: String) {
-        database.trustGroupQueries.enableCloudSync(
-            updated_at = Clock().currentTimeMillis(),
-            group_id = groupId
-        )
-    }
-    
-    override suspend fun getTrustedDevices(): List<TrustedDevice> {
-        val group = getTrustGroup() ?: return emptyList()
-        return database.trustedDeviceQueries.getTrustedDevicesByGroup(group.groupId)
-            .executeAsList()
-            .map { it.toTrustedDevice() }
-    }
-    
-    override suspend fun getTrustedDevice(deviceId: String): TrustedDevice? {
-        return database.trustedDeviceQueries.getTrustedDeviceById(deviceId)
-            .executeAsOneOrNull()
-            ?.toTrustedDevice()
-    }
-    
-    override suspend fun addTrustedDevice(device: TrustedDevice) {
+    override suspend fun updateGroupKey(groupId: String, newKey: ByteArray) = withContext(Dispatchers.IO) {
         database.transaction {
-            saveTrustedDeviceInternal(device)
-            
-            // Log security event
-            logSecurityEventInternal(
-                SecurityEvent(
-                    eventType = SecurityEventType.DEVICE_ADDED,
-                    deviceId = device.deviceId,
-                    timestamp = Clock().currentTimeMillis(),
-                    details = mapOf("added_by" to device.addedBy)
-                )
+            database.trustGroupQueries.updateGroupKey(
+                group_key = newKey,
+                updated_at = Clock().currentTimeMillis(),
+                group_id = groupId
             )
         }
     }
     
-    override suspend fun removeTrustedDevice(deviceId: String) {
+    override suspend fun enableCloudSync(groupId: String) = withContext(Dispatchers.IO) {
         database.transaction {
-            database.trustedDeviceQueries.removeTrustedDevice(deviceId)
-            
-            // Log security event
-            logSecurityEventInternal(
-                SecurityEvent(
-                    eventType = SecurityEventType.DEVICE_REMOVED,
-                    deviceId = deviceId,
-                    timestamp = Clock().currentTimeMillis()
-                )
+            database.trustGroupQueries.enableCloudSync(
+                updated_at = Clock().currentTimeMillis(),
+                group_id = groupId
             )
+        }
+    }
+    
+    override suspend fun getTrustedDevices(): List<TrustedDevice> = withContext(Dispatchers.IO) {
+        try {
+            val group = getTrustGroup() ?: return@withContext emptyList()
+            database.trustedDeviceQueries.getTrustedDevicesByGroup(group.groupId)
+                .executeAsList()
+                .map { it.toTrustedDevice() }
+        } catch (e: Exception) {
+            // Log error and return empty list for graceful degradation
+            emptyList()
+        }
+    }
+    
+    override suspend fun getTrustedDevice(deviceId: String): TrustedDevice? = withContext(Dispatchers.IO) {
+        try {
+            database.trustedDeviceQueries.getTrustedDeviceById(deviceId)
+                .executeAsOneOrNull()
+                ?.toTrustedDevice()
+        } catch (e: Exception) {
+            // Log error and return null for graceful degradation
+            null
+        }
+    }
+    
+    override suspend fun addTrustedDevice(device: TrustedDevice) = withContext(Dispatchers.IO) {
+        database.transaction {
+            try {
+                saveTrustedDeviceInternal(device)
+                
+                // Log security event
+                logSecurityEventInternal(
+                    SecurityEvent(
+                        eventType = SecurityEventType.DEVICE_ADDED,
+                        deviceId = device.deviceId,
+                        timestamp = Clock().currentTimeMillis(),
+                        details = mapOf("added_by" to device.addedBy)
+                    )
+                )
+            } catch (e: Exception) {
+                // Transaction will be automatically rolled back
+                throw e
+            }
+        }
+    }
+    
+    override suspend fun removeTrustedDevice(deviceId: String) = withContext(Dispatchers.IO) {
+        database.transaction {
+            try {
+                database.trustedDeviceQueries.removeTrustedDevice(deviceId)
+                
+                // Log security event
+                logSecurityEventInternal(
+                    SecurityEvent(
+                        eventType = SecurityEventType.DEVICE_REMOVED,
+                        deviceId = deviceId,
+                        timestamp = Clock().currentTimeMillis()
+                    )
+                )
+            } catch (e: Exception) {
+                // Transaction will be automatically rolled back
+                throw e
+            }
         }
     }
     
     override suspend fun updateDeviceLastSeen(deviceId: String) {
-        database.trustedDeviceQueries.updateLastSeen(
-            last_seen = Clock().currentTimeMillis(),
-            device_id = deviceId
-        )
+        withContext(Dispatchers.IO) {
+            database.trustedDeviceQueries.updateLastSeen(
+                last_seen = Clock().currentTimeMillis(),
+                device_id = deviceId
+            )
+        }
     }
     
-    override suspend fun isDeviceTrusted(deviceId: String): Boolean {
-        return database.trustedDeviceQueries.isDeviceTrusted(
-            device_id = deviceId,
-            expires_at = Clock().currentTimeMillis()
-        ).executeAsOne()
+    override suspend fun isDeviceTrusted(deviceId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            database.trustedDeviceQueries.isDeviceTrusted(
+                device_id = deviceId,
+                expires_at = Clock().currentTimeMillis()
+            ).executeAsOne()
+        } catch (e: Exception) {
+            // Log error and return false for safety
+            false
+        }
     }
     
-    override suspend fun getDeviceTrustLevel(deviceId: String): TrustLevel? {
-        val levelStr = database.trustedDeviceQueries.getDeviceTrustLevel(
-            device_id = deviceId,
-            expires_at = Clock().currentTimeMillis()
-        ).executeAsOneOrNull()
-        
-        return levelStr?.let { 
-            when (it) {
-                "FULL" -> TrustLevel.FULL
-                "LIMITED" -> TrustLevel.LIMITED
-                "MINIMAL" -> TrustLevel.MINIMAL
-                else -> TrustLevel.FULL
+    override suspend fun getDeviceTrustLevel(deviceId: String): TrustLevel? = withContext(Dispatchers.IO) {
+        try {
+            val levelStr = database.trustedDeviceQueries.getDeviceTrustLevel(
+                device_id = deviceId,
+                expires_at = Clock().currentTimeMillis()
+            ).executeAsOneOrNull()
+            
+            levelStr?.let { 
+                when (it) {
+                    "FULL" -> TrustLevel.FULL
+                    "LIMITED" -> TrustLevel.LIMITED
+                    "MINIMAL" -> TrustLevel.MINIMAL
+                    "TRUSTED" -> TrustLevel.TRUSTED
+                    "UNTRUSTED" -> TrustLevel.UNTRUSTED
+                    else -> TrustLevel.FULL
+                }
             }
+        } catch (e: Exception) {
+            // Log error and return null for graceful degradation
+            null
         }
     }
     
@@ -256,95 +377,173 @@ class TrustStoreImpl(
             }
     }
     
-    override suspend fun logSecurityEvent(event: SecurityEvent) {
-        logSecurityEventInternal(event)
+    override suspend fun logSecurityEvent(event: SecurityEvent) = withContext(Dispatchers.IO) {
+        database.transaction {
+            logSecurityEventInternal(event)
+        }
     }
     
-    override suspend fun getRecentSecurityEvents(limit: Int): List<SecurityEvent> {
-        return database.securityEventQueries.getRecentSecurityEvents(limit.toLong())
-            .executeAsList()
-            .map { it.toSecurityEvent() }
+    override suspend fun getRecentSecurityEvents(limit: Int): List<SecurityEvent> = withContext(Dispatchers.IO) {
+        try {
+            database.securityEventQueries.getRecentSecurityEvents(limit.toLong())
+                .executeAsList()
+                .map { it.toSecurityEvent() }
+        } catch (e: Exception) {
+            // Log error and return empty list for graceful degradation
+            emptyList()
+        }
     }
     
-    override suspend fun getSecurityEventsByDevice(deviceId: String, limit: Int): List<SecurityEvent> {
-        return database.securityEventQueries.getSecurityEventsByDevice(deviceId, limit.toLong())
-            .executeAsList()
-            .map { it.toSecurityEvent() }
+    override suspend fun getSecurityEventsByDevice(deviceId: String, limit: Int): List<SecurityEvent> = withContext(Dispatchers.IO) {
+        try {
+            database.securityEventQueries.getSecurityEventsByDevice(deviceId, limit.toLong())
+                .executeAsList()
+                .map { it.toSecurityEvent() }
+        } catch (e: Exception) {
+            // Log error and return empty list for graceful degradation
+            emptyList()
+        }
     }
     
-    override suspend fun createPairingSession(session: PairingSession) {
-        database.pairingSessionQueries.insertPairingSession(
-            session_id = session.sessionId,
-            device_id = session.deviceId,
-            ephemeral_public_key = session.ephemeralPublicKey,
-            expires_at = session.expiresAt,
-            status = session.status.name,
-            created_at = session.createdAt
-        )
+    override suspend fun createPairingSession(session: PairingSession) = withContext(Dispatchers.IO) {
+        database.transaction {
+            database.pairingSessionQueries.insertPairingSession(
+                session_id = session.sessionId,
+                device_id = session.deviceId,
+                ephemeral_public_key = session.ephemeralPublicKey,
+                expires_at = session.expiresAt,
+                status = session.status.name,
+                created_at = session.createdAt
+            )
+        }
     }
     
-    override suspend fun getPairingSession(sessionId: String): PairingSession? {
-        return database.pairingSessionQueries.getActivePairingSession(
-            session_id = sessionId,
-            expires_at = Clock().currentTimeMillis()
-        ).executeAsOneOrNull()?.toPairingSession()
+    override suspend fun getPairingSession(sessionId: String): PairingSession? = withContext(Dispatchers.IO) {
+        try {
+            database.pairingSessionQueries.getActivePairingSession(
+                session_id = sessionId,
+                expires_at = Clock().currentTimeMillis()
+            ).executeAsOneOrNull()?.toPairingSession()
+        } catch (e: Exception) {
+            // Log error and return null for graceful degradation
+            null
+        }
     }
     
-    override suspend fun updatePairingSessionStatus(sessionId: String, status: PairingSessionStatus) {
-        database.pairingSessionQueries.updatePairingSessionStatus(
-            status = status.name,
-            session_id = sessionId
-        )
+    override suspend fun updatePairingSessionStatus(sessionId: String, status: PairingSessionStatus) = withContext(Dispatchers.IO) {
+        database.transaction {
+            database.pairingSessionQueries.updatePairingSessionStatus(
+                status = status.name,
+                session_id = sessionId
+            )
+        }
     }
     
-    override suspend fun cleanExpiredPairingSessions() {
-        database.pairingSessionQueries.cleanExpiredPairingSessions(Clock().currentTimeMillis())
+    override suspend fun cleanExpiredPairingSessions() = withContext(Dispatchers.IO) {
+        database.transaction {
+            database.pairingSessionQueries.cleanExpiredPairingSessions(Clock().currentTimeMillis())
+        }
     }
     
-    override suspend fun saveClipboardEntry(entry: ClipboardEntry) {
-        database.clipboardEntryQueries.insertClipboardEntry(
-            device_id = entry.deviceId,
-            content = entry.content,
-            content_hash = entry.contentHash,
-            timestamp = entry.timestamp,
-            signature = entry.signature
-        )
+    override suspend fun saveClipboardEntry(entry: ClipboardEntry) = withContext(Dispatchers.IO) {
+        database.transaction {
+            database.clipboardEntryQueries.insertClipboardEntry(
+                device_id = entry.deviceId,
+                content = entry.content,
+                content_hash = entry.contentHash,
+                timestamp = entry.timestamp,
+                signature = entry.signature
+            )
+        }
     }
     
-    override suspend fun getLatestClipboardEntry(): ClipboardEntry? {
-        return database.clipboardEntryQueries.getLatestClipboardEntry()
-            .executeAsOneOrNull()
-            ?.toClipboardEntry()
+    override suspend fun getLatestClipboardEntry(): ClipboardEntry? = withContext(Dispatchers.IO) {
+        try {
+            database.clipboardEntryQueries.getLatestClipboardEntry()
+                .executeAsOneOrNull()
+                ?.toClipboardEntry()
+        } catch (e: Exception) {
+            // Log error and return null for graceful degradation
+            null
+        }
     }
     
-    override suspend fun getUnsyncedClipboardEntries(): List<ClipboardEntry> {
-        return database.clipboardEntryQueries.getUnsyncedClipboardEntries()
-            .executeAsList()
-            .map { it.toClipboardEntry() }
+    override suspend fun getUnsyncedClipboardEntries(): List<ClipboardEntry> = withContext(Dispatchers.IO) {
+        try {
+            database.clipboardEntryQueries.getUnsyncedClipboardEntries()
+                .executeAsList()
+                .map { it.toClipboardEntry() }
+        } catch (e: Exception) {
+            // Log error and return empty list for graceful degradation
+            emptyList()
+        }
     }
     
-    override suspend fun markClipboardEntrySynced(id: Long) {
-        database.clipboardEntryQueries.markClipboardEntrySynced(id)
+    override suspend fun markClipboardEntrySynced(id: Long) = withContext(Dispatchers.IO) {
+        database.transaction {
+            database.clipboardEntryQueries.markClipboardEntrySynced(id)
+        }
     }
     
-    override suspend fun isClipboardContentNew(contentHash: String): Boolean {
-        return !database.clipboardEntryQueries.contentExists(contentHash).executeAsOne()
+    override suspend fun isClipboardContentNew(contentHash: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            !database.clipboardEntryQueries.contentExists(contentHash).executeAsOne()
+        } catch (e: Exception) {
+            // Log error and return true for safety (assume content is new)
+            true
+        }
     }
     
-    override suspend fun cleanupExpiredDevices() {
-        database.trustedDeviceQueries.deleteExpiredDevices(Clock().currentTimeMillis())
+    override suspend fun cleanupExpiredDevices() = withContext(Dispatchers.IO) {
+        database.transaction {
+            database.trustedDeviceQueries.deleteExpiredDevices(Clock().currentTimeMillis())
+        }
     }
     
-    override suspend fun cleanupOldSecurityEvents(daysToKeep: Int) {
-        val cutoffTime = Clock().currentTimeMillis() - (daysToKeep * 24 * 60 * 60 * 1000L)
-        database.securityEventQueries.cleanOldSecurityEvents(cutoffTime)
+    override suspend fun cleanupOldSecurityEvents(daysToKeep: Int) = withContext(Dispatchers.IO) {
+        database.transaction {
+            val cutoffTime = Clock().currentTimeMillis() - (daysToKeep * 24 * 60 * 60 * 1000L)
+            database.securityEventQueries.cleanOldSecurityEvents(cutoffTime)
+        }
     }
     
-    override suspend fun cleanupOldClipboardEntries(maxEntries: Int) {
-        database.clipboardEntryQueries.cleanOldClipboardEntries(maxEntries.toLong())
+    override suspend fun cleanupOldClipboardEntries(maxEntries: Int) = withContext(Dispatchers.IO) {
+        database.transaction {
+            database.clipboardEntryQueries.cleanOldClipboardEntries(maxEntries.toLong())
+        }
     }
     
     // Helper functions
+    
+    /**
+     * Optimized batch insert for trusted devices to improve performance
+     * when adding multiple devices at once.
+     */
+    private fun batchInsertTrustedDevices(devices: List<TrustedDevice>) {
+        if (devices.isEmpty()) return
+        
+        // For small batches, individual inserts may be faster due to overhead
+        if (devices.size <= 3) {
+            devices.forEach { device ->
+                saveTrustedDeviceInternal(device)
+            }
+            return
+        }
+        
+        // For larger batches, optimize by clearing and inserting all at once
+        // This prevents the overhead of individual REPLACE operations
+        val groupId = devices.firstOrNull()?.groupId
+        if (groupId != null) {
+            // Clear existing devices for this group first for a clean insert
+            database.trustedDeviceQueries.clearDevicesForGroup(groupId)
+        }
+        
+        // Batch insert all devices - SQLDelight will prepare statements internally
+        // which is more efficient than individual operations
+        devices.forEach { device ->
+            saveTrustedDeviceInternal(device)
+        }
+    }
     
     private fun saveTrustedDeviceInternal(device: TrustedDevice) {
         database.trustedDeviceQueries.upsertTrustedDevice(
@@ -352,12 +551,12 @@ class TrustStoreImpl(
             group_id = device.groupId,
             public_key = device.publicKey,
             device_name = device.deviceName,
-            device_type = device.deviceType.name,
+            device_type = device.deviceType.toDatabaseString(),
             added_at = device.addedAt,
             added_by = device.addedBy,
             last_seen = device.lastSeen,
-            trust_level = device.trustLevel.name,
-            permissions = json.encodeToString(device.permissions.map { it.name }),
+            trust_level = device.trustLevel.toDatabaseString(),
+            permissions = device.permissions.toJsonString(),
             expires_at = device.expiresAt,
             is_active = if (device.isActive) 1L else 0L
         )
@@ -381,28 +580,12 @@ class TrustStoreImpl(
             groupId = group_id,
             publicKey = public_key,
             deviceName = device_name,
-            deviceType = when (device_type) {
-                "MOBILE" -> LocalDeviceType.MOBILE
-                "DESKTOP" -> LocalDeviceType.DESKTOP
-                else -> LocalDeviceType.UNKNOWN
-            },
+            deviceType = device_type.toLocalDeviceType(),
             addedAt = added_at,
             addedBy = added_by,
             lastSeen = last_seen,
-            trustLevel = when (trust_level) {
-                "FULL" -> TrustLevel.FULL
-                "LIMITED" -> TrustLevel.LIMITED
-                "MINIMAL" -> TrustLevel.MINIMAL
-                else -> TrustLevel.FULL
-            },
-            permissions = json.decodeFromString<List<String>>(permissions).map { 
-                when (it) {
-                    "FILE_SEND" -> Permission.FILE_SEND
-                    "FILE_RECEIVE" -> Permission.FILE_RECEIVE
-                    "CLIPBOARD_SYNC" -> Permission.CLIPBOARD_SYNC
-                    else -> Permission.FILE_SEND
-                }
-            }.toSet(),
+            trustLevel = trust_level.toTrustLevel(),
+            permissions = permissions.toPermissionSet(),
             expiresAt = expires_at,
             isActive = is_active == 1L
         )

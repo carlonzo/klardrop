@@ -91,7 +91,7 @@ class CommonComponent(
         // Use the messenger to send trust messages
         // For now, we'll create a simple stub message since we're using stub types
         // In a full implementation, we'd convert the message to the proper protobuf type
-        messenger().sendTrustMessage(deviceId, com.carlom.klardrop.protos.trust.TrustMessage())
+        messenger().sendTrustMessage(deviceId, message as com.carlom.klardrop.common.trust.model.TrustMessage)
       }
     )
   }

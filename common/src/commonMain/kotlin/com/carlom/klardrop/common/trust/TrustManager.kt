@@ -11,21 +11,6 @@ import com.carlom.klardrop.common.trust.protocol.TrustProtocolHandlerImpl
 import com.carlom.klardrop.common.trust.storage.SecureKeyStorageFactory
 import com.carlom.klardrop.common.trust.storage.TrustStore
 import com.carlom.klardrop.common.trust.storage.TrustStoreImpl
-// Using stub implementations instead of protobuf classes
-// import com.carlom.klardrop.protos.trust.TrustMessage as ProtoTrustMessage
-// import com.carlom.klardrop.protos.trust.TrustLevel
-// import com.carlom.klardrop.protos.trust.Permission
-// import com.carlom.klardrop.protos.trust.DeviceType as ProtoDeviceType
-// import com.carlom.klardrop.protos.trust.TrustMessageType
-// import com.carlom.klardrop.protos.trust.ECDHInitiation
-// import com.carlom.klardrop.protos.trust.ECDHResponse
-// import com.carlom.klardrop.protos.trust.GroupInvitation
-// import com.carlom.klardrop.protos.trust.JoinConfirmation
-// import com.carlom.klardrop.protos.trust.MemberUpdate
-// import com.carlom.klardrop.protos.trust.ClipboardSync
-// import com.carlom.klardrop.protos.trust.DiscoveryAnnouncement
-// import com.carlom.klardrop.protos.trust.UpdateAction
-import com.carlom.klardrop.common.communication.message.TrustMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
