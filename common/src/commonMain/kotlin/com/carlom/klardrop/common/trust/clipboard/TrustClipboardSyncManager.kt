@@ -3,9 +3,10 @@ package com.carlom.klardrop.common.trust.clipboard
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.trust.model.ClipboardEntry
+import com.carlom.klardrop.common.trust.model.Permission
+import com.carlom.klardrop.common.trust.model.UpdateAction
 import com.carlom.klardrop.common.trust.protocol.TrustEvent
 import com.carlom.klardrop.common.utils.log
-import com.carlom.klardrop.protos.trust.Permission
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -41,7 +42,7 @@ class TrustClipboardSyncManager(
             trustManager.getTrustEvents().collect { event ->
                 when (event) {
                     is TrustEvent.ClipboardUpdate -> {
-                        handleRemoteClipboardUpdate(event.content, event.fromDevice)
+                        handleRemoteClipboardUpdate(event.content, event.deviceId)
                     }
                     else -> {}
                 }
@@ -68,7 +69,7 @@ class TrustClipboardSyncManager(
     suspend fun isClipboardSyncAvailable(): Boolean {
         val trustedDevices = trustManager.trustedDevices.value
         return trustedDevices.any { device ->
-            device.permissions.contains(Permission.PERMISSION_CLIPBOARD_SYNC)
+            device.permissions.contains(Permission.CLIPBOARD_SYNC)
         }
     }
     
@@ -79,12 +80,17 @@ class TrustClipboardSyncManager(
         clipboardMonitorJob?.cancel()
         
         clipboardMonitorJob = scope.launch {
-            // Monitor clipboard changes with debounce
-            clipboardManager.flow
-                .debounce(DEBOUNCE_DELAY_MS)
-                .collect { content ->
-                    handleLocalClipboardChange(content)
+            // Create a flow that polls clipboard periodically
+            flow {
+                while (true) {
+                    emit(clipboardManager.read())
+                    delay(DEBOUNCE_DELAY_MS)
                 }
+            }
+            .distinctUntilChanged()
+            .collect { content ->
+                handleLocalClipboardChange(content)
+            }
         }
         
         log(TAG, "Started clipboard monitoring")
@@ -117,7 +123,7 @@ class TrustClipboardSyncManager(
         
         // Check if we have trusted devices with clipboard sync permission
         val devicesWithClipboardSync = trustManager.trustedDevices.value.filter { device ->
-            device.permissions.contains(Permission.PERMISSION_CLIPBOARD_SYNC)
+            device.permissions.contains(Permission.CLIPBOARD_SYNC)
         }
         
         if (devicesWithClipboardSync.isEmpty()) {
@@ -149,7 +155,7 @@ class TrustClipboardSyncManager(
         
         // Check if device has permission
         val trustedDevice = trustManager.trustedDevices.value.find { it.deviceId == fromDevice }
-        if (trustedDevice == null || !trustedDevice.permissions.contains(Permission.PERMISSION_CLIPBOARD_SYNC)) {
+        if (trustedDevice == null || !trustedDevice.permissions.contains(Permission.CLIPBOARD_SYNC)) {
             log(TAG, "Device $fromDevice doesn't have clipboard sync permission")
             return
         }
@@ -189,7 +195,7 @@ class TrustClipboardSyncManager(
      */
     suspend fun getDeviceClipboardSyncEnabled(deviceId: String): Boolean {
         val device = trustManager.trustedDevices.value.find { it.deviceId == deviceId }
-        return device?.permissions?.contains(Permission.PERMISSION_CLIPBOARD_SYNC) ?: false
+        return device?.permissions?.contains(Permission.CLIPBOARD_SYNC) ?: false
     }
     
     /**
@@ -199,9 +205,9 @@ class TrustClipboardSyncManager(
         val device = trustManager.trustedDevices.value.find { it.deviceId == deviceId } ?: return
         
         val updatedPermissions = if (enabled) {
-            device.permissions + Permission.PERMISSION_CLIPBOARD_SYNC
+            device.permissions + Permission.CLIPBOARD_SYNC
         } else {
-            device.permissions - Permission.PERMISSION_CLIPBOARD_SYNC
+            device.permissions - Permission.CLIPBOARD_SYNC
         }
         
         val updatedDevice = device.copy(permissions = updatedPermissions)
@@ -211,7 +217,7 @@ class TrustClipboardSyncManager(
         
         // Broadcast update to other devices
         trustManager.protocolHandler.broadcastMemberUpdate(
-            com.carlom.klardrop.protos.trust.UpdateAction.UPDATE_ACTION_UPDATE,
+            UpdateAction.UPDATE,
             updatedDevice
         )
     }

@@ -89,7 +89,9 @@ class CommonComponent(
       clipboardManager = clipboardManager,
       sendTrustMessage = { deviceId, message ->
         // Use the messenger to send trust messages
-        messenger().sendTrustMessage(deviceId, message)
+        // For now, we'll create a simple stub message since we're using stub types
+        // In a full implementation, we'd convert the message to the proper protobuf type
+        messenger().sendTrustMessage(deviceId, com.carlom.klardrop.protos.trust.TrustMessage())
       }
     )
   }

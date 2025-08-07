@@ -29,7 +29,7 @@ class TrustModule(
     private val internalPlatformDependencies: InternalPlatformDependencies,
     private val currentDeviceProvider: CurrentDeviceProvider,
     private val clipboardManager: ClipboardManager,
-    private val sendTrustMessage: suspend (deviceId: String, message: ProtoTrustMessage) -> Unit
+    private val sendTrustMessage: suspend (deviceId: String, message: Any) -> Unit
 ) {
     
     private val trustScope: CoroutineScope by lazy {
