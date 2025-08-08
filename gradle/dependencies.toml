@@ -70,5 +70,5 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "jetbrains-compose" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
-squareup-wire = { id = "com.squareup.wire", version = "5.3.5" }
+squareup-wire = { id = "com.squareup.wire", version = "5.3.8" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
