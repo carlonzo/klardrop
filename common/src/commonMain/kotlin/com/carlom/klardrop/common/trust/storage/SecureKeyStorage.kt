@@ -34,6 +34,10 @@ interface SecureKeyStorage {
     suspend fun clearAll()
 }
 
-expect class SecureKeyStorageFactory {
+interface SecureKeyStorageFactory {
     fun create(): SecureKeyStorage
+}
+
+expect class SecureKeyStorageFactoryImpl: SecureKeyStorageFactory {
+    override fun create(): SecureKeyStorage
 }

@@ -67,6 +67,7 @@ kotlin {
         implementation(deps.simplestorage)
         implementation(deps.bugsnag.kmp)
         implementation(deps.sqldelight.android.driver)
+        implementation(deps.androidx.security.crypto)
       }
     }
 

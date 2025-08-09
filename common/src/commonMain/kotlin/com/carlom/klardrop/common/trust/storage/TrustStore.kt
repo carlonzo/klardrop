@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.trust.storage
 import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.utils.Clock
+import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType as LocalDeviceType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -11,7 +12,6 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 interface TrustStore {
@@ -62,7 +62,8 @@ interface TrustStore {
 
 class TrustStoreImpl(
     private val database: AppDatabase,
-    private val secureKeyStorage: SecureKeyStorage
+    private val secureKeyStorage: SecureKeyStorage,
+    private val coroutines: Coroutines
 ) : TrustStore {
     
     private val json = Json { ignoreUnknownKeys = true }
@@ -135,7 +136,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun getDeviceKeypair(): DeviceKeypair? = withContext(Dispatchers.IO) {
+    override suspend fun getDeviceKeypair(): DeviceKeypair? = withContext(coroutines.ioDispatcher) {
         try {
             val dbKeypair = database.deviceKeypairQueries.getDeviceKeypair().executeAsOneOrNull()
                 ?: return@withContext null
@@ -161,7 +162,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun saveDeviceKeypair(keypair: DeviceKeypair) = withContext(Dispatchers.IO) {
+    override suspend fun saveDeviceKeypair(keypair: DeviceKeypair) = withContext(coroutines.ioDispatcher) {
         val alias = "device_key_${keypair.deviceId}"
         
         // Store private key in secure storage first (must be done outside transaction)
@@ -181,12 +182,12 @@ class TrustStoreImpl(
     }
     
     override suspend fun updateDeviceName(name: String) {
-        withContext(Dispatchers.IO) {
+        withContext(coroutines.ioDispatcher) {
             database.deviceKeypairQueries.updateDeviceName(name)
         }
     }
     
-    override suspend fun getTrustGroup(): TrustGroup? = withContext(Dispatchers.IO) {
+    override suspend fun getTrustGroup(): TrustGroup? = withContext(coroutines.ioDispatcher) {
         try {
             val dbGroup = database.trustGroupQueries.getActiveTrustGroup().executeAsOneOrNull()
                 ?: return@withContext null
@@ -211,7 +212,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun saveTrustGroup(group: TrustGroup) = withContext(Dispatchers.IO) {
+    override suspend fun saveTrustGroup(group: TrustGroup) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             try {
                 // Deactivate all existing groups
@@ -239,7 +240,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun updateGroupKey(groupId: String, newKey: ByteArray) = withContext(Dispatchers.IO) {
+    override suspend fun updateGroupKey(groupId: String, newKey: ByteArray) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             database.trustGroupQueries.updateGroupKey(
                 group_key = newKey,
@@ -249,7 +250,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun enableCloudSync(groupId: String) = withContext(Dispatchers.IO) {
+    override suspend fun enableCloudSync(groupId: String) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             database.trustGroupQueries.enableCloudSync(
                 updated_at = Clock().currentTimeMillis(),
@@ -258,7 +259,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun getTrustedDevices(): List<TrustedDevice> = withContext(Dispatchers.IO) {
+    override suspend fun getTrustedDevices(): List<TrustedDevice> = withContext(coroutines.ioDispatcher) {
         try {
             val group = getTrustGroup() ?: return@withContext emptyList()
             database.trustedDeviceQueries.getTrustedDevicesByGroup(group.groupId)
@@ -270,7 +271,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun getTrustedDevice(deviceId: String): TrustedDevice? = withContext(Dispatchers.IO) {
+    override suspend fun getTrustedDevice(deviceId: String): TrustedDevice? = withContext(coroutines.ioDispatcher) {
         try {
             database.trustedDeviceQueries.getTrustedDeviceById(deviceId)
                 .executeAsOneOrNull()
@@ -281,7 +282,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun addTrustedDevice(device: TrustedDevice) = withContext(Dispatchers.IO) {
+    override suspend fun addTrustedDevice(device: TrustedDevice) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             try {
                 saveTrustedDeviceInternal(device)
@@ -302,7 +303,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun removeTrustedDevice(deviceId: String) = withContext(Dispatchers.IO) {
+    override suspend fun removeTrustedDevice(deviceId: String) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             try {
                 database.trustedDeviceQueries.removeTrustedDevice(deviceId)
@@ -323,7 +324,7 @@ class TrustStoreImpl(
     }
     
     override suspend fun updateDeviceLastSeen(deviceId: String) {
-        withContext(Dispatchers.IO) {
+        withContext(coroutines.ioDispatcher) {
             database.trustedDeviceQueries.updateLastSeen(
                 last_seen = Clock().currentTimeMillis(),
                 device_id = deviceId
@@ -331,7 +332,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun isDeviceTrusted(deviceId: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun isDeviceTrusted(deviceId: String): Boolean = withContext(coroutines.ioDispatcher) {
         try {
             database.trustedDeviceQueries.isDeviceTrusted(
                 device_id = deviceId,
@@ -343,7 +344,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun getDeviceTrustLevel(deviceId: String): TrustLevel? = withContext(Dispatchers.IO) {
+    override suspend fun getDeviceTrustLevel(deviceId: String): TrustLevel? = withContext(coroutines.ioDispatcher) {
         try {
             val levelStr = database.trustedDeviceQueries.getDeviceTrustLevel(
                 device_id = deviceId,
@@ -371,19 +372,19 @@ class TrustStoreImpl(
         // For now, returning a simple flow
         return database.trustedDeviceQueries.getTrustedDevicesByGroup("")
             .asFlow()
-            .mapToList(Dispatchers.Default)
+            .mapToList(coroutines.cpuDispatcher)
             .map { devices ->
                 devices.map { it.toTrustedDevice() }
             }
     }
     
-    override suspend fun logSecurityEvent(event: SecurityEvent) = withContext(Dispatchers.IO) {
+    override suspend fun logSecurityEvent(event: SecurityEvent) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             logSecurityEventInternal(event)
         }
     }
     
-    override suspend fun getRecentSecurityEvents(limit: Int): List<SecurityEvent> = withContext(Dispatchers.IO) {
+    override suspend fun getRecentSecurityEvents(limit: Int): List<SecurityEvent> = withContext(coroutines.ioDispatcher) {
         try {
             database.securityEventQueries.getRecentSecurityEvents(limit.toLong())
                 .executeAsList()
@@ -394,7 +395,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun getSecurityEventsByDevice(deviceId: String, limit: Int): List<SecurityEvent> = withContext(Dispatchers.IO) {
+    override suspend fun getSecurityEventsByDevice(deviceId: String, limit: Int): List<SecurityEvent> = withContext(coroutines.ioDispatcher) {
         try {
             database.securityEventQueries.getSecurityEventsByDevice(deviceId, limit.toLong())
                 .executeAsList()
@@ -405,7 +406,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun createPairingSession(session: PairingSession) = withContext(Dispatchers.IO) {
+    override suspend fun createPairingSession(session: PairingSession) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             database.pairingSessionQueries.insertPairingSession(
                 session_id = session.sessionId,
@@ -418,7 +419,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun getPairingSession(sessionId: String): PairingSession? = withContext(Dispatchers.IO) {
+    override suspend fun getPairingSession(sessionId: String): PairingSession? = withContext(coroutines.ioDispatcher) {
         try {
             database.pairingSessionQueries.getActivePairingSession(
                 session_id = sessionId,
@@ -430,7 +431,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun updatePairingSessionStatus(sessionId: String, status: PairingSessionStatus) = withContext(Dispatchers.IO) {
+    override suspend fun updatePairingSessionStatus(sessionId: String, status: PairingSessionStatus) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             database.pairingSessionQueries.updatePairingSessionStatus(
                 status = status.name,
@@ -439,13 +440,13 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun cleanExpiredPairingSessions() = withContext(Dispatchers.IO) {
+    override suspend fun cleanExpiredPairingSessions() = withContext(coroutines.ioDispatcher) {
         database.transaction {
             database.pairingSessionQueries.cleanExpiredPairingSessions(Clock().currentTimeMillis())
         }
     }
     
-    override suspend fun saveClipboardEntry(entry: ClipboardEntry) = withContext(Dispatchers.IO) {
+    override suspend fun saveClipboardEntry(entry: ClipboardEntry) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             database.clipboardEntryQueries.insertClipboardEntry(
                 device_id = entry.deviceId,
@@ -457,7 +458,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun getLatestClipboardEntry(): ClipboardEntry? = withContext(Dispatchers.IO) {
+    override suspend fun getLatestClipboardEntry(): ClipboardEntry? = withContext(coroutines.ioDispatcher) {
         try {
             database.clipboardEntryQueries.getLatestClipboardEntry()
                 .executeAsOneOrNull()
@@ -468,7 +469,7 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun getUnsyncedClipboardEntries(): List<ClipboardEntry> = withContext(Dispatchers.IO) {
+    override suspend fun getUnsyncedClipboardEntries(): List<ClipboardEntry> = withContext(coroutines.ioDispatcher) {
         try {
             database.clipboardEntryQueries.getUnsyncedClipboardEntries()
                 .executeAsList()
@@ -479,13 +480,13 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun markClipboardEntrySynced(id: Long) = withContext(Dispatchers.IO) {
+    override suspend fun markClipboardEntrySynced(id: Long) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             database.clipboardEntryQueries.markClipboardEntrySynced(id)
         }
     }
     
-    override suspend fun isClipboardContentNew(contentHash: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun isClipboardContentNew(contentHash: String): Boolean = withContext(coroutines.ioDispatcher) {
         try {
             !database.clipboardEntryQueries.contentExists(contentHash).executeAsOne()
         } catch (e: Exception) {
@@ -494,20 +495,20 @@ class TrustStoreImpl(
         }
     }
     
-    override suspend fun cleanupExpiredDevices() = withContext(Dispatchers.IO) {
+    override suspend fun cleanupExpiredDevices() = withContext(coroutines.ioDispatcher) {
         database.transaction {
             database.trustedDeviceQueries.deleteExpiredDevices(Clock().currentTimeMillis())
         }
     }
     
-    override suspend fun cleanupOldSecurityEvents(daysToKeep: Int) = withContext(Dispatchers.IO) {
+    override suspend fun cleanupOldSecurityEvents(daysToKeep: Int) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             val cutoffTime = Clock().currentTimeMillis() - (daysToKeep * 24 * 60 * 60 * 1000L)
             database.securityEventQueries.cleanOldSecurityEvents(cutoffTime)
         }
     }
     
-    override suspend fun cleanupOldClipboardEntries(maxEntries: Int) = withContext(Dispatchers.IO) {
+    override suspend fun cleanupOldClipboardEntries(maxEntries: Int) = withContext(coroutines.ioDispatcher) {
         database.transaction {
             database.clipboardEntryQueries.cleanOldClipboardEntries(maxEntries.toLong())
         }

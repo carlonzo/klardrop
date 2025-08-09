@@ -14,6 +14,7 @@ expect class InternalPlatformDependencies {
   fun clipboardReaderWriter(): ClipboardReaderWriter
   fun driverFactory(): DriverFactory
   fun secureKeyStorageFactory(): SecureKeyStorageFactory
+
   suspend fun openFile(filePath: String): Boolean
 }
 

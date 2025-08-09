@@ -32,6 +32,7 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 
 androidx-datastore-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 androidx-datastore-core-okio = { module = "androidx.datastore:datastore-core-okio", version.ref = "datastore" }
+androidx-security-crypto = { module = "androidx.security:security-crypto", version = "1.1.0-alpha06" }
 
 okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
 ktor-network = { module = "io.ktor:ktor-network", version.ref = "ktor" }

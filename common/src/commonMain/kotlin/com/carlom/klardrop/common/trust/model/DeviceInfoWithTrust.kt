@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.trust.model
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.trust.model.TrustLevel
 
 /**
@@ -51,7 +52,7 @@ data class DeviceInfoWithTrust(
      * Check if trust has expired
      */
     fun isTrustExpired(): Boolean {
-        return expiresAt?.let { it < System.currentTimeMillis() } == true
+        return expiresAt?.let { it < Clock().currentTimeMillis() } == true
     }
     
     companion object {
@@ -61,7 +62,7 @@ data class DeviceInfoWithTrust(
         fun fromTrustedDevice(deviceInfo: DeviceInfo, trustedDevice: TrustedDevice): DeviceInfoWithTrust {
             return DeviceInfoWithTrust(
                 deviceInfo = deviceInfo,
-                trustStatus = if (trustedDevice.isActive && (trustedDevice.expiresAt == null || trustedDevice.expiresAt > System.currentTimeMillis())) {
+                trustStatus = if (trustedDevice.isActive && (trustedDevice.expiresAt == null || trustedDevice.expiresAt > Clock().currentTimeMillis())) {
                     TrustStatus.TRUSTED
                 } else {
                     TrustStatus.TRUST_EXPIRED

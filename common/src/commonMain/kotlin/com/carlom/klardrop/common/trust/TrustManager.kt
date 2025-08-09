@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.trust
 
 import com.carlom.klardrop.common.trust.crypto.CryptoProvider
-import com.carlom.klardrop.common.trust.crypto.CryptoProviderImpl
+import com.carlom.klardrop.common.trust.crypto.ProductionCryptoProvider
 import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.trust.model.*
 import com.carlom.klardrop.common.trust.crypto.EncryptedPayload
@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import com.carlom.klardrop.common.utils.Clock
+import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.CoroutinesImpl
 import com.carlom.klardrop.common.utils.DeviceType
 import io.ktor.utils.io.core.toByteArray
 import kotlinx.serialization.Serializable
@@ -50,8 +52,9 @@ class TrustManager(
 ) {
     
     private val secureKeyStorage = secureKeyStorageFactory.create()
-    private val cryptoProvider: CryptoProvider = CryptoProviderImpl()
-    val trustStore: TrustStore = TrustStoreImpl(database, secureKeyStorage)
+    private val cryptoProvider: CryptoProvider = ProductionCryptoProvider.create()
+    private val coroutines: Coroutines = CoroutinesImpl()
+    val trustStore: TrustStore = TrustStoreImpl(database, secureKeyStorage, coroutines)
     
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
@@ -155,7 +158,7 @@ class TrustManager(
                     deviceName = device.deviceName,
                     deviceType = device.deviceType,
                     addedAt = Clock().currentTimeMillis(),
-                    addedBy = device.deviceId
+                    addedBy = "self"
                 )
             ),
             createdAt = Clock().currentTimeMillis(),
