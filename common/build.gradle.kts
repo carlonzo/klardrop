@@ -41,6 +41,11 @@ kotlin {
         implementation(deps.filekit.core)
         implementation(deps.sqldelight.runtime)
         implementation(deps.sqldelight.coroutines.extensions)
+        
+        // Cryptography for trust features
+        implementation(deps.cryptography.core)
+        implementation(deps.cryptography.provider.optimal)
+        implementation(deps.cryptography.random)
       }
     }
 
