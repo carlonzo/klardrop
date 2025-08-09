@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
+import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.math.pow
 
 /**
@@ -28,7 +29,7 @@ interface Messenger {
 
   fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>> // Changed
   
-  suspend fun sendTrustMessage(deviceId: String, message: com.carlom.klardrop.protos.trust.TrustMessage)
+  suspend fun sendTrustMessage(deviceId: String, message: com.carlom.klardrop.common.trust.model.TrustMessage)
 }
 
 class MessengerImpl(
@@ -80,10 +81,11 @@ class MessengerImpl(
     return messageReceiver.notifier
   }
   
-  override suspend fun sendTrustMessage(deviceId: String, message: com.carlom.klardrop.protos.trust.TrustMessage) {
-    // Convert protobuf message to our internal TrustMessage format
+  override suspend fun sendTrustMessage(deviceId: String, message: com.carlom.klardrop.common.trust.model.TrustMessage) {
+    // Convert protobuf message to our internal TrustMessage format using kotlinx.serialization
+    val proto = ProtoBuf { }
     val trustMessage = com.carlom.klardrop.common.communication.message.TrustMessage(
-      trustMessageBytes = message.encode()
+      trustMessageBytes = proto.encodeToByteArray(com.carlom.klardrop.common.trust.model.TrustMessage.serializer(), message)
     )
     
     // Send as a regular message request  

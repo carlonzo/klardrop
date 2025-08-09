@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalTime::class)
+
 package com.carlom.klardrop
 
 import androidx.compose.animation.AnimatedVisibility
@@ -16,11 +18,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.trust.model.ClipboardEntry
+import com.carlom.klardrop.common.trust.model.Permission
 import com.carlom.klardrop.common.trust.model.TrustedDevice
+import com.carlom.klardrop.common.utils.Clock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
-import java.text.SimpleDateFormat
-import java.util.*
+import com.carlom.klardrop.utils.TimeFormatUtils
+import kotlin.time.ExperimentalTime
 
 /**
  * Clipboard sync settings screen
@@ -86,7 +90,7 @@ fun ClipboardSyncSettingsScreen(
                     )
                 }
                 
-                items(devices.filter { it.permissions.contains(com.carlom.klardrop.protos.trust.Permission.PERMISSION_CLIPBOARD_SYNC) }) { device ->
+                items(devices.filter { it.permissions.contains(Permission.CLIPBOARD_SYNC) }) { device ->
                     DeviceClipboardSettingCard(
                         device = device,
                         onToggleSync = { enabled ->
@@ -234,10 +238,8 @@ private fun DeviceClipboardSettingCard(
             ) {
                 Icon(
                     imageVector = when (device.deviceType) {
-                        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_PHONE -> Icons.Default.PhoneAndroid
-                        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_TABLET -> Icons.Default.Tablet
-                        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_LAPTOP -> Icons.Default.Computer
-                        com.carlom.klardrop.protos.trust.DeviceType.DEVICE_TYPE_DESKTOP -> Icons.Default.DesktopWindows
+                        com.carlom.klardrop.common.utils.DeviceType.MOBILE -> Icons.Default.PhoneAndroid
+                        com.carlom.klardrop.common.utils.DeviceType.DESKTOP -> Icons.Default.DesktopWindows
                         else -> Icons.Default.Devices
                     },
                     contentDescription = null,
@@ -252,7 +254,7 @@ private fun DeviceClipboardSettingCard(
                     
                     device.lastSeen?.let { lastSeen ->
                         Text(
-                            text = "Last seen ${formatRelativeTime(lastSeen)}",
+                            text = "Last seen ${TimeFormatUtils.formatRelativeTime(lastSeen)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -317,7 +319,7 @@ private fun ClipboardHistoryItem(entry: ClipboardEntry) {
                         )
                         
                         Text(
-                            text = formatTimestamp(entry.timestamp),
+                            text = TimeFormatUtils.formatRelativeTime(entry.timestamp),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -372,31 +374,5 @@ private fun EmptyDevicesState() {
 }
 
 /**
- * Format timestamp to readable format
- */
-private fun formatTimestamp(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diff = now - timestamp
-    
-    return when {
-        diff < 60_000 -> "Just now"
-        diff < 3600_000 -> "${diff / 60_000}m ago"
-        diff < 86400_000 -> "${diff / 3600_000}h ago"
-        else -> SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(timestamp))
-    }
-}
-
-/**
  * Format relative time
  */
-private fun formatRelativeTime(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diff = now - timestamp
-    
-    return when {
-        diff < 60_000 -> "just now"
-        diff < 3600_000 -> "${diff / 60_000} minutes ago"
-        diff < 86400_000 -> "${diff / 3600_000} hours ago"
-        else -> "${diff / 86400_000} days ago"
-    }
-}

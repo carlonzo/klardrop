@@ -30,13 +30,15 @@ fun main(args: Array<String>) {
     applicationInfo.appVersion
   )
 
+  FileKit.init("klardrop")
+
   val k = Klardrop(
     applicationInfo = applicationInfo,
     internalPlatformDependency = InternalPlatformDependencies()
   )
   k.init()
 
-  FileKit.init("klardrop")
+
 
   application {
 

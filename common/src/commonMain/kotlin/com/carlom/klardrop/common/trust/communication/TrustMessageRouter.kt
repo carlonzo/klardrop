@@ -5,7 +5,8 @@ import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TrustMessage
 import com.carlom.klardrop.common.trust.TrustManager
-import com.carlom.klardrop.protos.trust.TrustMessage as ProtoTrustMessage
+import com.carlom.klardrop.common.trust.model.TrustMessage as ProtoTrustMessage
+import kotlinx.serialization.protobuf.ProtoBuf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -32,9 +33,10 @@ class TrustMessageRouter(
     suspend fun sendTrustMessage(deviceId: String, message: ProtoTrustMessage) {
         val msgr = messenger ?: throw IllegalStateException("TrustMessageRouter not initialized")
         
-        // Convert protobuf message to communication TrustMessage
+        // Convert protobuf message to communication TrustMessage using kotlinx.serialization
+        val proto = ProtoBuf { }
         val trustMessage = TrustMessage(
-            trustMessageBytes = message.encode()
+            trustMessageBytes = proto.encodeToByteArray(ProtoTrustMessage.serializer(), message)
         )
         
         // Send as a regular message
@@ -57,8 +59,9 @@ class TrustMessageRouter(
         val tm = trustManager ?: throw IllegalStateException("TrustMessageRouter not initialized")
         
         try {
-            // Parse the protobuf message
-            val protoMessage = ProtoTrustMessage.ADAPTER.decode(message.trustMessageBytes)
+            // Parse the protobuf message using kotlinx.serialization
+            val proto = ProtoBuf { }
+            val protoMessage = proto.decodeFromByteArray(ProtoTrustMessage.serializer(), message.trustMessageBytes)
             
             // Handle it in the trust manager
             tm.handleTrustMessage(protoMessage, fromDeviceId)

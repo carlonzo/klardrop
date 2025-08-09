@@ -37,6 +37,7 @@ kotlin {
         implementation(deps.androidx.datastore.core)
         implementation(deps.androidx.datastore.core.okio)
         implementation(deps.kotlinx.serialization.protobuf)
+        implementation(deps.kotlinx.serialization.json)
         implementation(deps.ukey2)
         implementation(deps.filekit.core)
         
@@ -66,6 +67,7 @@ kotlin {
         implementation(deps.simplestorage)
         implementation(deps.bugsnag.kmp)
         implementation(deps.sqldelight.android.driver)
+        implementation(deps.androidx.security.crypto)
       }
     }
 

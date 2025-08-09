@@ -1,10 +1,12 @@
 package com.carlom.klardrop.common.trust.crypto
 
+import TestCoroutines
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
 class CryptoProviderTest {
     
+    private val testCoroutines = TestCoroutines()
     private val cryptoProvider = CryptoProviderImpl()
     
     @Test
@@ -293,7 +295,7 @@ class CryptoProviderTest {
     }
     
     @Test
-    fun testHash() {
+    fun testHash() = runTest(testCoroutines.dispatcher) {
         val data1 = "Hello, World!".encodeToByteArray()
         val data2 = "Hello, World!".encodeToByteArray()
         val data3 = "Different data".encodeToByteArray()
@@ -315,7 +317,7 @@ class CryptoProviderTest {
     }
     
     @Test
-    fun testHashEmptyData() {
+    fun testHashEmptyData() = runTest(testCoroutines.dispatcher) {
         val emptyData = ByteArray(0)
         val hash = cryptoProvider.hash(emptyData)
         

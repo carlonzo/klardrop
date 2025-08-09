@@ -23,7 +23,7 @@ actual class InternalPlatformDependencies(private val context: Context) {
   }
   
   actual fun secureKeyStorageFactory(): SecureKeyStorageFactory {
-    return SecureKeyStorageFactory()
+    return SecureKeyStorageFactory(context)
   }
 
   actual fun driverFactory(): DriverFactory {

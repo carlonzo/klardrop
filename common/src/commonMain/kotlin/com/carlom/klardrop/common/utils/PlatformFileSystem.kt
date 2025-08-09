@@ -10,7 +10,6 @@ import io.github.vinceglb.filekit.delete
 import io.github.vinceglb.filekit.extension
 import io.github.vinceglb.filekit.filesDir
 import io.github.vinceglb.filekit.name
-import io.github.vinceglb.filekit.projectDir
 import io.github.vinceglb.filekit.saveImageToGallery
 import io.github.vinceglb.filekit.size
 import io.github.vinceglb.filekit.source

@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.trust.storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.NetworkInterface
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -72,32 +73,112 @@ class DesktopSecureKeyStorage : SecureKeyStorage {
     }
     
     private fun loadOrCreateMasterKey(): ByteArray {
-        val masterKeyFile = File(STORAGE_DIR, MASTER_KEY_FILE)
+        val saltFile = File(STORAGE_DIR, "salt.dat")
+        val legacyMasterKeyFile = File(STORAGE_DIR, MASTER_KEY_FILE)
         
-        return if (masterKeyFile.exists()) {
-            // Load existing master key
-            masterKeyFile.readBytes()
-        } else {
-            // Generate new master key
-            val random = SecureRandom()
-            val key = ByteArray(32)
-            random.nextBytes(key)
-            
-            // Store it
-            masterKeyFile.writeBytes(key)
-            
-            // Set file permissions (Unix-like systems)
-            try {
-                masterKeyFile.setReadable(false, false)
-                masterKeyFile.setReadable(true, true)
-                masterKeyFile.setWritable(false, false)
-                masterKeyFile.setWritable(true, true)
-            } catch (e: Exception) {
-                // Ignore on systems that don't support these operations
-            }
-            
-            key
+        // Check for legacy master key file and migrate if needed
+        if (legacyMasterKeyFile.exists() && !saltFile.exists()) {
+            // Migration: generate salt and delete the plaintext master key
+            val salt = generateSalt()
+            storeSalt(saltFile, salt)
+            legacyMasterKeyFile.delete()
         }
+        
+        val salt = if (saltFile.exists()) {
+            loadSalt(saltFile)
+        } else {
+            val newSalt = generateSalt()
+            storeSalt(saltFile, newSalt)
+            newSalt
+        }
+        
+        return deriveMasterKey(salt)
+    }
+    
+    private fun generateSalt(): ByteArray {
+        val salt = ByteArray(SALT_LENGTH)
+        SecureRandom().nextBytes(salt)
+        return salt
+    }
+    
+    private fun storeSalt(saltFile: File, salt: ByteArray) {
+        saltFile.writeBytes(salt)
+        
+        // Set file permissions (Unix-like systems)
+        try {
+            saltFile.setReadable(false, false)
+            saltFile.setReadable(true, true)
+            saltFile.setWritable(false, false)
+            saltFile.setWritable(true, true)
+        } catch (e: Exception) {
+            // Ignore on systems that don't support these operations
+        }
+    }
+    
+    private fun loadSalt(saltFile: File): ByteArray {
+        return saltFile.readBytes()
+    }
+    
+    private fun deriveMasterKey(salt: ByteArray): ByteArray {
+        // Create a reproducible but hard-to-guess passphrase from system properties
+        val systemFingerprint = buildSystemFingerprint()
+        
+        val keySpec = PBEKeySpec(
+            systemFingerprint.toCharArray(),
+            salt,
+            ITERATIONS,
+            KEY_LENGTH
+        )
+        
+        val factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
+        val secretKey = factory.generateSecret(keySpec)
+        
+        // Clear the passphrase from memory
+        keySpec.clearPassword()
+        
+        return secretKey.encoded
+    }
+    
+    private fun buildSystemFingerprint(): String {
+        // Build a system fingerprint from various system properties
+        val components = mutableListOf<String>()
+        
+        // User and system identifiers
+        System.getProperty("user.name")?.let { components.add("user:$it") }
+        System.getProperty("user.home")?.let { components.add("home:${it.hashCode()}") }
+        System.getProperty("os.name")?.let { components.add("os:$it") }
+        System.getProperty("os.version")?.let { components.add("osver:$it") }
+        System.getProperty("os.arch")?.let { components.add("arch:$it") }
+        
+        // Add hardware identifier if available
+        try {
+            val networkInterfaces = NetworkInterface.getNetworkInterfaces()
+            while (networkInterfaces.hasMoreElements()) {
+                val ni = networkInterfaces.nextElement()
+                ni.hardwareAddress?.let { hwAddr ->
+                    if (hwAddr.isNotEmpty() && !isLocalLoopbackOrVirtual(ni)) {
+                        components.add("hw:${hwAddr.joinToString("") { "%02x".format(it) }}")
+                        break // Use only the first valid hardware address
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Fall back if hardware address is not accessible
+        }
+        
+        // If we couldn't get enough entropy, add Java runtime info
+        if (components.size < 3) {
+            System.getProperty("java.version")?.let { components.add("java:$it") }
+            System.getProperty("java.vendor")?.let { components.add("vendor:$it") }
+        }
+        
+        // Join all components with a delimiter
+        return components.joinToString("|")
+    }
+    
+    private fun isLocalLoopbackOrVirtual(ni: NetworkInterface): Boolean {
+        return ni.isLoopback || ni.isVirtual || ni.name.startsWith("lo") || 
+               ni.name.startsWith("vbox") || ni.name.startsWith("vmnet")
     }
     
     private fun encrypt(data: ByteArray, key: ByteArray): ByteArray {
@@ -132,6 +213,6 @@ class DesktopSecureKeyStorage : SecureKeyStorage {
     }
 }
 
-actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = DesktopSecureKeyStorage()
+actual class SecureKeyStorageFactoryImpl: SecureKeyStorageFactory {
+    actual override fun create(): SecureKeyStorage = DesktopSecureKeyStorage()
 }

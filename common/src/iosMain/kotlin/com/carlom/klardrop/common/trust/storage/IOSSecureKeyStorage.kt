@@ -3,6 +3,8 @@ package com.carlom.klardrop.common.trust.storage
 import kotlinx.cinterop.*
 import platform.Foundation.*
 import platform.Security.*
+import platform.CoreFoundation.*
+import platform.posix.memcpy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -22,7 +24,7 @@ class IOSSecureKeyStorage : SecureKeyStorage {
         val query = createBaseQuery(account)
         query[kSecValueData] = keyData
         
-        val status = SecItemAdd(query as CFDictionary, null)
+        val status = SecItemAdd(query as CFDictionaryRef, null)
         if (status != errSecSuccess) {
             throw SecurityException("Failed to store key: $status")
         }
@@ -35,8 +37,8 @@ class IOSSecureKeyStorage : SecureKeyStorage {
         query[kSecMatchLimit] = kSecMatchLimitOne
         
         memScoped {
-            val result = alloc<CFTypeRefVar>()
-            val status = SecItemCopyMatching(query as CFDictionary, result.ptr)
+            val result: CFTypeRefVar = alloc()
+            val status = SecItemCopyMatching(query as CFDictionaryRef, result.ptr)
             
             return@withContext when (status) {
                 errSecSuccess -> {
@@ -49,22 +51,22 @@ class IOSSecureKeyStorage : SecureKeyStorage {
         }
     }
     
-    override suspend fun deletePrivateKey(alias: String) = withContext(Dispatchers.Default) {
+    override suspend fun deletePrivateKey(alias: String): Unit = withContext(Dispatchers.Default) {
         val account = KEY_PREFIX + alias
         val query = createBaseQuery(account)
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(query as CFDictionaryRef)
     }
     
     override suspend fun keyExists(alias: String): Boolean = withContext(Dispatchers.Default) {
         retrievePrivateKey(alias) != null
     }
     
-    override suspend fun clearAll() = withContext(Dispatchers.Default) {
+    override suspend fun clearAll(): Unit = withContext(Dispatchers.Default) {
         val query = mutableMapOf<Any?, Any?>(
             kSecClass to kSecClassGenericPassword,
             kSecAttrService to SERVICE_NAME
         )
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(query as CFDictionaryRef)
     }
     
     private fun createBaseQuery(account: String): MutableMap<Any?, Any?> {
@@ -101,6 +103,6 @@ private fun NSData.toByteArray(): ByteArray {
 
 class SecurityException(message: String) : Exception(message)
 
-actual class SecureKeyStorageFactory {
-    actual fun create(): SecureKeyStorage = IOSSecureKeyStorage()
+actual class SecureKeyStorageFactoryImpl: SecureKeyStorageFactory {
+    actual override fun create(): SecureKeyStorage = IOSSecureKeyStorage()
 }

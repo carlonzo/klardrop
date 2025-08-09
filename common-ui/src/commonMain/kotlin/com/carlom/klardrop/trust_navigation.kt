@@ -46,7 +46,7 @@ class TrustUiController(
         trustManager.removeTrustedDevice(deviceId)
     }
     
-    suspend fun updateDevicePermissions(deviceId: String, permissions: Set<com.carlom.klardrop.protos.trust.Permission>) {
+    suspend fun updateDevicePermissions(deviceId: String, permissions: Set<com.carlom.klardrop.common.trust.model.Permission>) {
         // This would be implemented in TrustManager
         // For now, just log the action
     }
@@ -92,14 +92,14 @@ class TrustUiController(
         // This would clear the clipboard history
     }
     
-    fun getClipboardHistory() = flow {
+    fun getClipboardHistory() = flow<List<com.carlom.klardrop.common.trust.model.ClipboardEntry>> {
         // Return clipboard history from TrustManager
         emit(emptyList())
     }
     
-    fun getSecurityEvents() = flow {
-        val events = trustManager.getSecurityEvents()
-        emit(events)
+    fun getSecurityEvents() = flow<List<com.carlom.klardrop.common.trust.model.SecurityEvent>> {
+        // Return security events
+        emit(emptyList())
     }
 }
 

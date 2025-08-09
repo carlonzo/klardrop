@@ -66,6 +66,12 @@ kotlin {
       }
     }
 
+    commonTest {
+      dependencies {
+        implementation(kotlin("test"))
+      }
+    }
+
     val desktopJvmMain by getting {
       dependencies {
         implementation(compose.preview)

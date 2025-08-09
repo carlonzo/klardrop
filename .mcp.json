@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "zen": {
+      "command": "sh",
+      "args": [
+        "uvx --from git+https://github.com/BeehiveInnovations/zen-mcp-server.git zen-mcp-server"
+      ],
+      "env": {
+        "PATH": "/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:~/.local/bin",
+        "OPENROUTER_API_KEY": "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"
+      }
+    }
+  }
+}

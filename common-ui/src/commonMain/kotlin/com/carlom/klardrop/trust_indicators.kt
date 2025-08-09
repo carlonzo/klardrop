@@ -30,7 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.carlom.klardrop.common.trust.model.TrustStatus
-import com.carlom.klardrop.protos.trust.TrustLevel
+import com.carlom.klardrop.common.trust.model.TrustLevel
 
 /**
  * Trust status indicator badge to show on device cards
@@ -129,10 +129,11 @@ fun TrustLevelIndicator(
 ) {
     trustLevel?.let { level ->
         val (text, color) = when (level) {
-            TrustLevel.TRUST_LEVEL_FULL -> "Full" to MaterialTheme.colorScheme.primary
-            TrustLevel.TRUST_LEVEL_LIMITED -> "Limited" to MaterialTheme.colorScheme.secondary
-            TrustLevel.TRUST_LEVEL_REVOKED -> "Revoked" to MaterialTheme.colorScheme.error
-            else -> return@let
+            TrustLevel.TRUSTED -> "Trusted" to MaterialTheme.colorScheme.primary
+            TrustLevel.FULL -> "Full" to MaterialTheme.colorScheme.primary
+            TrustLevel.LIMITED -> "Limited" to MaterialTheme.colorScheme.secondary
+            TrustLevel.MINIMAL -> "Minimal" to MaterialTheme.colorScheme.secondary
+            TrustLevel.UNTRUSTED -> "Untrusted" to MaterialTheme.colorScheme.error
         }
 
         Text(
@@ -236,7 +237,7 @@ fun DeviceTrustIndicator(
             }
             
             deviceUi.trustLevel?.let { level ->
-                if (level != TrustLevel.TRUST_LEVEL_FULL) {
+                if (level != TrustLevel.FULL && level != TrustLevel.TRUSTED) {
                     Spacer(modifier = Modifier.width(4.dp))
                     TrustLevelIndicator(trustLevel = level)
                 }

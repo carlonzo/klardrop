@@ -1,29 +1,34 @@
 package com.carlom.klardrop.common.trust.clipboard
 
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.features.ClipboardMonitor
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.trust.model.ClipboardEntry
+import com.carlom.klardrop.common.trust.model.Permission
+import com.carlom.klardrop.common.trust.model.UpdateAction
 import com.carlom.klardrop.common.trust.protocol.TrustEvent
 import com.carlom.klardrop.common.utils.log
-import com.carlom.klardrop.protos.trust.Permission
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.launch
 
 /**
  * Manages clipboard synchronization between trusted devices
+ * Uses efficient platform-specific clipboard monitoring instead of polling
  */
+@OptIn(FlowPreview::class)
 class TrustClipboardSyncManager(
     private val clipboardManager: ClipboardManager,
+    private val clipboardMonitor: ClipboardMonitor,
     private val trustManager: TrustManager,
     private val scope: CoroutineScope
 ) {
     companion object {
         private const val TAG = "TrustClipboardSyncManager"
-        private const val MIN_SYNC_INTERVAL_MS = 30_000L // 30 seconds minimum
-        private const val DEBOUNCE_DELAY_MS = 1000L // 1 second debounce
+        const val MIN_SYNC_INTERVAL_MS = 30_000L // 30 seconds minimum
+        private const val DEBOUNCE_DELAY_MS = 500L // Reduced debounce for event-based monitoring
     }
     
     private val _syncEnabled = MutableStateFlow(false)
@@ -41,7 +46,7 @@ class TrustClipboardSyncManager(
             trustManager.getTrustEvents().collect { event ->
                 when (event) {
                     is TrustEvent.ClipboardUpdate -> {
-                        handleRemoteClipboardUpdate(event.content, event.fromDevice)
+                        handleRemoteClipboardUpdate(event.content, event.deviceId)
                     }
                     else -> {}
                 }
@@ -68,26 +73,26 @@ class TrustClipboardSyncManager(
     suspend fun isClipboardSyncAvailable(): Boolean {
         val trustedDevices = trustManager.trustedDevices.value
         return trustedDevices.any { device ->
-            device.permissions.contains(Permission.PERMISSION_CLIPBOARD_SYNC)
+            device.permissions.contains(Permission.CLIPBOARD_SYNC)
         }
     }
     
     /**
-     * Start monitoring local clipboard for changes
+     * Start monitoring local clipboard for changes using efficient platform-specific monitoring
      */
     private fun startClipboardMonitoring() {
         clipboardMonitorJob?.cancel()
         
         clipboardMonitorJob = scope.launch {
-            // Monitor clipboard changes with debounce
-            clipboardManager.flow
-                .debounce(DEBOUNCE_DELAY_MS)
+            // Use efficient platform-specific clipboard monitoring
+            clipboardMonitor.observeChanges()
+                .debounce(DEBOUNCE_DELAY_MS) // Debounce rapid changes
                 .collect { content ->
                     handleLocalClipboardChange(content)
                 }
         }
         
-        log(TAG, "Started clipboard monitoring")
+        log(TAG, "Started efficient clipboard monitoring")
     }
     
     /**
@@ -96,6 +101,7 @@ class TrustClipboardSyncManager(
     private fun stopClipboardMonitoring() {
         clipboardMonitorJob?.cancel()
         clipboardMonitorJob = null
+        clipboardMonitor.stopMonitoring()
         log(TAG, "Stopped clipboard monitoring")
     }
     
@@ -117,7 +123,7 @@ class TrustClipboardSyncManager(
         
         // Check if we have trusted devices with clipboard sync permission
         val devicesWithClipboardSync = trustManager.trustedDevices.value.filter { device ->
-            device.permissions.contains(Permission.PERMISSION_CLIPBOARD_SYNC)
+            device.permissions.contains(Permission.CLIPBOARD_SYNC)
         }
         
         if (devicesWithClipboardSync.isEmpty()) {
@@ -149,7 +155,7 @@ class TrustClipboardSyncManager(
         
         // Check if device has permission
         val trustedDevice = trustManager.trustedDevices.value.find { it.deviceId == fromDevice }
-        if (trustedDevice == null || !trustedDevice.permissions.contains(Permission.PERMISSION_CLIPBOARD_SYNC)) {
+        if (trustedDevice == null || !trustedDevice.permissions.contains(Permission.CLIPBOARD_SYNC)) {
             log(TAG, "Device $fromDevice doesn't have clipboard sync permission")
             return
         }
@@ -189,7 +195,7 @@ class TrustClipboardSyncManager(
      */
     suspend fun getDeviceClipboardSyncEnabled(deviceId: String): Boolean {
         val device = trustManager.trustedDevices.value.find { it.deviceId == deviceId }
-        return device?.permissions?.contains(Permission.PERMISSION_CLIPBOARD_SYNC) ?: false
+        return device?.permissions?.contains(Permission.CLIPBOARD_SYNC) ?: false
     }
     
     /**
@@ -199,9 +205,9 @@ class TrustClipboardSyncManager(
         val device = trustManager.trustedDevices.value.find { it.deviceId == deviceId } ?: return
         
         val updatedPermissions = if (enabled) {
-            device.permissions + Permission.PERMISSION_CLIPBOARD_SYNC
+            device.permissions + Permission.CLIPBOARD_SYNC
         } else {
-            device.permissions - Permission.PERMISSION_CLIPBOARD_SYNC
+            device.permissions - Permission.CLIPBOARD_SYNC
         }
         
         val updatedDevice = device.copy(permissions = updatedPermissions)
@@ -211,7 +217,7 @@ class TrustClipboardSyncManager(
         
         // Broadcast update to other devices
         trustManager.protocolHandler.broadcastMemberUpdate(
-            com.carlom.klardrop.protos.trust.UpdateAction.UPDATE_ACTION_UPDATE,
+            UpdateAction.UPDATE,
             updatedDevice
         )
     }
@@ -222,7 +228,7 @@ class TrustClipboardSyncManager(
  */
 data class ClipboardSyncPreferences(
     val enabled: Boolean = false,
-    val syncInterval: Long = MIN_SYNC_INTERVAL_MS,
+    val syncInterval: Long = TrustClipboardSyncManager.MIN_SYNC_INTERVAL_MS,
     val showNotifications: Boolean = true,
     val excludedApps: Set<String> = emptySet()
 )
