@@ -7,6 +7,7 @@ import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
+import com.carlom.klardrop.common.discovery.TrustAwareDiscoveryUtils
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
@@ -61,7 +62,8 @@ class CommonComponent(
       clock,
       fileManager,
       currentDeviceProvider,
-      messageRepository // Added messageRepository
+      messageRepository,
+      clipboardManager
     )
   }
 
@@ -78,6 +80,9 @@ class CommonComponent(
   private val fileManager: FileManager
     get() = FileManagerImpl(platformFileSystem)
 
+  private val trustAwareDiscoveryUtils: TrustAwareDiscoveryUtils by lazy {
+    TrustAwareDiscoveryUtils(communicationModule.trustManager())
+  }
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
   fun server() = communicationModule.server()
@@ -92,5 +97,21 @@ class CommonComponent(
   fun messageRepository() = messageRepository
 
   fun fileManager() = fileManager
+
+  fun trustManager() = communicationModule.trustManager()
+
+  fun trustStorage() = communicationModule.trustStorage()
+
+  fun trustAwareDiscoveryUtils() = trustAwareDiscoveryUtils
+  
+  fun clipboardSyncManager() = communicationModule.clipboardSyncManager()
+  
+  /**
+   * Initialize clipboard synchronization.
+   * This should be called after all components are created to resolve dependencies.
+   */
+  fun initializeClipboardSync() {
+    communicationModule.initializeClipboardSync()
+  }
 
 }

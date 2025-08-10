@@ -44,6 +44,8 @@ class DiscoveryController(
   private val platformFileSystem: PlatformFileSystem,
   private val clipboardManager: ClipboardManager,
   private val messageRepository: MessageRepository,
+  private val trustStorage: com.carlom.klardrop.common.trust.TrustStorage,
+  private val trustManager: com.carlom.klardrop.common.trust.TrustManager
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -52,11 +54,13 @@ class DiscoveryController(
     commonComponent.messenger(),
     commonComponent.platformFileSystem(),
     commonComponent.clipboardManager(),
-    commonComponent.messageRepository()
+    commonComponent.messageRepository(),
+    commonComponent.trustStorage(),
+    commonComponent.trustManager()
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository)
+  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage)
 
   val actionsFlow = MutableSharedFlow<ActionUi>()
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
@@ -213,6 +217,49 @@ class DiscoveryController(
       it.copy(navigateToChatDeviceId = null, navigateToChatDeviceName = null)
     }
   }
+
+  override fun onAddToTrusted(deviceUi: DeviceUi) {
+    log("DiscoveryController", "Adding device ${deviceUi.deviceName} to trusted")
+    
+    // Update UI to show pairing state
+    updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Pairing)
+    
+    coroutines.appScope.launch {
+      val result = trustManager.initiatePairing(deviceUi.deviceId)
+      
+      result.fold(
+        onSuccess = {
+          log("DiscoveryController", "Successfully initiated pairing with ${deviceUi.deviceName}")
+          // The TrustManager callbacks will update the UI state via trust flow
+        },
+        onFailure = { error ->
+          log("DiscoveryController", "Failed to initiate pairing with ${deviceUi.deviceName}: ${error.message}")
+          // Reset to untrusted state on failure
+          updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Untrusted)
+        }
+      )
+    }
+  }
+
+  override fun onRemoveTrust(deviceUi: DeviceUi) {
+    log("DiscoveryController", "Removing trust for device ${deviceUi.deviceName}")
+    
+    coroutines.appScope.launch {
+      trustStorage.removeTrustedDevice(deviceUi.deviceId)
+      updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Untrusted)
+    }
+  }
+
+  private fun updateDeviceTrustStatus(deviceId: String, newStatus: TrustStatus) {
+    screenStateFlow.update { currentState ->
+      val updatedDevices = currentState.devices.map { device ->
+        if (device.deviceId == deviceId) {
+          device.copy(trustStatus = newStatus)
+        } else device
+      }
+      currentState.copy(devices = updatedDevices)
+    }
+  }
 }
 
 data class DiscoveryScreenState(
@@ -234,8 +281,16 @@ data class DeviceUi(
   val deviceType: DeviceType,
   val activityState: ActivityState = ActivityState.Idle,
   val connectionTypes: List<DeviceConnection.DeviceConnectionType>,
-  val hasUnreadMessages: Boolean = false // New
+  val hasUnreadMessages: Boolean = false,
+  val trustStatus: TrustStatus = TrustStatus.Unknown
 )
+
+sealed interface TrustStatus {
+  object Unknown : TrustStatus
+  object Untrusted : TrustStatus  
+  object Trusted : TrustStatus
+  object Pairing : TrustStatus
+}
 
 sealed interface ActivityState {
 

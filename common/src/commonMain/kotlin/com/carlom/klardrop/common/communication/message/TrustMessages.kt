@@ -12,6 +12,7 @@ data class TrustPairingRequest(
     val deviceId: String,
     val deviceName: String,
     val ecdhPublicKey: ByteArray,        // ECDH public key for key exchange
+    val ecdsaPublicKey: ByteArray,       // ECDSA public key for message signing
     val timestamp: Long,
     val deviceType: String,              // Android/iOS/Desktop/macOS
     val appVersion: String,
@@ -28,6 +29,7 @@ data class TrustPairingRequest(
         if (deviceId != other.deviceId) return false
         if (deviceName != other.deviceName) return false
         if (!ecdhPublicKey.contentEquals(other.ecdhPublicKey)) return false
+        if (!ecdsaPublicKey.contentEquals(other.ecdsaPublicKey)) return false
         if (timestamp != other.timestamp) return false
         if (deviceType != other.deviceType) return false
         if (appVersion != other.appVersion) return false
@@ -40,6 +42,7 @@ data class TrustPairingRequest(
         var result = deviceId.hashCode()
         result = 31 * result + deviceName.hashCode()
         result = 31 * result + ecdhPublicKey.contentHashCode()
+        result = 31 * result + ecdsaPublicKey.contentHashCode()
         result = 31 * result + timestamp.hashCode()
         result = 31 * result + deviceType.hashCode()
         result = 31 * result + appVersion.hashCode()
@@ -53,6 +56,7 @@ data class TrustPairingResponse(
     val deviceId: String,
     val deviceName: String,
     val ecdhPublicKey: ByteArray,        // ECDH public key for key exchange
+    val ecdsaPublicKey: ByteArray,       // ECDSA public key for message signing
     val accepted: Boolean,
     val timestamp: Long,
     val rejectionReason: String? = null,  // Optional reason for rejection
@@ -68,6 +72,7 @@ data class TrustPairingResponse(
         if (deviceId != other.deviceId) return false
         if (deviceName != other.deviceName) return false
         if (!ecdhPublicKey.contentEquals(other.ecdhPublicKey)) return false
+        if (!ecdsaPublicKey.contentEquals(other.ecdsaPublicKey)) return false
         if (accepted != other.accepted) return false
         if (timestamp != other.timestamp) return false
         if (rejectionReason != other.rejectionReason) return false
@@ -80,6 +85,7 @@ data class TrustPairingResponse(
         var result = deviceId.hashCode()
         result = 31 * result + deviceName.hashCode()
         result = 31 * result + ecdhPublicKey.contentHashCode()
+        result = 31 * result + ecdsaPublicKey.contentHashCode()
         result = 31 * result + accepted.hashCode()
         result = 31 * result + timestamp.hashCode()
         result = 31 * result + (rejectionReason?.hashCode() ?: 0)

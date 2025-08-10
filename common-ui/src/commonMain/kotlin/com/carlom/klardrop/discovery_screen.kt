@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.chat.DeviceChatScreen
 import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.trust.TrustActionButton
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.PickerResultLauncher
@@ -125,15 +126,30 @@ private fun DiscoveryDashboard(
 
     FlowRow {
       devices.forEach { device ->
-        Box { // Wrap DeviceDiscovery to allow overlaying the dot
+        Box { // Wrap DeviceDiscovery to allow overlaying indicators
           DeviceDiscovery(device, isLargeScreen, onDeviceActionListener)
+          
+          // Unread messages indicator
           if (device.hasUnreadMessages) {
             Box(
               modifier = Modifier
-                .padding(top = 4.dp, end = 4.dp) // Adjust padding as needed
+                .padding(top = 4.dp, end = 4.dp)
                 .size(10.dp)
                 .background(MaterialTheme.colorScheme.error, RoundedCornerShape(5.dp))
                 .align(Alignment.TopEnd)
+            )
+          }
+          
+          // Trust action button (positioned at bottom-end)
+          if (device.trustStatus != TrustStatus.Unknown) {
+            TrustActionButton(
+              isTrusted = device.trustStatus == TrustStatus.Trusted,
+              isLoading = device.trustStatus == TrustStatus.Pairing,
+              onAddToTrusted = { onDeviceActionListener.onAddToTrusted(device) },
+              onRemoveTrust = { onDeviceActionListener.onRemoveTrust(device) },
+              modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(4.dp)
             )
           }
         }

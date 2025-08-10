@@ -3,22 +3,38 @@ package com.carlom.klardrop.common.trust
 /**
  * Interface for storing and retrieving trusted device public keys.
  * Platform-specific implementations handle secure storage (SharedPreferences, Keychain, etc.).
+ * 
+ * Stores both ECDH keys (for key exchange) and ECDSA keys (for message signing).
  */
 interface TrustStorage {
     
     /**
-     * Store a trusted device's public key.
+     * Store a trusted device's ECDH public key.
      * @param deviceId Unique device identifier
-     * @param publicKey ECDSA public key for signature verification
+     * @param publicKey ECDH public key for key exchange
      */
     suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray)
     
     /**
-     * Retrieve a trusted device's public key.
+     * Store a trusted device's ECDSA public key for message signing.
+     * @param deviceId Unique device identifier
+     * @param ecdsaPublicKey ECDSA public key for signature verification
+     */
+    suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray)
+    
+    /**
+     * Retrieve a trusted device's ECDH public key.
      * @param deviceId Device identifier
-     * @return Public key bytes, or null if device is not trusted
+     * @return ECDH public key bytes, or null if device is not trusted
      */
     suspend fun getTrustedDeviceKey(deviceId: String): ByteArray?
+    
+    /**
+     * Retrieve a trusted device's ECDSA public key for signature verification.
+     * @param deviceId Device identifier
+     * @return ECDSA public key bytes, or null if not stored
+     */
+    suspend fun getECDSAKey(deviceId: String): ByteArray?
     
     /**
      * Get all trusted devices and their public keys.

@@ -25,6 +25,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.trust.TrustBadge
+import com.carlom.klardrop.trust.DeviceTrustStatus
 
 
 @Composable
@@ -56,11 +58,26 @@ internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceAct
     horizontalAlignment = Alignment.CenterHorizontally
   ) {
 
-    CircleDevice(deviceUi)
+    Box {
+      CircleDevice(deviceUi)
+      
+      // Show trust badge for trusted devices
+      if (deviceUi.trustStatus == TrustStatus.Trusted) {
+        TrustBadge(
+          modifier = Modifier.align(Alignment.TopEnd)
+        )
+      }
+    }
 
     Text(
       text = deviceUi.deviceName,
       maxLines = 2
+    )
+    
+    // Show trust status
+    DeviceTrustStatus(
+      isTrusted = deviceUi.trustStatus == TrustStatus.Trusted,
+      isPairing = deviceUi.trustStatus == TrustStatus.Pairing
     )
   }
 
@@ -87,7 +104,16 @@ internal fun DeviceLarge(
         verticalAlignment = Alignment.CenterVertically
       ) {
 
-        CircleDevice(deviceUi)
+        Box {
+          CircleDevice(deviceUi)
+          
+          // Show trust badge for trusted devices
+          if (deviceUi.trustStatus == TrustStatus.Trusted) {
+            TrustBadge(
+              modifier = Modifier.align(Alignment.TopEnd)
+            )
+          }
+        }
 
         Spacer(modifier = Modifier.size(12.dp))
 
@@ -102,11 +128,19 @@ internal fun DeviceLarge(
 
         Spacer(modifier = Modifier.size(16.dp))
 
-        Text(
-          text = deviceUi.deviceName,
-          color = Color.Black,
-          maxLines = 2
-        )
+        Column {
+          Text(
+            text = deviceUi.deviceName,
+            color = Color.Black,
+            maxLines = 2
+          )
+          
+          // Show trust status
+          DeviceTrustStatus(
+            isTrusted = deviceUi.trustStatus == TrustStatus.Trusted,
+            isPairing = deviceUi.trustStatus == TrustStatus.Pairing
+          )
+        }
 
       }
 
@@ -158,6 +192,14 @@ interface OnDeviceActionListener {
   }
 
   fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend) {
+    throw IllegalStateException("Not implemented")
+  }
+
+  fun onAddToTrusted(deviceUi: DeviceUi) {
+    throw IllegalStateException("Not implemented")
+  }
+
+  fun onRemoveTrust(deviceUi: DeviceUi) {
     throw IllegalStateException("Not implemented")
   }
 

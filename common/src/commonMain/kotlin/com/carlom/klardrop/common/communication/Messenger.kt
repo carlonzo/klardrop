@@ -33,7 +33,9 @@ class MessengerImpl(
   private val client: Client,
   private val coroutines: Coroutines,
   private val nearbyClient: NearbyClient,
-  private val messageReceiver: MessageReceiver
+  private val messageReceiver: MessageReceiver,
+  private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
+  private val trustMessageWrapper: com.carlom.klardrop.common.trust.TrustMessageWrapper
 ) : Messenger {
 
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -55,10 +57,31 @@ class MessengerImpl(
         return@launch
       }
 
+      // NEW: Check if device is trusted and wrap message if needed
+      val finalMessageRequest = try {
+        if (trustManager.isTrusted(deviceId)) {
+          log("Messenger", "Device $deviceId is trusted, attempting to wrap message")
+          val wrappedMessage = trustMessageWrapper.wrapMessage(messageRequest.message, deviceId)
+          if (wrappedMessage != null) {
+            log("Messenger", "Successfully wrapped message for trusted device $deviceId")
+            com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest(wrappedMessage)
+          } else {
+            log("Messenger", "Failed to wrap message for trusted device $deviceId, using original")
+            messageRequest
+          }
+        } else {
+          log("Messenger", "Device $deviceId is not trusted, sending message as-is")
+          messageRequest
+        }
+      } catch (e: Exception) {
+        log("Messenger", "Error checking trust status for $deviceId: ${e.message}", e)
+        messageRequest // fallback to original message
+      }
+
       val transferCompleted = if (device.hasKlardropConnection()) {
-        handleKlardropTransfer(deviceId, messageRequest, flow)
+        handleKlardropTransfer(deviceId, finalMessageRequest, flow)
       } else if (device.hasNearbyConnection()) {
-        handleNearbyTransfer(deviceId, messageRequest, flow)
+        handleNearbyTransfer(deviceId, finalMessageRequest, flow)
       } else {
         log("Messenger", "Wanted to send a message to $deviceId but it has no connection")
         flow.emit(Error("$deviceId but it has no connection"))

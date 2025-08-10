@@ -6,6 +6,8 @@ import android.util.Base64
 /**
  * Android implementation of TrustStorage using SharedPreferences.
  * Keys are stored as Base64-encoded strings in encrypted SharedPreferences.
+ * 
+ * Stores both ECDH keys (for key exchange) and ECDSA keys (for message signing).
  */
 class AndroidTrustStorage(
     private val context: Context
@@ -14,6 +16,7 @@ class AndroidTrustStorage(
     companion object {
         private const val TRUST_PREFS = "trust_keys"
         private const val KEY_PREFIX = "trusted_device_"
+        private const val ECDSA_KEY_PREFIX = "ecdsa_key_"
     }
     
     private val sharedPrefs = context.getSharedPreferences(TRUST_PREFS, Context.MODE_PRIVATE)
@@ -61,6 +64,7 @@ class AndroidTrustStorage(
     override suspend fun removeTrustedDevice(deviceId: String) {
         sharedPrefs.edit()
             .remove(KEY_PREFIX + deviceId)
+            .remove(ECDSA_KEY_PREFIX + deviceId)
             .apply()
     }
     
@@ -68,13 +72,33 @@ class AndroidTrustStorage(
         val editor = sharedPrefs.edit()
         val allKeys = sharedPrefs.all.keys
         
-        // Remove all entries that start with our prefix
+        // Remove all entries that start with our prefixes
         for (key in allKeys) {
-            if (key.startsWith(KEY_PREFIX)) {
+            if (key.startsWith(KEY_PREFIX) || key.startsWith(ECDSA_KEY_PREFIX)) {
                 editor.remove(key)
             }
         }
         
         editor.apply()
+    }
+    
+    override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {
+        val encodedKey = Base64.encodeToString(ecdsaPublicKey, Base64.NO_WRAP)
+        sharedPrefs.edit()
+            .putString(ECDSA_KEY_PREFIX + deviceId, encodedKey)
+            .apply()
+    }
+    
+    override suspend fun getECDSAKey(deviceId: String): ByteArray? {
+        val encodedKey = sharedPrefs.getString(ECDSA_KEY_PREFIX + deviceId, null)
+            ?: return null
+        
+        return try {
+            Base64.decode(encodedKey, Base64.NO_WRAP)
+        } catch (e: IllegalArgumentException) {
+            // Invalid Base64 encoding - remove corrupted entry
+            sharedPrefs.edit().remove(ECDSA_KEY_PREFIX + deviceId).apply()
+            null
+        }
     }
 }

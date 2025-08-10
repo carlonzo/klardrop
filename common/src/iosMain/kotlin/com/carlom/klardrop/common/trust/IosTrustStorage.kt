@@ -1,154 +1,145 @@
 package com.carlom.klardrop.common.trust
 
-import kotlinx.cinterop.*
-import platform.CoreFoundation.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import platform.Foundation.*
-import platform.Security.*
 
 /**
- * iOS implementation of TrustStorage using Keychain Services.
- * Keys are stored securely in the iOS Keychain.
+ * iOS implementation of TrustStorage using UserDefaults.
+ * Keys are stored as Base64-encoded strings in UserDefaults.
+ * 
+ * Stores both ECDH keys (for key exchange) and ECDSA keys (for message signing).
  */
 class IosTrustStorage : TrustStorage {
     
     companion object {
-        private const val SERVICE_NAME = "klardrop_trust_keys"
+        private const val TRUST_KEY_PREFIX = "klardrop_trust_"
+        private const val ECDSA_KEY_PREFIX = "klardrop_ecdsa_"
     }
     
+    private val mutex = Mutex()
+    private val userDefaults = NSUserDefaults.standardUserDefaults
+    
     override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {
-        val query = CFDictionaryCreateMutable(null, 0, null, null)
-        
-        CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword)
-        CFDictionarySetValue(query, kSecAttrService, CFStringCreateWithCString(null, SERVICE_NAME, kCFStringEncodingUTF8))
-        CFDictionarySetValue(query, kSecAttrAccount, CFStringCreateWithCString(null, deviceId, kCFStringEncodingUTF8))
-        
-        val data = publicKey.usePinned { pinned ->
-            CFDataCreate(null, pinned.addressOf(0).reinterpret(), publicKey.size.convert())
+        mutex.withLock {
+            val encodedKey = publicKey.encodeBase64()
+            val key = TRUST_KEY_PREFIX + deviceId
+            userDefaults.setObject(encodedKey, key)
+            userDefaults.synchronize()
         }
-        CFDictionarySetValue(query, kSecValueData, data)
-        
-        // Try to add the item
-        val addResult = SecItemAdd(query, null)
-        
-        if (addResult == errSecDuplicateItem) {
-            // Item exists, update it
-            val updateQuery = CFDictionaryCreateMutable(null, 0, null, null)
-            CFDictionarySetValue(updateQuery, kSecClass, kSecClassGenericPassword)
-            CFDictionarySetValue(updateQuery, kSecAttrService, CFStringCreateWithCString(null, SERVICE_NAME, kCFStringEncodingUTF8))
-            CFDictionarySetValue(updateQuery, kSecAttrAccount, CFStringCreateWithCString(null, deviceId, kCFStringEncodingUTF8))
-            
-            val updateAttributes = CFDictionaryCreateMutable(null, 0, null, null)
-            CFDictionarySetValue(updateAttributes, kSecValueData, data)
-            
-            SecItemUpdate(updateQuery, updateAttributes)
-            CFRelease(updateQuery)
-            CFRelease(updateAttributes)
-        }
-        
-        CFRelease(query)
-        CFRelease(data)
     }
     
     override suspend fun getTrustedDeviceKey(deviceId: String): ByteArray? {
-        val query = CFDictionaryCreateMutable(null, 0, null, null)
-        
-        CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword)
-        CFDictionarySetValue(query, kSecAttrService, CFStringCreateWithCString(null, SERVICE_NAME, kCFStringEncodingUTF8))
-        CFDictionarySetValue(query, kSecAttrAccount, CFStringCreateWithCString(null, deviceId, kCFStringEncodingUTF8))
-        CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue)
-        
-        memScoped {
-            val result = alloc<CFTypeRefVar>()
-            val status = SecItemCopyMatching(query, result.ptr)
+        return mutex.withLock {
+            val key = TRUST_KEY_PREFIX + deviceId
+            val encodedKey = userDefaults.stringForKey(key) ?: return@withLock null
             
-            CFRelease(query)
-            
-            if (status == errSecSuccess) {
-                val data = result.value?.reinterpret<CFDataRef>()
-                if (data != null) {
-                    val length = CFDataGetLength(data).toInt()
-                    val bytes = CFDataGetBytePtr(data)
-                    val byteArray = ByteArray(length) { i ->
-                        bytes!![i]
-                    }
-                    CFRelease(data)
-                    return byteArray
-                }
+            return@withLock try {
+                encodedKey.decodeBase64()
+            } catch (e: Exception) {
+                // Invalid Base64 encoding - remove corrupted entry
+                userDefaults.removeObjectForKey(key)
+                userDefaults.synchronize()
+                null
             }
-            
-            return null
         }
     }
     
     override suspend fun getAllTrustedDevices(): Map<String, ByteArray> {
-        val query = CFDictionaryCreateMutable(null, 0, null, null)
-        
-        CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword)
-        CFDictionarySetValue(query, kSecAttrService, CFStringCreateWithCString(null, SERVICE_NAME, kCFStringEncodingUTF8))
-        CFDictionarySetValue(query, kSecReturnAttributes, kCFBooleanTrue)
-        CFDictionarySetValue(query, kSecReturnData, kCFBooleanTrue)
-        CFDictionarySetValue(query, kSecMatchLimit, kSecMatchLimitAll)
-        
-        val result = mutableMapOf<String, ByteArray>()
-        
-        memScoped {
-            val queryResult = alloc<CFTypeRefVar>()
-            val status = SecItemCopyMatching(query, queryResult.ptr)
+        return mutex.withLock {
+            val result = mutableMapOf<String, ByteArray>()
+            val allKeys = userDefaults.dictionaryRepresentation().keys
             
-            CFRelease(query)
-            
-            if (status == errSecSuccess) {
-                val array = queryResult.value?.reinterpret<CFArrayRef>()
-                if (array != null) {
-                    val count = CFArrayGetCount(array)
-                    for (i in 0 until count) {
-                        val item = CFArrayGetValueAtIndex(array, i.convert())?.reinterpret<CFDictionaryRef>()
-                        if (item != null) {
-                            // Extract account (device ID)
-                            val account = CFDictionaryGetValue(item, kSecAttrAccount)?.reinterpret<CFStringRef>()
-                            val accountStr = account?.let { 
-                                CFStringGetCStringPtr(it, kCFStringEncodingUTF8)?.toKString()
-                            }
-                            
-                            // Extract data (public key)
-                            val data = CFDictionaryGetValue(item, kSecValueData)?.reinterpret<CFDataRef>()
-                            val publicKey = data?.let { dataRef ->
-                                val length = CFDataGetLength(dataRef).toInt()
-                                val bytes = CFDataGetBytePtr(dataRef)
-                                ByteArray(length) { idx -> bytes!![idx] }
-                            }
-                            
-                            if (accountStr != null && publicKey != null) {
-                                result[accountStr] = publicKey
-                            }
+            allKeys.forEach { keyObj ->
+                val key = keyObj.toString()
+                if (key.startsWith(TRUST_KEY_PREFIX)) {
+                    val deviceId = key.removePrefix(TRUST_KEY_PREFIX)
+                    val encodedKey = userDefaults.stringForKey(key)
+                    if (encodedKey != null) {
+                        try {
+                            val publicKey = encodedKey.decodeBase64()
+                            result[deviceId] = publicKey
+                        } catch (e: Exception) {
+                            // Skip corrupted entries
                         }
                     }
-                    CFRelease(array)
                 }
             }
+            
+            result
         }
-        
-        return result
     }
     
     override suspend fun removeTrustedDevice(deviceId: String) {
-        val query = CFDictionaryCreateMutable(null, 0, null, null)
-        
-        CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword)
-        CFDictionarySetValue(query, kSecAttrService, CFStringCreateWithCString(null, SERVICE_NAME, kCFStringEncodingUTF8))
-        CFDictionarySetValue(query, kSecAttrAccount, CFStringCreateWithCString(null, deviceId, kCFStringEncodingUTF8))
-        
-        SecItemDelete(query)
-        CFRelease(query)
+        mutex.withLock {
+            // Remove ECDH key
+            val ecdhKey = TRUST_KEY_PREFIX + deviceId
+            userDefaults.removeObjectForKey(ecdhKey)
+            
+            // Remove ECDSA key
+            val ecdsaKey = ECDSA_KEY_PREFIX + deviceId
+            userDefaults.removeObjectForKey(ecdsaKey)
+            
+            userDefaults.synchronize()
+        }
     }
     
     override suspend fun clearAllTrustedDevices() {
-        val query = CFDictionaryCreateMutable(null, 0, null, null)
-        
-        CFDictionarySetValue(query, kSecClass, kSecClassGenericPassword)
-        CFDictionarySetValue(query, kSecAttrService, CFStringCreateWithCString(null, SERVICE_NAME, kCFStringEncodingUTF8))
-        
-        SecItemDelete(query)
-        CFRelease(query)
+        mutex.withLock {
+            val allKeys = userDefaults.dictionaryRepresentation().keys
+            
+            allKeys.forEach { keyObj ->
+                val key = keyObj.toString()
+                if (key.startsWith(TRUST_KEY_PREFIX) || key.startsWith(ECDSA_KEY_PREFIX)) {
+                    userDefaults.removeObjectForKey(key)
+                }
+            }
+            
+            userDefaults.synchronize()
+        }
     }
+    
+    override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {
+        mutex.withLock {
+            val encodedKey = ecdsaPublicKey.encodeBase64()
+            val key = ECDSA_KEY_PREFIX + deviceId
+            userDefaults.setObject(encodedKey, key)
+            userDefaults.synchronize()
+        }
+    }
+    
+    override suspend fun getECDSAKey(deviceId: String): ByteArray? {
+        return mutex.withLock {
+            val key = ECDSA_KEY_PREFIX + deviceId
+            val encodedKey = userDefaults.stringForKey(key) ?: return@withLock null
+            
+            return@withLock try {
+                encodedKey.decodeBase64()
+            } catch (e: Exception) {
+                // Invalid Base64 encoding - remove corrupted entry
+                userDefaults.removeObjectForKey(key)
+                userDefaults.synchronize()
+                null
+            }
+        }
+    }
+}
+
+/**
+ * Simple Base64 encoding/decoding functions for iOS
+ */
+private fun ByteArray.encodeBase64(): String {
+    // Use a simple hex encoding for now (Base64 encoding can be complex with Kotlin/Native)
+    return this.joinToString("") { byte -> 
+        val unsigned = byte.toInt() and 0xFF
+        when {
+            unsigned < 16 -> "0${unsigned.toString(16)}"
+            else -> unsigned.toString(16)
+        }
+    }
+}
+
+private fun String.decodeBase64(): ByteArray {
+    // Decode hex string back to ByteArray
+    return this.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 }
