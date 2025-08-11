@@ -30,12 +30,12 @@ import kotlinx.coroutines.launch
 
 class DeviceChatViewModel(
   private val deviceId: String,
-  val messageRepository: MessageRepository, // Made public val
+  val messageRepository: MessageRepository,
   private val messenger: Messenger,
   private val visibleDevices: VisibleDevices,
   private val coroutines: Coroutines,
-  private val fileManager: FileManager, // Added
-  private val platformFileSystem: PlatformFileSystem // Added for file operations
+  private val fileManager: FileManager,
+  private val platformFileSystem: PlatformFileSystem
 ) {
 
   // TODO we need to dispose this viewmodel
@@ -150,7 +150,7 @@ class DeviceChatViewModel(
               fileData.mimeType
             )
 
-            sendFileMessage(messageId, fileTransferId, fileMessage.toSendRequest(file))
+            sendFileMessage(messageId, fileTransferId, fileMessage.toSendRequest(file, fileTransferId))
           }
         }
 
@@ -195,9 +195,11 @@ class DeviceChatViewModel(
                 it.copy(error = "Failed to send message: ${progress.message}")
               }
             }
+
             is MessengerSendProgress.Completed -> {
               clearMessageProgress(messageId)
             }
+
             else -> {
               updateMessageProgress(messageId, progress)
             }
@@ -235,9 +237,11 @@ class DeviceChatViewModel(
                 it.copy(error = "Failed to send file: ${progress.message}")
               }
             }
+
             is MessengerSendProgress.Completed -> {
               // File transfer status will be updated by message handlers
             }
+
             else -> {
               // Progress updates handled by existing message handlers that update FileTransferStatus
             }

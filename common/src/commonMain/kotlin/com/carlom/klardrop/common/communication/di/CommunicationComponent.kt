@@ -83,8 +83,9 @@ class CommunicationModule(
   private val messageHandlers by lazy {
     MessageHandlersImpl(
       mapOf(
-        MessageType.TEXT to TextMessageHandler(serializer),
+        MessageType.TEXT to TextMessageHandler(serializer, messageRepository),
         MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
+
         MessageType.ACK_READY to AckMessageHandler(),
         MessageType.ACK_RECEIVED to AckMessageHandler(),
         MessageType.TRUST_PAIRING_REQUEST to TrustPairingRequestHandler(serializer, trustManager),

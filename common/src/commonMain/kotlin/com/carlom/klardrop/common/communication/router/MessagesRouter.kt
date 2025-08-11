@@ -89,22 +89,7 @@ class MessagesRouterImpl(
         if (messageHandler != null) {
           messageHandler.handleIncoming(message, readChannel, receiveFlow)
         } else {
-          // No payload, likely a text message
-          if (message is TextMessage) {
-              messageRepository.insertMessage(
-                  remoteDeviceId = fromDeviceId,
-                  content = message.text, // Assuming TextMessage has a 'text' field
-                  isSender = false,
-                  messageType = PersistenceMessageType.TEXT,
-                  isRead = false // Incoming messages are unread initially
-              )
-          }
-          receiveFlow.update {
-            it.copy(
-              messages = listOf(message),
-              status = ReceiveMessageStatus.Completed
-            )
-          }
+          error("No handler found in MessagesRouter for message type ${message.type} with id ${message.id}")
         }
       }
 
