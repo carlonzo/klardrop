@@ -1,32 +1,31 @@
 package com.carlom.klardrop.common.trust
 
-import com.carlom.klardrop.common.communication.Messenger
-import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
 import com.carlom.klardrop.common.communication.message.TrustedMessage
-import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.utils.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
 
 /**
  * Manages trust relationships between devices.
- * Orchestrates pairing flow, message signing/verification, and trust state management.
+ * Pure domain component focused on trust logic, cryptography, and state management.
+ * Does not handle communication - that's delegated to PairingProtocolCoordinator.
  */
 class TrustManager(
   private val crypto: TrustCrypto,
   private val storage: TrustStorage,
   private val clock: Clock,
-  private val currentDeviceProvider: CurrentDeviceProvider,
-  private val messenger: Messenger
+  private val currentDeviceProvider: CurrentDeviceProvider
 ) {
 
   companion object {
@@ -45,6 +44,10 @@ class TrustManager(
   // Callback for UI approval dialogs
   private var pairingApprovalCallback: PairingApprovalCallback? = null
 
+  // Events for pairing operations that external coordinators can listen to
+  private val _pairingEvents = MutableSharedFlow<PairingEvent>(extraBufferCapacity = 10)
+  val pairingEvents: SharedFlow<PairingEvent> = _pairingEvents.asSharedFlow()
+
   /**
    * Initialize the trust manager and generate device signing keys.
    */
@@ -56,12 +59,13 @@ class TrustManager(
   }
 
   /**
-   * Initiate pairing with a target device.
+   * Create a pairing request for a target device.
+   * Returns the request data to be sent by PairingProtocolCoordinator.
    * @param targetDeviceId Device ID to pair with
-   * @return Result indicating success or failure
+   * @return Result containing the TrustPairingRequest or failure
    */
-  suspend fun initiatePairing(targetDeviceId: String): Result<Unit> = withContext(Dispatchers.Default) {
-    println("🔐 [TrustManager] initiatePairing() called for deviceId: $targetDeviceId")
+  suspend fun createPairingRequest(targetDeviceId: String): Result<TrustPairingRequest> = withContext(Dispatchers.Default) {
+    println("🔐 [TrustManager] createPairingRequest() called for deviceId: $targetDeviceId")
     return@withContext try {
       val currentDevice = currentDeviceProvider.get()
       println("🔐 [TrustManager] Current device: ${currentDevice.shortDeviceId} (${currentDevice.deviceName})")
@@ -101,57 +105,44 @@ class TrustManager(
       // Set timeout to clean up session
       scope.launch {
         delay(PAIRING_TIMEOUT_SECONDS.seconds)
-        pairingSessions.remove(targetDeviceId)
-        println("🔐 [TrustManager] Cleaned up pairing session for $targetDeviceId after timeout")
-      }
-
-      // Send message through communication layer
-
-      println("🔐 [TrustManager] ✅ Messenger available, sending TrustPairingRequest to $targetDeviceId")
-
-      // Send the pairing request and wait for result
-      try {
-        val sendResult = messenger.send(targetDeviceId, request.toSimpleSendRequest())
-          .first { it.isCompleted() }
-
-        when (sendResult) {
-          is MessengerSendProgress.Completed -> {
-            println("🔐 [TrustManager] ✅ SUCCESS: TrustPairingRequest sent successfully to $targetDeviceId")
-            Result.success(Unit)
-          }
-
-          is MessengerSendProgress.Error -> {
-            println("🔐 [TrustManager] ❌ FAILED: TrustPairingRequest send failed: ${sendResult.message}")
-            pairingSessions.remove(targetDeviceId) // Cleanup on failure
-            Result.failure(Exception("Failed to send pairing request: ${sendResult.message}"))
-          }
-
-          else -> {
-            println("🔐 [TrustManager] ❌ UNEXPECTED: Send result was neither Completed nor Error: $sendResult")
-            pairingSessions.remove(targetDeviceId) // Cleanup on failure
-            Result.failure(Exception("Unexpected send result: $sendResult"))
-          }
+        if (pairingSessions[targetDeviceId] == session) {
+          pairingSessions.remove(targetDeviceId)
+          println("🔐 [TrustManager] Cleaned up pairing session for $targetDeviceId after timeout")
         }
-      } catch (e: Exception) {
-        println("🔐 [TrustManager] ❌ EXCEPTION: Failed to send pairing request: ${e.message}")
-        pairingSessions.remove(targetDeviceId) // Cleanup on failure
-        Result.failure(e)
       }
 
+      Result.success(request)
     } catch (e: Exception) {
       Result.failure(e)
     }
   }
 
   /**
-   * Handle incoming pairing request from another device.
-   * Shows approval dialog to user.
+   * Called when a pairing request has been successfully sent.
+   * Used for tracking and logging purposes.
    */
-  suspend fun handlePairingRequest(
+  fun onPairingRequestSent(targetDeviceId: String) {
+    println("🔐 [TrustManager] Pairing request confirmed sent to $targetDeviceId")
+  }
+
+  /**
+   * Called when a pairing request failed to send.
+   * Cleans up the pairing session.
+   */
+  fun onPairingRequestFailed(targetDeviceId: String) {
+    println("🔐 [TrustManager] Pairing request failed for $targetDeviceId, cleaning up session")
+    pairingSessions.remove(targetDeviceId)
+  }
+
+  /**
+   * Handle incoming pairing request from another device.
+   * Validates the request and emits an event for external coordinators.
+   */
+  suspend fun handleIncomingPairingRequest(
     request: TrustPairingRequest,
     senderAddress: String
   ) = withContext(Dispatchers.Default) {
-    println("🔐 [TrustManager] handlePairingRequest() called from ${request.deviceName} (${request.deviceId})")
+    println("🔐 [TrustManager] handleIncomingPairingRequest() called from ${request.deviceName} (${request.deviceId})")
 
     // Validate timestamp to prevent replay attacks
     val currentTime = clock.currentTimeMillis()
@@ -163,44 +154,80 @@ class TrustManager(
       return@withContext // Ignore old requests
     }
 
-    println("🔐 [TrustManager] Timestamp validation passed, checking pairing approval callback")
+    println("🔐 [TrustManager] Timestamp validation passed")
 
-    // Show approval dialog to user
+    // Create decision object with callback
+    val callback = pairingApprovalCallback
+    val decision = if (callback != null) {
+      println("🔐 [TrustManager] ✅ Creating pairing decision for device: ${request.deviceName}")
+      PairingDecision(
+        deviceId = request.deviceId,
+        deviceName = request.deviceName,
+        deviceType = request.deviceType,
+        approvalCallback = callback
+      )
+    } else {
+      println("🔐 [TrustManager] ❌ CRITICAL: pairingApprovalCallback is null! No UI dialog will be shown")
+      null
+    }
+
+    // Emit event for external coordinators to handle
+    _pairingEvents.tryEmit(PairingEvent.PairingRequestReceived(request, senderAddress, decision))
+  }
+
+  /**
+   * Process incoming pairing request from another device.
+   * Validates the request and returns a decision object for approval.
+   * @return PairingDecision if request is valid, null if invalid/expired
+   */
+  suspend fun processPairingRequest(
+    request: TrustPairingRequest,
+    senderAddress: String
+  ): PairingDecision? = withContext(Dispatchers.Default) {
+    println("🔐 [TrustManager] processPairingRequest() called from ${request.deviceName} (${request.deviceId})")
+
+    // Validate timestamp to prevent replay attacks
+    val currentTime = clock.currentTimeMillis()
+    val timeDiff = kotlin.math.abs(currentTime - request.timestamp)
+    println("🔐 [TrustManager] Time validation: current=$currentTime, request=${request.timestamp}, diff=${timeDiff}ms")
+
+    if (timeDiff > MAX_TIME_DIFF_SECONDS * 1000) {
+      println("🔐 [TrustManager] ❌ Rejecting request due to timestamp too old (>${MAX_TIME_DIFF_SECONDS}s)")
+      return@withContext null // Ignore old requests
+    }
+
+    println("🔐 [TrustManager] Timestamp validation passed")
+
+    // Return decision object with callback
     val callback = pairingApprovalCallback
     if (callback == null) {
       println("🔐 [TrustManager] ❌ CRITICAL: pairingApprovalCallback is null! No UI dialog will be shown")
-      return@withContext
+      return@withContext null
     }
 
-    println("🔐 [TrustManager] ✅ Showing pairing approval dialog to user for device: ${request.deviceName}")
-    callback.onPairingRequested(
+    println("🔐 [TrustManager] ✅ Creating pairing decision for device: ${request.deviceName}")
+    PairingDecision(
       deviceId = request.deviceId,
       deviceName = request.deviceName,
       deviceType = request.deviceType,
-      onAccept = {
-        println("🔐 [TrustManager] User accepted pairing with ${request.deviceName}")
-        acceptPairing(request, senderAddress)
-      },
-      onReject = {
-        println("🔐 [TrustManager] User rejected pairing with ${request.deviceName}")
-        rejectPairing(request.deviceId)
-      }
+      approvalCallback = callback
     )
   }
 
   /**
-   * Accept a pairing request and complete the key exchange.
+   * Create an acceptance response for a pairing request.
+   * Generates keys and stores trust relationship.
+   * @return Result containing the TrustPairingResponse or failure
    */
-  private suspend fun acceptPairing(
-    request: TrustPairingRequest,
-    senderAddress: String
-  ) = withContext(Dispatchers.Default) {
+  suspend fun createPairingAcceptance(
+    request: TrustPairingRequest
+  ): Result<TrustPairingResponse> = withContext(Dispatchers.Default) {
     try {
       val currentDevice = currentDeviceProvider.get()
 
       // Ensure we have ECDSA keys
       initialize()
-      val ecdsaKeys = deviceECDSAKeys ?: return@withContext
+      val ecdsaKeys = deviceECDSAKeys ?: return@withContext Result.failure(Exception("ECDSA keys not initialized"))
 
       // Generate our ECDH keypair
       val ourEcdhKeyPair = crypto.generateECDHKeyPair()
@@ -217,7 +244,7 @@ class TrustManager(
       storage.storeTrustedDevice(request.deviceId, request.ecdhPublicKey)  // ECDH key
       storage.storeECDSAKey(request.deviceId, request.ecdsaPublicKey)  // ECDSA key for verification
 
-      // Send response
+      // Create response
       val response = TrustPairingResponse(
         deviceId = currentDevice.shortDeviceId,
         deviceName = currentDevice.deviceName,
@@ -227,42 +254,21 @@ class TrustManager(
         timestamp = clock.currentTimeMillis()
       )
 
-      println("🔐 [TrustManager] ✅ Sending TrustPairingResponse (accepted) to ${request.deviceId}")
-      scope.launch {
-        try {
-          val sendResult = messenger.send(request.deviceId, response.toSimpleSendRequest())
-            .first { it.isCompleted() }
-
-          when (sendResult) {
-            is MessengerSendProgress.Completed -> {
-              println("🔐 [TrustManager] ✅ SUCCESS: Pairing acceptance sent to ${request.deviceId}")
-            }
-
-            is MessengerSendProgress.Error -> {
-              println("🔐 [TrustManager] ❌ FAILED: Could not send pairing acceptance: ${sendResult.message}")
-            }
-
-            else -> {
-              println("🔐 [TrustManager] ❌ UNEXPECTED: Pairing acceptance send result: $sendResult")
-            }
-          }
-        } catch (e: Exception) {
-          println("🔐 [TrustManager] ❌ EXCEPTION: Failed to send pairing acceptance: ${e.message}")
-        }
-      }
-
+      println("🔐 [TrustManager] ✅ Created TrustPairingResponse (accepted) for ${request.deviceId}")
+      Result.success(response)
     } catch (e: Exception) {
-      // TODO: Log error and send rejection
-      rejectPairing(request.deviceId)
+      println("🔐 [TrustManager] ❌ Failed to create acceptance: ${e.message}")
+      Result.failure(e)
     }
   }
 
   /**
-   * Reject a pairing request.
+   * Create a rejection response for a pairing request.
+   * @return TrustPairingResponse with rejection
    */
-  private suspend fun rejectPairing(deviceId: String) {
+  suspend fun createPairingRejection(deviceId: String): TrustPairingResponse = withContext(Dispatchers.Default) {
     val currentDevice = currentDeviceProvider.get()
-    val response = TrustPairingResponse(
+    TrustPairingResponse(
       deviceId = currentDevice.shortDeviceId,
       deviceName = currentDevice.deviceName,
       ecdhPublicKey = ByteArray(0), // Empty for rejection
@@ -271,36 +277,13 @@ class TrustManager(
       timestamp = clock.currentTimeMillis(),
       rejectionReason = "User declined"
     )
-
-    println("🔐 [TrustManager] ✅ Sending TrustPairingResponse (rejected) to $deviceId")
-    scope.launch {
-      try {
-        val sendResult = messenger.send(deviceId, response.toSimpleSendRequest())
-          .first { it.isCompleted() }
-
-        when (sendResult) {
-          is MessengerSendProgress.Completed -> {
-            println("🔐 [TrustManager] ✅ SUCCESS: Pairing rejection sent to $deviceId")
-          }
-
-          is MessengerSendProgress.Error -> {
-            println("🔐 [TrustManager] ❌ FAILED: Could not send pairing rejection: ${sendResult.message}")
-          }
-
-          else -> {
-            println("🔐 [TrustManager] ❌ UNEXPECTED: Pairing rejection send result: $sendResult")
-          }
-        }
-      } catch (e: Exception) {
-        println("🔐 [TrustManager] ❌ EXCEPTION: Failed to send pairing rejection: ${e.message}")
-      }
-    }
   }
 
   /**
-   * Handle pairing response from target device.
+   * Finalize pairing after receiving response from target device.
+   * Completes the key exchange and stores trust relationship.
    */
-  suspend fun handlePairingResponse(response: TrustPairingResponse) = withContext(Dispatchers.Default) {
+  suspend fun finalizePairing(response: TrustPairingResponse) = withContext(Dispatchers.Default) {
     val session = pairingSessions[response.deviceId] ?: return@withContext
 
     try {
@@ -443,6 +426,36 @@ data class TrustedDevice(
     var result = deviceId.hashCode()
     result = 31 * result + publicKey.contentHashCode()
     return result
+  }
+}
+
+/**
+ * Events emitted by TrustManager that external coordinators can listen to.
+ */
+sealed interface PairingEvent {
+  data class SendPairingRequest(val targetDeviceId: String, val request: TrustPairingRequest) : PairingEvent
+  data class SendPairingResponse(val targetDeviceId: String, val response: TrustPairingResponse) : PairingEvent
+  data class PairingRequestReceived(val request: TrustPairingRequest, val senderAddress: String, val decision: PairingDecision?) : PairingEvent
+}
+
+/**
+ * Represents a pairing decision that needs user approval.
+ * Encapsulates the approval callback mechanism.
+ */
+data class PairingDecision(
+  val deviceId: String,
+  val deviceName: String,
+  val deviceType: String,
+  private val approvalCallback: PairingApprovalCallback?
+) {
+  fun showApprovalDialog(onAccept: suspend () -> Unit, onReject: suspend () -> Unit) {
+    approvalCallback?.onPairingRequested(
+      deviceId = deviceId,
+      deviceName = deviceName,
+      deviceType = deviceType,
+      onAccept = onAccept,
+      onReject = onReject
+    )
   }
 }
 

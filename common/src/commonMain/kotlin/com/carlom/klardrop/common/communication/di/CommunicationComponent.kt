@@ -25,6 +25,7 @@ import com.carlom.klardrop.common.receiver.MessageReceiverImpl
 import com.carlom.klardrop.common.trust.ClipboardSyncManager
 import com.carlom.klardrop.common.trust.ClipboardSyncMessageHandler
 import com.carlom.klardrop.common.trust.InMemoryTrustStorage
+import com.carlom.klardrop.common.trust.PairingProtocolCoordinator
 import com.carlom.klardrop.common.trust.TrustChecker
 import com.carlom.klardrop.common.trust.TrustCrypto
 import com.carlom.klardrop.common.trust.TrustManager
@@ -62,7 +63,13 @@ class CommunicationModule(
     override suspend fun isTrusted(deviceId: String): Boolean = trustStorage.isTrusted(deviceId)
   }
 
-  private val trustManager = TrustManager(trustCrypto, trustStorage, clock, currentDeviceProvider, messenger)
+  // TrustManager is now a pure domain component without messenger dependency
+  private val trustManager by lazy {
+    TrustManager(trustCrypto, trustStorage, clock, currentDeviceProvider)
+  }
+
+  // PairingProtocolCoordinator will be initialized manually after DI cycle is complete
+  private var pairingProtocolCoordinator: PairingProtocolCoordinator? = null
 
   private val trustMessageWrapper by lazy {
     TrustMessageWrapper(trustManager, serializer)
@@ -70,7 +77,7 @@ class CommunicationModule(
 
   // Clipboard sync components
   private val clipboardSyncManager by lazy {
-    ClipboardSyncManager(clipboardManager, visibleDevices, trustManager, clock, coroutines, messenger)
+    ClipboardSyncManager(clipboardManager, visibleDevices, trustManager, clock, coroutines, lazy { messenger })
   }
 
   private val messageHandlers by lazy {
@@ -154,9 +161,17 @@ class CommunicationModule(
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
   fun trustManager() = trustManager
+  fun pairingProtocolCoordinator() = pairingProtocolCoordinator ?: initializePairingProtocolCoordinator()
   fun trustStorage() = trustStorage
   fun trustMessageWrapper() = trustMessageWrapper
   fun clipboardSyncManager() = clipboardSyncManager
+
+  private fun initializePairingProtocolCoordinator(): PairingProtocolCoordinator {
+    if (pairingProtocolCoordinator == null) {
+      pairingProtocolCoordinator = PairingProtocolCoordinator(trustManager, messenger)
+    }
+    return pairingProtocolCoordinator!!
+  }
 
 
   @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)

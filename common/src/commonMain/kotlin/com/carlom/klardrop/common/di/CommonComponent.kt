@@ -100,6 +100,8 @@ class CommonComponent(
 
   fun trustManager() = communicationModule.trustManager()
 
+  fun pairingProtocolCoordinator() = communicationModule.pairingProtocolCoordinator()
+
   fun trustStorage() = communicationModule.trustStorage()
 
   fun trustAwareDiscoveryUtils() = trustAwareDiscoveryUtils

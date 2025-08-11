@@ -42,9 +42,9 @@ class TrustPairingRequestHandler(
         val senderAddress = message.deviceId
         println("🔐 [TrustPairingRequestHandler] Using sender address: $senderAddress")
         
-        // Delegate to TrustManager
-        println("🔐 [TrustPairingRequestHandler] Delegating to TrustManager.handlePairingRequest()")
-        trustManager.handlePairingRequest(message, senderAddress)
+        // Delegate to TrustManager - it will emit events that PairingProtocolCoordinator can listen to
+        println("🔐 [TrustPairingRequestHandler] Delegating to TrustManager.processPairingRequest()")
+        trustManager.handleIncomingPairingRequest(message, senderAddress)
         
         // Update receive flow 
         receiveFlow.update {
@@ -87,7 +87,7 @@ class TrustPairingResponseHandler(
         log("TrustPairingResponseHandler", "Received pairing response from ${message.deviceName}")
         
         // Delegate to TrustManager
-        trustManager.handlePairingResponse(message)
+        trustManager.finalizePairing(message)
         
         // Update receive flow
         receiveFlow.update {

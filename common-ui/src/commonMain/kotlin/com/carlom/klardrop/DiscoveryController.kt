@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.trust.PairingProtocolCoordinator
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
@@ -45,7 +46,8 @@ class DiscoveryController(
   private val clipboardManager: ClipboardManager,
   private val messageRepository: MessageRepository,
   private val trustStorage: com.carlom.klardrop.common.trust.TrustStorage,
-  private val trustManager: com.carlom.klardrop.common.trust.TrustManager
+  private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
+  private val pairingProtocolCoordinator: PairingProtocolCoordinator
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -56,7 +58,8 @@ class DiscoveryController(
     commonComponent.clipboardManager(),
     commonComponent.messageRepository(),
     commonComponent.trustStorage(),
-    commonComponent.trustManager()
+    commonComponent.trustManager(),
+    commonComponent.pairingProtocolCoordinator()
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
@@ -227,9 +230,9 @@ class DiscoveryController(
     updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Pairing)
     
     coroutines.appScope.launch {
-      println("🖥️ [DiscoveryController] Calling trustManager.initiatePairing(${deviceUi.deviceId})")
-      val result = trustManager.initiatePairing(deviceUi.deviceId)
-      println("🖥️ [DiscoveryController] trustManager.initiatePairing() returned: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
+      println("🖥️ [DiscoveryController] Calling pairingProtocolCoordinator.initiatePairing(${deviceUi.deviceId})")
+      val result = pairingProtocolCoordinator.initiatePairing(deviceUi.deviceId)
+      println("🖥️ [DiscoveryController] pairingProtocolCoordinator.initiatePairing() returned: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
       
       result.fold(
         onSuccess = {

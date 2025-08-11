@@ -33,7 +33,7 @@ class ClipboardSyncManager(
   private val trustManager: TrustManager,
   private val clock: Clock,
   private val coroutines: Coroutines,
-  private val messenger: Messenger
+  private val messenger: Lazy<Messenger>
 ) {
 
   private val syncScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -107,7 +107,7 @@ class ClipboardSyncManager(
     syncScope.launch {
       try {
         log("ClipboardSyncManager", "Sending clipboard sync to $deviceId")
-        messenger.send(deviceId, message)
+        messenger.value.send(deviceId, message)
           .untilCompleted()
           .firstOrNull()
       } catch (e: Exception) {
