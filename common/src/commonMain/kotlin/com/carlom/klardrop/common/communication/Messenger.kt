@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import kotlin.math.pow
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Messenger used to send messages
@@ -65,9 +67,13 @@ class MessengerImpl(
 
       // NEW: Check if device is trusted and wrap message if needed
       val finalMessageRequest = try {
-        if (trustChecker.value.isTrusted(deviceId)) {
+        val message = messageRequest.message
+        val isPairingMessage = message is com.carlom.klardrop.common.communication.message.TrustPairingRequest ||
+                               message is com.carlom.klardrop.common.communication.message.TrustPairingResponse
+
+        if (trustChecker.value.isTrusted(deviceId) && !isPairingMessage) {
           log("Messenger", "Device $deviceId is trusted, attempting to wrap message")
-          val wrappedMessage = trustMessageWrapper.wrapMessage(messageRequest.message, deviceId)
+          val wrappedMessage = trustMessageWrapper.wrapMessage(message, deviceId)
           if (wrappedMessage != null) {
             log("Messenger", "Successfully wrapped message for trusted device $deviceId")
             com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest(wrappedMessage)
@@ -76,7 +82,11 @@ class MessengerImpl(
             messageRequest
           }
         } else {
-          log("Messenger", "Device $deviceId is not trusted, sending message as-is")
+          if (isPairingMessage) {
+            log("Messenger", "Device $deviceId: Pairing message detected, sending unwrapped for protocol handshake")
+          } else {
+            log("Messenger", "Device $deviceId is not trusted, sending message as-is")
+          }
           messageRequest
         }
       } catch (e: Exception) {
@@ -184,10 +194,10 @@ class MessengerImpl(
           log("Messenger", "[DEBUG] Closed connection to $deviceId, starting backoff delay")
           
           // Wait before retry with exponential backoff
-          val delayMs = (1000 * config.retryBackoffMultiplier.pow(attempt - 1)).toLong()
-          log("Messenger", "[DEBUG] Waiting ${delayMs}ms before retry (attempt $attempt)")
+          val delay = (1.seconds * config.retryBackoffMultiplier.pow(attempt - 1))
+          log("Messenger", "[DEBUG] Waiting ${delay.inWholeMilliseconds}ms before retry (attempt $attempt)")
           withContext(coroutines.mainDispatcher) {
-            kotlinx.coroutines.delay(delayMs)
+            kotlinx.coroutines.delay(delay)
           }
           
           return@getOrElse false // Signal to retry

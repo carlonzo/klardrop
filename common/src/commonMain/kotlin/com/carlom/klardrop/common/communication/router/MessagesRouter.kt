@@ -135,17 +135,8 @@ class MessagesRouterImpl(
         }
         messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress) // Passed toDeviceId
       } else {
-        // No payload, likely a text message
-        if (message is TextMessage) {
-            messageRepository.insertMessage(
-                remoteDeviceId = toDeviceId,
-                content = message.text, // Assuming TextMessage has a 'text' field
-                isSender = true,
-                messageType = PersistenceMessageType.TEXT,
-                isRead = true // Outgoing messages are read by default
-            )
-        }
         // message has no payload. we can send it directly
+        // Note: Message insertion is handled optimistically by the ViewModel layer
         log("MessagesRouter", "[DEBUG] Sending message to $toDeviceId: type=${message.type}, id=${message.id}")
         writeChannel.sendMessage(message, messageSerializer)
       }

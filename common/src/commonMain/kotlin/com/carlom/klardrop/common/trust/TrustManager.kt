@@ -284,31 +284,60 @@ class TrustManager(
    * Completes the key exchange and stores trust relationship.
    */
   suspend fun finalizePairing(response: TrustPairingResponse) = withContext(Dispatchers.Default) {
-    val session = pairingSessions[response.deviceId] ?: return@withContext
+    println("🔐 [TrustManager] finalizePairing() called for device: ${response.deviceId} (${response.deviceName}), accepted: ${response.accepted}")
+    
+    val session = pairingSessions[response.deviceId]
+    if (session == null) {
+      println("🔐 [TrustManager] ❌ No pairing session found for device: ${response.deviceId}")
+      return@withContext
+    }
+    
+    println("🔐 [TrustManager] Found pairing session for device: ${response.deviceId}")
 
     try {
       if (!response.accepted) {
+        println("🔐 [TrustManager] ❌ Pairing was rejected by device: ${response.deviceId}")
+        
+        // Emit failure event for UI updates
+        _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, false))
+        
         // TODO: Show rejection message to user
         return@withContext
       }
 
+      println("🔐 [TrustManager] Pairing was accepted, computing shared secret...")
+      
       // Compute shared secret (for future use)
       val sharedSecret = crypto.computeECDHSecret(
         privateKey = session.ecdhKeyPair.privateKey,
         peerPublicKeyBytes = response.ecdhPublicKey
       )
+      
+      println("🔐 [TrustManager] Computed shared secret, storing trusted device keys...")
 
       // Store peer's keys
       storage.storeTrustedDevice(response.deviceId, response.ecdhPublicKey)  // ECDH key
       storage.storeECDSAKey(response.deviceId, response.ecdsaPublicKey)  // ECDSA key for verification
+      
+      println("🔐 [TrustManager] ✅ Successfully stored trusted device keys for: ${response.deviceId}")
+      println("🔐 [TrustManager] Device ${response.deviceId} is now trusted")
+      
+      // Emit completion event for UI updates
+      _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, true))
 
       // TODO: Show success message to user
 
     } catch (e: Exception) {
+      println("🔐 [TrustManager] ❌ Exception during finalizePairing: ${e.message}")
+      
+      // Emit failure event for UI updates
+      _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, false))
+      
       // TODO: Show error message to user
     } finally {
       // Clean up session
       pairingSessions.remove(response.deviceId)
+      println("🔐 [TrustManager] Cleaned up pairing session for device: ${response.deviceId}")
     }
   }
 
@@ -436,6 +465,7 @@ sealed interface PairingEvent {
   data class SendPairingRequest(val targetDeviceId: String, val request: TrustPairingRequest) : PairingEvent
   data class SendPairingResponse(val targetDeviceId: String, val response: TrustPairingResponse) : PairingEvent
   data class PairingRequestReceived(val request: TrustPairingRequest, val senderAddress: String, val decision: PairingDecision?) : PairingEvent
+  data class PairingCompleted(val deviceId: String, val deviceName: String, val success: Boolean) : PairingEvent
 }
 
 /**

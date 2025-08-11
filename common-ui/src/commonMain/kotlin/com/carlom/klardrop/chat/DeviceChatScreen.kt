@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.Button
@@ -69,6 +70,7 @@ fun DeviceChatScreen(
 ) {
   val messagesState by viewModel.messages.collectAsState()
   val uiState by viewModel.uiState.collectAsState()
+  val messageSendProgress by viewModel.messageSendProgress.collectAsState()
   var textToSend by remember { mutableStateOf("") }
   var showAttachmentMenu by remember { mutableStateOf(false) }
 
@@ -132,7 +134,10 @@ fun DeviceChatScreen(
                 onOpenFileRequest = { onOpenFileRequest(it) }
               ) // Pass repository
             } else {
-              TextMessageBubble(message = message)
+              TextMessageBubble(
+                message = message,
+                sendProgress = messageSendProgress[message.id]
+              )
             }
           }
         }
@@ -144,8 +149,7 @@ fun DeviceChatScreen(
         // Attachment button with dropdown menu
         Box {
           IconButton(
-            onClick = { showAttachmentMenu = true },
-            enabled = !uiState.isSending
+            onClick = { showAttachmentMenu = true }
           ) {
             Icon(Icons.Default.Add, contentDescription = "Attach")
           }
@@ -197,15 +201,9 @@ fun DeviceChatScreen(
               viewModel.sendTextMessage(textToSend)
               textToSend = ""
             }
-          }, enabled = textToSend.isNotBlank() && !uiState.isSending
+          }, enabled = textToSend.isNotBlank()
         ) {
-          if (uiState.isSending) {
-            CircularProgressIndicator(
-              modifier = Modifier.size(16.dp), strokeWidth = 2.dp
-            )
-          } else {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
-          }
+          Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
         }
       }
     }
@@ -213,7 +211,10 @@ fun DeviceChatScreen(
 }
 
 @Composable
-fun TextMessageBubble(message: Messages) {
+fun TextMessageBubble(
+  message: Messages,
+  sendProgress: com.carlom.klardrop.common.communication.MessengerSendProgress? = null
+) {
   // Basic representation, align based on is_sender
   val horizontalArrangement = if (message.is_sender != 0L) Arrangement.End else Arrangement.Start
   Row(
@@ -224,9 +225,39 @@ fun TextMessageBubble(message: Messages) {
         containerColor = if (message.is_sender != 0L) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
       ), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-      Text(
-        text = message.content, modifier = Modifier.padding(8.dp)
-      )
+      Box(modifier = Modifier.padding(8.dp)) {
+        Text(text = message.content)
+        
+        // Show status indicator for sent messages only
+        if (message.is_sender != 0L && sendProgress != null) {
+          when (sendProgress) {
+            is com.carlom.klardrop.common.communication.MessengerSendProgress.Pending,
+            is com.carlom.klardrop.common.communication.MessengerSendProgress.InProgress -> {
+              CircularProgressIndicator(
+                modifier = Modifier
+                  .size(12.dp)
+                  .align(Alignment.BottomEnd)
+                  .padding(2.dp),
+                strokeWidth = 1.5.dp,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+              )
+            }
+            is com.carlom.klardrop.common.communication.MessengerSendProgress.Error -> {
+              Icon(
+                imageVector = Icons.Default.Cancel,
+                contentDescription = "Failed",
+                modifier = Modifier
+                  .size(12.dp)
+                  .align(Alignment.BottomEnd),
+                tint = Color.Red
+              )
+            }
+            is com.carlom.klardrop.common.communication.MessengerSendProgress.Completed -> {
+              // No indicator for completed messages
+            }
+          }
+        }
+      }
     }
   }
 }

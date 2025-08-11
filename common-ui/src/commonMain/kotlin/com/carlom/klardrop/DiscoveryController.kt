@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.trust.PairingApprovalCallback
 import com.carlom.klardrop.common.trust.PairingProtocolCoordinator
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
@@ -48,7 +49,7 @@ class DiscoveryController(
   private val trustStorage: com.carlom.klardrop.common.trust.TrustStorage,
   private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
   private val pairingProtocolCoordinator: PairingProtocolCoordinator
-) : OnDeviceActionListener, ReceiveNotificationsCallbacks {
+) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
 
   constructor(commonComponent: CommonComponent) : this(
     commonComponent.coroutines(),
@@ -80,6 +81,22 @@ class DiscoveryController(
         screenStateFlow.update { state ->
           state.copy(devices = it.toList())
         }
+      }
+    }
+
+    // Register the pairing approval callback
+    trustManager.setPairingApprovalCallback(this)
+    println("🖥️ [DiscoveryController] Registered pairingApprovalCallback with TrustManager.")
+    
+    // Register pairing completion callback
+    pairingProtocolCoordinator.onPairingCompleted = { deviceId, deviceName, success ->
+      println("🖥️ [DiscoveryController] Pairing completion callback: $deviceName ($deviceId), success: $success")
+      if (success) {
+        println("🖥️ [DiscoveryController] Updating UI to show device $deviceName as Trusted")
+        updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
+      } else {
+        println("🖥️ [DiscoveryController] Updating UI to show device $deviceName as Untrusted (pairing failed)")
+        updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
       }
     }
   }
@@ -269,13 +286,107 @@ class DiscoveryController(
       currentState.copy(devices = updatedDevices)
     }
   }
+
+  // Implementation of PairingApprovalCallback
+  override fun onPairingRequested(
+    deviceId: String,
+    deviceName: String,
+    deviceType: String,
+    onAccept: suspend () -> Unit,
+    onReject: suspend () -> Unit
+  ) {
+    println("🖥️ [DiscoveryController] onPairingRequested for device: $deviceName ($deviceId)")
+    println("🖥️ [DiscoveryController] About to update pairingDialogState in screenStateFlow")
+    controllerScope.launch {
+      screenStateFlow.update { currentState ->
+        // Check if a pairing dialog is already active
+        if (currentState.pairingDialogState != null) {
+          println("🖥️ [DiscoveryController] Ignoring duplicate/concurrent pairing request for $deviceId. A dialog is already active.")
+          return@update currentState // Don't update the state
+        }
+
+        println("🖥️ [DiscoveryController] Creating PairingDialogState for $deviceName")
+        val newState = currentState.copy(
+          pairingDialogState = PairingDialogState(
+            deviceId = deviceId,
+            deviceName = deviceName,
+            deviceType = deviceType,
+            onAccept = {
+              controllerScope.launch {
+                try {
+                  onAccept()
+                  screenStateFlow.update { it.copy(pairingDialogState = null) }
+                  updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
+                  println("🖥️ [DiscoveryController] ✅ Pairing accepted for $deviceName")
+                } catch (e: Exception) {
+                  println("🖥️ [DiscoveryController] ❌ Failed to accept pairing: ${e.message}")
+                  screenStateFlow.update { state ->
+                    state.copy(
+                      pairingDialogState = state.pairingDialogState?.copy(
+                        isError = true,
+                        errorMessage = "Failed to accept pairing: ${e.message}"
+                      )
+                    )
+                  }
+                  updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+                }
+              }
+            },
+            onReject = {
+              controllerScope.launch {
+                try {
+                  onReject()
+                  screenStateFlow.update { it.copy(pairingDialogState = null) }
+                  updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+                  println("🖥️ [DiscoveryController] ✅ Pairing rejected for $deviceName")
+                } catch (e: Exception) {
+                  println("🖥️ [DiscoveryController] ❌ Failed to reject pairing: ${e.message}")
+                  screenStateFlow.update { state ->
+                    state.copy(
+                      pairingDialogState = state.pairingDialogState?.copy(
+                        isError = true,
+                        errorMessage = "Failed to reject pairing: ${e.message}"
+                      )
+                    )
+                  }
+                  updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+                }
+              }
+            }
+          )
+        )
+        println("🖥️ [DiscoveryController] ✅ Successfully updated screenStateFlow with pairingDialogState for $deviceName")
+        println("🖥️ [DiscoveryController] New state pairingDialogState: ${newState.pairingDialogState != null}")
+        newState
+      }
+      println("🖥️ [DiscoveryController] Current screenStateFlow pairingDialogState after update: ${screenStateFlow.value.pairingDialogState != null}")
+      screenStateFlow.value.pairingDialogState?.let { state ->
+        println("🖥️ [DiscoveryController] PairingDialogState details: deviceId=${state.deviceId}, deviceName=${state.deviceName}")
+      }
+    }
+  }
+
+  fun dismissPairingDialog() {
+    screenStateFlow.update { it.copy(pairingDialogState = null) }
+  }
 }
 
 data class DiscoveryScreenState(
   val devices: List<DeviceUi> = emptyList(),
   val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap(),
   val navigateToChatDeviceId: String? = null,    // New
-  val navigateToChatDeviceName: String? = null   // New
+  val navigateToChatDeviceName: String? = null,   // New
+  val pairingDialogState: PairingDialogState? = null
+)
+
+data class PairingDialogState(
+  val deviceId: String,
+  val deviceName: String,
+  val deviceType: String,
+  val onAccept: () -> Unit,
+  val onReject: () -> Unit,
+  val isError: Boolean = false,
+  val errorMessage: String? = null
 )
 
 // ActionUi might not be needed anymore if onDeviceClick directly updates state for navigation

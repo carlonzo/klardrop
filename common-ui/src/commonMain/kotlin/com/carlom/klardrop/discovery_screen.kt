@@ -22,10 +22,13 @@ import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.TextButton
 import androidx.compose.material.TextField
 import androidx.compose.material.rememberModalBottomSheetState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -107,6 +110,15 @@ fun DiscoveryScreen(
         )
 
       }
+    )
+  }
+
+  // --- Pairing Dialog (shown on both screens) ---
+  discoveryState.pairingDialogState?.let { pairingState ->
+    println("🖥️ [DiscoveryScreen] About to show PairingApprovalDialog for device: ${pairingState.deviceName}")
+    PairingApprovalDialog(
+      state = pairingState,
+      onDismiss = { discoveryController.dismissPairingDialog() }
     )
   }
 }
@@ -246,4 +258,56 @@ private fun ColumnScope.ShareSheet(
 
 
   Spacer(Modifier.height(40.dp))
+}
+
+@Composable
+private fun PairingApprovalDialog(
+  state: PairingDialogState,
+  onDismiss: () -> Unit
+) {
+  println("🖥️ [PairingApprovalDialog] Rendering pairing dialog for device: ${state.deviceName}")
+  
+  AlertDialog(
+    onDismissRequest = {
+      println("🖥️ [PairingApprovalDialog] Dialog dismissed - calling onDismiss")
+      onDismiss()
+    },
+    title = {
+      Text("Pairing Request")
+    },
+    text = {
+      if (state.isError) {
+        Text("Error: ${state.errorMessage ?: "Unknown error occurred during pairing"}")
+      } else {
+        Text("Device '${state.deviceName}' (${state.deviceType}) wants to pair with this device. Do you want to accept?")
+      }
+    },
+    confirmButton = {
+      if (state.isError) {
+        Button(onClick = {
+          println("🖥️ [PairingApprovalDialog] Error dialog - Close button clicked")
+          onDismiss()
+        }) {
+          Text("Close")
+        }
+      } else {
+        Button(onClick = {
+          println("🖥️ [PairingApprovalDialog] Accept button clicked for ${state.deviceName}")
+          state.onAccept()
+        }) {
+          Text("Accept")
+        }
+      }
+    },
+    dismissButton = {
+      if (!state.isError) {
+        Button(onClick = {
+          println("🖥️ [PairingApprovalDialog] Reject button clicked for ${state.deviceName}")
+          state.onReject()
+        }) {
+          Text("Reject")
+        }
+      }
+    }
+  )
 }

@@ -30,6 +30,9 @@ class PairingProtocolCoordinator(
     private val messenger: Messenger
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    
+    // Callback for when pairing is completed (for UI updates)
+    var onPairingCompleted: ((deviceId: String, deviceName: String, success: Boolean) -> Unit)? = null
 
     init {
         // Listen to pairing events from TrustManager
@@ -53,6 +56,10 @@ class PairingProtocolCoordinator(
                                 rejectPairing(event.request.deviceId)
                             }
                         )
+                    }
+                    is PairingEvent.PairingCompleted -> {
+                        println("🔐 [PairingProtocolCoordinator] Pairing completed for ${event.deviceName} (${event.deviceId}), success: ${event.success}")
+                        onPairingCompleted?.invoke(event.deviceId, event.deviceName, event.success)
                     }
                 }
             }
