@@ -219,20 +219,26 @@ class DiscoveryController(
   }
 
   override fun onAddToTrusted(deviceUi: DeviceUi) {
+    println("🖥️ [DiscoveryController] onAddToTrusted() called for device: ${deviceUi.deviceName} (${deviceUi.deviceId})")
     log("DiscoveryController", "Adding device ${deviceUi.deviceName} to trusted")
     
     // Update UI to show pairing state
+    println("🖥️ [DiscoveryController] Updating UI to show Pairing state")
     updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Pairing)
     
     coroutines.appScope.launch {
+      println("🖥️ [DiscoveryController] Calling trustManager.initiatePairing(${deviceUi.deviceId})")
       val result = trustManager.initiatePairing(deviceUi.deviceId)
+      println("🖥️ [DiscoveryController] trustManager.initiatePairing() returned: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
       
       result.fold(
         onSuccess = {
+          println("🖥️ [DiscoveryController] ✅ SUCCESS: Pairing initiation succeeded for ${deviceUi.deviceName}")
           log("DiscoveryController", "Successfully initiated pairing with ${deviceUi.deviceName}")
           // The TrustManager callbacks will update the UI state via trust flow
         },
         onFailure = { error ->
+          println("🖥️ [DiscoveryController] ❌ FAILURE: Pairing initiation failed for ${deviceUi.deviceName}: ${error.message}")
           log("DiscoveryController", "Failed to initiate pairing with ${deviceUi.deviceName}: ${error.message}")
           // Reset to untrusted state on failure
           updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Untrusted)

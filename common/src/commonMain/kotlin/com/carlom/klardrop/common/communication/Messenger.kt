@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.trust.TrustChecker
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.SupervisorJob
@@ -24,7 +25,7 @@ import kotlin.math.pow
 interface Messenger {
   fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress>
 
-  fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>> // Changed
+  fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>>
 }
 
 class MessengerImpl(
@@ -32,34 +33,39 @@ class MessengerImpl(
   private val connectionsPool: ConnectionsPool,
   private val client: Client,
   private val coroutines: Coroutines,
-  private val nearbyClient: NearbyClient,
+  private val nearbyClient: Lazy<NearbyClient>,
   private val messageReceiver: MessageReceiver,
-  private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
+  private val trustChecker: Lazy<TrustChecker>,
   private val trustMessageWrapper: com.carlom.klardrop.common.trust.TrustMessageWrapper
 ) : Messenger {
 
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
 
   override fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress> {
+    println("📨 [Messenger] send() called: deviceId=$deviceId, messageType=${messageRequest.message.type}, messageId=${messageRequest.message.id}")
 
     val flow = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 1)
 
     messengerScope.launch {
 
       flow.emit(Pending)
+      println("📨 [Messenger] Emitted Pending status for $deviceId")
 
       val device = visibleDevices.getDevice(deviceId)
 
       //    skip if not visible
       if (device == null) {
+        println("📨 [Messenger] ❌ Device $deviceId is not visible in device list")
         log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
         flow.emit(Error("$deviceId it is not visible"))
         return@launch
       }
+      
+      println("📨 [Messenger] ✅ Device $deviceId found in visible devices")
 
       // NEW: Check if device is trusted and wrap message if needed
       val finalMessageRequest = try {
-        if (trustManager.isTrusted(deviceId)) {
+        if (trustChecker.value.isTrusted(deviceId)) {
           log("Messenger", "Device $deviceId is trusted, attempting to wrap message")
           val wrappedMessage = trustMessageWrapper.wrapMessage(messageRequest.message, deviceId)
           if (wrappedMessage != null) {
@@ -114,7 +120,7 @@ class MessengerImpl(
       log("Messenger", "Client sending message to $deviceId: ${it.address} ${it.port}")
 
       runCatching {
-        nearbyClient.send(it.address, it.port, listOf(messageRequest), sendFlow)
+        nearbyClient.value.send(it.address, it.port, listOf(messageRequest), sendFlow)
       }.onFailure { exception ->
         log("Messenger", "Error sending message to $deviceId", exception)
       }.isSuccess

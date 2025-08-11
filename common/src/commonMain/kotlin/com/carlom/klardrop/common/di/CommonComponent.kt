@@ -103,15 +103,7 @@ class CommonComponent(
   fun trustStorage() = communicationModule.trustStorage()
 
   fun trustAwareDiscoveryUtils() = trustAwareDiscoveryUtils
-  
+
   fun clipboardSyncManager() = communicationModule.clipboardSyncManager()
-  
-  /**
-   * Initialize clipboard synchronization.
-   * This should be called after all components are created to resolve dependencies.
-   */
-  fun initializeClipboardSync() {
-    communicationModule.initializeClipboardSync()
-  }
 
 }

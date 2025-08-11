@@ -40,9 +40,6 @@ class Klardrop(
         }
       }
     }
-
-    // initialize clipboard synchronization
-    commonComponent.initializeClipboardSync()
     
     // start clipboard monitoring
     commonComponent.clipboardSyncManager().startClipboardMonitoring()

@@ -18,6 +18,53 @@ Based on the comprehensive review, the Trusted Device Groups implementation has 
 3. **Core Cryptography Missing** - TrustCrypto contains only placeholder implementations
 4. **Protocol Security Gaps** - ECDH exchange inefficiencies, nonce replay vulnerabilities
 
+## TODOs from Current Implementation
+
+### Critical TODOs (Must be addressed)
+1. **TrustCrypto.kt - Replace all placeholder cryptographic implementations**
+   - `TODO: Replace with actual ECDH key generation using cryptography-kotlin`
+   - `TODO: Replace with actual ECDH shared secret computation`
+   - `TODO: Replace with actual ECDSA key generation using cryptography-kotlin`
+   - `TODO: Replace with actual ECDSA signing using cryptography-kotlin`
+   - `TODO: Replace with actual ECDSA verification using cryptography-kotlin`
+
+2. **TrustManager.kt - Device key persistence**
+   - `TODO: Persist device ECDSA keys for consistency across restarts` (line 54)
+
+3. **CommunicationComponent.kt - Trust storage persistence**
+   - `TODO: to change to already implemented persisted trust storage` (line 55)
+
+### UI/UX TODOs (User feedback and experience)
+4. **TrustManager.kt - User notifications**
+   - `TODO: Show rejection message to user` (line 316)
+   - `TODO: Show success message to user` (line 330)
+   - `TODO: Show error message to user` (line 332)
+
+5. **TrustedDevicesScreen.kt - Device metadata display**
+   - `TODO: Get actual device name from storage` (deviceName display)
+   - `TODO: Get actual device type from storage` (deviceType display)
+   - `TODO: Get actual trust date` (trustedSince timestamp)
+
+### Configuration TODOs
+6. **TrustManager.kt - Build configuration**
+   - `TODO: Get from build config` (appVersion at line 97)
+
+### Error Handling TODOs
+7. **TrustManager.kt - Error logging**
+   - `TODO: Log error and send rejection` (line 255)
+
+### Removed/Resolved TODOs
+- Communication layer TODOs have been resolved with the interface segregation implementation
+- `TODO: Send message through communication layer` - RESOLVED
+- `TODO: Send response through communication layer` - RESOLVED
+
+### TODO to Phase Mapping
+- **Phase 1**: TODOs #1 (TrustCrypto), #2 (Device key persistence)
+- **Phase 2**: TODO #3 (Trust storage persistence)
+- **Phase 3**: Already covered in protocol enhancements
+- **Phase 4**: TODOs #4 (User notifications), #5 (Device metadata)
+- **Phase 5**: TODOs #6 (Build config), #7 (Error logging)
+
 ## Implementation Phases
 
 ### Phase 1: Core Cryptography Implementation (Days 1-3)

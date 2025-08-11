@@ -9,6 +9,7 @@ import com.carlom.klardrop.common.utils.OsType
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 class FakeVisibleDevices : VisibleDevices {
 
@@ -35,7 +36,7 @@ class FakeVisibleDevices : VisibleDevices {
     return devices.firstOrNull { device -> device.deviceConnections.any { it.address == hostname } }
   }
 
-  override val visibleDevices: Flow<Map<String, DiscoveryDevice>>
+  override val visibleDevices: StateFlow<Map<String, DiscoveryDevice>>
     get() = _visibleDevices
 
   override suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection) {

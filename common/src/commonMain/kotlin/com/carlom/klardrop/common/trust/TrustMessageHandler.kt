@@ -2,11 +2,13 @@ package com.carlom.klardrop.common.trust
 
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.MessageHandler
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
+import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
@@ -32,13 +34,16 @@ class TrustPairingRequestHandler(
         readChannel: ByteReadChannel,
         receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
     ) {
+        println("🔐 [TrustPairingRequestHandler] ✅ Received pairing request from ${message.deviceName} (${message.deviceId})")
         log("TrustPairingRequestHandler", "Received pairing request from ${message.deviceName}")
         
         // Extract sender address from context (this would normally come from the connection)
         // For now, we'll use the device ID as the address
         val senderAddress = message.deviceId
+        println("🔐 [TrustPairingRequestHandler] Using sender address: $senderAddress")
         
         // Delegate to TrustManager
+        println("🔐 [TrustPairingRequestHandler] Delegating to TrustManager.handlePairingRequest()")
         trustManager.handlePairingRequest(message, senderAddress)
         
         // Update receive flow 
@@ -48,6 +53,7 @@ class TrustPairingRequestHandler(
                 status = ReceiveMessageStatus.Completed
             )
         }
+        println("🔐 [TrustPairingRequestHandler] ✅ Completed handling pairing request")
     }
 
     override suspend fun handleOutgoing(
@@ -112,10 +118,10 @@ class TrustPairingResponseHandler(
 class TrustedMessageHandler(
     private val serializer: MessageSerializer,
     private val trustManager: TrustManager
-) : MessageHandler<com.carlom.klardrop.common.communication.message.TrustedMessage, SimpleSendMessageRequest> {
+) : MessageHandler<TrustedMessage, SimpleSendMessageRequest> {
 
     override suspend fun handleIncoming(
-        message: com.carlom.klardrop.common.communication.message.TrustedMessage,
+        message: TrustedMessage,
         readChannel: ByteReadChannel,
         receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
     ) {
@@ -151,7 +157,7 @@ class TrustedMessageHandler(
         writeChannel: ByteWriteChannel,
         progressFlow: MutableSharedFlow<MessengerSendProgress>
     ) {
-        val message = request.message as com.carlom.klardrop.common.communication.message.TrustedMessage
+        val message = request.message as TrustedMessage
         log("TrustedMessageHandler", "Sending trusted message to $toDeviceId")
         
         // Send the signed message
@@ -174,9 +180,9 @@ class TrustMessageWrapper(
      * @return TrustedMessage if device is trusted, null otherwise
      */
     suspend fun wrapMessage(
-        originalMessage: com.carlom.klardrop.common.communication.message.Message,
+        originalMessage: Message,
         targetDeviceId: String
-    ): com.carlom.klardrop.common.communication.message.TrustedMessage? {
+    ): TrustedMessage? {
         // Only wrap if target is trusted
         if (!trustManager.isTrusted(targetDeviceId)) {
             return null
@@ -195,8 +201,8 @@ class TrustMessageWrapper(
      * @return The original message if verification succeeds, null otherwise
      */
     suspend fun unwrapMessage(
-        trustedMessage: com.carlom.klardrop.common.communication.message.TrustedMessage
-    ): com.carlom.klardrop.common.communication.message.Message? {
+        trustedMessage: TrustedMessage
+    ): Message? {
         // Verify the message signature
         val isValid = trustManager.verifyMessage(trustedMessage)
         if (!isValid) {
@@ -218,4 +224,4 @@ class TrustMessageWrapper(
  */
 fun TrustPairingRequest.toSendRequest(): SimpleSendMessageRequest = this.toSimpleSendRequest() as SimpleSendMessageRequest
 fun TrustPairingResponse.toSendRequest(): SimpleSendMessageRequest = this.toSimpleSendRequest() as SimpleSendMessageRequest
-fun com.carlom.klardrop.common.communication.message.TrustedMessage.toSendRequest(): SimpleSendMessageRequest = this.toSimpleSendRequest() as SimpleSendMessageRequest
+fun TrustedMessage.toSendRequest(): SimpleSendMessageRequest = this.toSimpleSendRequest() as SimpleSendMessageRequest

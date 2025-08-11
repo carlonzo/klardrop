@@ -5,13 +5,14 @@ import com.carlom.klardrop.common.utils.log
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 
 interface VisibleDevices {
 
-  val visibleDevices: Flow<Map<String, DiscoveryDevice>>
+  val visibleDevices: StateFlow<Map<String, DiscoveryDevice>>
 
   suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection)
 
@@ -32,7 +33,7 @@ internal class VisibleDevicesImpl(
 
   private val visibleDevicesFlow = MutableStateFlow(emptyMap<String, DiscoveryDevice>())
 
-  override val visibleDevices: Flow<Map<String, DiscoveryDevice>> = visibleDevicesFlow.asStateFlow()
+  override val visibleDevices: StateFlow<Map<String, DiscoveryDevice>> = visibleDevicesFlow.asStateFlow()
 
   override suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection) {
 

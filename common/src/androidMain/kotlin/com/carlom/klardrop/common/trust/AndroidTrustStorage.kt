@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.trust
 
 import android.content.Context
 import android.util.Base64
+import androidx.core.content.edit
 
 /**
  * Android implementation of TrustStorage using SharedPreferences.
@@ -10,7 +11,7 @@ import android.util.Base64
  * Stores both ECDH keys (for key exchange) and ECDSA keys (for message signing).
  */
 class AndroidTrustStorage(
-    private val context: Context
+    context: Context
 ) : TrustStorage {
     
     companion object {
@@ -23,9 +24,9 @@ class AndroidTrustStorage(
     
     override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {
         val encodedKey = Base64.encodeToString(publicKey, Base64.NO_WRAP)
-        sharedPrefs.edit()
-            .putString(KEY_PREFIX + deviceId, encodedKey)
-            .apply()
+        sharedPrefs.edit {
+          putString(KEY_PREFIX + deviceId, encodedKey)
+        }
     }
     
     override suspend fun getTrustedDeviceKey(deviceId: String): ByteArray? {
@@ -36,7 +37,7 @@ class AndroidTrustStorage(
             Base64.decode(encodedKey, Base64.NO_WRAP)
         } catch (e: IllegalArgumentException) {
             // Invalid Base64 encoding - remove corrupted entry
-            sharedPrefs.edit().remove(KEY_PREFIX + deviceId).apply()
+            sharedPrefs.edit { remove(KEY_PREFIX + deviceId) }
             null
         }
     }
@@ -62,31 +63,31 @@ class AndroidTrustStorage(
     }
     
     override suspend fun removeTrustedDevice(deviceId: String) {
-        sharedPrefs.edit()
-            .remove(KEY_PREFIX + deviceId)
+        sharedPrefs.edit {
+          remove(KEY_PREFIX + deviceId)
             .remove(ECDSA_KEY_PREFIX + deviceId)
-            .apply()
+        }
     }
     
     override suspend fun clearAllTrustedDevices() {
-        val editor = sharedPrefs.edit()
+      sharedPrefs.edit {
         val allKeys = sharedPrefs.all.keys
-        
+
         // Remove all entries that start with our prefixes
         for (key in allKeys) {
-            if (key.startsWith(KEY_PREFIX) || key.startsWith(ECDSA_KEY_PREFIX)) {
-                editor.remove(key)
-            }
+          if (key.startsWith(KEY_PREFIX) || key.startsWith(ECDSA_KEY_PREFIX)) {
+            remove(key)
+          }
         }
-        
-        editor.apply()
+
+      }
     }
     
     override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {
         val encodedKey = Base64.encodeToString(ecdsaPublicKey, Base64.NO_WRAP)
-        sharedPrefs.edit()
-            .putString(ECDSA_KEY_PREFIX + deviceId, encodedKey)
-            .apply()
+        sharedPrefs.edit {
+          putString(ECDSA_KEY_PREFIX + deviceId, encodedKey)
+        }
     }
     
     override suspend fun getECDSAKey(deviceId: String): ByteArray? {
@@ -97,7 +98,7 @@ class AndroidTrustStorage(
             Base64.decode(encodedKey, Base64.NO_WRAP)
         } catch (e: IllegalArgumentException) {
             // Invalid Base64 encoding - remove corrupted entry
-            sharedPrefs.edit().remove(ECDSA_KEY_PREFIX + deviceId).apply()
+            sharedPrefs.edit { remove(ECDSA_KEY_PREFIX + deviceId) }
             null
         }
     }
