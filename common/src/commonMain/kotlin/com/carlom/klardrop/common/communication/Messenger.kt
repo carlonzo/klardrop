@@ -3,7 +3,12 @@ package com.carlom.klardrop.common.communication
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
+import com.carlom.klardrop.common.communication.message.FileMessage
+import com.carlom.klardrop.common.communication.message.MessageSignature
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.toSendRequest
+import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.receiver.MessageReceiver
@@ -12,13 +17,12 @@ import com.carlom.klardrop.common.trust.TrustChecker
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.pow
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -44,53 +48,72 @@ class MessengerImpl(
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
 
   override fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress> {
-    println("📨 [Messenger] send() called: deviceId=$deviceId, messageType=${messageRequest.message.type}, messageId=${messageRequest.message.id}")
+    log("Messenger", "send() called: deviceId=$deviceId, messageType=${messageRequest.message.type}, messageId=${messageRequest.message.id}")
 
     val flow = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 1)
 
     messengerScope.launch {
 
       flow.emit(Pending)
-      println("📨 [Messenger] Emitted Pending status for $deviceId")
+      log("Messenger", "Emitted Pending status for $deviceId")
 
       val device = visibleDevices.getDevice(deviceId)
 
       //    skip if not visible
       if (device == null) {
-        println("📨 [Messenger] ❌ Device $deviceId is not visible in device list")
+        log("Messenger", "❌ Device $deviceId is not visible in device list")
         log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
         flow.emit(Error("$deviceId it is not visible"))
         return@launch
       }
       
-      println("📨 [Messenger] ✅ Device $deviceId found in visible devices")
+      log("Messenger", "✅ Device $deviceId found in visible devices")
 
-      // NEW: Check if device is trusted and wrap message if needed
+      // NEW: Check if device is trusted and create signed request if needed
       val finalMessageRequest = try {
         val message = messageRequest.message
         val isPairingMessage = message is com.carlom.klardrop.common.communication.message.TrustPairingRequest ||
                                message is com.carlom.klardrop.common.communication.message.TrustPairingResponse
 
         if (trustChecker.value.isTrusted(deviceId) && !isPairingMessage) {
-          log("Messenger", "Device $deviceId is trusted, attempting to wrap message")
-          val wrappedMessage = trustMessageWrapper.wrapMessage(message, deviceId)
-          if (wrappedMessage != null) {
-            log("Messenger", "Successfully wrapped message for trusted device $deviceId")
-            com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest(wrappedMessage)
-          } else {
-            log("Messenger", "Failed to wrap message for trusted device $deviceId, using original")
-            messageRequest
+          log("Messenger", "Device $deviceId is trusted, creating signed request")
+          
+          // Create signature for trusted device communication
+          val messageSignature = createMessageSignature(message, deviceId)
+          
+          when (message) {
+            is TextMessage -> {
+              log("Messenger", "Creating signed text request for trusted device $deviceId")
+              message.toSimpleSendRequest(messageSignature)
+            }
+            is FileMessage -> {
+              log("Messenger", "Creating signed file request for trusted device $deviceId")
+              // Extract file info from original request if it's a FileSendRequest
+              when (messageRequest) {
+                is FileMessage.FileSendRequest -> {
+                  message.toSendRequest(messageRequest.file, messageRequest.fileTransferId, messageSignature)
+                }
+                else -> {
+                  log("Messenger", "Unexpected request type for FileMessage, using original")
+                  messageRequest
+                }
+              }
+            }
+            else -> {
+              log("Messenger", "Message type ${message.type} not supported for signing, using original")
+              messageRequest
+            }
           }
         } else {
           if (isPairingMessage) {
-            log("Messenger", "Device $deviceId: Pairing message detected, sending unwrapped for protocol handshake")
+            log("Messenger", "Device $deviceId: Pairing message detected, sending unsigned for protocol handshake")
           } else {
-            log("Messenger", "Device $deviceId is not trusted, sending message as-is")
+            log("Messenger", "Device $deviceId is not trusted, sending unsigned request")
           }
           messageRequest
         }
       } catch (e: Exception) {
-        log("Messenger", "Error checking trust status for $deviceId: ${e.message}", e)
+        log("Messenger", "Error creating signed request for $deviceId: ${e.message}", e)
         messageRequest // fallback to original message
       }
 
@@ -224,6 +247,27 @@ class MessengerImpl(
     log("Messenger", "[DEBUG] All retries exhausted for $deviceId after $maxRetries attempts")
     flow.emit(Error("Transfer failed after $maxRetries retry attempts"))
     return false
+  }
+
+  private suspend fun createMessageSignature(message: com.carlom.klardrop.common.communication.message.Message, deviceId: String): MessageSignature? {
+    return try {
+      // Use existing TrustMessageWrapper to create signature, but extract signature data instead of wrapping
+      val wrappedMessage = trustMessageWrapper.wrapMessage(message, deviceId)
+      if (wrappedMessage != null) {
+        MessageSignature(
+          signature = wrappedMessage.signature,
+          timestamp = wrappedMessage.timestamp,
+          nonce = wrappedMessage.nonce,
+          senderId = wrappedMessage.senderId
+        )
+      } else {
+        log("Messenger", "Failed to create signature for message to $deviceId")
+        null
+      }
+    } catch (e: Exception) {
+      log("Messenger", "Error creating signature for $deviceId: ${e.message}", e)
+      null
+    }
   }
 
   private suspend fun getOrEstablishConnection(deviceId: String): ConnectionMessenger? {

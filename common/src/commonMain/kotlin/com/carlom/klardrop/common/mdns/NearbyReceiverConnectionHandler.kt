@@ -449,7 +449,7 @@ class NearbyReceiverConnectionHandler(
       )
     }
 
-    println("emitted progress $messagesProgress")
+    log("NearbyReceiverConnectionHandler", "emitted progress $messagesProgress")
 
   }
 
@@ -459,7 +459,7 @@ class NearbyReceiverConnectionHandler(
     writeChannel: ByteWriteChannel
   ): Frame {
     val offlineFrame = nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
-    println("receiveTransferSetupFrame $offlineFrame")
+    log("NearbyReceiverConnectionHandler", "receiveTransferSetupFrame $offlineFrame")
 
     val payloadTransfer = offlineFrame.v1?.payload_transfer
     require(payloadTransfer != null) { "Payload transfer not found" }

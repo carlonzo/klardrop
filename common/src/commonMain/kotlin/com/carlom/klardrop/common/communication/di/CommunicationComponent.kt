@@ -33,7 +33,6 @@ import com.carlom.klardrop.common.trust.TrustMessageWrapper
 import com.carlom.klardrop.common.trust.TrustPairingRequestHandler
 import com.carlom.klardrop.common.trust.TrustPairingResponseHandler
 import com.carlom.klardrop.common.trust.TrustStorage
-import com.carlom.klardrop.common.trust.TrustedMessageHandler
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -81,8 +80,7 @@ class CommunicationModule(
   }
 
   private val messageHandlers by lazy {
-    // Create handlers map without TrustedMessageHandler first
-    val baseHandlers = mapOf(
+    val handlers = mapOf(
       MessageType.TEXT to TextMessageHandler(serializer, messageRepository),
       MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
       MessageType.ACK_READY to AckMessageHandler(),
@@ -92,13 +90,7 @@ class CommunicationModule(
       MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager)
     )
     
-    // Create a temporary MessageHandlers to pass to TrustedMessageHandler
-    val tempHandlers = MessageHandlersImpl(baseHandlers)
-    
-    // Create the complete handlers map including TrustedMessageHandler
-    val allHandlers = baseHandlers + (MessageType.TRUSTED_MESSAGE to TrustedMessageHandler(serializer, trustManager, tempHandlers))
-    
-    MessageHandlersImpl(allHandlers)
+    MessageHandlersImpl(handlers)
   }
 
   private val connectionsPool by lazy { ConnectionsPoolImpl() }
@@ -108,7 +100,7 @@ class CommunicationModule(
       serializer,
       coroutines,
       messageReceiver,
-      messageRepository
+      trustManager
     )
   }
 

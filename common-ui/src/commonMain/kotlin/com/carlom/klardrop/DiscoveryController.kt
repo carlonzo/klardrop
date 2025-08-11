@@ -86,16 +86,16 @@ class DiscoveryController(
 
     // Register the pairing approval callback
     trustManager.setPairingApprovalCallback(this)
-    println("🖥️ [DiscoveryController] Registered pairingApprovalCallback with TrustManager.")
+    log("DiscoveryController", "Registered pairingApprovalCallback with TrustManager.")
     
     // Register pairing completion callback
     pairingProtocolCoordinator.onPairingCompleted = { deviceId, deviceName, success ->
-      println("🖥️ [DiscoveryController] Pairing completion callback: $deviceName ($deviceId), success: $success")
+      log("DiscoveryController", "Pairing completion callback: $deviceName ($deviceId), success: $success")
       if (success) {
-        println("🖥️ [DiscoveryController] Updating UI to show device $deviceName as Trusted")
+        log("DiscoveryController", "Updating UI to show device $deviceName as Trusted")
         updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
       } else {
-        println("🖥️ [DiscoveryController] Updating UI to show device $deviceName as Untrusted (pairing failed)")
+        log("DiscoveryController", "Updating UI to show device $deviceName as Untrusted (pairing failed)")
         updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
       }
     }
@@ -240,26 +240,26 @@ class DiscoveryController(
   }
 
   override fun onAddToTrusted(deviceUi: DeviceUi) {
-    println("🖥️ [DiscoveryController] onAddToTrusted() called for device: ${deviceUi.deviceName} (${deviceUi.deviceId})")
+    log("DiscoveryController", "onAddToTrusted() called for device: ${deviceUi.deviceName} (${deviceUi.deviceId})")
     log("DiscoveryController", "Adding device ${deviceUi.deviceName} to trusted")
     
     // Update UI to show pairing state
-    println("🖥️ [DiscoveryController] Updating UI to show Pairing state")
+    log("DiscoveryController", "Updating UI to show Pairing state")
     updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Pairing)
     
     coroutines.appScope.launch {
-      println("🖥️ [DiscoveryController] Calling pairingProtocolCoordinator.initiatePairing(${deviceUi.deviceId})")
+      log("DiscoveryController", "Calling pairingProtocolCoordinator.initiatePairing(${deviceUi.deviceId})")
       val result = pairingProtocolCoordinator.initiatePairing(deviceUi.deviceId)
-      println("🖥️ [DiscoveryController] pairingProtocolCoordinator.initiatePairing() returned: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
+      log("DiscoveryController", "pairingProtocolCoordinator.initiatePairing() returned: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
       
       result.fold(
         onSuccess = {
-          println("🖥️ [DiscoveryController] ✅ SUCCESS: Pairing initiation succeeded for ${deviceUi.deviceName}")
+          log("DiscoveryController", "SUCCESS: Pairing initiation succeeded for ${deviceUi.deviceName}")
           log("DiscoveryController", "Successfully initiated pairing with ${deviceUi.deviceName}")
           // The TrustManager callbacks will update the UI state via trust flow
         },
         onFailure = { error ->
-          println("🖥️ [DiscoveryController] ❌ FAILURE: Pairing initiation failed for ${deviceUi.deviceName}: ${error.message}")
+          log("DiscoveryController", "FAILURE: Pairing initiation failed for ${deviceUi.deviceName}: ${error.message}")
           log("DiscoveryController", "Failed to initiate pairing with ${deviceUi.deviceName}: ${error.message}")
           // Reset to untrusted state on failure
           updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Untrusted)
@@ -296,17 +296,17 @@ class DiscoveryController(
     onAccept: suspend () -> Unit,
     onReject: suspend () -> Unit
   ) {
-    println("🖥️ [DiscoveryController] onPairingRequested for device: $deviceName ($deviceId)")
-    println("🖥️ [DiscoveryController] About to update pairingDialogState in screenStateFlow")
+    log("DiscoveryController", "onPairingRequested for device: $deviceName ($deviceId)")
+    log("DiscoveryController", "About to update pairingDialogState in screenStateFlow")
     controllerScope.launch {
       screenStateFlow.update { currentState ->
         // Check if a pairing dialog is already active
         if (currentState.pairingDialogState != null) {
-          println("🖥️ [DiscoveryController] Ignoring duplicate/concurrent pairing request for $deviceId. A dialog is already active.")
+          log("DiscoveryController", "Ignoring duplicate/concurrent pairing request for $deviceId. A dialog is already active.")
           return@update currentState // Don't update the state
         }
 
-        println("🖥️ [DiscoveryController] Creating PairingDialogState for $deviceName")
+        log("DiscoveryController", "Creating PairingDialogState for $deviceName")
         val newState = currentState.copy(
           pairingDialogState = PairingDialogState(
             deviceId = deviceId,
@@ -318,9 +318,9 @@ class DiscoveryController(
                   onAccept()
                   screenStateFlow.update { it.copy(pairingDialogState = null) }
                   updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
-                  println("🖥️ [DiscoveryController] ✅ Pairing accepted for $deviceName")
+                  log("DiscoveryController", "Pairing accepted for $deviceName")
                 } catch (e: Exception) {
-                  println("🖥️ [DiscoveryController] ❌ Failed to accept pairing: ${e.message}")
+                  log("DiscoveryController", "Failed to accept pairing: ${e.message}")
                   screenStateFlow.update { state ->
                     state.copy(
                       pairingDialogState = state.pairingDialogState?.copy(
@@ -339,9 +339,9 @@ class DiscoveryController(
                   onReject()
                   screenStateFlow.update { it.copy(pairingDialogState = null) }
                   updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
-                  println("🖥️ [DiscoveryController] ✅ Pairing rejected for $deviceName")
+                  log("DiscoveryController", "Pairing rejected for $deviceName")
                 } catch (e: Exception) {
-                  println("🖥️ [DiscoveryController] ❌ Failed to reject pairing: ${e.message}")
+                  log("DiscoveryController", "Failed to reject pairing: ${e.message}")
                   screenStateFlow.update { state ->
                     state.copy(
                       pairingDialogState = state.pairingDialogState?.copy(
@@ -356,13 +356,13 @@ class DiscoveryController(
             }
           )
         )
-        println("🖥️ [DiscoveryController] ✅ Successfully updated screenStateFlow with pairingDialogState for $deviceName")
-        println("🖥️ [DiscoveryController] New state pairingDialogState: ${newState.pairingDialogState != null}")
+        log("DiscoveryController", "Successfully updated screenStateFlow with pairingDialogState for $deviceName")
+        log("DiscoveryController", "New state pairingDialogState: ${newState.pairingDialogState != null}")
         newState
       }
-      println("🖥️ [DiscoveryController] Current screenStateFlow pairingDialogState after update: ${screenStateFlow.value.pairingDialogState != null}")
+      log("DiscoveryController", "Current screenStateFlow pairingDialogState after update: ${screenStateFlow.value.pairingDialogState != null}")
       screenStateFlow.value.pairingDialogState?.let { state ->
-        println("🖥️ [DiscoveryController] PairingDialogState details: deviceId=${state.deviceId}, deviceName=${state.deviceName}")
+        log("DiscoveryController", "PairingDialogState details: deviceId=${state.deviceId}, deviceName=${state.deviceName}")
       }
     }
   }

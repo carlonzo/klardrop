@@ -42,18 +42,20 @@ data class FileMessage(
   data class FileSendRequest(
     override val message: FileMessage,
     val file: PlatformFile,
-    val fileTransferId: Long
-  ) : SendMessageRequest
+    val fileTransferId: Long,
+    override val messageSignature: MessageSignature? = null
+  ) : SignedSendMessageRequest
 }
 
-fun FileMessage.toSendRequest(file: PlatformFile, fileTransferId: Long): FileMessage.FileSendRequest {
-  return FileMessage.FileSendRequest(this, file, fileTransferId)
+fun FileMessage.toSendRequest(file: PlatformFile, fileTransferId: Long, messageSignature: MessageSignature? = null): FileMessage.FileSendRequest {
+  return FileMessage.FileSendRequest(this, file, fileTransferId, messageSignature)
 }
 
 // Overload for direct file sharing (not persisted in chat)
-fun FileMessage.toSendRequest(file: PlatformFile): FileMessage.FileSendRequest {
-  return FileMessage.FileSendRequest(this, file, fileTransferId = -1) // -1 indicates no persistence
+fun FileMessage.toSendRequest(file: PlatformFile, messageSignature: MessageSignature? = null): FileMessage.FileSendRequest {
+  return FileMessage.FileSendRequest(this, file, fileTransferId = -1, messageSignature) // -1 indicates no persistence
 }
+
 
 class FileMessageHandler(
   private val serializer: MessageSerializer,

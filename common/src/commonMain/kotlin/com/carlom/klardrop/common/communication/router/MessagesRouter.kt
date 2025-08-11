@@ -7,18 +7,17 @@ import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.SignedSendMessageRequest
 import com.carlom.klardrop.common.communication.readMessage
-import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.persistence.MessageRepository
-import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
 import com.carlom.klardrop.common.receiver.MessageReceiver
-import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
+import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import io.ktor.utils.io.*
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 
 interface MessagesRouter {
@@ -42,7 +41,7 @@ class MessagesRouterImpl(
   private val messageSerializer: MessageSerializer,
   private val coroutines: Coroutines,
   private val messengeReceiver: MessageReceiver,
-  private val messageRepository: MessageRepository // Added
+  private val trustManager: TrustManager
 ) : MessagesRouter {
   override suspend fun onMessageIncoming(
     fromDeviceId: String, 
@@ -111,6 +110,35 @@ class MessagesRouterImpl(
   ) {
     coroutines.ioDispatcher {
       val message = sendMessageRequest.message
+
+      // NEW: Signature verification for signed requests
+      if (sendMessageRequest is SignedSendMessageRequest && sendMessageRequest.isSigned()) {
+        log("MessagesRouter", "Verifying signature for signed message to $toDeviceId")
+        val messageSignature = sendMessageRequest.messageSignature!!
+        
+        try {
+          // Create a TrustedMessage for verification using existing verification logic
+          val trustedMessage = com.carlom.klardrop.common.communication.message.TrustedMessage(
+            payload = messageSerializer.serialize(message),
+            timestamp = messageSignature.timestamp,
+            nonce = messageSignature.nonce,
+            signature = messageSignature.signature,
+            senderId = messageSignature.senderId
+          )
+          
+          val isValid = trustManager.verifyMessage(trustedMessage)
+          if (!isValid) {
+            log("MessagesRouter", "Signature verification failed for message to $toDeviceId")
+            progress.emit(MessengerSendProgress.Error("Signature verification failed"))
+            return@ioDispatcher
+          }
+          log("MessagesRouter", "Signature verification successful for message to $toDeviceId")
+        } catch (e: Exception) {
+          log("MessagesRouter", "Error during signature verification for $toDeviceId: ${e.message}", e)
+          progress.emit(MessengerSendProgress.Error("Signature verification error: ${e.message}"))
+          return@ioDispatcher
+        }
+      }
 
       if (message.hasPayload) {
         // message has extra payload. we need to handle it
