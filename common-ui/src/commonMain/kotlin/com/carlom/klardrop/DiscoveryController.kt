@@ -177,7 +177,7 @@ class DiscoveryController(
           messagesMap[receiveId] = receiveMessageUpdate
 
           var updatedDevices = currentState.devices
-          if (!messageProcessedForUnreadUpdate && receiveMessageUpdate.status.isFinished() && !(receiveMessageUpdate.status is ReceiveMessageStatus.Failed)) {
+          if (!messageProcessedForUnreadUpdate && receiveMessageUpdate.status.isFinished() && receiveMessageUpdate.status !is ReceiveMessageStatus.Failed) {
             if (remoteDeviceId != currentState.navigateToChatDeviceId) {
               updatedDevices = currentState.devices.map { deviceUi ->
                 if (deviceUi.deviceId == remoteDeviceId) {
@@ -198,6 +198,7 @@ class DiscoveryController(
   }
 
   fun dispose() {
+    // TODO implement dispose logic
     controllerScope.cancel()
   }
 

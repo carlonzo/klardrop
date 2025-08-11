@@ -4,15 +4,15 @@ import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.MessageHandler
-import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
 import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.sendMessage
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
+import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.log
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
@@ -117,8 +117,11 @@ class TrustPairingResponseHandler(
  */
 class TrustedMessageHandler(
     private val serializer: MessageSerializer,
-    private val trustManager: TrustManager
+    private val trustManager: TrustManager,
+    private val messageHandlers: com.carlom.klardrop.common.communication.message.MessageHandlers
 ) : MessageHandler<TrustedMessage, SimpleSendMessageRequest> {
+    
+    private val trustMessageWrapper = TrustMessageWrapper(trustManager, serializer)
 
     override suspend fun handleIncoming(
         message: TrustedMessage,
@@ -127,10 +130,10 @@ class TrustedMessageHandler(
     ) {
         log("TrustedMessageHandler", "Received trusted message from ${message.senderId}")
         
-        // Verify the message signature
-        val isValid = trustManager.verifyMessage(message)
+        // Use TrustMessageWrapper to verify and unwrap the message
+        val unwrappedMessage = trustMessageWrapper.unwrapMessage(message)
         
-        if (!isValid) {
+        if (unwrappedMessage == null) {
             log("TrustedMessageHandler", "Message verification failed for ${message.senderId}")
             receiveFlow.update {
                 it.copy(
@@ -140,14 +143,33 @@ class TrustedMessageHandler(
             return
         }
         
-        log("TrustedMessageHandler", "Message verification succeeded for ${message.senderId}")
+        log("TrustedMessageHandler", "Message verification succeeded, unwrapped ${unwrappedMessage.type}")
         
-        // Update receive flow with the verified trusted message
-        receiveFlow.update {
-            it.copy(
-                messages = listOf(message),
-                status = ReceiveMessageStatus.Completed
-            )
+        // CRITICAL SAFEGUARD: Prevent infinite dispatch loops 
+        if (unwrappedMessage.type == MessageType.TRUSTED_MESSAGE) {
+            log("TrustedMessageHandler", "ERROR: Nested TRUSTED_MESSAGE detected. Dropping to prevent infinite loop.")
+            receiveFlow.update {
+                it.copy(
+                    status = ReceiveMessageStatus.Failed("Invalid nested trusted message")
+                )
+            }
+            return
+        }
+        
+        // Delegate to the appropriate handler for the unwrapped message
+        val targetHandler = messageHandlers[unwrappedMessage.type]
+        if (targetHandler != null) {
+            log("TrustedMessageHandler", "Delegating to ${unwrappedMessage.type} handler")
+            @Suppress("UNCHECKED_CAST")
+            val handler = targetHandler
+            handler.handleIncoming(unwrappedMessage, readChannel, receiveFlow)
+        } else {
+            log("TrustedMessageHandler", "No handler found for unwrapped message type ${unwrappedMessage.type}")
+            receiveFlow.update {
+                it.copy(
+                    status = ReceiveMessageStatus.Failed("No handler for message type ${unwrappedMessage.type}")
+                )
+            }
         }
     }
 

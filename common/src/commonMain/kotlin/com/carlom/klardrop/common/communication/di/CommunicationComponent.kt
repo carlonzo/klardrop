@@ -81,19 +81,24 @@ class CommunicationModule(
   }
 
   private val messageHandlers by lazy {
-    MessageHandlersImpl(
-      mapOf(
-        MessageType.TEXT to TextMessageHandler(serializer, messageRepository),
-        MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
-
-        MessageType.ACK_READY to AckMessageHandler(),
-        MessageType.ACK_RECEIVED to AckMessageHandler(),
-        MessageType.TRUST_PAIRING_REQUEST to TrustPairingRequestHandler(serializer, trustManager),
-        MessageType.TRUST_PAIRING_RESPONSE to TrustPairingResponseHandler(serializer, trustManager),
-        MessageType.TRUSTED_MESSAGE to TrustedMessageHandler(serializer, trustManager),
-        MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager)
-      )
+    // Create handlers map without TrustedMessageHandler first
+    val baseHandlers = mapOf(
+      MessageType.TEXT to TextMessageHandler(serializer, messageRepository),
+      MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
+      MessageType.ACK_READY to AckMessageHandler(),
+      MessageType.ACK_RECEIVED to AckMessageHandler(),
+      MessageType.TRUST_PAIRING_REQUEST to TrustPairingRequestHandler(serializer, trustManager),
+      MessageType.TRUST_PAIRING_RESPONSE to TrustPairingResponseHandler(serializer, trustManager),
+      MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager)
     )
+    
+    // Create a temporary MessageHandlers to pass to TrustedMessageHandler
+    val tempHandlers = MessageHandlersImpl(baseHandlers)
+    
+    // Create the complete handlers map including TrustedMessageHandler
+    val allHandlers = baseHandlers + (MessageType.TRUSTED_MESSAGE to TrustedMessageHandler(serializer, trustManager, tempHandlers))
+    
+    MessageHandlersImpl(allHandlers)
   }
 
   private val connectionsPool by lazy { ConnectionsPoolImpl() }
