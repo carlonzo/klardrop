@@ -42,7 +42,8 @@ class MessengerImpl(
   private val nearbyClient: Lazy<NearbyClient>,
   private val messageReceiver: MessageReceiver,
   private val trustChecker: Lazy<TrustChecker>,
-  private val trustMessageWrapper: com.carlom.klardrop.common.trust.TrustMessageWrapper
+  private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
+  private val messageSerializer: MessageSerializer
 ) : Messenger {
 
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -69,40 +70,28 @@ class MessengerImpl(
       
       log("Messenger", "✅ Device $deviceId found in visible devices")
 
-      // NEW: Check if device is trusted and create signed request if needed
+      // Check if device is trusted and wrap message in TrustedMessage if needed
       val finalMessageRequest = try {
         val message = messageRequest.message
         val isPairingMessage = message is com.carlom.klardrop.common.communication.message.TrustPairingRequest ||
                                message is com.carlom.klardrop.common.communication.message.TrustPairingResponse
 
         if (trustChecker.value.isTrusted(deviceId) && !isPairingMessage) {
-          log("Messenger", "Device $deviceId is trusted, creating signed request")
+          log("Messenger", "Device $deviceId is trusted, creating TrustedMessage")
           
-          // Create signature for trusted device communication
-          val messageSignature = createMessageSignature(message, deviceId)
+          // Serialize the original message
+          val messageBytes = messageSerializer.serialize(message)
           
-          when (message) {
-            is TextMessage -> {
-              log("Messenger", "Creating signed text request for trusted device $deviceId")
-              message.toSimpleSendRequest(messageSignature)
-            }
-            is FileMessage -> {
-              log("Messenger", "Creating signed file request for trusted device $deviceId")
-              // Extract file info from original request if it's a FileSendRequest
-              when (messageRequest) {
-                is FileMessage.FileSendRequest -> {
-                  message.toSendRequest(messageRequest.file, messageRequest.fileTransferId, messageSignature)
-                }
-                else -> {
-                  log("Messenger", "Unexpected request type for FileMessage, using original")
-                  messageRequest
-                }
-              }
-            }
-            else -> {
-              log("Messenger", "Message type ${message.type} not supported for signing, using original")
-              messageRequest
-            }
+          // Sign the message using TrustManager
+          val trustedMessage = trustManager.signMessage(messageBytes)
+          
+          if (trustedMessage != null) {
+            log("Messenger", "Successfully created TrustedMessage for device $deviceId")
+            // Create a new request with the TrustedMessage
+            trustedMessage.toSimpleSendRequest()
+          } else {
+            log("Messenger", "Failed to create TrustedMessage for device $deviceId, sending unsigned")
+            messageRequest
           }
         } else {
           if (isPairingMessage) {
@@ -113,7 +102,7 @@ class MessengerImpl(
           messageRequest
         }
       } catch (e: Exception) {
-        log("Messenger", "Error creating signed request for $deviceId: ${e.message}", e)
+        log("Messenger", "Error creating TrustedMessage for $deviceId: ${e.message}", e)
         messageRequest // fallback to original message
       }
 
@@ -249,26 +238,6 @@ class MessengerImpl(
     return false
   }
 
-  private suspend fun createMessageSignature(message: com.carlom.klardrop.common.communication.message.Message, deviceId: String): MessageSignature? {
-    return try {
-      // Use existing TrustMessageWrapper to create signature, but extract signature data instead of wrapping
-      val wrappedMessage = trustMessageWrapper.wrapMessage(message, deviceId)
-      if (wrappedMessage != null) {
-        MessageSignature(
-          signature = wrappedMessage.signature,
-          timestamp = wrappedMessage.timestamp,
-          nonce = wrappedMessage.nonce,
-          senderId = wrappedMessage.senderId
-        )
-      } else {
-        log("Messenger", "Failed to create signature for message to $deviceId")
-        null
-      }
-    } catch (e: Exception) {
-      log("Messenger", "Error creating signature for $deviceId: ${e.message}", e)
-      null
-    }
-  }
 
   private suspend fun getOrEstablishConnection(deviceId: String): ConnectionMessenger? {
     log("Messenger", "[DEBUG] getOrEstablishConnection() called for $deviceId")

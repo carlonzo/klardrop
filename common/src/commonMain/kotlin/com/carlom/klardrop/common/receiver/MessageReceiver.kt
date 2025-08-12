@@ -73,8 +73,8 @@ internal class MessageReceiverImpl(
 }
 
 data class ReceiveMessageUpdate(
-  val device: DeviceInfo? = null, val messages: List<Message> = emptyList(),
-
+  val device: DeviceInfo? = null,
+  val messages: List<Message> = emptyList(),
   val status: ReceiveMessageStatus
 )
 

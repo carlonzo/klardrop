@@ -70,9 +70,6 @@ class CommunicationModule(
   // PairingProtocolCoordinator will be initialized manually after DI cycle is complete
   private var pairingProtocolCoordinator: PairingProtocolCoordinator? = null
 
-  private val trustMessageWrapper by lazy {
-    TrustMessageWrapper(trustManager, serializer)
-  }
 
   // Clipboard sync components
   private val clipboardSyncManager by lazy {
@@ -150,7 +147,8 @@ class CommunicationModule(
       nearbyClient,
       messageReceiver,
       lazy { trustChecker },
-      trustMessageWrapper
+      trustManager,
+      serializer
     )
   }
 
@@ -161,7 +159,6 @@ class CommunicationModule(
   fun trustManager() = trustManager
   fun pairingProtocolCoordinator() = pairingProtocolCoordinator ?: initializePairingProtocolCoordinator()
   fun trustStorage() = trustStorage
-  fun trustMessageWrapper() = trustMessageWrapper
   fun clipboardSyncManager() = clipboardSyncManager
 
   private fun initializePairingProtocolCoordinator(): PairingProtocolCoordinator {

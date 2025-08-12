@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,7 +60,6 @@ import kotlinx.coroutines.delay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceChatScreen(
-  deviceId: String,
   deviceName: String,
   viewModel: DeviceChatViewModel,
   onBackClicked: () -> Unit,
@@ -82,7 +79,7 @@ fun DeviceChatScreen(
   }
 
   val imagePickerLauncher = rememberFilePickerLauncher(
-    mode = FileKitMode.Multiple(), 
+    mode = FileKitMode.Multiple(),
     type = FileKitType.ImageAndVideo
   ) { files ->
     if (!files.isNullOrEmpty()) {
@@ -153,13 +150,13 @@ fun DeviceChatScreen(
           ) {
             Icon(Icons.Default.Add, contentDescription = "Attach")
           }
-          
+
           DropdownMenu(
             expanded = showAttachmentMenu,
             onDismissRequest = { showAttachmentMenu = false }
           ) {
             DropdownMenuItem(
-              text = { 
+              text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.AttachFile, contentDescription = null)
                   Spacer(modifier = Modifier.width(8.dp))
@@ -172,7 +169,7 @@ fun DeviceChatScreen(
               }
             )
             DropdownMenuItem(
-              text = { 
+              text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.Image, contentDescription = null)
                   Spacer(modifier = Modifier.width(8.dp))
@@ -186,7 +183,7 @@ fun DeviceChatScreen(
             )
           }
         }
-        
+
         OutlinedTextField(
           value = textToSend,
           onValueChange = { textToSend = it },
@@ -227,7 +224,7 @@ fun TextMessageBubble(
     ) {
       Box(modifier = Modifier.padding(8.dp)) {
         Text(text = message.content)
-        
+
         // Show status indicator for sent messages only
         if (message.is_sender != 0L && sendProgress != null) {
           when (sendProgress) {
@@ -242,6 +239,7 @@ fun TextMessageBubble(
                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
               )
             }
+
             is com.carlom.klardrop.common.communication.MessengerSendProgress.Error -> {
               Icon(
                 imageVector = Icons.Default.Cancel,
@@ -252,6 +250,7 @@ fun TextMessageBubble(
                 tint = Color.Red
               )
             }
+
             is com.carlom.klardrop.common.communication.MessengerSendProgress.Completed -> {
               // No indicator for completed messages
             }
@@ -299,8 +298,8 @@ fun FileMessageBubble(
             fileTransferState?.let { state ->
               if (state.total_size > 0) {
                 LinearProgressIndicator(
-                  progress = state.transferred_size.toFloat() / state.total_size.toFloat(),
-                  modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 2.dp)
+                  progress = { (state.transferred_size / state.total_size).toFloat() },
+                  modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 2.dp),
                 )
                 Text(
                   text = "${(state.transferred_size.toFloat() / 1024).toInt()}KB / ${(state.total_size.toFloat() / 1024).toInt()}KB",

@@ -81,7 +81,6 @@ fun DiscoveryScreen(
       uiDependencies.deviceChatViewModelFactory(discoveryState.navigateToChatDeviceId!!)
     }
     DeviceChatScreen(
-      deviceId = discoveryState.navigateToChatDeviceId!!,
       deviceName = discoveryState.navigateToChatDeviceName!!,
       viewModel = chatViewModel,
       onBackClicked = { discoveryController.onBackFromChat() },

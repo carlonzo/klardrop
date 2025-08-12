@@ -25,7 +25,8 @@ class TrustManager(
   private val crypto: TrustCrypto,
   private val storage: TrustStorage,
   private val clock: Clock,
-  private val currentDeviceProvider: CurrentDeviceProvider
+  private val currentDeviceProvider: CurrentDeviceProvider,
+  private val nonceManager: NonceManager = NonceManager()
 ) {
 
   companion object {
@@ -285,43 +286,43 @@ class TrustManager(
    */
   suspend fun finalizePairing(response: TrustPairingResponse) = withContext(Dispatchers.Default) {
     println("🔐 [TrustManager] finalizePairing() called for device: ${response.deviceId} (${response.deviceName}), accepted: ${response.accepted}")
-    
+
     val session = pairingSessions[response.deviceId]
     if (session == null) {
       println("🔐 [TrustManager] ❌ No pairing session found for device: ${response.deviceId}")
       return@withContext
     }
-    
+
     println("🔐 [TrustManager] Found pairing session for device: ${response.deviceId}")
 
     try {
       if (!response.accepted) {
         println("🔐 [TrustManager] ❌ Pairing was rejected by device: ${response.deviceId}")
-        
+
         // Emit failure event for UI updates
         _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, false))
-        
+
         // TODO: Show rejection message to user
         return@withContext
       }
 
       println("🔐 [TrustManager] Pairing was accepted, computing shared secret...")
-      
+
       // Compute shared secret (for future use)
       val sharedSecret = crypto.computeECDHSecret(
         privateKey = session.ecdhKeyPair.privateKey,
         peerPublicKeyBytes = response.ecdhPublicKey
       )
-      
+
       println("🔐 [TrustManager] Computed shared secret, storing trusted device keys...")
 
       // Store peer's keys
       storage.storeTrustedDevice(response.deviceId, response.ecdhPublicKey)  // ECDH key
       storage.storeECDSAKey(response.deviceId, response.ecdsaPublicKey)  // ECDSA key for verification
-      
+
       println("🔐 [TrustManager] ✅ Successfully stored trusted device keys for: ${response.deviceId}")
       println("🔐 [TrustManager] Device ${response.deviceId} is now trusted")
-      
+
       // Emit completion event for UI updates
       _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, true))
 
@@ -329,10 +330,10 @@ class TrustManager(
 
     } catch (e: Exception) {
       println("🔐 [TrustManager] ❌ Exception during finalizePairing: ${e.message}")
-      
+
       // Emit failure event for UI updates
       _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, false))
-      
+
       // TODO: Show error message to user
     } finally {
       // Clean up session
@@ -398,6 +399,7 @@ class TrustManager(
 
   /**
    * Verify a signed message from a trusted device.
+   * Implements timing attack protection and nonce replay prevention.
    * @param trustedMessage Message to verify
    * @return true if signature is valid and from trusted device
    */
@@ -407,23 +409,31 @@ class TrustManager(
       val senderECDSAKey = storage.getECDSAKey(trustedMessage.senderId)
         ?: return false
 
-      // Check timestamp to prevent replay attacks
-      val currentTime = clock.currentTimeMillis()
-      if (kotlin.math.abs(currentTime - trustedMessage.timestamp) > MAX_TIME_DIFF_SECONDS * 1000) {
-        return false
-      }
+      // --- Perform all checks and store results to avoid timing attacks ---
 
-      // Recreate signed data
+      // 1. Timestamp check
+      val currentTime = clock.currentTimeMillis()
+      val isTimestampValid = kotlin.math.abs(currentTime - trustedMessage.timestamp) <= MAX_TIME_DIFF_SECONDS * 1000
+
+      // 2. Nonce check - prevents replay attacks
+      val isNonceValid = nonceManager.isNonceValid(trustedMessage.senderId, trustedMessage.nonce)
+
+      // 3. Signature check (The expensive part)
+      // We perform this even if other checks fail to keep timing consistent
       val dataToVerify = crypto.combineForSigning(
         trustedMessage.payload,
         trustedMessage.timestamp,
         trustedMessage.nonce
       )
+      val isSignatureValid = crypto.verifyECDSA(senderECDSAKey, dataToVerify, trustedMessage.signature)
 
-      // Verify ECDSA signature
-      return crypto.verifyECDSA(senderECDSAKey, dataToVerify, trustedMessage.signature)
+      // Use bitwise 'and' to prevent short-circuiting
+      // All three booleans are evaluated before the final result is determined
+      return isTimestampValid and isNonceValid and isSignatureValid
 
     } catch (e: Exception) {
+      // Log internal error for debugging but return generic failure
+      println("Internal error during message verification: ${e.message}")
       return false
     }
   }
@@ -464,7 +474,9 @@ data class TrustedDevice(
 sealed interface PairingEvent {
   data class SendPairingRequest(val targetDeviceId: String, val request: TrustPairingRequest) : PairingEvent
   data class SendPairingResponse(val targetDeviceId: String, val response: TrustPairingResponse) : PairingEvent
-  data class PairingRequestReceived(val request: TrustPairingRequest, val senderAddress: String, val decision: PairingDecision?) : PairingEvent
+  data class PairingRequestReceived(val request: TrustPairingRequest, val senderAddress: String, val decision: PairingDecision?) :
+    PairingEvent
+
   data class PairingCompleted(val deviceId: String, val deviceName: String, val success: Boolean) : PairingEvent
 }
 

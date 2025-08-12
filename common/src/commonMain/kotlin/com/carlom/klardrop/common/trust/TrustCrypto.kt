@@ -1,19 +1,20 @@
 package com.carlom.klardrop.common.trust
 
+import dev.whyoleg.cryptography.CryptographyProvider
+import dev.whyoleg.cryptography.algorithms.ECDSA
+import dev.whyoleg.cryptography.algorithms.ECDH
+import dev.whyoleg.cryptography.algorithms.EC
+import dev.whyoleg.cryptography.algorithms.SHA256
 import dev.whyoleg.cryptography.random.CryptographyRandom
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlin.time.measureTime
 
 /**
  * Cryptographic operations for the trust system.
  * Provides ECDH key exchange and ECDSA signature operations for secure device pairing.
  *
- * This implementation uses placeholder crypto for now. The actual cryptography-kotlin
- * library API will be integrated once the correct usage patterns are confirmed.
- *
- * Security Note: This is a DEVELOPMENT implementation. Production code must use
- * actual cryptographic operations from the cryptography-kotlin library.
+ * This implementation uses the cryptography-kotlin library for all cryptographic
+ * operations, ensuring secure and multiplatform-compatible cryptography.
  */
 class TrustCrypto {
 
@@ -26,6 +27,11 @@ class TrustCrypto {
     private const val ECDSA_SIGNATURE_SIZE = 64  // P-256 ECDSA signature (r,s)
     private const val SHARED_SECRET_SIZE = 32  // P-256 shared secret
   }
+
+  // Algorithm instances initialized once for efficiency
+  private val provider = CryptographyProvider.Default
+  private val ecdsa = provider.get(ECDSA)
+  private val ecdh = provider.get(ECDH)
 
   // Key pair wrapper classes
   data class ECDHKeyPair(
@@ -55,6 +61,16 @@ class TrustCrypto {
     }
 
     override fun hashCode(): Int = data.contentHashCode()
+
+    override fun toString(): String = "ECDHPrivateKey(data=[REDACTED])"
+
+    /**
+     * Securely clear the private key data from memory.
+     * Call this when the key is no longer needed.
+     */
+    fun clear() {
+      data.fill(0)
+    }
   }
 
   data class ECDSAKeyPair(
@@ -84,6 +100,16 @@ class TrustCrypto {
     }
 
     override fun hashCode(): Int = data.contentHashCode()
+
+    override fun toString(): String = "ECDSAPrivateKey(data=[REDACTED])"
+
+    /**
+     * Securely clear the private key data from memory.
+     * Call this when the key is no longer needed.
+     */
+    fun clear() {
+      data.fill(0)
+    }
   }
 
   /**
@@ -92,15 +118,20 @@ class TrustCrypto {
    * @return ECDH keypair
    */
   suspend fun generateECDHKeyPair(): ECDHKeyPair = withContext(Dispatchers.Default) {
-    // TODO: Replace with actual ECDH key generation using cryptography-kotlin
-    // For now, generate random bytes as placeholder
-    val publicKeyData = CryptographyRandom.nextBytes(ECDH_PUBLIC_KEY_SIZE)
-    val privateKeyData = CryptographyRandom.nextBytes(ECDH_PRIVATE_KEY_SIZE)
+    try {
+      val keyPairGenerator = ecdh.keyPairGenerator(EC.Curve.P256)
+      val keyPair = keyPairGenerator.generateKey()
 
-    ECDHKeyPair(
-      publicKey = ECDHPublicKey(publicKeyData),
-      privateKey = ECDHPrivateKey(privateKeyData)
-    )
+      val publicKeyData = keyPair.publicKey.encodeToByteArray(EC.PublicKey.Format.RAW)
+      val privateKeyData = keyPair.privateKey.encodeToByteArray(EC.PrivateKey.Format.RAW)
+
+      ECDHKeyPair(
+        publicKey = ECDHPublicKey(publicKeyData),
+        privateKey = ECDHPrivateKey(privateKeyData)
+      )
+    } catch (e: Exception) {
+      throw RuntimeException("Failed to generate ECDH key pair", e)
+    }
   }
 
   /**
@@ -113,11 +144,23 @@ class TrustCrypto {
     privateKey: ECDHPrivateKey,
     peerPublicKeyBytes: ByteArray
   ): ByteArray = withContext(Dispatchers.Default) {
-    // TODO: Replace with actual ECDH shared secret computation
-    // For now, generate deterministic bytes based on inputs
-    val combined = privateKey.data + peerPublicKeyBytes
-    val hash = simpleHash(combined)
-    hash.sliceArray(0 until SHARED_SECRET_SIZE)
+    try {
+      // Validate input size
+      if (peerPublicKeyBytes.size != ECDH_PUBLIC_KEY_SIZE) {
+        throw IllegalArgumentException("Invalid peer public key size: ${peerPublicKeyBytes.size}")
+      }
+
+      val privateKeyDecoder = ecdh.privateKeyDecoder(EC.Curve.P256)
+      val ourPrivateKey = privateKeyDecoder.decodeFromByteArray(EC.PrivateKey.Format.RAW, privateKey.data)
+
+      val publicKeyDecoder = ecdh.publicKeyDecoder(EC.Curve.P256)
+      val peerPublicKey = publicKeyDecoder.decodeFromByteArray(EC.PublicKey.Format.RAW, peerPublicKeyBytes)
+
+      val sharedSecretGenerator = ourPrivateKey.sharedSecretGenerator()
+      sharedSecretGenerator.generateSharedSecret(peerPublicKey).toByteArray()
+    } catch (e: Exception) {
+      throw RuntimeException("Failed to compute ECDH shared secret", e)
+    }
   }
 
   /**
@@ -126,38 +169,41 @@ class TrustCrypto {
    * @return ECDSA keypair
    */
   suspend fun generateECDSAKeyPair(): ECDSAKeyPair = withContext(Dispatchers.Default) {
-    // TODO: Replace with actual ECDSA key generation using cryptography-kotlin
-    // For now, generate random bytes as placeholder
-    val publicKeyData = CryptographyRandom.nextBytes(ECDSA_PUBLIC_KEY_SIZE)
-    val privateKeyData = CryptographyRandom.nextBytes(ECDSA_PRIVATE_KEY_SIZE)
+    try {
+      val keyPairGenerator = ecdsa.keyPairGenerator(EC.Curve.P256)
+      val keyPair = keyPairGenerator.generateKey()
 
-    ECDSAKeyPair(
-      publicKey = ECDSAPublicKey(publicKeyData),
-      privateKey = ECDSAPrivateKey(privateKeyData)
-    )
+      val publicKeyData = keyPair.publicKey.encodeToByteArray(EC.PublicKey.Format.RAW)
+      val privateKeyData = keyPair.privateKey.encodeToByteArray(EC.PrivateKey.Format.RAW)
+
+      ECDSAKeyPair(
+        publicKey = ECDSAPublicKey(publicKeyData),
+        privateKey = ECDSAPrivateKey(privateKeyData)
+      )
+    } catch (e: Exception) {
+      throw RuntimeException("Failed to generate ECDSA key pair", e)
+    }
   }
 
   /**
    * Sign data with ECDSA private key.
    * @param privateKey ECDSA private key
    * @param data Data to sign
-   * @return Signature bytes in DER format
+   * @return Signature bytes in RAW format (r || s)
    */
   suspend fun signWithECDSA(
     privateKey: ECDSAPrivateKey,
     data: ByteArray
   ): ByteArray = withContext(Dispatchers.Default) {
-    // TODO: Replace with actual ECDSA signing using cryptography-kotlin
-    // For now, generate deterministic signature based on private key and data
+    try {
+      val privateKeyDecoder = ecdsa.privateKeyDecoder(EC.Curve.P256)
+      val signingKey = privateKeyDecoder.decodeFromByteArray(EC.PrivateKey.Format.RAW, privateKey.data)
 
-    // Simulate <50ms signing time
-    val signTime = measureTime {
-      kotlinx.coroutines.delay(30) // Simulate cryptographic operation
+      val signatureGenerator = signingKey.signatureGenerator(digest = SHA256, format = ECDSA.SignatureFormat.RAW)
+      signatureGenerator.generateSignature(data)
+    } catch (e: Exception) {
+      throw RuntimeException("Failed to sign data with ECDSA", e)
     }
-
-    val combined = privateKey.data + data
-    val hash = simpleHash(combined)
-    hash.sliceArray(0 until ECDSA_SIGNATURE_SIZE)
   }
 
   /**
@@ -172,38 +218,41 @@ class TrustCrypto {
     data: ByteArray,
     signature: ByteArray
   ): Boolean = withContext(Dispatchers.Default) {
-    // TODO: Replace with actual ECDSA verification using cryptography-kotlin
-    // For now, perform basic validation
+    try {
+      // Fast-fail for obviously incorrect inputs
+      if (publicKeyBytes.size != ECDSA_PUBLIC_KEY_SIZE) return@withContext false
+      if (signature.size != ECDSA_SIGNATURE_SIZE) return@withContext false
 
-    // Simulate <50ms verification time
-    val verifyTime = measureTime {
-      kotlinx.coroutines.delay(30) // Simulate cryptographic operation
+      val publicKeyDecoder = ecdsa.publicKeyDecoder(EC.Curve.P256)
+      val verificationKey = publicKeyDecoder.decodeFromByteArray(EC.PublicKey.Format.RAW, publicKeyBytes)
+
+      val signatureVerifier = verificationKey.signatureVerifier(digest = SHA256, format = ECDSA.SignatureFormat.RAW)
+      signatureVerifier.tryVerifySignature(data, signature)
+    } catch (_: Exception) {
+      // Log generic error for debugging without exposing internal details
+      println("ECDSA signature verification failed")
+      false
     }
-
-    // Basic validation checks
-    if (publicKeyBytes.size != ECDSA_PUBLIC_KEY_SIZE) return@withContext false
-    if (signature.size != ECDSA_SIGNATURE_SIZE) return@withContext false
-
-    // In placeholder implementation, always return true for valid-sized inputs
-    true
   }
 
   /**
    * Encode public key to bytes.
+   * This is now a pass-through function as the wrapper already holds the raw bytes.
    * @param publicKey ECDH public key
    * @return Public key bytes
    */
-  suspend fun encodePublicKey(publicKey: ECDHPublicKey): ByteArray = withContext(Dispatchers.Default) {
-    return@withContext publicKey.data
+  fun encodePublicKey(publicKey: ECDHPublicKey): ByteArray {
+    return publicKey.data
   }
 
   /**
    * Encode ECDSA public key to bytes.
+   * This is now a pass-through function as the wrapper already holds the raw bytes.
    * @param publicKey ECDSA public key
    * @return Public key bytes
    */
-  suspend fun encodeECDSAPublicKey(publicKey: ECDSAPublicKey): ByteArray = withContext(Dispatchers.Default) {
-    return@withContext publicKey.data
+  fun encodeECDSAPublicKey(publicKey: ECDSAPublicKey): ByteArray {
+    return publicKey.data
   }
 
   /**
@@ -223,23 +272,6 @@ class TrustCrypto {
     return payload + timestampBytes + nonce
   }
 
-  /**
-   * Simple hash function for placeholder implementation.
-   * NOT cryptographically secure - for development only.
-   */
-  private fun simpleHash(data: ByteArray): ByteArray {
-    // Very simple hash for placeholder - XOR all bytes and repeat
-    var hash = ByteArray(64) { 0 }
-    for (i in data.indices) {
-      hash[i % 64] = (hash[i % 64].toInt() xor data[i].toInt()).toByte()
-    }
-    // Mix the hash a bit more
-    for (i in 0 until 64) {
-      val next = (i + 1) % 64
-      hash[i] = (hash[i].toInt() xor hash[next].toInt()).toByte()
-    }
-    return hash
-  }
 
   private fun Long.toByteArray(): ByteArray {
     return byteArrayOf(

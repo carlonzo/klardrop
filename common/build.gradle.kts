@@ -94,6 +94,7 @@ kotlin {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
       languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
+      languageSettings.optIn("kotlin.time.ExperimentalTime")
     }
   }
 
