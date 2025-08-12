@@ -38,7 +38,7 @@ private const val LOG_DEBUG = true
 
 private fun log(tag: String, message: String) {
   if (LOG_DEBUG)
-    com.carlom.klardrop.common.utils.log(tag, message)
+    log(tag, message)
 }
 
 internal fun createEndpointInfo(currentDevice: CurrentDevice): ByteArray {
@@ -264,7 +264,7 @@ internal suspend fun sendEncryptedWrappedPayload(
     val sizeStartRange = (chunkIndex * SANE_FRAME_LENGTH)
     val size = min(SANE_FRAME_LENGTH, totalSize - sizeStartRange)
     val chunk = payload.toByteString(sizeStartRange, size)
-    println("Sending chunk $chunkIndex chunkBody from:sizeStartRange size: $size chunkSize: ${chunk.size} total size $totalSize")
+    log("NearbyShareUtils", "Sending chunk $chunkIndex chunkBody from:sizeStartRange size: $size chunkSize: ${chunk.size} total size $totalSize")
 
     sendChunkWrappedPayload(
       totalSize = totalSizeLong,

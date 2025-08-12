@@ -27,7 +27,8 @@ class ShareToDeviceController(
   private val visibleDevices: VisibleDevices,
   private val messenger: Messenger,
   private val platformFileSystem: PlatformFileSystem,
-  private val messageRepository: MessageRepository
+  private val messageRepository: MessageRepository,
+  private val trustStorage: com.carlom.klardrop.common.trust.TrustStorage
 ) {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -35,11 +36,12 @@ class ShareToDeviceController(
     visibleDevices = commonComponent.visibleDevices(),
     messenger = commonComponent.messenger(),
     platformFileSystem = commonComponent.platformFileSystem(),
-    messageRepository = commonComponent.messageRepository()
+    messageRepository = commonComponent.messageRepository(),
+    trustStorage = commonComponent.trustStorage()
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher)
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository)
+  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage)
 
   private var onDataToSend: OnDataToSend? = null
 

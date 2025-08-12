@@ -1,0 +1,524 @@
+package com.carlom.klardrop.common.trust
+
+import com.carlom.klardrop.common.communication.message.TrustPairingRequest
+import com.carlom.klardrop.common.communication.message.TrustPairingResponse
+import com.carlom.klardrop.common.communication.message.TrustedMessage
+import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
+import com.carlom.klardrop.common.utils.Clock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.seconds
+
+/**
+ * Manages trust relationships between devices.
+ * Pure domain component focused on trust logic, cryptography, and state management.
+ * Does not handle communication - that's delegated to PairingProtocolCoordinator.
+ */
+class TrustManager(
+  private val crypto: TrustCrypto,
+  private val storage: TrustStorage,
+  private val clock: Clock,
+  private val currentDeviceProvider: CurrentDeviceProvider,
+  private val nonceManager: NonceManager = NonceManager()
+) {
+
+  companion object {
+    private const val PAIRING_TIMEOUT_SECONDS = 30
+    private const val MAX_TIME_DIFF_SECONDS = 300 // 5 minutes
+  }
+
+  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+  // Temporary storage for in-progress pairing sessions
+  private val pairingSessions = mutableMapOf<String, PairingSession>()
+
+  // ECDSA keypair for this device (for signing messages)
+  private var deviceECDSAKeys: TrustCrypto.ECDSAKeyPair? = null
+
+  // Callback for UI approval dialogs
+  private var pairingApprovalCallback: PairingApprovalCallback? = null
+
+  // Events for pairing operations that external coordinators can listen to
+  private val _pairingEvents = MutableSharedFlow<PairingEvent>(extraBufferCapacity = 10)
+  val pairingEvents: SharedFlow<PairingEvent> = _pairingEvents.asSharedFlow()
+
+  /**
+   * Initialize the trust manager and generate device signing keys.
+   */
+  suspend fun initialize() {
+    if (deviceECDSAKeys == null) {
+      deviceECDSAKeys = crypto.generateECDSAKeyPair()
+      // TODO: Persist device ECDSA keys for consistency across restarts
+    }
+  }
+
+  /**
+   * Create a pairing request for a target device.
+   * Returns the request data to be sent by PairingProtocolCoordinator.
+   * @param targetDeviceId Device ID to pair with
+   * @return Result containing the TrustPairingRequest or failure
+   */
+  suspend fun createPairingRequest(targetDeviceId: String): Result<TrustPairingRequest> = withContext(Dispatchers.Default) {
+    println("🔐 [TrustManager] createPairingRequest() called for deviceId: $targetDeviceId")
+    return@withContext try {
+      val currentDevice = currentDeviceProvider.get()
+      println("🔐 [TrustManager] Current device: ${currentDevice.shortDeviceId} (${currentDevice.deviceName})")
+
+      // Ensure we have ECDSA keys
+      initialize()
+      val ecdsaKeys = deviceECDSAKeys ?: return@withContext Result.failure(Exception("ECDSA keys not initialized"))
+      println("🔐 [TrustManager] ECDSA keys initialized: ${ecdsaKeys != null}")
+
+      // Generate ECDH keypair for this pairing session
+      val ecdhKeyPair = crypto.generateECDHKeyPair()
+      val ecdhPublicKeyBytes = crypto.encodePublicKey(ecdhKeyPair.publicKey)
+      val ecdsaPublicKeyBytes = crypto.encodeECDSAPublicKey(ecdsaKeys.publicKey)
+      println("🔐 [TrustManager] Generated ECDH keypair, public key size: ${ecdhPublicKeyBytes.size} bytes")
+
+      // Store session for completion when response arrives
+      val session = PairingSession(
+        targetDeviceId = targetDeviceId,
+        ecdhKeyPair = ecdhKeyPair,
+        timestamp = clock.currentTimeMillis()
+      )
+      pairingSessions[targetDeviceId] = session
+      println("🔐 [TrustManager] Stored pairing session for device: $targetDeviceId")
+
+      // Create pairing request
+      val request = TrustPairingRequest(
+        deviceId = currentDevice.shortDeviceId,
+        deviceName = currentDevice.deviceName,
+        ecdhPublicKey = ecdhPublicKeyBytes,
+        ecdsaPublicKey = ecdsaPublicKeyBytes,
+        timestamp = clock.currentTimeMillis(),
+        deviceType = currentDevice.deviceType.name,
+        appVersion = "1.0.0" // TODO: Get from build config
+      )
+      println("🔐 [TrustManager] Created TrustPairingRequest: ${request.deviceId} -> $targetDeviceId")
+
+      // Set timeout to clean up session
+      scope.launch {
+        delay(PAIRING_TIMEOUT_SECONDS.seconds)
+        if (pairingSessions[targetDeviceId] == session) {
+          pairingSessions.remove(targetDeviceId)
+          println("🔐 [TrustManager] Cleaned up pairing session for $targetDeviceId after timeout")
+        }
+      }
+
+      Result.success(request)
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  /**
+   * Called when a pairing request has been successfully sent.
+   * Used for tracking and logging purposes.
+   */
+  fun onPairingRequestSent(targetDeviceId: String) {
+    println("🔐 [TrustManager] Pairing request confirmed sent to $targetDeviceId")
+  }
+
+  /**
+   * Called when a pairing request failed to send.
+   * Cleans up the pairing session.
+   */
+  fun onPairingRequestFailed(targetDeviceId: String) {
+    println("🔐 [TrustManager] Pairing request failed for $targetDeviceId, cleaning up session")
+    pairingSessions.remove(targetDeviceId)
+  }
+
+  /**
+   * Handle incoming pairing request from another device.
+   * Validates the request and emits an event for external coordinators.
+   */
+  suspend fun handleIncomingPairingRequest(
+    request: TrustPairingRequest,
+    senderAddress: String
+  ) = withContext(Dispatchers.Default) {
+    println("🔐 [TrustManager] handleIncomingPairingRequest() called from ${request.deviceName} (${request.deviceId})")
+
+    // Validate timestamp to prevent replay attacks
+    val currentTime = clock.currentTimeMillis()
+    val timeDiff = kotlin.math.abs(currentTime - request.timestamp)
+    println("🔐 [TrustManager] Time validation: current=$currentTime, request=${request.timestamp}, diff=${timeDiff}ms")
+
+    if (timeDiff > MAX_TIME_DIFF_SECONDS * 1000) {
+      println("🔐 [TrustManager] ❌ Rejecting request due to timestamp too old (>${MAX_TIME_DIFF_SECONDS}s)")
+      return@withContext // Ignore old requests
+    }
+
+    println("🔐 [TrustManager] Timestamp validation passed")
+
+    // Create decision object with callback
+    val callback = pairingApprovalCallback
+    val decision = if (callback != null) {
+      println("🔐 [TrustManager] ✅ Creating pairing decision for device: ${request.deviceName}")
+      PairingDecision(
+        deviceId = request.deviceId,
+        deviceName = request.deviceName,
+        deviceType = request.deviceType,
+        approvalCallback = callback
+      )
+    } else {
+      println("🔐 [TrustManager] ❌ CRITICAL: pairingApprovalCallback is null! No UI dialog will be shown")
+      null
+    }
+
+    // Emit event for external coordinators to handle
+    _pairingEvents.tryEmit(PairingEvent.PairingRequestReceived(request, senderAddress, decision))
+  }
+
+  /**
+   * Process incoming pairing request from another device.
+   * Validates the request and returns a decision object for approval.
+   * @return PairingDecision if request is valid, null if invalid/expired
+   */
+  suspend fun processPairingRequest(
+    request: TrustPairingRequest,
+    senderAddress: String
+  ): PairingDecision? = withContext(Dispatchers.Default) {
+    println("🔐 [TrustManager] processPairingRequest() called from ${request.deviceName} (${request.deviceId})")
+
+    // Validate timestamp to prevent replay attacks
+    val currentTime = clock.currentTimeMillis()
+    val timeDiff = kotlin.math.abs(currentTime - request.timestamp)
+    println("🔐 [TrustManager] Time validation: current=$currentTime, request=${request.timestamp}, diff=${timeDiff}ms")
+
+    if (timeDiff > MAX_TIME_DIFF_SECONDS * 1000) {
+      println("🔐 [TrustManager] ❌ Rejecting request due to timestamp too old (>${MAX_TIME_DIFF_SECONDS}s)")
+      return@withContext null // Ignore old requests
+    }
+
+    println("🔐 [TrustManager] Timestamp validation passed")
+
+    // Return decision object with callback
+    val callback = pairingApprovalCallback
+    if (callback == null) {
+      println("🔐 [TrustManager] ❌ CRITICAL: pairingApprovalCallback is null! No UI dialog will be shown")
+      return@withContext null
+    }
+
+    println("🔐 [TrustManager] ✅ Creating pairing decision for device: ${request.deviceName}")
+    PairingDecision(
+      deviceId = request.deviceId,
+      deviceName = request.deviceName,
+      deviceType = request.deviceType,
+      approvalCallback = callback
+    )
+  }
+
+  /**
+   * Create an acceptance response for a pairing request.
+   * Generates keys and stores trust relationship.
+   * @return Result containing the TrustPairingResponse or failure
+   */
+  suspend fun createPairingAcceptance(
+    request: TrustPairingRequest
+  ): Result<TrustPairingResponse> = withContext(Dispatchers.Default) {
+    try {
+      val currentDevice = currentDeviceProvider.get()
+
+      // Ensure we have ECDSA keys
+      initialize()
+      val ecdsaKeys = deviceECDSAKeys ?: return@withContext Result.failure(Exception("ECDSA keys not initialized"))
+
+      // Generate our ECDH keypair
+      val ourEcdhKeyPair = crypto.generateECDHKeyPair()
+      val ourEcdhPublicKeyBytes = crypto.encodePublicKey(ourEcdhKeyPair.publicKey)
+      val ourEcdsaPublicKeyBytes = crypto.encodeECDSAPublicKey(ecdsaKeys.publicKey)
+
+      // Compute shared secret (though we won't use it for now, just store public keys)
+      val sharedSecret = crypto.computeECDHSecret(
+        privateKey = ourEcdhKeyPair.privateKey,
+        peerPublicKeyBytes = request.ecdhPublicKey
+      )
+
+      // Store peer's keys for future use
+      storage.storeTrustedDevice(request.deviceId, request.ecdhPublicKey)  // ECDH key
+      storage.storeECDSAKey(request.deviceId, request.ecdsaPublicKey)  // ECDSA key for verification
+
+      // Create response
+      val response = TrustPairingResponse(
+        deviceId = currentDevice.shortDeviceId,
+        deviceName = currentDevice.deviceName,
+        ecdhPublicKey = ourEcdhPublicKeyBytes,
+        ecdsaPublicKey = ourEcdsaPublicKeyBytes,
+        accepted = true,
+        timestamp = clock.currentTimeMillis()
+      )
+
+      println("🔐 [TrustManager] ✅ Created TrustPairingResponse (accepted) for ${request.deviceId}")
+      Result.success(response)
+    } catch (e: Exception) {
+      println("🔐 [TrustManager] ❌ Failed to create acceptance: ${e.message}")
+      Result.failure(e)
+    }
+  }
+
+  /**
+   * Create a rejection response for a pairing request.
+   * @return TrustPairingResponse with rejection
+   */
+  suspend fun createPairingRejection(deviceId: String): TrustPairingResponse = withContext(Dispatchers.Default) {
+    val currentDevice = currentDeviceProvider.get()
+    TrustPairingResponse(
+      deviceId = currentDevice.shortDeviceId,
+      deviceName = currentDevice.deviceName,
+      ecdhPublicKey = ByteArray(0), // Empty for rejection
+      ecdsaPublicKey = ByteArray(0), // Empty for rejection
+      accepted = false,
+      timestamp = clock.currentTimeMillis(),
+      rejectionReason = "User declined"
+    )
+  }
+
+  /**
+   * Finalize pairing after receiving response from target device.
+   * Completes the key exchange and stores trust relationship.
+   */
+  suspend fun finalizePairing(response: TrustPairingResponse) = withContext(Dispatchers.Default) {
+    println("🔐 [TrustManager] finalizePairing() called for device: ${response.deviceId} (${response.deviceName}), accepted: ${response.accepted}")
+
+    val session = pairingSessions[response.deviceId]
+    if (session == null) {
+      println("🔐 [TrustManager] ❌ No pairing session found for device: ${response.deviceId}")
+      return@withContext
+    }
+
+    println("🔐 [TrustManager] Found pairing session for device: ${response.deviceId}")
+
+    try {
+      if (!response.accepted) {
+        println("🔐 [TrustManager] ❌ Pairing was rejected by device: ${response.deviceId}")
+
+        // Emit failure event for UI updates
+        _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, false))
+
+        // TODO: Show rejection message to user
+        return@withContext
+      }
+
+      println("🔐 [TrustManager] Pairing was accepted, computing shared secret...")
+
+      // Compute shared secret (for future use)
+      val sharedSecret = crypto.computeECDHSecret(
+        privateKey = session.ecdhKeyPair.privateKey,
+        peerPublicKeyBytes = response.ecdhPublicKey
+      )
+
+      println("🔐 [TrustManager] Computed shared secret, storing trusted device keys...")
+
+      // Store peer's keys
+      storage.storeTrustedDevice(response.deviceId, response.ecdhPublicKey)  // ECDH key
+      storage.storeECDSAKey(response.deviceId, response.ecdsaPublicKey)  // ECDSA key for verification
+
+      println("🔐 [TrustManager] ✅ Successfully stored trusted device keys for: ${response.deviceId}")
+      println("🔐 [TrustManager] Device ${response.deviceId} is now trusted")
+
+      // Emit completion event for UI updates
+      _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, true))
+
+      // TODO: Show success message to user
+
+    } catch (e: Exception) {
+      println("🔐 [TrustManager] ❌ Exception during finalizePairing: ${e.message}")
+
+      // Emit failure event for UI updates
+      _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, false))
+
+      // TODO: Show error message to user
+    } finally {
+      // Clean up session
+      pairingSessions.remove(response.deviceId)
+      println("🔐 [TrustManager] Cleaned up pairing session for device: ${response.deviceId}")
+    }
+  }
+
+  /**
+   * Check if a device is trusted.
+   */
+  suspend fun isTrusted(deviceId: String): Boolean {
+    return storage.isTrusted(deviceId)
+  }
+
+  /**
+   * Get list of all trusted devices.
+   */
+  suspend fun getTrustedDevices(): List<TrustedDevice> {
+    return storage.getAllTrustedDevices()
+      .map { (deviceId, publicKey) ->
+        TrustedDevice(deviceId, publicKey)
+      }
+  }
+
+  /**
+   * Remove trust relationship with a device.
+   */
+  suspend fun removeTrust(deviceId: String) {
+    storage.removeTrustedDevice(deviceId)
+  }
+
+  /**
+   * Sign a message with this device's ECDSA private key.
+   * @param message Message bytes to sign
+   * @return Signed TrustedMessage
+   */
+  suspend fun signMessage(message: ByteArray): TrustedMessage? {
+    val signingKeys = deviceECDSAKeys ?: return null
+
+    return try {
+      val timestamp = clock.currentTimeMillis()
+      val nonce = crypto.generateNonce()
+      val currentDevice = currentDeviceProvider.get()
+
+      // Create data to sign
+      val dataToSign = crypto.combineForSigning(message, timestamp, nonce)
+
+      // Sign data with ECDSA
+      val signature = crypto.signWithECDSA(signingKeys.privateKey, dataToSign)
+
+      TrustedMessage(
+        payload = message,
+        timestamp = timestamp,
+        nonce = nonce,
+        signature = signature,
+        senderId = currentDevice.shortDeviceId
+      )
+    } catch (e: Exception) {
+      null
+    }
+  }
+
+  /**
+   * Verify a signed message from a trusted device.
+   * Implements timing attack protection and nonce replay prevention.
+   * @param trustedMessage Message to verify
+   * @return true if signature is valid and from trusted device
+   */
+  suspend fun verifyMessage(trustedMessage: TrustedMessage): Boolean {
+    try {
+      // Get sender's ECDSA public key for verification
+      val senderECDSAKey = storage.getECDSAKey(trustedMessage.senderId)
+        ?: return false
+
+      // --- Perform all checks and store results to avoid timing attacks ---
+
+      // 1. Timestamp check
+      val currentTime = clock.currentTimeMillis()
+      val isTimestampValid = kotlin.math.abs(currentTime - trustedMessage.timestamp) <= MAX_TIME_DIFF_SECONDS * 1000
+
+      // 2. Nonce check - prevents replay attacks
+      val isNonceValid = nonceManager.isNonceValid(trustedMessage.senderId, trustedMessage.nonce)
+
+      // 3. Signature check (The expensive part)
+      // We perform this even if other checks fail to keep timing consistent
+      val dataToVerify = crypto.combineForSigning(
+        trustedMessage.payload,
+        trustedMessage.timestamp,
+        trustedMessage.nonce
+      )
+      val isSignatureValid = crypto.verifyECDSA(senderECDSAKey, dataToVerify, trustedMessage.signature)
+
+      // Use bitwise 'and' to prevent short-circuiting
+      // All three booleans are evaluated before the final result is determined
+      return isTimestampValid and isNonceValid and isSignatureValid
+
+    } catch (e: Exception) {
+      // Log internal error for debugging but return generic failure
+      println("Internal error during message verification: ${e.message}")
+      return false
+    }
+  }
+
+  /**
+   * Set callback for pairing approval dialogs.
+   */
+  fun setPairingApprovalCallback(callback: PairingApprovalCallback) {
+    this.pairingApprovalCallback = callback
+  }
+}
+
+/**
+ * Represents a trusted device.
+ */
+data class TrustedDevice(
+  val deviceId: String,
+  val publicKey: ByteArray
+) {
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is TrustedDevice) return false
+    if (deviceId != other.deviceId) return false
+    if (!publicKey.contentEquals(other.publicKey)) return false
+    return true
+  }
+
+  override fun hashCode(): Int {
+    var result = deviceId.hashCode()
+    result = 31 * result + publicKey.contentHashCode()
+    return result
+  }
+}
+
+/**
+ * Events emitted by TrustManager that external coordinators can listen to.
+ */
+sealed interface PairingEvent {
+  data class SendPairingRequest(val targetDeviceId: String, val request: TrustPairingRequest) : PairingEvent
+  data class SendPairingResponse(val targetDeviceId: String, val response: TrustPairingResponse) : PairingEvent
+  data class PairingRequestReceived(val request: TrustPairingRequest, val senderAddress: String, val decision: PairingDecision?) :
+    PairingEvent
+
+  data class PairingCompleted(val deviceId: String, val deviceName: String, val success: Boolean) : PairingEvent
+}
+
+/**
+ * Represents a pairing decision that needs user approval.
+ * Encapsulates the approval callback mechanism.
+ */
+data class PairingDecision(
+  val deviceId: String,
+  val deviceName: String,
+  val deviceType: String,
+  private val approvalCallback: PairingApprovalCallback?
+) {
+  fun showApprovalDialog(onAccept: suspend () -> Unit, onReject: suspend () -> Unit) {
+    approvalCallback?.onPairingRequested(
+      deviceId = deviceId,
+      deviceName = deviceName,
+      deviceType = deviceType,
+      onAccept = onAccept,
+      onReject = onReject
+    )
+  }
+}
+
+/**
+ * Callback interface for pairing approval UI.
+ */
+interface PairingApprovalCallback {
+  fun onPairingRequested(
+    deviceId: String,
+    deviceName: String,
+    deviceType: String,
+    onAccept: suspend () -> Unit,
+    onReject: suspend () -> Unit
+  )
+}
+
+/**
+ * Internal class to track pairing sessions.
+ */
+private data class PairingSession(
+  val targetDeviceId: String,
+  val ecdhKeyPair: TrustCrypto.ECDHKeyPair,
+  val timestamp: Long
+)

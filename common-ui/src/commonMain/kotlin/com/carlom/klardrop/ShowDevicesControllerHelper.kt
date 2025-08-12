@@ -3,6 +3,7 @@ package com.carlom.klardrop
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -18,7 +19,8 @@ import kotlin.time.Duration.Companion.seconds
 class ShowDevicesControllerHelper(
   private val coroutineScope: CoroutineScope,
   private val visibleDevices: VisibleDevices,
-  private val messageRepository: MessageRepository
+  private val messageRepository: MessageRepository,
+  private val trustStorage: TrustStorage
 ) {
 
   private val _devicesFlow = MutableStateFlow<Map<String, DeviceUi>>(mapOf())
@@ -33,12 +35,18 @@ class ShowDevicesControllerHelper(
         devices.values.map { device ->
           val deviceInfo = device.deviceInfo
           val unreadCount = unreadCounts[deviceInfo.deviceId] ?: 0L
+          
+          // Check trust status
+          val isTrusted = trustStorage.isTrusted(deviceInfo.deviceId)
+          val trustStatus = if (isTrusted) TrustStatus.Trusted else TrustStatus.Untrusted
+          
           DeviceUi(
             deviceId = deviceInfo.deviceId,
             deviceName = deviceInfo.name,
             deviceType = deviceInfo.deviceType,
             connectionTypes = device.deviceConnections.map { it.deviceConnectionType }.distinct(),
-            hasUnreadMessages = unreadCount > 0
+            hasUnreadMessages = unreadCount > 0,
+            trustStatus = trustStatus
           )
         }
       }.collect { deviceList ->

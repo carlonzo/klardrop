@@ -1,11 +1,16 @@
 package com.carlom.klardrop.common.communication
 
+import com.carlom.klardrop.common.communication.message.ClipboardSyncMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.TrustPairingRequest
+import com.carlom.klardrop.common.communication.message.TrustPairingResponse
+import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
+import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.utils.Coroutines
 import kotlinx.coroutines.invoke
 import kotlinx.serialization.KSerializer
@@ -48,6 +53,11 @@ class MessageSerializer(
       MessageType.FILE -> FileMessage.serializer() as KSerializer<E>
       MessageType.ACK_READY -> MessageAcknowledgment.serializer() as KSerializer<E>
       MessageType.ACK_RECEIVED -> MessageAcknowledgment.serializer() as KSerializer<E>
+      MessageType.TRUST_PAIRING_REQUEST -> TrustPairingRequest.serializer() as KSerializer<E>
+      MessageType.TRUST_PAIRING_RESPONSE -> TrustPairingResponse.serializer() as KSerializer<E>
+      MessageType.TRUSTED_MESSAGE -> TrustedMessage.serializer() as KSerializer<E>
+      MessageType.CLIPBOARD_SYNC -> ClipboardSyncMessage.serializer() as KSerializer<E>
+      MessageType.TRUST_REVOCATION -> TrustRevocationMessage.serializer() as KSerializer<E>
     }
   }
 }

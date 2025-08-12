@@ -40,6 +40,9 @@ class Klardrop(
         }
       }
     }
+    
+    // start clipboard monitoring
+//    commonComponent.clipboardSyncManager().startClipboardMonitoring()
 
     // start discovery jobs
     discoveryNetwork.discoveryKlardropDevices()

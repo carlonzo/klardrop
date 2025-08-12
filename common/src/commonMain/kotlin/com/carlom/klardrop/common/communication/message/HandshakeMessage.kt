@@ -1,9 +1,6 @@
 package com.carlom.klardrop.common.communication.message
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromByteArray
-import kotlinx.serialization.encodeToByteArray
-import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.random.Random
 
 @Serializable

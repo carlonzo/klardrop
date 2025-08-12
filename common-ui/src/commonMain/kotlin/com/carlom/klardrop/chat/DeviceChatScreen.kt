@@ -15,14 +15,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -61,7 +60,6 @@ import kotlinx.coroutines.delay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceChatScreen(
-  deviceId: String,
   deviceName: String,
   viewModel: DeviceChatViewModel,
   onBackClicked: () -> Unit,
@@ -69,6 +67,7 @@ fun DeviceChatScreen(
 ) {
   val messagesState by viewModel.messages.collectAsState()
   val uiState by viewModel.uiState.collectAsState()
+  val messageSendProgress by viewModel.messageSendProgress.collectAsState()
   var textToSend by remember { mutableStateOf("") }
   var showAttachmentMenu by remember { mutableStateOf(false) }
 
@@ -80,7 +79,7 @@ fun DeviceChatScreen(
   }
 
   val imagePickerLauncher = rememberFilePickerLauncher(
-    mode = FileKitMode.Multiple(), 
+    mode = FileKitMode.Multiple(),
     type = FileKitType.ImageAndVideo
   ) { files ->
     if (!files.isNullOrEmpty()) {
@@ -132,7 +131,10 @@ fun DeviceChatScreen(
                 onOpenFileRequest = { onOpenFileRequest(it) }
               ) // Pass repository
             } else {
-              TextMessageBubble(message = message)
+              TextMessageBubble(
+                message = message,
+                sendProgress = messageSendProgress[message.id]
+              )
             }
           }
         }
@@ -144,18 +146,17 @@ fun DeviceChatScreen(
         // Attachment button with dropdown menu
         Box {
           IconButton(
-            onClick = { showAttachmentMenu = true },
-            enabled = !uiState.isSending
+            onClick = { showAttachmentMenu = true }
           ) {
             Icon(Icons.Default.Add, contentDescription = "Attach")
           }
-          
+
           DropdownMenu(
             expanded = showAttachmentMenu,
             onDismissRequest = { showAttachmentMenu = false }
           ) {
             DropdownMenuItem(
-              text = { 
+              text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.AttachFile, contentDescription = null)
                   Spacer(modifier = Modifier.width(8.dp))
@@ -168,7 +169,7 @@ fun DeviceChatScreen(
               }
             )
             DropdownMenuItem(
-              text = { 
+              text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.Image, contentDescription = null)
                   Spacer(modifier = Modifier.width(8.dp))
@@ -182,7 +183,7 @@ fun DeviceChatScreen(
             )
           }
         }
-        
+
         OutlinedTextField(
           value = textToSend,
           onValueChange = { textToSend = it },
@@ -197,15 +198,9 @@ fun DeviceChatScreen(
               viewModel.sendTextMessage(textToSend)
               textToSend = ""
             }
-          }, enabled = textToSend.isNotBlank() && !uiState.isSending
+          }, enabled = textToSend.isNotBlank()
         ) {
-          if (uiState.isSending) {
-            CircularProgressIndicator(
-              modifier = Modifier.size(16.dp), strokeWidth = 2.dp
-            )
-          } else {
-            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
-          }
+          Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
         }
       }
     }
@@ -213,7 +208,10 @@ fun DeviceChatScreen(
 }
 
 @Composable
-fun TextMessageBubble(message: Messages) {
+fun TextMessageBubble(
+  message: Messages,
+  sendProgress: com.carlom.klardrop.common.communication.MessengerSendProgress? = null
+) {
   // Basic representation, align based on is_sender
   val horizontalArrangement = if (message.is_sender != 0L) Arrangement.End else Arrangement.Start
   Row(
@@ -224,9 +222,41 @@ fun TextMessageBubble(message: Messages) {
         containerColor = if (message.is_sender != 0L) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
       ), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-      Text(
-        text = message.content, modifier = Modifier.padding(8.dp)
-      )
+      Box(modifier = Modifier.padding(8.dp)) {
+        Text(text = message.content)
+
+        // Show status indicator for sent messages only
+        if (message.is_sender != 0L && sendProgress != null) {
+          when (sendProgress) {
+            is com.carlom.klardrop.common.communication.MessengerSendProgress.Pending,
+            is com.carlom.klardrop.common.communication.MessengerSendProgress.InProgress -> {
+              CircularProgressIndicator(
+                modifier = Modifier
+                  .size(12.dp)
+                  .align(Alignment.BottomEnd)
+                  .padding(2.dp),
+                strokeWidth = 1.5.dp,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+              )
+            }
+
+            is com.carlom.klardrop.common.communication.MessengerSendProgress.Error -> {
+              Icon(
+                imageVector = Icons.Default.Cancel,
+                contentDescription = "Failed",
+                modifier = Modifier
+                  .size(12.dp)
+                  .align(Alignment.BottomEnd),
+                tint = Color.Red
+              )
+            }
+
+            is com.carlom.klardrop.common.communication.MessengerSendProgress.Completed -> {
+              // No indicator for completed messages
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -268,8 +298,8 @@ fun FileMessageBubble(
             fileTransferState?.let { state ->
               if (state.total_size > 0) {
                 LinearProgressIndicator(
-                  progress = state.transferred_size.toFloat() / state.total_size.toFloat(),
-                  modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 2.dp)
+                  progress = { (state.transferred_size / state.total_size).toFloat() },
+                  modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 2.dp),
                 )
                 Text(
                   text = "${(state.transferred_size.toFloat() / 1024).toInt()}KB / ${(state.total_size.toFloat() / 1024).toInt()}KB",

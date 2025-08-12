@@ -27,6 +27,11 @@ import kotlin.test.assertIs
 import kotlin.time.ExperimentalTime
 import kotlin.time.Duration.Companion.seconds
 
+fun FakeClipboardManager() = com.carlom.klardrop.common.features.ClipboardManager(
+  coroutines = TestCoroutines(),
+  readerWriter = com.carlom.klardrop.common.features.ClipboardReaderWriter()
+)
+
 class KlardropIntegrationTest {
 
   private val coroutines = TestCoroutines()
@@ -237,7 +242,8 @@ internal class KlardropTestContext(
     clock = clock,
     fileManager = KlardropTestFileManager(),
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(clientDeviceId)),
-    messageRepository = FakeMessageRepository()
+    messageRepository = FakeMessageRepository(),
+    clipboardManager = FakeClipboardManager()
   )
 
   val serverCommunicationModule = CommunicationModule(
@@ -247,7 +253,8 @@ internal class KlardropTestContext(
     clock = clock,
     fileManager = KlardropTestFileManager(),
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(serverDeviceId)),
-    messageRepository = FakeMessageRepository()
+    messageRepository = FakeMessageRepository(),
+    clipboardManager = FakeClipboardManager()
   )
 
   data class ServerContext(

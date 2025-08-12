@@ -16,12 +16,23 @@ import com.carlom.klardrop.common.communication.message.TextMessageHandler
 import com.carlom.klardrop.common.communication.router.MessagesRouterImpl
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
-import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.MessageReceiverImpl
+import com.carlom.klardrop.common.trust.ClipboardSyncManager
+import com.carlom.klardrop.common.trust.ClipboardSyncMessageHandler
+import com.carlom.klardrop.common.trust.InMemoryTrustStorage
+import com.carlom.klardrop.common.trust.PairingProtocolCoordinator
+import com.carlom.klardrop.common.trust.TrustChecker
+import com.carlom.klardrop.common.trust.TrustCrypto
+import com.carlom.klardrop.common.trust.TrustManager
+import com.carlom.klardrop.common.trust.TrustMessageWrapper
+import com.carlom.klardrop.common.trust.TrustPairingRequestHandler
+import com.carlom.klardrop.common.trust.TrustPairingResponseHandler
+import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -33,20 +44,50 @@ class CommunicationModule(
   private val clock: Clock,
   private val fileManager: FileManager,
   private val currentDeviceProvider: CurrentDeviceProvider,
-  private val messageRepository: MessageRepository // Added
+  private val messageRepository: MessageRepository,
+  private val clipboardManager: ClipboardManager
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
 
+  // Trust system components
+  private val trustStorage: TrustStorage by lazy {
+    // TODO to change to already implemented persisted trust storage
+    InMemoryTrustStorage()
+  }
+
+  private val trustCrypto = TrustCrypto()
+
+  private val trustChecker = object : TrustChecker {
+    override suspend fun isTrusted(deviceId: String): Boolean = trustStorage.isTrusted(deviceId)
+  }
+
+  // TrustManager is now a pure domain component without messenger dependency
+  private val trustManager by lazy {
+    TrustManager(trustCrypto, trustStorage, clock, currentDeviceProvider)
+  }
+
+  // PairingProtocolCoordinator will be initialized manually after DI cycle is complete
+  private var pairingProtocolCoordinator: PairingProtocolCoordinator? = null
+
+
+  // Clipboard sync components
+  private val clipboardSyncManager by lazy {
+    ClipboardSyncManager(clipboardManager, visibleDevices, trustManager, clock, coroutines, lazy { messenger })
+  }
+
   private val messageHandlers by lazy {
-    MessageHandlersImpl(
-      mapOf(
-        MessageType.TEXT to TextMessageHandler(serializer),
-        MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
-        MessageType.ACK_READY to AckMessageHandler(),
-        MessageType.ACK_RECEIVED to AckMessageHandler()
-      )
+    val handlers = mapOf(
+      MessageType.TEXT to TextMessageHandler(serializer, messageRepository),
+      MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
+      MessageType.ACK_READY to AckMessageHandler(),
+      MessageType.ACK_RECEIVED to AckMessageHandler(),
+      MessageType.TRUST_PAIRING_REQUEST to TrustPairingRequestHandler(serializer, trustManager),
+      MessageType.TRUST_PAIRING_RESPONSE to TrustPairingResponseHandler(serializer, trustManager),
+      MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager)
     )
+    
+    MessageHandlersImpl(handlers)
   }
 
   private val connectionsPool by lazy { ConnectionsPoolImpl() }
@@ -56,7 +97,7 @@ class CommunicationModule(
       serializer,
       coroutines,
       messageReceiver,
-      messageRepository // Added messageRepository
+      trustManager
     )
   }
 
@@ -89,18 +130,7 @@ class CommunicationModule(
     )
   }
 
-  private val messenger: Messenger by lazy {
-    MessengerImpl(
-      visibleDevices,
-      connectionsPool,
-      client(),
-      coroutines,
-      nearbyClient,
-      messageReceiver
-    )
-  }
-
-  private val nearbyClient by lazy {
+  private val nearbyClient = lazy {
     NearbyClient(
       coroutines,
       currentDeviceProvider,
@@ -108,11 +138,36 @@ class CommunicationModule(
     )
   }
 
+  private val messenger: Messenger by lazy {
+    MessengerImpl(
+      visibleDevices,
+      connectionsPool,
+      client(),
+      coroutines,
+      nearbyClient,
+      messageReceiver,
+      lazy { trustChecker },
+      trustManager,
+      serializer
+    )
+  }
 
   fun client() = client
   fun server() = server
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
+  fun trustManager() = trustManager
+  fun pairingProtocolCoordinator() = pairingProtocolCoordinator ?: initializePairingProtocolCoordinator()
+  fun trustStorage() = trustStorage
+  fun clipboardSyncManager() = clipboardSyncManager
+
+  private fun initializePairingProtocolCoordinator(): PairingProtocolCoordinator {
+    if (pairingProtocolCoordinator == null) {
+      pairingProtocolCoordinator = PairingProtocolCoordinator(trustManager, messenger)
+    }
+    return pairingProtocolCoordinator!!
+  }
+
 
   @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
   internal fun connectionsPool() = connectionsPool

@@ -15,6 +15,13 @@ enum class MessageType(val id: Byte) {
   FILE(2),
   ACK_READY(3),
   ACK_RECEIVED(4),
+  
+  // Trust system messages
+  TRUST_PAIRING_REQUEST(10),
+  TRUST_PAIRING_RESPONSE(11),
+  TRUSTED_MESSAGE(12), // Handled directly in MessagesRouter for security verification
+  CLIPBOARD_SYNC(13),
+  TRUST_REVOCATION(14),
 
   ;
 
@@ -37,15 +44,77 @@ sealed interface SendMessageRequest {
   val message: Message
 }
 
-fun Message.toSimpleSendRequest(): SendMessageRequest {
+/**
+ * Signature wrapper for trusted messages - encapsulates all cryptographic data.
+ */
+@Serializable
+data class MessageSignature(
+    val signature: ByteArray,
+    val timestamp: Long,
+    val nonce: ByteArray,
+    val senderId: String
+) {
+    /**
+     * ByteArray-safe content comparison for MessageSignature.
+     */
+    fun contentEquals(other: MessageSignature?): Boolean {
+        if (other == null) return false
+        return signature.contentEquals(other.signature) && 
+               timestamp == other.timestamp &&
+               nonce.contentEquals(other.nonce) &&
+               senderId == other.senderId
+    }
+    
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is MessageSignature) return false
+        
+        if (!signature.contentEquals(other.signature)) return false
+        if (timestamp != other.timestamp) return false
+        if (!nonce.contentEquals(other.nonce)) return false
+        if (senderId != other.senderId) return false
+        
+        return true
+    }
+    
+    override fun hashCode(): Int {
+        var result = signature.contentHashCode()
+        result = 31 * result + timestamp.hashCode()
+        result = 31 * result + nonce.contentHashCode()
+        result = 31 * result + senderId.hashCode()
+        return result
+    }
+}
+
+/**
+ * SendMessageRequest with optional signature for trusted device communication.
+ */
+interface SignedSendMessageRequest : SendMessageRequest {
+    val messageSignature: MessageSignature?
+    
+    /**
+     * Returns true if this request contains a signature.
+     */
+    fun isSigned(): Boolean = messageSignature != null
+    
+    /**
+     * Returns true if this request requires signature verification.
+     */
+    fun requiresVerification(): Boolean = isSigned()
+}
+
+fun Message.toSimpleSendRequest(messageSignature: MessageSignature? = null): SendMessageRequest {
   if (hasPayload) {
     throw IllegalStateException("Message has payload. Cant use an empty send request")
   }
 
-  return SimpleSendMessageRequest(this)
+  return SimpleSendMessageRequest(this, messageSignature)
 }
 
-class SimpleSendMessageRequest(override val message: Message) : SendMessageRequest
+class SimpleSendMessageRequest(
+    override val message: Message,
+    override val messageSignature: MessageSignature? = null
+) : SignedSendMessageRequest
 
 enum class AckType {
   READY,

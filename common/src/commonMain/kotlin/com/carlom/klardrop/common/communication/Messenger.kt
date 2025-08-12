@@ -3,20 +3,27 @@ package com.carlom.klardrop.common.communication
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
+import com.carlom.klardrop.common.communication.message.FileMessage
+import com.carlom.klardrop.common.communication.message.MessageSignature
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.toSendRequest
+import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.trust.TrustChecker
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.pow
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Messenger used to send messages
@@ -24,7 +31,7 @@ import kotlin.math.pow
 interface Messenger {
   fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress>
 
-  fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>> // Changed
+  fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>>
 }
 
 class MessengerImpl(
@@ -32,33 +39,77 @@ class MessengerImpl(
   private val connectionsPool: ConnectionsPool,
   private val client: Client,
   private val coroutines: Coroutines,
-  private val nearbyClient: NearbyClient,
-  private val messageReceiver: MessageReceiver
+  private val nearbyClient: Lazy<NearbyClient>,
+  private val messageReceiver: MessageReceiver,
+  private val trustChecker: Lazy<TrustChecker>,
+  private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
+  private val messageSerializer: MessageSerializer
 ) : Messenger {
 
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
 
   override fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress> {
+    log("Messenger", "send() called: deviceId=$deviceId, messageType=${messageRequest.message.type}, messageId=${messageRequest.message.id}")
 
     val flow = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 1)
 
     messengerScope.launch {
 
       flow.emit(Pending)
+      log("Messenger", "Emitted Pending status for $deviceId")
 
       val device = visibleDevices.getDevice(deviceId)
 
       //    skip if not visible
       if (device == null) {
+        log("Messenger", "❌ Device $deviceId is not visible in device list")
         log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
         flow.emit(Error("$deviceId it is not visible"))
         return@launch
       }
+      
+      log("Messenger", "✅ Device $deviceId found in visible devices")
+
+      // Check if device is trusted and wrap message in TrustedMessage if needed
+      val finalMessageRequest = try {
+        val message = messageRequest.message
+        val isPairingMessage = message is com.carlom.klardrop.common.communication.message.TrustPairingRequest ||
+                               message is com.carlom.klardrop.common.communication.message.TrustPairingResponse
+
+        if (trustChecker.value.isTrusted(deviceId) && !isPairingMessage) {
+          log("Messenger", "Device $deviceId is trusted, creating TrustedMessage")
+          
+          // Serialize the original message
+          val messageBytes = messageSerializer.serialize(message)
+          
+          // Sign the message using TrustManager
+          val trustedMessage = trustManager.signMessage(messageBytes)
+          
+          if (trustedMessage != null) {
+            log("Messenger", "Successfully created TrustedMessage for device $deviceId")
+            // Create a new request with the TrustedMessage
+            trustedMessage.toSimpleSendRequest()
+          } else {
+            log("Messenger", "Failed to create TrustedMessage for device $deviceId, sending unsigned")
+            messageRequest
+          }
+        } else {
+          if (isPairingMessage) {
+            log("Messenger", "Device $deviceId: Pairing message detected, sending unsigned for protocol handshake")
+          } else {
+            log("Messenger", "Device $deviceId is not trusted, sending unsigned request")
+          }
+          messageRequest
+        }
+      } catch (e: Exception) {
+        log("Messenger", "Error creating TrustedMessage for $deviceId: ${e.message}", e)
+        messageRequest // fallback to original message
+      }
 
       val transferCompleted = if (device.hasKlardropConnection()) {
-        handleKlardropTransfer(deviceId, messageRequest, flow)
+        handleKlardropTransfer(deviceId, finalMessageRequest, flow)
       } else if (device.hasNearbyConnection()) {
-        handleNearbyTransfer(deviceId, messageRequest, flow)
+        handleNearbyTransfer(deviceId, finalMessageRequest, flow)
       } else {
         log("Messenger", "Wanted to send a message to $deviceId but it has no connection")
         flow.emit(Error("$deviceId but it has no connection"))
@@ -91,7 +142,7 @@ class MessengerImpl(
       log("Messenger", "Client sending message to $deviceId: ${it.address} ${it.port}")
 
       runCatching {
-        nearbyClient.send(it.address, it.port, listOf(messageRequest), sendFlow)
+        nearbyClient.value.send(it.address, it.port, listOf(messageRequest), sendFlow)
       }.onFailure { exception ->
         log("Messenger", "Error sending message to $deviceId", exception)
       }.isSuccess
@@ -155,10 +206,10 @@ class MessengerImpl(
           log("Messenger", "[DEBUG] Closed connection to $deviceId, starting backoff delay")
           
           // Wait before retry with exponential backoff
-          val delayMs = (1000 * config.retryBackoffMultiplier.pow(attempt - 1)).toLong()
-          log("Messenger", "[DEBUG] Waiting ${delayMs}ms before retry (attempt $attempt)")
+          val delay = (1.seconds * config.retryBackoffMultiplier.pow(attempt - 1))
+          log("Messenger", "[DEBUG] Waiting ${delay.inWholeMilliseconds}ms before retry (attempt $attempt)")
           withContext(coroutines.mainDispatcher) {
-            kotlinx.coroutines.delay(delayMs)
+            kotlinx.coroutines.delay(delay)
           }
           
           return@getOrElse false // Signal to retry
@@ -186,6 +237,7 @@ class MessengerImpl(
     flow.emit(Error("Transfer failed after $maxRetries retry attempts"))
     return false
   }
+
 
   private suspend fun getOrEstablishConnection(deviceId: String): ConnectionMessenger? {
     log("Messenger", "[DEBUG] getOrEstablishConnection() called for $deviceId")

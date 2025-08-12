@@ -41,6 +41,11 @@ kotlin {
         implementation(deps.filekit.core)
         implementation(deps.sqldelight.runtime)
         implementation(deps.sqldelight.coroutines.extensions)
+        
+        // Cryptography for trust features
+        implementation(deps.cryptography.core)
+        implementation(deps.cryptography.provider.optimal)
+        implementation(deps.cryptography.random)
       }
     }
 
@@ -89,6 +94,7 @@ kotlin {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
       languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
+      languageSettings.optIn("kotlin.time.ExperimentalTime")
     }
   }
 

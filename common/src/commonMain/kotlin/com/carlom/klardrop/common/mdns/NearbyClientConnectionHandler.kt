@@ -3,8 +3,10 @@ package com.carlom.klardrop.common.mdns
 import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.MessengerSendProgress.*
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.SignedSendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
@@ -20,7 +22,6 @@ import com.google.location.nearby.connections.proto.OsInfo
 import com.google.location.nearby.connections.proto.PayloadTransferFrame
 import com.google.location.nearby.connections.proto.V1Frame
 import com.google.location.nearby.connections.proto.WifiLanUsableChannels
-import io.github.vinceglb.filekit.readBytes
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
@@ -67,7 +68,7 @@ class NearbyClientConnectionHandler(
 
       waitForTransferResponse(readChannel, writeChannel, nearbyConnection)
 
-      initiateTransfer(readChannel, writeChannel, nearbyConnection, sendFlow)
+      initiateTransfer(writeChannel, nearbyConnection, sendFlow)
 
     } catch (e: Exception) {
       log("NearbyClientConnectionHandler", "Error sending $sendRequests", e)
@@ -77,12 +78,11 @@ class NearbyClientConnectionHandler(
       connection.close()
     }
 
-    sendFlow.emit(MessengerSendProgress.Completed)
+    sendFlow.emit(Completed)
 
   }
 
   private suspend fun initiateTransfer(
-    readChannel: ByteReadChannel,
     writeChannel: ByteWriteChannel,
     nearbyConnection: D2DConnectionContext,
     sendFlow: MutableSharedFlow<MessengerSendProgress>
@@ -127,12 +127,14 @@ class NearbyClientConnectionHandler(
               writeChannel = writeChannel,
               nearbyConnection = nearbyConnection
             ).collect { progress ->
-              sendFlow.emit(MessengerSendProgress.InProgress(progress))
+              sendFlow.emit(InProgress(progress))
             }
 
           }
 
         }
+
+        is SignedSendMessageRequest -> error("SignedSendMessageRequest is not supported in Nearby transfers ")
       }
     }
 
