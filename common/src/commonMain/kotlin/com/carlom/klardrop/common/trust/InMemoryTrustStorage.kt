@@ -13,6 +13,7 @@ class InMemoryTrustStorage : TrustStorage {
     
     private val trustedDevices = mutableMapOf<String, ByteArray>()  // ECDH keys
     private val ecdsaKeys = mutableMapOf<String, ByteArray>()  // ECDSA keys for signing
+    private var devicePrivateKey: ByteArray? = null  // Device's own private key
     private val mutex = Mutex()
     
     override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {
@@ -56,6 +57,26 @@ class InMemoryTrustStorage : TrustStorage {
     override suspend fun getECDSAKey(deviceId: String): ByteArray? {
         return mutex.withLock {
             ecdsaKeys[deviceId]?.copyOf()
+        }
+    }
+    
+    // Device Identity Persistence Methods
+    
+    override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {
+        mutex.withLock {
+            devicePrivateKey = privateKey.copyOf()
+        }
+    }
+    
+    override suspend fun getDevicePrivateKey(): ByteArray? {
+        return mutex.withLock {
+            devicePrivateKey?.copyOf()
+        }
+    }
+    
+    override suspend fun deleteDevicePrivateKey() {
+        mutex.withLock {
+            devicePrivateKey = null
         }
     }
 }

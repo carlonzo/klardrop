@@ -63,7 +63,8 @@ class CommonComponent(
       fileManager,
       currentDeviceProvider,
       messageRepository,
-      clipboardManager
+      clipboardManager,
+      internalPlatformDependency.trustStorage()
     )
   }
 

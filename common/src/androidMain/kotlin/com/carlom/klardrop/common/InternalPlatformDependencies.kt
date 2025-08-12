@@ -5,6 +5,8 @@ import android.os.Environment
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
+import com.carlom.klardrop.common.trust.AndroidTrustStorage
+import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
 
 actual class InternalPlatformDependencies(private val context: Context) {
@@ -23,6 +25,10 @@ actual class InternalPlatformDependencies(private val context: Context) {
 
   actual fun driverFactory(): DriverFactory {
     return DriverFactory(context)
+  }
+
+  actual fun trustStorage(): TrustStorage {
+    return AndroidTrustStorage(context)
   }
 
   actual suspend fun openFile(filePath: String): Boolean {

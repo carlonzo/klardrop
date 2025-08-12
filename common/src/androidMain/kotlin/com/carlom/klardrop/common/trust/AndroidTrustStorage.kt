@@ -18,6 +18,7 @@ class AndroidTrustStorage(
         private const val TRUST_PREFS = "trust_keys"
         private const val KEY_PREFIX = "trusted_device_"
         private const val ECDSA_KEY_PREFIX = "ecdsa_key_"
+        private const val DEVICE_PRIVATE_KEY = "device_private_key"
     }
     
     private val sharedPrefs = context.getSharedPreferences(TRUST_PREFS, Context.MODE_PRIVATE)
@@ -100,6 +101,34 @@ class AndroidTrustStorage(
             // Invalid Base64 encoding - remove corrupted entry
             sharedPrefs.edit { remove(ECDSA_KEY_PREFIX + deviceId) }
             null
+        }
+    }
+    
+    // Device Identity Persistence Methods
+    
+    override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {
+        val encodedKey = Base64.encodeToString(privateKey, Base64.NO_WRAP)
+        sharedPrefs.edit {
+            putString(DEVICE_PRIVATE_KEY, encodedKey)
+        }
+    }
+    
+    override suspend fun getDevicePrivateKey(): ByteArray? {
+        val encodedKey = sharedPrefs.getString(DEVICE_PRIVATE_KEY, null)
+            ?: return null
+        
+        return try {
+            Base64.decode(encodedKey, Base64.NO_WRAP)
+        } catch (e: IllegalArgumentException) {
+            // Invalid Base64 encoding - remove corrupted entry
+            sharedPrefs.edit { remove(DEVICE_PRIVATE_KEY) }
+            null
+        }
+    }
+    
+    override suspend fun deleteDevicePrivateKey() {
+        sharedPrefs.edit {
+            remove(DEVICE_PRIVATE_KEY)
         }
     }
 }

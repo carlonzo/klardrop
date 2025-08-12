@@ -62,4 +62,30 @@ interface TrustStorage {
     suspend fun isTrusted(deviceId: String): Boolean {
         return getTrustedDeviceKey(deviceId) != null
     }
+    
+    // Device Identity Persistence Methods
+    
+    /**
+     * Store this device's own identity private key securely.
+     * The corresponding public key can be derived from the private key.
+     * This key persists across app restarts to maintain device identity.
+     * 
+     * @param privateKey The raw bytes of the device's ECDSA private key
+     */
+    suspend fun storeDevicePrivateKey(privateKey: ByteArray)
+    
+    /**
+     * Retrieve this device's own identity private key.
+     * Used to maintain consistent device identity across app restarts.
+     * 
+     * @return The raw bytes of the device's ECDSA private key, or null if none exists
+     */
+    suspend fun getDevicePrivateKey(): ByteArray?
+    
+    /**
+     * Delete this device's identity private key.
+     * Used for security cleanup or device reset functionality.
+     * After calling this, the device will generate a new identity on next startup.
+     */
+    suspend fun deleteDevicePrivateKey()
 }

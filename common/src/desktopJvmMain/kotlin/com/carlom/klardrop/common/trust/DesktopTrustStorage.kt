@@ -21,10 +21,13 @@ class DesktopTrustStorage(
     companion object {
         private const val TRUST_FILE_NAME = "trusted_devices.properties"
         private const val ECDSA_FILE_NAME = "ecdsa_keys.properties"
+        private const val DEVICE_KEY_FILE_NAME = "device_private_key.properties"
+        private const val DEVICE_PRIVATE_KEY = "device_private_key"
     }
     
     private val trustFile = File(appDir, TRUST_FILE_NAME)
     private val ecdsaFile = File(appDir, ECDSA_FILE_NAME)
+    private val deviceKeyFile = File(appDir, DEVICE_KEY_FILE_NAME)
     private val fileMutex = Mutex() // Prevent concurrent file access
     
     init {
@@ -152,6 +155,41 @@ class DesktopTrustStorage(
                 props.remove(deviceId)
                 saveProperties(props, ecdsaFile, "Klardrop ECDSA Keys - Do not manually edit this file")
                 null
+            }
+        }
+    }
+    
+    // Device Identity Persistence Methods
+    
+    override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {
+        fileMutex.withLock {
+            val props = Properties()
+            val encodedKey = Base64.getEncoder().encodeToString(privateKey)
+            props.setProperty(DEVICE_PRIVATE_KEY, encodedKey)
+            saveProperties(props, deviceKeyFile, "Klardrop Device Private Key - Do not manually edit this file")
+        }
+    }
+    
+    override suspend fun getDevicePrivateKey(): ByteArray? {
+        fileMutex.withLock {
+            val props = loadProperties(deviceKeyFile)
+            val encodedKey = props.getProperty(DEVICE_PRIVATE_KEY) ?: return null
+            
+            return try {
+                Base64.getDecoder().decode(encodedKey)
+            } catch (e: IllegalArgumentException) {
+                // Invalid Base64 encoding - remove corrupted entry
+                props.remove(DEVICE_PRIVATE_KEY)
+                saveProperties(props, deviceKeyFile, "Klardrop Device Private Key - Do not manually edit this file")
+                null
+            }
+        }
+    }
+    
+    override suspend fun deleteDevicePrivateKey() {
+        fileMutex.withLock {
+            if (deviceKeyFile.exists()) {
+                deviceKeyFile.delete()
             }
         }
     }

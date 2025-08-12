@@ -16,6 +16,7 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
 import com.carlom.klardrop.common.mdns.FakeVisibleDevices
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
+import com.carlom.klardrop.common.trust.InMemoryTrustStorage
 import com.carlom.klardrop.common.utils.Clock
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.test.runTest
@@ -243,7 +244,8 @@ internal class KlardropTestContext(
     fileManager = KlardropTestFileManager(),
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(clientDeviceId)),
     messageRepository = FakeMessageRepository(),
-    clipboardManager = FakeClipboardManager()
+    clipboardManager = FakeClipboardManager(),
+    trustStorage = InMemoryTrustStorage()
   )
 
   val serverCommunicationModule = CommunicationModule(
@@ -254,7 +256,8 @@ internal class KlardropTestContext(
     fileManager = KlardropTestFileManager(),
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(serverDeviceId)),
     messageRepository = FakeMessageRepository(),
-    clipboardManager = FakeClipboardManager()
+    clipboardManager = FakeClipboardManager(),
+    trustStorage = InMemoryTrustStorage()
   )
 
   data class ServerContext(
