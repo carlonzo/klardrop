@@ -108,4 +108,8 @@ class CommonComponent(
 
   fun clipboardSyncManager() = communicationModule.clipboardSyncManager()
 
+  fun currentDeviceProvider() = currentDeviceProvider
+
+  fun localPropertiesRepository() = localProperties
+
 }

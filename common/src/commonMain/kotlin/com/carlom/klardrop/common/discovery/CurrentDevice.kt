@@ -34,11 +34,23 @@ class CurrentDeviceProvider(
       id
     }
 
-    val deviceName = CommonPlatformDependencies.getDeviceName()
+    // Get system device name
+    val systemDeviceName = CommonPlatformDependencies.getDeviceName()
+    
+    // Prioritize custom device name with fallback to system name
+    val deviceName = properties.customDeviceName?.takeIf { it.isNotBlank() } ?: systemDeviceName
+    
     val deviceType = CommonPlatformDependencies.deviceType()
     val osType = CommonPlatformDependencies.osType()
 
     return CurrentDevice(deviceId, deviceName, deviceType, osType)
+  }
+
+  /**
+   * Updates the custom device name in local properties
+   */
+  suspend fun updateCustomDeviceName(customDeviceName: String?) {
+    localPropertiesRepository.saveCustomDeviceName(customDeviceName)
   }
 
   /**

@@ -48,7 +48,9 @@ class DiscoveryController(
   private val messageRepository: MessageRepository,
   private val trustStorage: com.carlom.klardrop.common.trust.TrustStorage,
   private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
-  private val pairingProtocolCoordinator: PairingProtocolCoordinator
+  private val pairingProtocolCoordinator: PairingProtocolCoordinator,
+  private val currentDeviceProvider: com.carlom.klardrop.common.discovery.CurrentDeviceProvider,
+  private val localPropertiesRepository: com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -60,7 +62,9 @@ class DiscoveryController(
     commonComponent.messageRepository(),
     commonComponent.trustStorage(),
     commonComponent.trustManager(),
-    commonComponent.pairingProtocolCoordinator()
+    commonComponent.pairingProtocolCoordinator(),
+    commonComponent.currentDeviceProvider(),
+    commonComponent.localPropertiesRepository()
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
@@ -370,6 +374,44 @@ class DiscoveryController(
   fun dismissPairingDialog() {
     screenStateFlow.update { it.copy(pairingDialogState = null) }
   }
+
+  fun onSettingsClicked() {
+    controllerScope.launch {
+      val systemName = com.carlom.klardrop.common.CommonPlatformDependencies.getDeviceName()
+      val properties = localPropertiesRepository.getProperty()
+      screenStateFlow.update { state ->
+        state.copy(
+          navigateToSettings = true,
+          systemDeviceName = systemName,
+          currentDeviceName = properties.customDeviceName?.takeIf { it.isNotBlank() } ?: systemName
+        )
+      }
+    }
+  }
+
+  fun onBackFromSettings() {
+    screenStateFlow.update { it.copy(navigateToSettings = false) }
+  }
+
+  private fun loadDeviceNames() {
+    controllerScope.launch {
+      val systemName = com.carlom.klardrop.common.CommonPlatformDependencies.getDeviceName()
+      val properties = localPropertiesRepository.getProperty()
+      screenStateFlow.update { state ->
+        state.copy(
+          systemDeviceName = systemName,
+          currentDeviceName = properties.customDeviceName?.takeIf { it.isNotBlank() } ?: systemName
+        )
+      }
+    }
+  }
+
+  fun saveCustomDeviceName(customName: String?) {
+    controllerScope.launch {
+      currentDeviceProvider.updateCustomDeviceName(customName)
+      loadDeviceNames()
+    }
+  }
 }
 
 data class DiscoveryScreenState(
@@ -377,7 +419,10 @@ data class DiscoveryScreenState(
   val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap(),
   val navigateToChatDeviceId: String? = null,    // New
   val navigateToChatDeviceName: String? = null,   // New
-  val pairingDialogState: PairingDialogState? = null
+  val pairingDialogState: PairingDialogState? = null,
+  val navigateToSettings: Boolean = false,
+  val currentDeviceName: String? = null,
+  val systemDeviceName: String? = null
 )
 
 data class PairingDialogState(

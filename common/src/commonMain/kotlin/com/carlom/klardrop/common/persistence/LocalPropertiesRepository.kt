@@ -17,6 +17,7 @@ interface LocalPropertiesRepository {
 
   suspend fun getProperty(): KlardropProperties
   suspend fun save(properties: KlardropProperties)
+  suspend fun saveCustomDeviceName(customDeviceName: String?)
 
 }
 
@@ -26,10 +27,12 @@ internal class LocalPropertiesRepositoryImpl(
 ): LocalPropertiesRepository {
 
   private val deviceIdKey = stringPreferencesKey("device_id")
+  private val customDeviceNameKey = stringPreferencesKey("custom_device_name")
 
   override val properties: Flow<KlardropProperties> = dataStore.data.mapLatest {
     KlardropProperties(
-      it[deviceIdKey] ?: ""
+      deviceId = it[deviceIdKey] ?: "",
+      customDeviceName = it[customDeviceNameKey]
     )
   }
 
@@ -41,6 +44,15 @@ internal class LocalPropertiesRepositoryImpl(
     withContext( coroutines.ioDispatcher) {
       dataStore.edit {
         it.putOrRemove(deviceIdKey, properties.deviceId)
+        it.putOrRemove(customDeviceNameKey, properties.customDeviceName)
+      }
+    }
+  }
+
+  override suspend fun saveCustomDeviceName(customDeviceName: String?) {
+    withContext(coroutines.ioDispatcher) {
+      dataStore.edit { preferences ->
+        preferences.putOrRemove(customDeviceNameKey, customDeviceName)
       }
     }
   }
@@ -53,5 +65,6 @@ internal fun <T>MutablePreferences.putOrRemove(key: Preferences.Key<T>, value: T
 }
 
 data class KlardropProperties(
-  val deviceId: String
+  val deviceId: String,
+  val customDeviceName: String? = null
 )
