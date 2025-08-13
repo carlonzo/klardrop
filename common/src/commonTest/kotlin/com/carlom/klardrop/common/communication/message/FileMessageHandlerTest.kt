@@ -83,7 +83,7 @@ class FileMessageHandlerTest {
     fileMessageHandler.handleIncoming(fileMessage, byteReadChannel, receiveFlow)
 
     // Verify initial DB calls
-    assertEquals("insertFileTransfer(test.txt, dummy_path_placeholder, 100, IN_PROGRESS)", mockMessageRepository.calls[0])
+    assertEquals("insertFileTransfer(test.txt, , 100, IN_PROGRESS)", mockMessageRepository.calls[0])
     val expectedFileTransferId = mockMessageRepository.nextFileTransferId - 1
     assertEquals("insertMessage($remoteDeviceId, test.txt, false, FILE, $expectedFileTransferId, false)", mockMessageRepository.calls[1])
 
@@ -114,7 +114,7 @@ class FileMessageHandlerTest {
     }
 
     // Verify initial DB calls
-    assertEquals("insertFileTransfer(fail.txt, dummy_path_placeholder, 100, IN_PROGRESS)", mockMessageRepository.calls[0])
+    assertEquals("insertFileTransfer(fail.txt, , 100, IN_PROGRESS)", mockMessageRepository.calls[0])
     val expectedFileTransferId = mockMessageRepository.nextFileTransferId - 1
     assertEquals("insertMessage($remoteDeviceId, fail.txt, false, FILE, $expectedFileTransferId, false)", mockMessageRepository.calls[1])
 
@@ -135,7 +135,7 @@ class FileMessageHandlerTest {
     // Create a simple mock that satisfies the path property requirement
     val mockPlatformFile = PlatformFile(Path("/fake/path", fileName))
 
-    val sendRequest = FileMessage.FileSendRequest(fileMessage, mockPlatformFile)
+    val sendRequest = FileMessage.FileSendRequest(fileMessage, mockPlatformFile, fileTransferId = 1L)
     val progressFlow = MutableSharedFlow<MessengerSendProgress>()
     val byteWriteChannel = io.ktor.utils.io.ByteChannel(true).apply { close() } // Auto-flush true
 

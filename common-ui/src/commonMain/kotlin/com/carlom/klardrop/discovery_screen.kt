@@ -22,8 +22,12 @@ import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.TextButton
 import androidx.compose.material.TextField
 import androidx.compose.material.rememberModalBottomSheetState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
@@ -75,8 +79,15 @@ fun DiscoveryScreen(
 
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
+  // --- Navigation to Settings Screen ---
+  if (discoveryState.navigateToSettings) {
+    SettingsScreen(
+      modifier = modifier,
+      discoveryController = discoveryController
+    )
+  }
   // --- Navigation to Chat Screen ---
-  if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
+  else if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
     val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
       uiDependencies.deviceChatViewModelFactory(discoveryState.navigateToChatDeviceId!!)
     }
@@ -104,7 +115,8 @@ fun DiscoveryScreen(
           modifier = modifier,
           isLargeScreen = isLargeScreen,
           devices = discoveryState.devices,
-          onDeviceActionListener = discoveryController // This now triggers chat navigation
+          onDeviceActionListener = discoveryController, // This now triggers chat navigation
+          onSettingsClicked = { discoveryController.onSettingsClicked() }
         )
 
       }
@@ -128,7 +140,8 @@ private fun DiscoveryDashboard(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
   devices: Collection<DeviceUi>,
-  onDeviceActionListener: OnDeviceActionListener
+  onDeviceActionListener: OnDeviceActionListener,
+  onSettingsClicked: () -> Unit
 ) {
   Box(
     modifier = modifier
@@ -166,6 +179,18 @@ private fun DiscoveryDashboard(
       }
     }
 
+    // Settings button positioned at top-right
+    IconButton(
+      onClick = onSettingsClicked,
+      modifier = Modifier
+        .align(Alignment.TopEnd)
+        .padding(8.dp)
+    ) {
+      Icon(
+        imageVector = Icons.Default.Settings,
+        contentDescription = "Settings"
+      )
+    }
 
   }
 }

@@ -15,4 +15,9 @@ class FakeLocalPropertiesRepository(private val currentDeviceId: String = Random
   override suspend fun save(properties: KlardropProperties) {
     this.properties.emit(properties)
   }
+
+  override suspend fun saveCustomDeviceName(customDeviceName: String?) {
+    val current = getProperty()
+    save(current.copy(customDeviceName = customDeviceName))
+  }
 }
