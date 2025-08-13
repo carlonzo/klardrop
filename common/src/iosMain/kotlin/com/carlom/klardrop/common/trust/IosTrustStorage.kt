@@ -15,6 +15,7 @@ class IosTrustStorage : TrustStorage {
     companion object {
         private const val TRUST_KEY_PREFIX = "klardrop_trust_"
         private const val ECDSA_KEY_PREFIX = "klardrop_ecdsa_"
+        private const val DEVICE_PRIVATE_KEY = "klardrop_device_private_key"
     }
     
     private val mutex = Mutex()
@@ -22,7 +23,7 @@ class IosTrustStorage : TrustStorage {
     
     override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {
         mutex.withLock {
-            val encodedKey = publicKey.encodeBase64()
+            val encodedKey = publicKey.toBase64String()
             val key = TRUST_KEY_PREFIX + deviceId
             userDefaults.setObject(encodedKey, key)
             userDefaults.synchronize()
@@ -34,13 +35,12 @@ class IosTrustStorage : TrustStorage {
             val key = TRUST_KEY_PREFIX + deviceId
             val encodedKey = userDefaults.stringForKey(key) ?: return@withLock null
             
-            return@withLock try {
-                encodedKey.decodeBase64()
-            } catch (e: Exception) {
-                // Invalid Base64 encoding - remove corrupted entry
-                userDefaults.removeObjectForKey(key)
-                userDefaults.synchronize()
-                null
+            return@withLock encodedKey.fromBase64OrNull().also { decoded ->
+                if (decoded == null) {
+                    // Invalid Base64 encoding - remove corrupted entry
+                    userDefaults.removeObjectForKey(key)
+                    userDefaults.synchronize()
+                }
             }
         }
     }
@@ -56,12 +56,11 @@ class IosTrustStorage : TrustStorage {
                     val deviceId = key.removePrefix(TRUST_KEY_PREFIX)
                     val encodedKey = userDefaults.stringForKey(key)
                     if (encodedKey != null) {
-                        try {
-                            val publicKey = encodedKey.decodeBase64()
+                        val publicKey = encodedKey.fromBase64OrNull()
+                        if (publicKey != null) {
                             result[deviceId] = publicKey
-                        } catch (e: Exception) {
-                            // Skip corrupted entries
                         }
+                        // Skip corrupted entries (when fromBase64OrNull returns null)
                     }
                 }
             }
@@ -101,7 +100,7 @@ class IosTrustStorage : TrustStorage {
     
     override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {
         mutex.withLock {
-            val encodedKey = ecdsaPublicKey.encodeBase64()
+            val encodedKey = ecdsaPublicKey.toBase64String()
             val key = ECDSA_KEY_PREFIX + deviceId
             userDefaults.setObject(encodedKey, key)
             userDefaults.synchronize()
@@ -113,33 +112,44 @@ class IosTrustStorage : TrustStorage {
             val key = ECDSA_KEY_PREFIX + deviceId
             val encodedKey = userDefaults.stringForKey(key) ?: return@withLock null
             
-            return@withLock try {
-                encodedKey.decodeBase64()
-            } catch (e: Exception) {
-                // Invalid Base64 encoding - remove corrupted entry
-                userDefaults.removeObjectForKey(key)
-                userDefaults.synchronize()
-                null
+            return@withLock encodedKey.fromBase64OrNull().also { decoded ->
+                if (decoded == null) {
+                    // Invalid Base64 encoding - remove corrupted entry
+                    userDefaults.removeObjectForKey(key)
+                    userDefaults.synchronize()
+                }
             }
         }
     }
-}
-
-/**
- * Simple Base64 encoding/decoding functions for iOS
- */
-private fun ByteArray.encodeBase64(): String {
-    // Use a simple hex encoding for now (Base64 encoding can be complex with Kotlin/Native)
-    return this.joinToString("") { byte -> 
-        val unsigned = byte.toInt() and 0xFF
-        when {
-            unsigned < 16 -> "0${unsigned.toString(16)}"
-            else -> unsigned.toString(16)
+    
+    // Device Identity Persistence Methods
+    
+    override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {
+        mutex.withLock {
+            val encodedKey = privateKey.toBase64String()
+            userDefaults.setObject(encodedKey, DEVICE_PRIVATE_KEY)
+            userDefaults.synchronize()
         }
     }
-}
-
-private fun String.decodeBase64(): ByteArray {
-    // Decode hex string back to ByteArray
-    return this.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+    
+    override suspend fun getDevicePrivateKey(): ByteArray? {
+        return mutex.withLock {
+            val encodedKey = userDefaults.stringForKey(DEVICE_PRIVATE_KEY) ?: return@withLock null
+            
+            return@withLock encodedKey.fromBase64OrNull().also { decoded ->
+                if (decoded == null) {
+                    // Invalid Base64 encoding - remove corrupted entry
+                    userDefaults.removeObjectForKey(DEVICE_PRIVATE_KEY)
+                    userDefaults.synchronize()
+                }
+            }
+        }
+    }
+    
+    override suspend fun deleteDevicePrivateKey() {
+        mutex.withLock {
+            userDefaults.removeObjectForKey(DEVICE_PRIVATE_KEY)
+            userDefaults.synchronize()
+        }
+    }
 }

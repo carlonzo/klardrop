@@ -3,6 +3,7 @@ package com.carlom.klardrop.common
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
+import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import kotlinx.io.files.Path
@@ -12,6 +13,7 @@ expect class InternalPlatformDependencies {
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun clipboardReaderWriter(): ClipboardReaderWriter
   fun driverFactory(): DriverFactory
+  fun trustStorage(): TrustStorage
   suspend fun openFile(filePath: String): Boolean
 }
 

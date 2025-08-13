@@ -3,6 +3,8 @@ package com.carlom.klardrop.common
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
+import com.carlom.klardrop.common.trust.IosTrustStorage
+import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import platform.Foundation.*
@@ -42,6 +44,10 @@ actual class InternalPlatformDependencies {
 
   actual fun driverFactory(): DriverFactory {
     return DriverFactory()
+  }
+
+  actual fun trustStorage(): TrustStorage {
+    return IosTrustStorage()
   }
 
   actual suspend fun openFile(filePath: String): Boolean {

@@ -24,7 +24,6 @@ import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.MessageReceiverImpl
 import com.carlom.klardrop.common.trust.ClipboardSyncManager
 import com.carlom.klardrop.common.trust.ClipboardSyncMessageHandler
-import com.carlom.klardrop.common.trust.InMemoryTrustStorage
 import com.carlom.klardrop.common.trust.PairingProtocolCoordinator
 import com.carlom.klardrop.common.trust.TrustChecker
 import com.carlom.klardrop.common.trust.TrustCrypto
@@ -45,16 +44,14 @@ class CommunicationModule(
   private val fileManager: FileManager,
   private val currentDeviceProvider: CurrentDeviceProvider,
   private val messageRepository: MessageRepository,
-  private val clipboardManager: ClipboardManager
+  private val clipboardManager: ClipboardManager,
+  private val trustStorage: TrustStorage
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
 
-  // Trust system components
-  private val trustStorage: TrustStorage by lazy {
-    // TODO to change to already implemented persisted trust storage
-    InMemoryTrustStorage()
-  }
+  // Trust system components - now injected via constructor
+  // (trustStorage is passed via constructor parameter)
 
   private val trustCrypto = TrustCrypto()
 
