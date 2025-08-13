@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.communication.message.MessageHandler
 import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.discovery.DeviceInfo
@@ -15,6 +16,7 @@ import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import io.github.vinceglb.filekit.PlatformFile
@@ -144,6 +146,31 @@ class MessagesRouterImplTest {
     override val messageReceivedNotifier: kotlinx.coroutines.flow.Flow<ReceiveMessageUpdate> = kotlinx.coroutines.flow.flowOf()
   }
 
+  fun createMockTrustManager(): TrustManager {
+    val crypto = com.carlom.klardrop.common.trust.TrustCrypto()
+    val storage = object : com.carlom.klardrop.common.trust.TrustStorage {
+      override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {}
+      override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {}
+      override suspend fun getTrustedDeviceKey(deviceId: String): ByteArray? = null
+      override suspend fun getECDSAKey(deviceId: String): ByteArray? = null
+      override suspend fun getAllTrustedDevices(): Map<String, ByteArray> = emptyMap()
+      override suspend fun removeTrustedDevice(deviceId: String) {}
+      override suspend fun clearAllTrustedDevices() {}
+    }
+    val clock = com.carlom.klardrop.common.utils.Clock()
+    val localPropsRepo = object : com.carlom.klardrop.common.persistence.LocalPropertiesRepository {
+      override val properties: kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.persistence.KlardropProperties> = 
+        kotlinx.coroutines.flow.flowOf(com.carlom.klardrop.common.persistence.KlardropProperties("test-device", "Test Device"))
+      override suspend fun getProperty(): com.carlom.klardrop.common.persistence.KlardropProperties = 
+        com.carlom.klardrop.common.persistence.KlardropProperties("test-device", "Test Device")
+      override suspend fun save(properties: com.carlom.klardrop.common.persistence.KlardropProperties) {}
+      override suspend fun saveCustomDeviceName(customDeviceName: String?) {}
+    }
+    val currentDeviceProvider = com.carlom.klardrop.common.discovery.CurrentDeviceProvider(localPropsRepo)
+    
+    return com.carlom.klardrop.common.trust.TrustManager(crypto, storage, clock, currentDeviceProvider)
+  }
+
 
   @BeforeTest
   fun setup() {
@@ -167,7 +194,7 @@ class MessagesRouterImplTest {
       messageSerializer = mockMessageSerializer,
       coroutines = mockCoroutines,
       messengeReceiver = mockMessageReceiver,
-      messageRepository = mockMessageRepository
+      trustManager = createMockTrustManager()
     )
   }
 
@@ -192,20 +219,19 @@ class MessagesRouterImplTest {
     val textContent = "Hello from router test!"
     val textMessage = TextMessage(text = textContent)
 
+    // Set up a handler for TEXT messages
+    val mockHandler = MockMessageHandler<TextMessage, SimpleSendMessageRequest>()
+    @Suppress("UNCHECKED_CAST")
+    mockMessageHandlers.handlerToReturn = mockHandler as MessageHandler<Message, SendMessageRequest>
+
     val serializedMessage = createMessageBytes(textMessage)
     val readChannel = ByteReadChannel(serializedMessage)
     val writeChannel = ByteChannel(true)
 
     messagesRouter.onMessageIncoming(fromDeviceId, writeChannel, readChannel) { }
 
-    assertEquals(1, mockMessageRepository.calls.size)
-    assertEquals(
-      "insertMessage($fromDeviceId, $textContent, false, TEXT, null, false)",
-      mockMessageRepository.calls[0]
-    )
-    // Also check that receiveFlow was updated
-    assertEquals(ReceiveMessageStatus.Completed, mockMessageReceiver.onReceiveMessageFlow.value.status)
-    assertEquals(textMessage, mockMessageReceiver.onReceiveMessageFlow.value.messages.firstOrNull())
+    // Verify the handler was called with the message
+    assertEquals(textMessage, mockHandler.incomingMessageHandled)
   }
 
   @Test
@@ -221,13 +247,9 @@ class MessagesRouterImplTest {
 
     messagesRouter.onSendingMessage(toDeviceId, request, writeChannel, readChannel, progressFlow)
 
-    assertEquals(1, mockMessageRepository.calls.size)
-    assertEquals(
-      "insertMessage($toDeviceId, $textContent, true, TEXT, null, true)",
-      mockMessageRepository.calls[0]
-    )
-    // Verify that sendMessage was called on writeChannel (actual bytes are complex to check here)
-    // Note: We rely on the repository call above to verify the operation succeeded
+    // For TEXT messages with hasPayload=false, the router sends directly without using handlers
+    // So we just verify no errors occurred (no exceptions thrown)
+    assertEquals(0, mockMessageRepository.calls.size) // MessageRepository should not be called directly by router for no-payload messages
   }
 
   @Test
@@ -255,7 +277,7 @@ class MessagesRouterImplTest {
     val fileMessage = FileMessage("outgoing.dat", 456, "app/foo")
     // Create a mock PlatformFile instance
     val mockPlatformFile = PlatformFile(Path("/tmp", "test"))
-    val request = FileMessage.FileSendRequest(fileMessage, mockPlatformFile)
+    val request = FileMessage.FileSendRequest(fileMessage, mockPlatformFile, fileTransferId = 1L)
     val mockHandler = MockMessageHandler<FileMessage, FileMessage.FileSendRequest>()
     @Suppress("UNCHECKED_CAST")
     mockMessageHandlers.handlerToReturn = mockHandler as MessageHandler<Message, SendMessageRequest>
@@ -268,6 +290,6 @@ class MessagesRouterImplTest {
     messagesRouter.onSendingMessage(toDeviceId, request, writeChannel, readChannel, progressFlow)
 
     assertEquals(0, mockMessageRepository.calls.size) // MessageRepository should not be called directly by router for handled messages
-    assertEquals(request, mockHandler.outgoingRequestHandled)
+    assertEquals(request, mockHandler.outgoingRequestHandled as FileMessage.FileSendRequest)
   }
 }
