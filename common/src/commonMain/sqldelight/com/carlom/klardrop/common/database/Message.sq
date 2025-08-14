@@ -7,13 +7,14 @@ CREATE TABLE messages (
     message_type TEXT NOT NULL, -- Enum: TEXT, FILE
     file_transfer_id INTEGER,
     is_read INTEGER NOT NULL DEFAULT 0, -- 0 = unread, 1 = read
+    mime_type TEXT NOT NULL DEFAULT 'text/plain',
     FOREIGN KEY(file_transfer_id) REFERENCES file_transfers(id)
 );
 
 -- Queries for messages table
 insert:
-INSERT INTO messages (remote_device_id, content, timestamp, is_sender, message_type, file_transfer_id, is_read)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO messages (remote_device_id, content, timestamp, is_sender, message_type, file_transfer_id, is_read, mime_type)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 lastInsertRowId:
 SELECT last_insert_rowid();

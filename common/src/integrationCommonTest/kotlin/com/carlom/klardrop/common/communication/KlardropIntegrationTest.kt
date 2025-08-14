@@ -380,14 +380,16 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
     isSender: Boolean,
     messageType: com.carlom.klardrop.common.persistence.MessageType,
     fileTransferId: Long?,
-    isRead: Boolean
+    isRead: Boolean,
+    mimeType: String
   ): Long = 1L
 
   override suspend fun insertFileTransfer(
     fileName: String,
     filePath: String,
     totalSize: Long,
-    status: com.carlom.klardrop.common.persistence.FileTransferStatus
+    status: com.carlom.klardrop.common.persistence.FileTransferStatus,
+    mimeType: String
   ): Long = 1L
 
   override suspend fun updateFileTransferStatus(id: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus) {}

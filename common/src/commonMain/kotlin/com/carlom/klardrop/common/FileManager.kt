@@ -15,7 +15,7 @@ interface FileManager {
 
 interface FileTransfer {
   val bufferedSink: Sink
-  suspend fun onTransferCompleted()
+  suspend fun onTransferCompleted(): Path?
   suspend fun onTransferFailed()
 }
 

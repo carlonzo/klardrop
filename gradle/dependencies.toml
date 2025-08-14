@@ -16,6 +16,7 @@ bugsnag-jvm = "3.8.0"
 filekit = "0.10.0"
 sqldelight = "2.1.0"
 cryptography = "0.5.0"
+coil3 = "3.3.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -62,6 +63,9 @@ sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", versi
 cryptography-core = { module = "dev.whyoleg.cryptography:cryptography-core", version.ref = "cryptography" }
 cryptography-provider-optimal = { module = "dev.whyoleg.cryptography:cryptography-provider-optimal", version.ref = "cryptography" }
 cryptography-random = { module = "dev.whyoleg.cryptography:cryptography-random", version.ref = "cryptography" }
+
+coil3-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil3" }
+coil3-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil3" }
 
 
 [plugins]

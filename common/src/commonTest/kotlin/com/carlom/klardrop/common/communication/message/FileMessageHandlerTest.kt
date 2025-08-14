@@ -205,14 +205,15 @@ private class MockMessageRepository : MessageRepository {
     isSender: Boolean,
     messageType: PersistenceMessageType,
     fileTransferId: Long?,
-    isRead: Boolean
+    isRead: Boolean,
+    mimeType: String
   ): Long {
-    calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead)")
+    calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
     return nextMessageId++
   }
 
-  override suspend fun insertFileTransfer(fileName: String, filePath: String, totalSize: Long, status: FileTransferStatus): Long {
-    calls.add("insertFileTransfer($fileName, $filePath, $totalSize, $status)")
+  override suspend fun insertFileTransfer(fileName: String, filePath: String, totalSize: Long, status: FileTransferStatus, mimeType: String): Long {
+    calls.add("insertFileTransfer($fileName, $filePath, $totalSize, $status, $mimeType)")
     return nextFileTransferId++
   }
 
@@ -263,8 +264,9 @@ private class MockFileTransfer() : FileTransfer {
   override val bufferedSink: Sink = kotlinx.io.Buffer() // Use a Buffer as a dummy Sink
   var transferCompleted = false
   var transferFailed = false
-  override suspend fun onTransferCompleted() {
+  override suspend fun onTransferCompleted(): kotlinx.io.files.Path? {
     transferCompleted = true
+    return null
   }
 
   override suspend fun onTransferFailed() {

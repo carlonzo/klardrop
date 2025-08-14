@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -47,11 +48,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.carlom.klardrop.common.database.Messages
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.persistence.MessageType
+import com.carlom.klardrop.common.utils.FileTypeUtils
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
@@ -67,7 +72,6 @@ fun DeviceChatScreen(
 ) {
   val messagesState by viewModel.messages.collectAsState()
   val uiState by viewModel.uiState.collectAsState()
-  val messageSendProgress by viewModel.messageSendProgress.collectAsState()
   var textToSend by remember { mutableStateOf("") }
   var showAttachmentMenu by remember { mutableStateOf(false) }
 
@@ -124,16 +128,22 @@ fun DeviceChatScreen(
           items(messagesState.sortedByDescending { it.timestamp }) { message -> // Ensure order again if not guaranteed by flow
             // Placeholder: Determine if it's a text or file message
             // This logic will need to be more robust, potentially fetching File_transfer details
-            if (message.message_type == "FILE" && message.file_transfer_id != null) {
+            if (message.message_type == MessageType.FILE.name && message.file_transfer_id != null) {
               FileMessageBubble(
                 message = message,
                 messageRepository = viewModel.messageRepository,
                 onOpenFileRequest = { onOpenFileRequest(it) }
               ) // Pass repository
-            } else {
+            } else if (message.message_type == MessageType.TEXT.name) {
               TextMessageBubble(
-                message = message,
-                sendProgress = messageSendProgress[message.id]
+                message = message
+              )
+            } else {
+              // Handle unknown message types gracefully
+              Text(
+                text = "Unsupported message type - ${message.message_type}",
+                style = MaterialTheme.typography.bodyMedium.copy(color = Color.Red),
+                modifier = Modifier.padding(8.dp)
               )
             }
           }
@@ -209,8 +219,7 @@ fun DeviceChatScreen(
 
 @Composable
 fun TextMessageBubble(
-  message: Messages,
-  sendProgress: com.carlom.klardrop.common.communication.MessengerSendProgress? = null
+  message: Messages
 ) {
   // Basic representation, align based on is_sender
   val horizontalArrangement = if (message.is_sender != 0L) Arrangement.End else Arrangement.Start
@@ -223,39 +232,10 @@ fun TextMessageBubble(
       ), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
       Box(modifier = Modifier.padding(8.dp)) {
-        Text(text = message.content)
-
-        // Show status indicator for sent messages only
-        if (message.is_sender != 0L && sendProgress != null) {
-          when (sendProgress) {
-            is com.carlom.klardrop.common.communication.MessengerSendProgress.Pending,
-            is com.carlom.klardrop.common.communication.MessengerSendProgress.InProgress -> {
-              CircularProgressIndicator(
-                modifier = Modifier
-                  .size(12.dp)
-                  .align(Alignment.BottomEnd)
-                  .padding(2.dp),
-                strokeWidth = 1.5.dp,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-              )
-            }
-
-            is com.carlom.klardrop.common.communication.MessengerSendProgress.Error -> {
-              Icon(
-                imageVector = Icons.Default.Cancel,
-                contentDescription = "Failed",
-                modifier = Modifier
-                  .size(12.dp)
-                  .align(Alignment.BottomEnd),
-                tint = Color.Red
-              )
-            }
-
-            is com.carlom.klardrop.common.communication.MessengerSendProgress.Completed -> {
-              // No indicator for completed messages
-            }
-          }
+        SelectionContainer {
+          Text(text = message.content)
         }
+
       }
     }
   }
@@ -280,65 +260,106 @@ fun FileMessageBubble(
     Modifier
   }
 
+  val cardColors = CardDefaults.cardColors(
+    containerColor = if (isSender) {
+      MaterialTheme.colorScheme.primaryContainer
+    } else if (isCompletedReceivedFile) {
+      MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f) // Slightly transparent to indicate clickable
+    } else {
+      MaterialTheme.colorScheme.secondaryContainer
+    }
+  )
+
   val horizontalArrangement = if (isSender) Arrangement.End else Arrangement.Start
   Row(
     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = horizontalArrangement
   ) {
     Card(
-      colors = CardDefaults.cardColors(
-        containerColor = if (isSender) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-      ), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), modifier = Modifier.widthIn(max = 280.dp).then(bubbleModifier)
+      colors = cardColors,
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+      modifier = Modifier.widthIn(max = 280.dp).then(bubbleModifier)
     ) {
       Column(modifier = Modifier.padding(8.dp)) {
         when (currentStatus) {
           FileTransferStatus.IN_PROGRESS.name -> {
+
             Text(fileName, style = MaterialTheme.typography.titleSmall)
+
             Spacer(modifier = Modifier.height(4.dp))
+
             Text("Status: $currentStatus", style = MaterialTheme.typography.labelMedium)
+
             fileTransferState?.let { state ->
               if (state.total_size > 0) {
                 LinearProgressIndicator(
                   progress = { (state.transferred_size / state.total_size).toFloat() },
                   modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 2.dp),
                 )
+
                 Text(
                   text = "${(state.transferred_size.toFloat() / 1024).toInt()}KB / ${(state.total_size.toFloat() / 1024).toInt()}KB",
                   style = MaterialTheme.typography.labelMedium
                 )
+
               }
             }
           }
 
           FileTransferStatus.COMPLETED.name -> {
+            // Show thumbnail for image/video files if available
+            if (filePath != null && fileTransferState?.mime_type?.let { FileTypeUtils.isImageOrVideoMimeType(it) } == true) {
+              AsyncImage(
+                model = filePath,
+                contentDescription = "Thumbnail for $fileName",
+                modifier = Modifier
+                  .size(120.dp)
+                  .padding(bottom = 8.dp),
+                contentScale = ContentScale.Crop
+              )
+            }
+
             Text(fileName, style = MaterialTheme.typography.titleSmall)
+
             Spacer(modifier = Modifier.height(4.dp))
+
             Text("Status: $currentStatus", style = MaterialTheme.typography.labelMedium)
+
             fileTransferState?.let { state ->
+
               Text(
                 text = "Size: ${(state.total_size.toFloat() / 1024).toInt()}KB" + if (isCompletedReceivedFile) " (Click to open)" else "",
                 style = MaterialTheme.typography.labelMedium
               )
+
             }
           }
 
           FileTransferStatus.FAILED.name -> {
+
             Row(verticalAlignment = Alignment.CenterVertically) {
               Text("⚠️", style = MaterialTheme.typography.labelLarge.copy(color = Color.Red)) // Larger icon
               Spacer(Modifier.width(8.dp))
               Text(
                 text = fileName, style = MaterialTheme.typography.titleSmall.copy(textDecoration = TextDecoration.LineThrough)
               )
+
             }
             Spacer(modifier = Modifier.height(4.dp))
+
             Text(
               "Transfer failed", style = MaterialTheme.typography.labelMedium.copy(color = Color.Red)
             )
+
           }
 
           else -> { // Fallback for null status or other states
+
             Text(fileName, style = MaterialTheme.typography.titleSmall)
+
             Spacer(modifier = Modifier.height(4.dp))
+
             Text("Loading file info...", style = MaterialTheme.typography.labelMedium)
+
           }
         }
       }

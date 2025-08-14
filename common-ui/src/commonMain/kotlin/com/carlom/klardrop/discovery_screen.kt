@@ -8,11 +8,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -21,9 +25,9 @@ import androidx.compose.material.ModalBottomSheetState
 import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.TextButton
 import androidx.compose.material.TextField
-import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -86,6 +90,7 @@ fun DiscoveryScreen(
       discoveryController = discoveryController
     )
   }
+
   // --- Navigation to Chat Screen ---
   else if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
     val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
@@ -143,15 +148,39 @@ private fun DiscoveryDashboard(
   onDeviceActionListener: OnDeviceActionListener,
   onSettingsClicked: () -> Unit
 ) {
-  Box(
+  Column(
     modifier = modifier
+      .windowInsetsPadding(WindowInsets.statusBars)
+      .padding(horizontal = 16.dp)
   ) {
 
+    // Top bar with title and settings button
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 16.dp),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Text(
+        text = "Klardrop",
+        style = MaterialTheme.typography.headlineMedium
+      )
+
+      IconButton(onClick = onSettingsClicked) {
+        Icon(
+          imageVector = Icons.Default.Settings,
+          contentDescription = "Settings"
+        )
+      }
+    }
+
+    // Content below the top bar
     FlowRow {
       devices.forEach { device ->
         Box { // Wrap DeviceDiscovery to allow overlaying indicators
           DeviceDiscovery(device, isLargeScreen, onDeviceActionListener)
-          
+
           // Unread messages indicator
           if (device.hasUnreadMessages) {
             Box(
@@ -162,7 +191,7 @@ private fun DiscoveryDashboard(
                 .align(Alignment.TopEnd)
             )
           }
-          
+
           // Trust action button (positioned at bottom-end)
           if (device.trustStatus != TrustStatus.Unknown) {
             TrustActionButton(
@@ -177,19 +206,6 @@ private fun DiscoveryDashboard(
           }
         }
       }
-    }
-
-    // Settings button positioned at top-right
-    IconButton(
-      onClick = onSettingsClicked,
-      modifier = Modifier
-        .align(Alignment.TopEnd)
-        .padding(8.dp)
-    ) {
-      Icon(
-        imageVector = Icons.Default.Settings,
-        contentDescription = "Settings"
-      )
     }
 
   }
@@ -289,7 +305,7 @@ private fun PairingApprovalDialog(
   onDismiss: () -> Unit
 ) {
   println("🖥️ [PairingApprovalDialog] Rendering pairing dialog for device: ${state.deviceName}")
-  
+
   AlertDialog(
     onDismissRequest = {
       println("🖥️ [PairingApprovalDialog] Dialog dismissed - calling onDismiss")

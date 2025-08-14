@@ -58,9 +58,10 @@ class MessagesRouterImplTest {
       isSender: Boolean,
       messageType: com.carlom.klardrop.common.persistence.MessageType,
       fileTransferId: Long?,
-      isRead: Boolean
+      isRead: Boolean,
+      mimeType: String
     ): Long {
-      calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead)")
+      calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
       return 1L
     }
 
@@ -68,9 +69,10 @@ class MessagesRouterImplTest {
       fileName: String,
       filePath: String,
       totalSize: Long,
-      status: com.carlom.klardrop.common.persistence.FileTransferStatus
+      status: com.carlom.klardrop.common.persistence.FileTransferStatus,
+      mimeType: String
     ): Long {
-      calls.add("insertFileTransfer($fileName, $filePath, $totalSize, $status)")
+      calls.add("insertFileTransfer($fileName, $filePath, $totalSize, $status, $mimeType)")
       return 1L
     }
 
@@ -156,6 +158,9 @@ class MessagesRouterImplTest {
       override suspend fun getAllTrustedDevices(): Map<String, ByteArray> = emptyMap()
       override suspend fun removeTrustedDevice(deviceId: String) {}
       override suspend fun clearAllTrustedDevices() {}
+      override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {}
+      override suspend fun getDevicePrivateKey(): ByteArray? = null
+      override suspend fun deleteDevicePrivateKey() {}
     }
     val clock = com.carlom.klardrop.common.utils.Clock()
     val localPropsRepo = object : com.carlom.klardrop.common.persistence.LocalPropertiesRepository {

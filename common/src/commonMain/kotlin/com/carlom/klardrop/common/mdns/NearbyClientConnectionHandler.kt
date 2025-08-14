@@ -10,6 +10,7 @@ import com.carlom.klardrop.common.communication.message.SignedSendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
+import com.carlom.klardrop.common.utils.FileTypeUtils
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.toByteArray
 import com.carlonzo.ukey2.Ukey2Handshake
@@ -184,9 +185,9 @@ class NearbyClientConnectionHandler(
       val mimetype = request.message.mimeType.lowercase()
 
       val fileType: FileMetadata.Type =
-        if (mimetype.startsWith("image/")) FileMetadata.Type.IMAGE
-        else if (mimetype.startsWith("video/")) FileMetadata.Type.VIDEO
-        else if (mimetype.startsWith("audio/")) FileMetadata.Type.AUDIO
+        if (FileTypeUtils.isImageMimeType(mimetype)) FileMetadata.Type.IMAGE
+        else if (FileTypeUtils.isVideo(mimetype)) FileMetadata.Type.VIDEO
+        else if (FileTypeUtils.isAudioMimeType(mimetype)) FileMetadata.Type.AUDIO
         else FileMetadata.Type.UNKNOWN
 
       FileMetadata(
