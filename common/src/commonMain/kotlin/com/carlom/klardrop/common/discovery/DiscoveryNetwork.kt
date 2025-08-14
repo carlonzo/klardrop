@@ -37,31 +37,55 @@ class DiscoveryNetwork internal constructor(
 
   private var nearbySharePublishJob: Job? = null
   private var klardropPublishJob: Job? = null
+  private var nearbySharePort: Int? = null
+  private var klardropPort: Int? = null
+  private var deviceFlowSubscription: Job? = null
 
 
   fun startPublishNearbyShare(port: Int) {
     log("DiscoveryNetwork", "startPublishNearbyShare $port")
-
+    nearbySharePort = port
+    
+    startDeviceFlowSubscriptionIfNeeded()
+    republishNearbyShare(port)
+  }
+  
+  private fun republishNearbyShare(port: Int, deviceInfo: CurrentDevice? = null) {
     nearbySharePublishJob?.cancel()
     nearbySharePublishJob = discoveryScope.launch {
-
-      val registerServiceInfo = nearbyShareDiscoveryUtils.getRegisterServiceInfo(port, currentDevice.await())
-
+      val currentDeviceInfo = deviceInfo ?: currentDeviceProvider.get()
+      val registerServiceInfo = nearbyShareDiscoveryUtils.getRegisterServiceInfo(port, currentDeviceInfo)
       serviceDiscoveryMdns.registerService(registerServiceInfo)
     }
-
   }
 
   fun startPublishKlardrop(port: Int) {
     log("DiscoveryNetwork", "startPublishKlardrop $port")
-
+    klardropPort = port
+    startDeviceFlowSubscriptionIfNeeded()
+    republishKlardrop(port)
+  }
+  
+  private fun republishKlardrop(port: Int, deviceInfo: CurrentDevice? = null) {
     klardropPublishJob?.cancel()
     klardropPublishJob = discoveryScope.launch {
-
-      val registerServiceInfo = klardropDiscoveryUtils.getRegisterServiceInfo(port, currentDevice.await())
-
+      val currentDeviceInfo = deviceInfo ?: currentDeviceProvider.get()
+      val registerServiceInfo = klardropDiscoveryUtils.getRegisterServiceInfo(port, currentDeviceInfo)
       serviceDiscoveryMdns.registerService(registerServiceInfo)
     }
+  }
+  
+  private fun startDeviceFlowSubscriptionIfNeeded() {
+    if (deviceFlowSubscription != null) return
+    
+    deviceFlowSubscription = currentDeviceProvider.deviceInfoFlow
+      .onEach { deviceInfo ->
+        log("DiscoveryNetwork", "Device info changed: ${deviceInfo.deviceName}")
+        // Republish services if they were previously started
+        nearbySharePort?.let { port -> republishNearbyShare(port, deviceInfo) }
+        klardropPort?.let { port -> republishKlardrop(port, deviceInfo) }
+      }
+      .launchIn(discoveryScope)
   }
 
 
