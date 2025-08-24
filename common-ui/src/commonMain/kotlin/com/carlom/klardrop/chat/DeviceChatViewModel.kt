@@ -10,7 +10,6 @@ import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.database.Messages
-import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
@@ -32,7 +31,6 @@ class DeviceChatViewModel(
   private val deviceId: String,
   val messageRepository: MessageRepository,
   private val messenger: Messenger,
-  private val visibleDevices: VisibleDevices,
   private val coroutines: Coroutines,
   private val fileManager: FileManager,
   private val platformFileSystem: PlatformFileSystem
@@ -65,7 +63,7 @@ class DeviceChatViewModel(
 
         // Send the message - persistence is handled by TextMessageHandler
         val textMessage = TextMessage(text = text)
-        sendMessageWithoutTracking(textMessage.toSimpleSendRequest())
+        sendMessage(textMessage.toSimpleSendRequest())
 
       } catch (e: Exception) {
         _uiState.value = _uiState.value.copy(
@@ -122,7 +120,7 @@ class DeviceChatViewModel(
             )
 
             // Send the file - handler will create DB records and manage transfer
-            sendMessageWithoutTracking(fileMessage.toSendRequest(file))
+            sendMessage(fileMessage.toSendRequest(file))
           }
         }
 
@@ -139,26 +137,17 @@ class DeviceChatViewModel(
   }
 
 
-  // Method for sending messages without progress tracking (handlers manage persistence)
-  private suspend fun sendMessageWithoutTracking(
+  private suspend fun sendMessage(
     sendRequest: SendMessageRequest
   ) {
-    val isVisible = visibleDevices.isDeviceVisible(deviceId)
-    if (isVisible) {
 
-      val finalStatus = messenger.send(deviceId, sendRequest)
-        .untilCompleted()
-        .lastOrNull()
+    val finalStatus = messenger.send(deviceId, sendRequest)
+      .untilCompleted()
+      .lastOrNull()
 
-      if (finalStatus is MessengerSendProgress.Error) {
-        _uiState.update {
-          it.copy(error = "Failed to send message: ${finalStatus.message}")
-        }
-      }
-
-    } else {
+    if (finalStatus is MessengerSendProgress.Error) {
       _uiState.update {
-        it.copy(error = "Device not found or not connected")
+        it.copy(error = "Failed to send message: ${finalStatus.message}")
       }
     }
   }

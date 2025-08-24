@@ -3,10 +3,9 @@ package com.carlom.klardrop.common.communication
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
-import com.carlom.klardrop.common.communication.message.FileMessage
-import com.carlom.klardrop.common.communication.message.MessageSignature
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
-import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.TrustPairingRequest
+import com.carlom.klardrop.common.communication.message.TrustPairingResponse
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
@@ -48,7 +47,10 @@ class MessengerImpl(
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
 
   override fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress> {
-    log("Messenger", "send() called: deviceId=$deviceId, messageType=${messageRequest.message.type}, messageId=${messageRequest.message.id}")
+    log(
+      "Messenger",
+      "send() called: deviceId=$deviceId, messageType=${messageRequest.message.type}, messageId=${messageRequest.message.id}"
+    )
 
     val flow = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 1)
 
@@ -66,24 +68,23 @@ class MessengerImpl(
         flow.emit(Error("$deviceId it is not visible"))
         return@launch
       }
-      
+
       log("Messenger", "✅ Device $deviceId found in visible devices")
 
       // Check if device is trusted and wrap message in TrustedMessage if needed
       val finalMessageRequest = try {
         val message = messageRequest.message
-        val isPairingMessage = message is com.carlom.klardrop.common.communication.message.TrustPairingRequest ||
-                               message is com.carlom.klardrop.common.communication.message.TrustPairingResponse
+        val isPairingMessage = message is TrustPairingRequest || message is TrustPairingResponse
 
-        if (trustChecker.value.isTrusted(deviceId) && !isPairingMessage) {
+        if (!isPairingMessage && trustChecker.value.isTrusted(deviceId)) {
           log("Messenger", "Device $deviceId is trusted, creating TrustedMessage")
-          
+
           // Serialize the original message
           val messageBytes = messageSerializer.serialize(message)
-          
+
           // Sign the message using TrustManager
           val trustedMessage = trustManager.signMessage(messageBytes)
-          
+
           if (trustedMessage != null) {
             log("Messenger", "Successfully created TrustedMessage for device $deviceId")
             // Create a new request with the TrustedMessage
@@ -159,13 +160,16 @@ class MessengerImpl(
     val config = AckTimeoutConfig.DEFAULT
     val maxRetries = config.maxRetries
     var attempt = 0
-    
-    log("Messenger", "[DEBUG] Starting handleKlardropTransfer for $deviceId, message: ${messageRequest.message.id}, maxRetries: $maxRetries")
-    
+
+    log(
+      "Messenger",
+      "[DEBUG] Starting handleKlardropTransfer for $deviceId, message: ${messageRequest.message.id}, maxRetries: $maxRetries"
+    )
+
     while (attempt <= maxRetries) {
       attempt++
       log("Messenger", "[DEBUG] Attempt $attempt/$maxRetries for $deviceId, message: ${messageRequest.message.id}")
-      
+
       val result = runCatching {
         // Get or establish connection
         log("Messenger", "[DEBUG] Getting or establishing connection to $deviceId (attempt $attempt)")
@@ -183,34 +187,40 @@ class MessengerImpl(
           }
         }
 
-        log("Messenger", "[DEBUG] Successfully got connection to $deviceId, sending message: ${messageRequest.message.id} (attempt $attempt)")
+        log(
+          "Messenger",
+          "[DEBUG] Successfully got connection to $deviceId, sending message: ${messageRequest.message.id} (attempt $attempt)"
+        )
 
         // Send the message - this will emit progress updates to the flow and wait for ACKs
         connectionMessenger.send(messageRequest, flow)
         log("Messenger", "[DEBUG] Successfully sent message ${messageRequest.message.id} to $deviceId (attempt $attempt)")
         true
       }.getOrElse { exception ->
-        log("Messenger", "[DEBUG] Error in Klardrop transfer to $deviceId (attempt $attempt): ${exception::class.simpleName}: ${exception.message}")
+        log(
+          "Messenger",
+          "[DEBUG] Error in Klardrop transfer to $deviceId (attempt $attempt): ${exception::class.simpleName}: ${exception.message}"
+        )
         log("Messenger", "[DEBUG] Full exception for attempt $attempt", exception)
-        
+
         // Check if this is an ACK timeout (connection lost)
         val exceptionMessage = exception.message ?: ""
         val isAckTimeout = exceptionMessage.contains("ACK timeout")
         log("Messenger", "[DEBUG] Is ACK timeout: $isAckTimeout, exception message: '$exceptionMessage'")
-        
+
         if (isAckTimeout && attempt <= maxRetries) {
           log("Messenger", "[DEBUG] ACK timeout detected, will retry connection to $deviceId (attempt $attempt)")
           // Force cleanup of the connection
           connectionsPool.closeConnection(deviceId)
           log("Messenger", "[DEBUG] Closed connection to $deviceId, starting backoff delay")
-          
+
           // Wait before retry with exponential backoff
           val delay = (1.seconds * config.retryBackoffMultiplier.pow(attempt - 1))
           log("Messenger", "[DEBUG] Waiting ${delay.inWholeMilliseconds}ms before retry (attempt $attempt)")
           withContext(coroutines.mainDispatcher) {
             kotlinx.coroutines.delay(delay)
           }
-          
+
           return@getOrElse false // Signal to retry
         } else {
           // Final failure or non-timeout error
@@ -220,17 +230,17 @@ class MessengerImpl(
           return false
         }
       }
-      
+
       if (result) {
         // Success
         log("Messenger", "[DEBUG] Successfully completed transfer to $deviceId (attempt $attempt)")
         return true
       }
-      
+
       log("Messenger", "[DEBUG] Attempt $attempt failed, will retry if attempts remaining")
       // If we get here, it was a retryable failure and we should try again
     }
-    
+
     // All retries exhausted
     log("Messenger", "[DEBUG] All retries exhausted for $deviceId after $maxRetries attempts")
     flow.emit(Error("Transfer failed after $maxRetries retry attempts"))
@@ -240,13 +250,13 @@ class MessengerImpl(
 
   private suspend fun getOrEstablishConnection(deviceId: String): ConnectionMessenger? {
     log("Messenger", "[DEBUG] getOrEstablishConnection() called for $deviceId")
-    
+
     // First, check if we have a valid existing connection
     val existingConnection = connectionsPool.getConnection(deviceId)
     if (existingConnection != null) {
       val isConnectionClosed = existingConnection.isClosed()
       log("Messenger", "[DEBUG] Found existing connection for $deviceId, isClosed=$isConnectionClosed")
-      
+
       if (!isConnectionClosed) {
         log("Messenger", "[DEBUG] Using existing active connection for $deviceId")
         return existingConnection
@@ -263,7 +273,7 @@ class MessengerImpl(
     val connectResult = runCatching {
       client.connectTo(deviceId)
     }
-    
+
     if (connectResult.isFailure) {
       val exception = connectResult.exceptionOrNull()
       log("Messenger", "Failed to connect to $deviceId: ${exception?.message}")

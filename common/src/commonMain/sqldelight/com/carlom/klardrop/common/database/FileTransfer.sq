@@ -1,5 +1,6 @@
 CREATE TABLE file_transfers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uuid TEXT NOT NULL UNIQUE,
     file_name TEXT NOT NULL,
     file_path TEXT NOT NULL,
     total_size INTEGER NOT NULL,
@@ -10,11 +11,14 @@ CREATE TABLE file_transfers (
 
 -- Queries for file_transfers table
 insertFileTransfer:
-INSERT INTO file_transfers (file_name, file_path, total_size, transferred_size, status, mime_type)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO file_transfers (uuid, file_name, file_path, total_size, transferred_size, status, mime_type)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
-lastInsertRowIdFileTransfer:
-SELECT last_insert_rowid();
+getIdByUuid:
+SELECT id
+FROM file_transfers
+WHERE uuid = ?
+LIMIT 1;
 
 updateStatus:
 UPDATE file_transfers

@@ -2,7 +2,6 @@ package com.carlom.klardrop.common.features
 
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,7 +39,8 @@ class ClipboardManager(
     awaitClose {
       collectionJob.cancel()
     }
-  }.distinctUntilChanged().shareIn(clipboardScope, started = SharingStarted.WhileSubscribed())
+  }.distinctUntilChanged()
+    .shareIn(clipboardScope, started = SharingStarted.WhileSubscribed())
 
   fun write(text: String) {
     readerWriter.write(text)

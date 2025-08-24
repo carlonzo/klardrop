@@ -21,8 +21,7 @@ class UiDependencies(private val commonComponent: CommonComponent) {
             messenger = commonComponent.messenger(),
             coroutines = commonComponent.coroutines(),
             fileManager = commonComponent.fileManager(), // Added,
-            visibleDevices = commonComponent.visibleDevices(),
-            platformFileSystem = commonComponent.platformFileSystem()
+          platformFileSystem = commonComponent.platformFileSystem()
         )
     }
 }
