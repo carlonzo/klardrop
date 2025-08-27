@@ -60,9 +60,8 @@ class MessagesRouterImplTest {
       fileTransferId: Long?,
       isRead: Boolean,
       mimeType: String
-    ): Long {
+    ) {
       calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
-      return 1L
     }
 
     override suspend fun insertFileTransfer(
@@ -282,7 +281,7 @@ class MessagesRouterImplTest {
     val fileMessage = FileMessage("outgoing.dat", 456, "app/foo")
     // Create a mock PlatformFile instance
     val mockPlatformFile = PlatformFile(Path("/tmp", "test"))
-    val request = FileMessage.FileSendRequest(fileMessage, mockPlatformFile, fileTransferId = 1L)
+    val request = FileMessage.FileSendRequest(fileMessage, mockPlatformFile)
     val mockHandler = MockMessageHandler<FileMessage, FileMessage.FileSendRequest>()
     @Suppress("UNCHECKED_CAST")
     mockMessageHandlers.handlerToReturn = mockHandler as MessageHandler<Message, SendMessageRequest>
