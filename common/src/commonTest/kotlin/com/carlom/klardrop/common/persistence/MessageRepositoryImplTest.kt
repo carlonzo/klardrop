@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.persistence
 
+import app.cash.sqldelight.db.SqlDriver
 import app.cash.turbine.test
 import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.database.createTestDriver
@@ -18,6 +19,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessageRepositoryImplTest {
 
+    private lateinit var driver: SqlDriver
     private lateinit var db: AppDatabase
     private lateinit var messageRepository: MessageRepositoryImpl
     private lateinit var testDispatcher: TestDispatcher
@@ -27,11 +29,16 @@ class MessageRepositoryImplTest {
 
     @BeforeTest
     fun setup() {
-        val driver = createTestDriver()
+        driver = createTestDriver()
         db = AppDatabase(driver)
         testDispatcher = UnconfinedTestDispatcher()
         realClock = Clock()
         messageRepository = MessageRepositoryImpl(db, realClock, testDispatcher)
+    }
+
+    @AfterTest
+    fun tearDown() {
+        driver.close()
     }
 
     @Test

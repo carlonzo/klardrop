@@ -83,7 +83,7 @@ class TrustCryptoTest {
     @Test
     fun testECDSASignatureGeneration() = runTest {
         val keyPair = trustCrypto.generateECDSAKeyPair()
-        val data = "test message".toByteArray()
+        val data = "test message".encodeToByteArray()
         
         val signature = trustCrypto.signWithECDSA(keyPair.privateKey, data)
         
@@ -94,7 +94,7 @@ class TrustCryptoTest {
     @Test
     fun testECDSASignatureVerification() = runTest {
         val keyPair = trustCrypto.generateECDSAKeyPair()
-        val data = "test message".toByteArray()
+        val data = "test message".encodeToByteArray()
         
         val signature = trustCrypto.signWithECDSA(keyPair.privateKey, data)
         val publicKeyBytes = trustCrypto.encodeECDSAPublicKey(keyPair.publicKey)
@@ -106,8 +106,8 @@ class TrustCryptoTest {
     @Test
     fun testECDSASignatureVerificationWithWrongData() = runTest {
         val keyPair = trustCrypto.generateECDSAKeyPair()
-        val originalData = "original message".toByteArray()
-        val modifiedData = "modified message".toByteArray()
+        val originalData = "original message".encodeToByteArray()
+        val modifiedData = "modified message".encodeToByteArray()
         
         val signature = trustCrypto.signWithECDSA(keyPair.privateKey, originalData)
         val publicKeyBytes = trustCrypto.encodeECDSAPublicKey(keyPair.publicKey)
@@ -120,7 +120,7 @@ class TrustCryptoTest {
     fun testECDSASignatureVerificationWithWrongKey() = runTest {
         val correctKeyPair = trustCrypto.generateECDSAKeyPair()
         val wrongKeyPair = trustCrypto.generateECDSAKeyPair()
-        val data = "test message".toByteArray()
+        val data = "test message".encodeToByteArray()
         
         val signature = trustCrypto.signWithECDSA(correctKeyPair.privateKey, data)
         val wrongPublicKeyBytes = trustCrypto.encodeECDSAPublicKey(wrongKeyPair.publicKey)
@@ -132,7 +132,7 @@ class TrustCryptoTest {
     @Test
     fun testECDSAPublicKeyEncoding() = runTest {
         val keyPair = trustCrypto.generateECDSAKeyPair()
-        val data = "test message".toByteArray()
+        val data = "test message".encodeToByteArray()
         
         // Sign with original key
         val signature = trustCrypto.signWithECDSA(keyPair.privateKey, data)
@@ -170,7 +170,7 @@ class TrustCryptoTest {
         // Test multiple sign/verify cycles
         repeat(5) {
             val keyPair = trustCrypto.generateECDSAKeyPair()
-            val data = "consistency test $it".toByteArray()
+            val data = "consistency test $it".encodeToByteArray()
             
             val signature = trustCrypto.signWithECDSA(keyPair.privateKey, data)
             
@@ -212,7 +212,7 @@ class TrustCryptoTest {
     @Test
     fun testECDSAPerformance() = runTest {
         val keyPair = trustCrypto.generateECDSAKeyPair()
-        val data = "performance test message".toByteArray()
+        val data = "performance test message".encodeToByteArray()
         val publicKeyBytes = trustCrypto.encodeECDSAPublicKey(keyPair.publicKey)
         
         // Test signature generation performance (must be < 50ms per requirement)
@@ -248,7 +248,7 @@ class TrustCryptoTest {
     @Test
     fun testECDSASignatureUniqueness() = runTest {
         val keyPair = trustCrypto.generateECDSAKeyPair()
-        val data = "test message".toByteArray()
+        val data = "test message".encodeToByteArray()
         val publicKeyBytes = trustCrypto.encodeECDSAPublicKey(keyPair.publicKey)
         
         // Generate multiple signatures of the same data
@@ -266,7 +266,7 @@ class TrustCryptoTest {
     @Test
     fun testMalformedSignatureHandling() = runTest {
         val keyPair = trustCrypto.generateECDSAKeyPair()
-        val data = "test message".toByteArray()
+        val data = "test message".encodeToByteArray()
         val publicKeyBytes = trustCrypto.encodeECDSAPublicKey(keyPair.publicKey)
         
         // Test with malformed signatures
@@ -274,7 +274,7 @@ class TrustCryptoTest {
             ByteArray(0), // Empty signature
             ByteArray(1) { 0xFF.toByte() }, // Too short
             ByteArray(1000) { 0x00 }, // Too long
-            "not a signature".toByteArray() // Invalid format
+            "not a signature".encodeToByteArray() // Invalid format
         )
         
         malformedSignatures.forEach { malformedSig ->
@@ -291,7 +291,7 @@ class TrustCryptoTest {
     @Test
     fun testMalformedPublicKeyHandling() = runTest {
         val validKeyPair = trustCrypto.generateECDSAKeyPair()
-        val data = "test message".toByteArray()
+        val data = "test message".encodeToByteArray()
         val signature = trustCrypto.signWithECDSA(validKeyPair.privateKey, data)
         
         // Test with malformed public keys
@@ -299,7 +299,7 @@ class TrustCryptoTest {
             ByteArray(0), // Empty key
             ByteArray(1) { 0xFF.toByte() }, // Too short
             ByteArray(1000) { 0x00 }, // Wrong size
-            "not a key".toByteArray() // Invalid format
+            "not a key".encodeToByteArray() // Invalid format
         )
         
         malformedKeys.forEach { malformedKey ->
@@ -322,7 +322,7 @@ class TrustCryptoTest {
             ByteArray(0), // Empty key
             ByteArray(1) { 0xFF.toByte() }, // Too short
             ByteArray(1000) { 0x00 }, // Wrong size
-            "not a key".toByteArray() // Invalid format
+            "not a key".encodeToByteArray() // Invalid format
         )
         
         malformedKeys.forEach { malformedKey ->
@@ -354,7 +354,7 @@ class TrustCryptoTest {
     
     @Test
     fun testCombineForSigning() {
-        val payload = "test message".toByteArray()
+        val payload = "test message".encodeToByteArray()
         val timestamp = 1234567890L
         val nonce = ByteArray(16) { it.toByte() }
         
@@ -399,7 +399,7 @@ class TrustCryptoTest {
         
         // Test concurrent signature operations
         val results = (1..10).map { i ->
-            val data = "concurrent test $i".toByteArray()
+            val data = "concurrent test $i".encodeToByteArray()
             val signature = trustCrypto.signWithECDSA(keyPair.privateKey, data)
             val isValid = trustCrypto.verifyECDSA(publicKeyBytes, data, signature)
             isValid
