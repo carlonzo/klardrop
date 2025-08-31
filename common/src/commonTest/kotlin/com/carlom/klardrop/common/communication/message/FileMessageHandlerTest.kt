@@ -83,9 +83,9 @@ class FileMessageHandlerTest {
     fileMessageHandler.handleIncoming(fileMessage, byteReadChannel, receiveFlow)
 
     // Verify initial DB calls
-    assertEquals("insertFileTransfer(test.txt, , 100, IN_PROGRESS)", mockMessageRepository.calls[0])
+    assertEquals("insertFileTransfer(test.txt, , 100, IN_PROGRESS, text/plain)", mockMessageRepository.calls[0])
     val expectedFileTransferId = mockMessageRepository.nextFileTransferId - 1
-    assertEquals("insertMessage($remoteDeviceId, test.txt, false, FILE, $expectedFileTransferId, false)", mockMessageRepository.calls[1])
+    assertEquals("insertMessage($remoteDeviceId, test.txt, false, FILE, $expectedFileTransferId, false, text/plain)", mockMessageRepository.calls[1])
 
     // Verify NO intermediate progress updates (only final state)
     // Note: file path update is commented out due to interface limitations
@@ -114,9 +114,9 @@ class FileMessageHandlerTest {
     }
 
     // Verify initial DB calls
-    assertEquals("insertFileTransfer(fail.txt, , 100, IN_PROGRESS)", mockMessageRepository.calls[0])
+    assertEquals("insertFileTransfer(fail.txt, , 100, IN_PROGRESS, text/plain)", mockMessageRepository.calls[0])
     val expectedFileTransferId = mockMessageRepository.nextFileTransferId - 1
-    assertEquals("insertMessage($remoteDeviceId, fail.txt, false, FILE, $expectedFileTransferId, false)", mockMessageRepository.calls[1])
+    assertEquals("insertMessage($remoteDeviceId, fail.txt, false, FILE, $expectedFileTransferId, false, text/plain)", mockMessageRepository.calls[1])
 
     // Verify only final failure status (no intermediate progress updates)
     assertEquals("updateFileTransferStatus($expectedFileTransferId, FAILED)", mockMessageRepository.calls.last())
@@ -135,7 +135,7 @@ class FileMessageHandlerTest {
     // Create a simple mock that satisfies the path property requirement
     val mockPlatformFile = PlatformFile(Path("/fake/path", fileName))
 
-    val sendRequest = FileMessage.FileSendRequest(fileMessage, mockPlatformFile, fileTransferId = 1L)
+    val sendRequest = FileMessage.FileSendRequest(fileMessage, mockPlatformFile)
     val progressFlow = MutableSharedFlow<MessengerSendProgress>()
     val byteWriteChannel = io.ktor.utils.io.ByteChannel(true).apply { close() } // Auto-flush true
 
@@ -158,7 +158,7 @@ class FileMessageHandlerTest {
     // Verify initial DB calls
     assertEquals("insertFileTransfer($fileName, /fake/path/outgoing.dat, $fileSize, IN_PROGRESS)", mockMessageRepository.calls[0])
     val expectedFileTransferId = mockMessageRepository.nextFileTransferId - 1
-    assertEquals("insertMessage($toDeviceId, $fileName, true, FILE, $expectedFileTransferId, true)", mockMessageRepository.calls[1])
+    assertEquals("insertMessage($toDeviceId, $fileName, true, FILE, $expectedFileTransferId, true, application/octet-stream)", mockMessageRepository.calls[1])
 
     // Verify only final completion status (no intermediate progress updates to DB)
     assertEquals("updateFileTransferStatus($expectedFileTransferId, COMPLETED)", mockMessageRepository.calls.last())
@@ -205,14 +205,14 @@ private class MockMessageRepository : MessageRepository {
     isSender: Boolean,
     messageType: PersistenceMessageType,
     fileTransferId: Long?,
-    isRead: Boolean
-  ): Long {
-    calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead)")
-    return nextMessageId++
+    isRead: Boolean,
+    mimeType: String
+  ) {
+    calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
   }
 
-  override suspend fun insertFileTransfer(fileName: String, filePath: String, totalSize: Long, status: FileTransferStatus): Long {
-    calls.add("insertFileTransfer($fileName, $filePath, $totalSize, $status)")
+  override suspend fun insertFileTransfer(fileName: String, filePath: String, totalSize: Long, status: FileTransferStatus, mimeType: String): Long {
+    calls.add("insertFileTransfer($fileName, $filePath, $totalSize, $status, $mimeType)")
     return nextFileTransferId++
   }
 
@@ -263,12 +263,12 @@ private class MockFileTransfer() : FileTransfer {
   override val bufferedSink: Sink = kotlinx.io.Buffer() // Use a Buffer as a dummy Sink
   var transferCompleted = false
   var transferFailed = false
-  override suspend fun onTransferCompleted() {
+  override suspend fun onTransferCompleted(): kotlinx.io.files.Path? {
     transferCompleted = true
+    return null
   }
 
   override suspend fun onTransferFailed() {
     transferFailed = true
   }
 }
-

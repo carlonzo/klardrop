@@ -46,6 +46,7 @@ compose.desktop {
       packageName = "klardrop"
       packageVersion = "1.0.0"
       modules("jdk.unsupported")
+      modules("java.sql")
 
       val icon = file("icon_launcher.png")
       macOS {

@@ -27,10 +27,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.time.ExperimentalTime
 import kotlin.time.Duration.Companion.seconds
+import com.carlom.klardrop.common.features.ClipboardReaderWriter
+
+expect fun testClipboardReaderWriter(): ClipboardReaderWriter
 
 fun FakeClipboardManager() = com.carlom.klardrop.common.features.ClipboardManager(
   coroutines = TestCoroutines(),
-  readerWriter = com.carlom.klardrop.common.features.ClipboardReaderWriter()
+  readerWriter = testClipboardReaderWriter()
 )
 
 class KlardropIntegrationTest {
@@ -380,14 +383,16 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
     isSender: Boolean,
     messageType: com.carlom.klardrop.common.persistence.MessageType,
     fileTransferId: Long?,
-    isRead: Boolean
-  ): Long = 1L
+    isRead: Boolean,
+    mimeType: String
+  ) {}
 
   override suspend fun insertFileTransfer(
     fileName: String,
     filePath: String,
     totalSize: Long,
-    status: com.carlom.klardrop.common.persistence.FileTransferStatus
+    status: com.carlom.klardrop.common.persistence.FileTransferStatus,
+    mimeType: String
   ): Long = 1L
 
   override suspend fun updateFileTransferStatus(id: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus) {}

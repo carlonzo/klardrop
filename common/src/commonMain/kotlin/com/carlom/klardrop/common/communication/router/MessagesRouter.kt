@@ -171,7 +171,7 @@ internal class MessagesRouterImpl(
         messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress) // Passed toDeviceId
       } else {
         // message has no payload. we can send it directly
-        // Note: Message insertion is handled optimistically by the ViewModel layer
+        // Note: Message persistence is handled by individual message handlers
         log("MessagesRouter", "[DEBUG] Sending message to $toDeviceId: type=${message.type}, id=${message.id}")
         writeChannel.sendMessage(message, messageSerializer)
       }

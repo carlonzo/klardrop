@@ -42,18 +42,13 @@ data class FileMessage(
   data class FileSendRequest(
     override val message: FileMessage,
     val file: PlatformFile,
-    val fileTransferId: Long,
     override val messageSignature: MessageSignature? = null
   ) : SignedSendMessageRequest
 }
 
-fun FileMessage.toSendRequest(file: PlatformFile, fileTransferId: Long, messageSignature: MessageSignature? = null): FileMessage.FileSendRequest {
-  return FileMessage.FileSendRequest(this, file, fileTransferId, messageSignature)
-}
-
-// Overload for direct file sharing (not persisted in chat)
+// All file messages are persisted in chat
 fun FileMessage.toSendRequest(file: PlatformFile, messageSignature: MessageSignature? = null): FileMessage.FileSendRequest {
-  return FileMessage.FileSendRequest(this, file, fileTransferId = -1, messageSignature) // -1 indicates no persistence
+  return FileMessage.FileSendRequest(this, file, messageSignature)
 }
 
 
@@ -76,7 +71,8 @@ class FileMessageHandler(
         fileName = message.fileName,
         filePath = "", // Actual path will be known after saving
         totalSize = message.fileSize,
-        status = FileTransferStatus.IN_PROGRESS
+        status = FileTransferStatus.IN_PROGRESS,
+        mimeType = message.mimeType
     )
     messageRepository.insertMessage(
         remoteDeviceId = receiveFlow.value.device?.deviceId ?: "unknown", // Assumes deviceId is available in receiveFlow
@@ -84,7 +80,8 @@ class FileMessageHandler(
         isSender = false,
         messageType = PersistenceMessageType.FILE,
         fileTransferId = fileTransferId,
-        isRead = false // Incoming messages are unread initially
+        isRead = false, // Incoming messages are unread initially
+        mimeType = message.mimeType
     )
 
     coroutines.ioDispatcher {
@@ -148,10 +145,13 @@ class FileMessageHandler(
         }
       }.onSuccess {
         log("FileMessageHandler", "Received file with size: $totalBytesReceived")
-        fileTransfer.onTransferCompleted()
-        // TODO: Need to get the final file path after transfer completion
-        // The current FileTransfer interface doesn't provide access to the final path
-        // This will need to be addressed in a future iteration
+        val finalFilePath = fileTransfer.onTransferCompleted()
+        
+        // Update file path if we have one (might be null for gallery saves)
+        if (finalFilePath != null) {
+          messageRepository.updateFileTransferFilePath(fileTransferId, finalFilePath.toString())
+        }
+        
         messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
         receiveFlow.update {
           it.copy(
@@ -174,13 +174,29 @@ class FileMessageHandler(
   }
 
   override suspend fun handleOutgoing(
-    toDeviceId: String, // Added
+    toDeviceId: String,
     request: FileMessage.FileSendRequest,
     writeChannel: ByteWriteChannel,
     progressFlow: MutableSharedFlow<MessengerSendProgress>
   ) {
-    // Note: File transfer and message insertion is handled optimistically by the ViewModel layer
-    // We only handle the actual file transmission here
+    // Create database records for all outgoing file messages
+    val fileTransferId = messageRepository.insertFileTransfer(
+      fileName = request.message.fileName,
+      filePath = request.file.path,
+      totalSize = request.message.fileSize,
+      status = FileTransferStatus.IN_PROGRESS,
+      mimeType = request.message.mimeType
+    )
+    
+    messageRepository.insertMessage(
+      remoteDeviceId = toDeviceId,
+      content = request.message.fileName,
+      isSender = true,
+      messageType = PersistenceMessageType.FILE,
+      fileTransferId = fileTransferId,
+      isRead = true,
+      mimeType = request.message.mimeType
+    )
 
     coroutines.ioDispatcher.invoke {
       updateSentProgress(progressFlow, 0, request.message.fileSize)
@@ -217,16 +233,12 @@ class FileMessageHandler(
         }
       }.onSuccess {
         log("FileMessageHandler", "File ${request.file} sent successfully in ${clock.currentTimeMillis() - start} ms")
-        // Only update file transfer status if this is a persisted chat message
-        if (request.fileTransferId != -1L) {
-          messageRepository.updateFileTransferStatus(request.fileTransferId, FileTransferStatus.COMPLETED)
-        }
+        // Update file transfer status to completed
+        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
       }.onFailure {
         log("FileMessageHandler", "Error sending file", it)
-        // Only update file transfer status if this is a persisted chat message
-        if (request.fileTransferId != -1L) {
-          messageRepository.updateFileTransferStatus(request.fileTransferId, FileTransferStatus.FAILED)
-        }
+        // Update file transfer status to failed
+        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
         log("FileMessageHandler", "After error exists? ${request.file.exists()} ${request.file.size()} ${request.file.readBytes().size}")
 
         throw it

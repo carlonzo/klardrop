@@ -38,8 +38,8 @@ class FileManagerImpl(
   ) : FileTransfer {
     override val bufferedSink: Sink by lazy { platformFileSystem.getWriteStreamTo(destinationPath).buffered() }
 
-    override suspend fun onTransferCompleted() {
-      platformFileSystem.moveToStorage(destinationPath, mimeType)
+    override suspend fun onTransferCompleted(): Path? {
+      return platformFileSystem.moveToStorage(destinationPath, mimeType)
     }
 
     override suspend fun onTransferFailed() {

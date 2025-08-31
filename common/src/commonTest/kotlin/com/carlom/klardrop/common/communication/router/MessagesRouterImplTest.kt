@@ -58,19 +58,20 @@ class MessagesRouterImplTest {
       isSender: Boolean,
       messageType: com.carlom.klardrop.common.persistence.MessageType,
       fileTransferId: Long?,
-      isRead: Boolean
-    ): Long {
-      calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead)")
-      return 1L
+      isRead: Boolean,
+      mimeType: String
+    ) {
+      calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
     }
 
     override suspend fun insertFileTransfer(
       fileName: String,
       filePath: String,
       totalSize: Long,
-      status: com.carlom.klardrop.common.persistence.FileTransferStatus
+      status: com.carlom.klardrop.common.persistence.FileTransferStatus,
+      mimeType: String
     ): Long {
-      calls.add("insertFileTransfer($fileName, $filePath, $totalSize, $status)")
+      calls.add("insertFileTransfer($fileName, $filePath, $totalSize, $status, $mimeType)")
       return 1L
     }
 
@@ -156,6 +157,9 @@ class MessagesRouterImplTest {
       override suspend fun getAllTrustedDevices(): Map<String, ByteArray> = emptyMap()
       override suspend fun removeTrustedDevice(deviceId: String) {}
       override suspend fun clearAllTrustedDevices() {}
+      override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {}
+      override suspend fun getDevicePrivateKey(): ByteArray? = null
+      override suspend fun deleteDevicePrivateKey() {}
     }
     val clock = com.carlom.klardrop.common.utils.Clock()
     val localPropsRepo = object : com.carlom.klardrop.common.persistence.LocalPropertiesRepository {
@@ -277,7 +281,7 @@ class MessagesRouterImplTest {
     val fileMessage = FileMessage("outgoing.dat", 456, "app/foo")
     // Create a mock PlatformFile instance
     val mockPlatformFile = PlatformFile(Path("/tmp", "test"))
-    val request = FileMessage.FileSendRequest(fileMessage, mockPlatformFile, fileTransferId = 1L)
+    val request = FileMessage.FileSendRequest(fileMessage, mockPlatformFile)
     val mockHandler = MockMessageHandler<FileMessage, FileMessage.FileSendRequest>()
     @Suppress("UNCHECKED_CAST")
     mockMessageHandlers.handlerToReturn = mockHandler as MessageHandler<Message, SendMessageRequest>

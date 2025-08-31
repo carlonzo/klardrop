@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.persistence
 
+import app.cash.sqldelight.db.SqlDriver
 import app.cash.turbine.test
 import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.database.createTestDriver
@@ -18,6 +19,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessageRepositoryImplTest {
 
+    private lateinit var driver: SqlDriver
     private lateinit var db: AppDatabase
     private lateinit var messageRepository: MessageRepositoryImpl
     private lateinit var testDispatcher: TestDispatcher
@@ -27,11 +29,16 @@ class MessageRepositoryImplTest {
 
     @BeforeTest
     fun setup() {
-        val driver = createTestDriver()
+        driver = createTestDriver()
         db = AppDatabase(driver)
         testDispatcher = UnconfinedTestDispatcher()
         realClock = Clock()
         messageRepository = MessageRepositoryImpl(db, realClock, testDispatcher)
+    }
+
+    @AfterTest
+    fun tearDown() {
+        driver.close()
     }
 
     @Test
@@ -39,20 +46,18 @@ class MessageRepositoryImplTest {
         val remoteDeviceId = "device-123"
         val content = "Hello, Klardrop!"
 
-        val insertedId = messageRepository.insertMessage(
+        messageRepository.insertMessage(
             remoteDeviceId = remoteDeviceId,
             content = content,
             isSender = true,
             messageType = MessageType.TEXT,
             isRead = true
         )
-        assertTrue(insertedId > 0)
 
         messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
             val messages = awaitItem()
             assertEquals(1, messages.size)
             val msg = messages.first()
-            assertEquals(insertedId, msg.id)
             assertEquals(remoteDeviceId, msg.remote_device_id)
             assertEquals(content, msg.content)
             assertEquals(1L, msg.is_sender)
@@ -67,14 +72,13 @@ class MessageRepositoryImplTest {
         val remoteDeviceId = "device-unread"
         val content = "Unread message"
 
-        val insertedId = messageRepository.insertMessage(
+        messageRepository.insertMessage(
             remoteDeviceId = remoteDeviceId,
             content = content,
             isSender = false,
             messageType = MessageType.TEXT,
             isRead = false
         )
-        assertTrue(insertedId > 0)
 
         messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
             val messages = awaitItem()
@@ -154,7 +158,7 @@ class MessageRepositoryImplTest {
         )
         assertTrue(fileTransferId > 0)
 
-        val messageId = messageRepository.insertMessage(
+        messageRepository.insertMessage(
             remoteDeviceId = remoteDeviceId,
             content = fileName,
             isSender = false,
@@ -162,13 +166,11 @@ class MessageRepositoryImplTest {
             fileTransferId = fileTransferId,
             isRead = false
         )
-        assertTrue(messageId > 0)
 
         messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
             val messages = awaitItem()
             assertEquals(1, messages.size)
             val msg = messages.first()
-            assertEquals(messageId, msg.id)
             assertEquals(remoteDeviceId, msg.remote_device_id)
             assertEquals(fileName, msg.content)
             assertEquals(0L, msg.is_sender)

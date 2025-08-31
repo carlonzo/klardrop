@@ -11,7 +11,7 @@ import com.carlom.klardrop.common.discovery.toDeviceType
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
-import com.carlom.klardrop.common.utils.getMimeTypeFromExtension
+import com.carlom.klardrop.common.utils.FileTypeUtils
 import com.carlom.klardrop.common.utils.log
 import com.carlonzo.ukey2.Ukey2Handshake
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
@@ -417,7 +417,7 @@ class NearbyReceiverConnectionHandler(
       messagesToReceive[fileMetadata.payload_id!!] = FileMessage(
         fileName = fileMetadata.name!!,
         fileSize = fileMetadata.size!!,
-        mimeType = fileMetadata.mime_type ?: getMimeTypeFromExtension(fileMetadata.name)
+        mimeType = fileMetadata.mime_type ?: FileTypeUtils.getMimeTypeFromExtension(fileMetadata.name)
       )
 
     }

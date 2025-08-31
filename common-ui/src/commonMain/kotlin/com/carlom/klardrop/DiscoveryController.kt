@@ -1,6 +1,5 @@
 package com.carlom.klardrop
 
-import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -11,27 +10,19 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
-import com.carlom.klardrop.common.trust.PairingApprovalCallback
-import com.carlom.klardrop.common.trust.PairingProtocolCoordinator
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.trust.PairingApprovalCallback
+import com.carlom.klardrop.common.trust.PairingProtocolCoordinator
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
-import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
 import io.github.vinceglb.filekit.PlatformFile
-import io.github.vinceglb.filekit.name
-import io.github.vinceglb.filekit.path
-import io.github.vinceglb.filekit.readBytes
-import io.github.vinceglb.filekit.size
-import io.github.vinceglb.filekit.toKotlinxIoPath
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
@@ -70,7 +61,6 @@ class DiscoveryController(
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
   private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage)
 
-  val actionsFlow = MutableSharedFlow<ActionUi>()
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 
   init {
