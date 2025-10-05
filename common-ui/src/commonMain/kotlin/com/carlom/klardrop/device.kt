@@ -6,7 +6,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,8 +24,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.utils.log
-import com.carlom.klardrop.trust.TrustBadge
 import com.carlom.klardrop.trust.DeviceTrustStatus
+import com.carlom.klardrop.trust.TrustBadge
 
 
 @Composable
@@ -60,7 +59,7 @@ internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceAct
 
     Box {
       CircleDevice(deviceUi)
-      
+
       // Show trust badge for trusted devices
       if (deviceUi.trustStatus == TrustStatus.Trusted) {
         TrustBadge(
@@ -73,7 +72,7 @@ internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceAct
       text = deviceUi.deviceName,
       maxLines = 2
     )
-    
+
     // Show trust status
     DeviceTrustStatus(
       isTrusted = deviceUi.trustStatus == TrustStatus.Trusted,
@@ -97,55 +96,51 @@ internal fun DeviceLarge(
       .deviceAdditions(deviceUi, onDeviceActionListener)
   ) {
 
-    Box {
 
-      Row(
-        modifier = Modifier.padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
+    Row(
+      modifier = Modifier.padding(16.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
 
-        Box {
-          CircleDevice(deviceUi)
-          
-          // Show trust badge for trusted devices
-          if (deviceUi.trustStatus == TrustStatus.Trusted) {
-            TrustBadge(
-              modifier = Modifier.align(Alignment.TopEnd)
-            )
-          }
+      Box {
+        CircleDevice(deviceUi)
+
+        // Show trust badge for trusted devices
+        if (deviceUi.trustStatus == TrustStatus.Trusted) {
+          TrustBadge(
+            modifier = Modifier.align(Alignment.TopEnd)
+          )
         }
+      }
 
-        Spacer(modifier = Modifier.size(12.dp))
+      Spacer(modifier = Modifier.size(12.dp))
 
-        Column {
-          deviceUi.connectionTypes.forEach {
-            Text(
-              text = it.name,
-              color = Color.Black,
-            )
-          }
-        }
-
-        Spacer(modifier = Modifier.size(16.dp))
-
-        Column {
+      Column {
+        deviceUi.connectionTypes.forEach {
           Text(
-            text = deviceUi.deviceName,
+            text = it.name,
             color = Color.Black,
-            maxLines = 2
-          )
-          
-          // Show trust status
-          DeviceTrustStatus(
-            isTrusted = deviceUi.trustStatus == TrustStatus.Trusted,
-            isPairing = deviceUi.trustStatus == TrustStatus.Pairing
           )
         }
+      }
 
+      Spacer(modifier = Modifier.size(16.dp))
+
+      Column {
+        Text(
+          text = deviceUi.deviceName,
+          color = Color.Black,
+          maxLines = 2
+        )
+
+        // Show trust status
+        DeviceTrustStatus(
+          isTrusted = deviceUi.trustStatus == TrustStatus.Trusted,
+          isPairing = deviceUi.trustStatus == TrustStatus.Pairing
+        )
       }
 
     }
-
 
   }
 
@@ -161,7 +156,7 @@ private fun CircleDevice(deviceUi: DeviceUi) {
 
   Box(modifier = Modifier.size(circleSize)) {
     if (isSending) {
-      val progress = (deviceUi.activityState as ActivityState.Sending).progressPercentage / 100.0f
+      val progress = deviceUi.activityState.progressPercentage / 100.0f
       CircularProgressIndicator(
         progress = { progress },
         modifier = Modifier.size(circleSize),
@@ -173,7 +168,6 @@ private fun CircleDevice(deviceUi: DeviceUi) {
       modifier = Modifier.size(circleSize)
     ) {
       drawCircle(Color.LightGray, radius = (targetCircleSize / 2 - 5.dp).toPx())
-
     }
   }
 

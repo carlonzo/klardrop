@@ -59,16 +59,13 @@ class NearbyReceiverConnectionHandler(
     try {
       val writeChannel = connection.openWriteChannel(autoFlush = false)
 
-      val msg = connectionRequest.toString()
-      log("NearbyReceiverConnectionHandler", "Connection request received ${msg.substring(0, msg.length / 2)}")
-      log("NearbyReceiverConnectionHandler", "Connection request received ${msg.substring(msg.length / 2)}")
+      log("NearbyReceiverConnectionHandler", "Starting Nearby Share receive")
       processConnectionRequest(connectionRequest)
 
       val nearbyConnection = createConnection(readChannel, writeChannel)
-      log("NearbyReceiverConnectionHandler", "Handshake completed $nearbyConnection")
-
       makeIntroduction(writeChannel)
 
+      log("NearbyReceiverConnectionHandler", "Performing paired key exchange")
       handleKeyPairExchange(readChannel, writeChannel, nearbyConnection)
 
       handleTransferSetup(readChannel, writeChannel, nearbyConnection)
@@ -110,20 +107,21 @@ class NearbyReceiverConnectionHandler(
 
       acceptTransfer(nearbyConnection, writeChannel)
 
+      log("NearbyReceiverConnectionHandler", "Starting file reception")
       receiveTransfer(readChannel, writeChannel, nearbyConnection)
     } catch (e: Exception) {
-      log("NearbyReceiverConnectionHandler", "Error on connection", e)
+      log("NearbyReceiverConnectionHandler", "Receive failed", e)
       receiveFlow.update {
         it.copy(status = ReceiveMessageStatus.Failed(e.message ?: "Unknown error"))
       }
       throw e
     } finally {
       connection.close()
-      log("NearbyReceiverConnectionHandler", "Connection closed")
     }
 
     require(receiveProgress.values.all { it == 100 }) { "Not all messages received $receiveProgress $messagesToReceive" }
 
+    log("NearbyReceiverConnectionHandler", "Receive completed successfully")
     receiveFlow.update {
       it.copy(
         status = ReceiveMessageStatus.Completed,
@@ -304,8 +302,8 @@ class NearbyReceiverConnectionHandler(
     server.parseHandshakeMessage(clientHandshake)
     log("NearbyReceiverConnectionHandler", "Client Finish received")
 
-    // Get the auth string
-    val verificationString = server.getVerificationString(32)
+    // Get the auth string (used for PIN verification)
+    server.getVerificationString(32)
 
     // lets accept everything
     server.verifyHandshake()
@@ -350,8 +348,6 @@ class NearbyReceiverConnectionHandler(
     nearbyConnection: D2DConnectionContext
   ) {
 
-    log("NearbyReceiverConnectionHandler", "Step 1: Sending server's PairedKeyEncryptionFrame (SERVER SENDS FIRST per protocol line 97)")
-
     // Step 1: Send server's PairedKeyEncryptionFrame (SERVER SENDS FIRST per protocol line 97 & Swift lines 257-260)
     val serverPairedKeyEncryptionFrame = Frame(
       version = Frame.Version.V1,
@@ -364,16 +360,10 @@ class NearbyReceiverConnectionHandler(
       )
     )
     sendEncryptedWrappedPayload(serverPairedKeyEncryptionFrame, writeChannel, nearbyConnection)
-    log("NearbyReceiverConnectionHandler", "Step 1 DONE: Sent server's PairedKeyEncryptionFrame")
-
-    log("NearbyReceiverConnectionHandler", "Step 2: Waiting for client's PairedKeyEncryptionFrame (per protocol line 98)")
 
     // Step 2: Receive client's PairedKeyEncryptionFrame (CLIENT SENDS SECOND per protocol line 98 & Swift lines 83-84, 266)
     val clientKeyPairSetupFrame = receiveTransferSetupFrame(nearbyConnection, readChannel, writeChannel)
-    log("NearbyReceiverConnectionHandler", "Step 2 DONE: Received client's PairedKeyEncryptionFrame: $clientKeyPairSetupFrame")
     require(clientKeyPairSetupFrame.v1?.paired_key_encryption != null) { "Client's paired key encryption not found" }
-
-    log("NearbyReceiverConnectionHandler", "Step 3: Sending server's PairedKeyResultFrame (SERVER SENDS FIRST per protocol line 99)")
 
     // Step 3: Send server's PairedKeyResultFrame (SERVER SENDS FIRST per protocol line 99 & Swift lines 268-275)
     val serverPairedResult = Frame(
@@ -386,17 +376,11 @@ class NearbyReceiverConnectionHandler(
       )
     )
     sendEncryptedWrappedPayload(serverPairedResult, writeChannel, nearbyConnection)
-    log("NearbyReceiverConnectionHandler", "Step 3 DONE: Sent server's PairedKeyResultFrame")
-
-    log("NearbyReceiverConnectionHandler", "Step 4: Waiting for client's PairedKeyResultFrame (per protocol line 100)")
 
     // Step 4: Receive client's PairedKeyResultFrame (CLIENT SENDS SECOND per protocol line 100 & Swift lines 85-86, 278)
     val clientPairedKeyResultOffline = nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
     val clientPairedKeyResultPayload = clientPairedKeyResultOffline.v1?.payload_transfer?.payload_chunk!!
-    val clientPairedKeyResult = Frame.ADAPTER.decode(clientPairedKeyResultPayload.body!!)
-    log("NearbyReceiverConnectionHandler", "Step 4 DONE: Received client's PairedKeyResultFrame: $clientPairedKeyResult")
-
-    log("NearbyReceiverConnectionHandler", "Paired key exchange completed successfully")
+    Frame.ADAPTER.decode(clientPairedKeyResultPayload.body!!)
 
   }
 

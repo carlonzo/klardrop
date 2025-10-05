@@ -93,6 +93,9 @@ class DiscoveryController(
         updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
       }
     }
+
+    // Ensure identity fields are loaded for the IdentityCard on first render
+    loadDeviceNames()
   }
 
   private fun sendText(deviceId: String, text: String) {
@@ -365,25 +368,7 @@ class DiscoveryController(
     screenStateFlow.update { it.copy(pairingDialogState = null) }
   }
 
-  fun onSettingsClicked() {
-    controllerScope.launch {
-      val systemName = com.carlom.klardrop.common.CommonPlatformDependencies.getDeviceName()
-      val properties = localPropertiesRepository.getProperty()
-      screenStateFlow.update { state ->
-        state.copy(
-          navigateToSettings = true,
-          systemDeviceName = systemName,
-          currentDeviceName = properties.customDeviceName?.takeIf { it.isNotBlank() } ?: systemName
-        )
-      }
-    }
-  }
-
-  fun onBackFromSettings() {
-    screenStateFlow.update { it.copy(navigateToSettings = false) }
-  }
-
-  private fun loadDeviceNames() {
+  fun loadDeviceNames() {
     controllerScope.launch {
       val systemName = com.carlom.klardrop.common.CommonPlatformDependencies.getDeviceName()
       val properties = localPropertiesRepository.getProperty()
@@ -410,7 +395,6 @@ data class DiscoveryScreenState(
   val navigateToChatDeviceId: String? = null,    // New
   val navigateToChatDeviceName: String? = null,   // New
   val pairingDialogState: PairingDialogState? = null,
-  val navigateToSettings: Boolean = false,
   val currentDeviceName: String? = null,
   val systemDeviceName: String? = null
 )
@@ -424,12 +408,6 @@ data class PairingDialogState(
   val isError: Boolean = false,
   val errorMessage: String? = null
 )
-
-// ActionUi might not be needed anymore if onDeviceClick directly updates state for navigation
-// For now, keeping it, but OnDeviceClicked action might become obsolete.
-sealed interface ActionUi {
-  class OnDeviceClicked(val deviceUi: DeviceUi) : ActionUi
-}
 
 data class DeviceUi(
   val deviceId: String,

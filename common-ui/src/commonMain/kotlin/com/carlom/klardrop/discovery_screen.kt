@@ -5,9 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -16,7 +15,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -26,14 +29,16 @@ import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.TextButton
 import androidx.compose.material.TextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -83,16 +88,9 @@ fun DiscoveryScreen(
 
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
-  // --- Navigation to Settings Screen ---
-  if (discoveryState.navigateToSettings) {
-    SettingsScreen(
-      modifier = modifier,
-      discoveryController = discoveryController
-    )
-  }
 
   // --- Navigation to Chat Screen ---
-  else if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
+  if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
     val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
       uiDependencies.deviceChatViewModelFactory(discoveryState.navigateToChatDeviceId!!)
     }
@@ -119,9 +117,10 @@ fun DiscoveryScreen(
         DiscoveryDashboard(
           modifier = modifier,
           isLargeScreen = isLargeScreen,
+          currentDeviceName = discoveryState.currentDeviceName ?: discoveryState.systemDeviceName ?: "",
           devices = discoveryState.devices,
-          onDeviceActionListener = discoveryController, // This now triggers chat navigation
-          onSettingsClicked = { discoveryController.onSettingsClicked() }
+          onDeviceActionListener = discoveryController,
+          onDeviceRename = { newName -> discoveryController.saveCustomDeviceName(newName) }
         )
 
       }
@@ -139,49 +138,180 @@ fun DiscoveryScreen(
 }
 
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun DiscoveryDashboard(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
+  currentDeviceName: String,
   devices: Collection<DeviceUi>,
   onDeviceActionListener: OnDeviceActionListener,
-  onSettingsClicked: () -> Unit
+  onDeviceRename: (String) -> Unit
 ) {
+  val containerShape = RoundedCornerShape(24.dp)
+  var showRenameSheet by remember { mutableStateOf(false) }
+
   Column(
     modifier = modifier
       .windowInsetsPadding(WindowInsets.statusBars)
       .padding(horizontal = 16.dp)
   ) {
 
-    // Top bar with title and settings button
-    Row(
+    TopAppBar(
+      title = { Text("Klardrop") },
+    )
+
+    Spacer(Modifier.height(8.dp))
+
+    Text(
+      text = "You'll appear as",
+      style = MaterialTheme.typography.labelLarge,
+      color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(Modifier.height(8.dp))
+
+    androidx.compose.material3.Surface(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(vertical = 16.dp),
-      horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically
+        .clickable { showRenameSheet = true },
+      shape = containerShape,
+      tonalElevation = 1.dp
     ) {
-      Text(
-        text = "Klardrop",
-        style = MaterialTheme.typography.headlineMedium
-      )
-
-      IconButton(onClick = onSettingsClicked) {
+      Row(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+      ) {
+        Text(
+          text = currentDeviceName.ifEmpty { "This device" },
+          style = MaterialTheme.typography.titleMedium
+        )
         Icon(
-          imageVector = Icons.Default.Settings,
-          contentDescription = "Settings"
+          imageVector = Icons.Filled.ChevronRight,
+          contentDescription = "Edit device name"
         )
       }
     }
 
-    // Content below the top bar
-    FlowRow {
-      devices.forEach { device ->
-        Box { // Wrap DeviceDiscovery to allow overlaying indicators
+    Spacer(Modifier.height(16.dp))
+
+    val trusted = devices.filter { it.trustStatus == TrustStatus.Trusted }
+    val others = devices.filter { it.trustStatus != TrustStatus.Trusted }
+
+    if (trusted.isNotEmpty()) {
+      Text(
+        text = "Send to your devices",
+        style = MaterialTheme.typography.titleMedium
+      )
+      Spacer(Modifier.height(8.dp))
+
+      DeviceGrid(
+        devices = trusted,
+        isLargeScreen = isLargeScreen,
+        onDeviceActionListener = onDeviceActionListener,
+        containerShape = containerShape
+      )
+
+      Spacer(Modifier.height(16.dp))
+    }
+
+    if (others.isNotEmpty()) {
+      Text(
+        text = "Send to nearby devices",
+        style = MaterialTheme.typography.titleMedium
+      )
+      Spacer(Modifier.height(8.dp))
+
+      DeviceGrid(
+        devices = others,
+        isLargeScreen = isLargeScreen,
+        onDeviceActionListener = onDeviceActionListener,
+        containerShape = containerShape
+      )
+    }
+  }
+
+  // Device Rename Bottom Sheet
+  if (showRenameSheet) {
+    ModalBottomSheetLayout(
+      sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+      sheetBackgroundColor = MaterialTheme.colorScheme.surface,
+      sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
+      sheetContent = {
+        var newName by remember { mutableStateOf(currentDeviceName) }
+
+        Column(
+          modifier = Modifier.padding(24.dp),
+          verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+          Text(
+            "Rename Device",
+            style = MaterialTheme.typography.headlineSmall
+          )
+
+          OutlinedTextField(
+            value = newName,
+            onValueChange = { newName = it },
+            label = { Text("Device Name") },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardActions = KeyboardActions(
+              onDone = {
+                onDeviceRename(newName)
+                showRenameSheet = false
+              }
+            ),
+            keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done)
+          )
+
+          Row(
+            horizontalArrangement = Arrangement.End,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            TextButton(onClick = { showRenameSheet = false }) {
+              Text("Cancel")
+            }
+            Button(onClick = {
+              onDeviceRename(newName)
+              showRenameSheet = false
+            }) {
+              Text("Save")
+            }
+          }
+        }
+      },
+      sheetState = rememberModalBottomSheetState(ModalBottomSheetValue.Expanded)
+    ) { }
+  }
+}
+
+@Composable
+private fun DeviceGrid(
+  devices: List<DeviceUi>,
+  isLargeScreen: Boolean,
+  onDeviceActionListener: OnDeviceActionListener,
+  containerShape: RoundedCornerShape
+) {
+  val columns = if (isLargeScreen) GridCells.Adaptive(minSize = 400.dp) else GridCells.Adaptive(minSize = 180.dp)
+
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .background(MaterialTheme.colorScheme.surfaceVariant, containerShape)
+      .padding(12.dp)
+  ) {
+    LazyVerticalGrid(
+      columns = columns,
+      contentPadding = PaddingValues(0.dp),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      items(devices) { device ->
+        Box(
+          modifier = Modifier
+        ) {
           DeviceDiscovery(device, isLargeScreen, onDeviceActionListener)
 
-          // Unread messages indicator
           if (device.hasUnreadMessages) {
             Box(
               modifier = Modifier
@@ -192,7 +322,6 @@ private fun DiscoveryDashboard(
             )
           }
 
-          // Trust action button (positioned at bottom-end)
           if (device.trustStatus != TrustStatus.Unknown) {
             TrustActionButton(
               isTrusted = device.trustStatus == TrustStatus.Trusted,
@@ -207,12 +336,11 @@ private fun DiscoveryDashboard(
         }
       }
     }
-
   }
 }
 
 @Composable
-private fun ColumnScope.ShareSheet(
+private fun ShareSheet(
   filePickerFiles: PickerResultLauncher,
   filePickerPictures: PickerResultLauncher,
   discoveryController: DiscoveryController,
