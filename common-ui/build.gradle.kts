@@ -56,6 +56,7 @@ kotlin {
         api(compose.material)
         api(compose.material3)
         api(compose.materialIconsExtended)
+        api(compose.components.resources)
         api(compose.ui)
 
         api(deps.kotlinx.coroutines.core)
@@ -105,4 +106,10 @@ android {
   defaultConfig {
     minSdk = 23
   }
+}
+
+compose.resources {
+  publicResClass = false
+  packageOfResClass = "com.klardrop.resources"
+  generateResClass = auto
 }

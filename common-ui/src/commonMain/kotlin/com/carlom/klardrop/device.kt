@@ -23,12 +23,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.trust.DeviceTrustStatus
 import com.carlom.klardrop.trust.TrustBadge
+import com.klardrop.resources.Res
+import com.klardrop.resources.laptop
+import com.klardrop.resources.mobile
+import org.jetbrains.compose.resources.painterResource
 
 @Composable
 fun DeviceDiscovery(
@@ -156,8 +159,8 @@ private fun CircleDevice(deviceUi: DeviceUi) {
    val circleSize by animateDpAsState(targetValue = targetCircleSize)
 
    val painter = when (deviceUi.deviceType) {
-       DeviceType.MOBILE -> painterResource("mobile.svg")
-       DeviceType.DESKTOP -> painterResource("laptop.svg")
+       DeviceType.MOBILE -> painterResource(resource = Res.drawable.mobile)
+       DeviceType.DESKTOP -> painterResource(Res.drawable.laptop)
        else -> null
    }
 
