@@ -70,7 +70,7 @@ class CommonComponent(
 
   private val discoveryModule by lazy {
     DiscoveryModule(
-      coroutines, currentDeviceProvider, internalPlatformDependency
+      coroutines, currentDeviceProvider, internalPlatformDependency, utilsModule
     )
   }
 

@@ -14,7 +14,8 @@ data class DeviceInfo(
 
 data class DiscoveryDevice(
   val deviceInfo: DeviceInfo,
-  val deviceConnections: List<DeviceConnection> = emptyList()
+  val deviceConnections: List<DeviceConnection> = emptyList(),
+  val lastSeenTimestamp: Long
 ) {
 
   fun hasNearbyConnection(): Boolean {
