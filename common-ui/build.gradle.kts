@@ -101,7 +101,7 @@ kotlin {
 
 android {
   namespace = "com.klardrop.common.ui"
-  compileSdk = 35
+  compileSdk = 36
   defaultConfig {
     minSdk = 23
   }

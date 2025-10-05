@@ -14,6 +14,7 @@ import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
+import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.FakeVisibleDevices
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.trust.InMemoryTrustStorage
@@ -25,9 +26,8 @@ import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.time.ExperimentalTime
 import kotlin.time.Duration.Companion.seconds
-import com.carlom.klardrop.common.features.ClipboardReaderWriter
+import kotlin.time.ExperimentalTime
 
 expect fun testClipboardReaderWriter(): ClipboardReaderWriter
 
@@ -96,7 +96,7 @@ class KlardropIntegrationTest {
   @Test
   fun testMessengerReconnectionFromBothSides() = testMessengerReconnection(clientDropsConnection = true, serverDropsConnection = true)
 
-  @Test 
+  @Test
   fun testAckCorrelationRaceCondition() = runTest(coroutines.dispatcher) {
     // This test verifies our fix for the ACK correlation race condition
     testContext.setupServerAndClient()
@@ -108,27 +108,27 @@ class KlardropIntegrationTest {
 
         // Send multiple messages sequentially to test ACK correlation
         val messages = (1..3).map { textSendRequest("ACK correlation test message $it") }
-        
+
         val receiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
 
-        for ((index, message) in messages.withIndex()) {
+        for ((_, message) in messages.withIndex()) {
           // Send one message at a time
           val senderFlow = clientMessenger.send(serverDeviceId, message)
           val senderChannel = senderFlow.testIn(this@turbineScope)
-          
+
           // Advance to complete the send operation
           advanceToCompletion()
-          
+
           // Verify send completed successfully (no ACK timeout)
           val result = senderChannel.awaitFor { it is Completed }
           assertEquals(Completed, result)
-          
+
           // Verify message was received
           val update = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
           assertIs<ReceiveMessageStatus.Completed>(update.status)
           assertEquals(1, update.messages.size)
           assertEquals((message.message as TextMessage).text, (update.messages.first() as TextMessage).text)
-          
+
           senderChannel.cancelAndIgnoreRemainingEvents()
         }
 
@@ -140,80 +140,81 @@ class KlardropIntegrationTest {
   // simple method to parametize the test for reconnection issues. using a boolean to indicate if the client should drop the connection or the server
   @OptIn(ExperimentalTime::class)
   @Suppress("VisibleForTests")
-  private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) = runTest(coroutines.dispatcher, timeout = 60.seconds) {
-    testContext.setupServerAndClient()
+  private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) =
+    runTest(coroutines.dispatcher, timeout = 60.seconds) {
+      testContext.setupServerAndClient()
 
-    turbineScope(timeout = 30.seconds) {
-      with(testContext) {
-        // send first message between client and server
-        sendAndVerifyMessage("firstMessage")
+      turbineScope(timeout = 30.seconds) {
+        with(testContext) {
+          // send first message between client and server
+          sendAndVerifyMessage("firstMessage")
 
-        if (clientDropsConnection) {
-          dropClientConnections()
-        }
-
-        if (serverDropsConnection) {
-          dropServerConnections()
-        }
-
-        // Wait a bit to ensure cleanup
-        advanceToCompletion()
-        
-        // Give extra time for connection cleanup
-        coroutines.dispatcher.scheduler.advanceTimeBy(500)
-        coroutines.dispatcher.scheduler.runCurrent()
-
-        val messageReceiver = serverCommunicationModule.messageReceiver()
-        val clientMessenger = clientCommunicationModule.messenger()
-
-        // Now try to send a second message - this should trigger reconnection
-        val secondMessage = textSendRequest("reconnection messenger message")
-
-        // Set up receiver before sending to avoid race conditions
-        val secondReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
-        
-        // Allow receiver to properly set up
-        coroutines.dispatcher.scheduler.runCurrent()
-        coroutines.dispatcher.scheduler.advanceTimeBy(100)
-        coroutines.dispatcher.scheduler.runCurrent()
-
-        val secondSendFlow = clientMessenger.send(serverDeviceId, secondMessage)
-        val secondSenderChannel = secondSendFlow.testIn(this@turbineScope)
-
-        // Since connections were dropped, this should trigger timeouts and retries
-        // We need to give enough time for reconnection attempts
-        coroutines.dispatcher.scheduler.runCurrent()
-        coroutines.dispatcher.scheduler.advanceUntilIdle()
-        
-        // Advance past the ACK timeout (2 seconds) to trigger retry logic
-        advanceTimeAndComplete(2100) // Past 2-second ACK timeout
-        
-        // Additional time for reconnection and retry
-        coroutines.dispatcher.scheduler.advanceTimeBy(3000)
-        coroutines.dispatcher.scheduler.runCurrent()
-        coroutines.dispatcher.scheduler.advanceUntilIdle()
-
-        // Wait for second message to be sent
-        try {
-          secondSenderChannel.awaitFor {
-            it is Completed
+          if (clientDropsConnection) {
+            dropClientConnections()
           }
-        } catch (e: Exception) {
-          throw e
+
+          if (serverDropsConnection) {
+            dropServerConnections()
+          }
+
+          // Wait a bit to ensure cleanup
+          advanceToCompletion()
+
+          // Give extra time for connection cleanup
+          coroutines.dispatcher.scheduler.advanceTimeBy(500)
+          coroutines.dispatcher.scheduler.runCurrent()
+
+          val messageReceiver = serverCommunicationModule.messageReceiver()
+          val clientMessenger = clientCommunicationModule.messenger()
+
+          // Now try to send a second message - this should trigger reconnection
+          val secondMessage = textSendRequest("reconnection messenger message")
+
+          // Set up receiver before sending to avoid race conditions
+          val secondReceiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
+
+          // Allow receiver to properly set up
+          coroutines.dispatcher.scheduler.runCurrent()
+          coroutines.dispatcher.scheduler.advanceTimeBy(100)
+          coroutines.dispatcher.scheduler.runCurrent()
+
+          val secondSendFlow = clientMessenger.send(serverDeviceId, secondMessage)
+          val secondSenderChannel = secondSendFlow.testIn(this@turbineScope)
+
+          // Since connections were dropped, this should trigger timeouts and retries
+          // We need to give enough time for reconnection attempts
+          coroutines.dispatcher.scheduler.runCurrent()
+          coroutines.dispatcher.scheduler.advanceUntilIdle()
+
+          // Advance past the ACK timeout (2 seconds) to trigger retry logic
+          advanceTimeAndComplete(2100) // Past 2-second ACK timeout
+
+          // Additional time for reconnection and retry
+          coroutines.dispatcher.scheduler.advanceTimeBy(3000)
+          coroutines.dispatcher.scheduler.runCurrent()
+          coroutines.dispatcher.scheduler.advanceUntilIdle()
+
+          // Wait for second message to be sent
+          try {
+            secondSenderChannel.awaitFor {
+              it is Completed
+            }
+          } catch (e: Exception) {
+            throw e
+          }
+
+          // If it completes, verify the message was received
+          advanceToCompletion()
+          val secondCompletedUpdate = secondReceiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
+          assertIs<ReceiveMessageStatus.Completed>(secondCompletedUpdate.status)
+          assertEquals(1, secondCompletedUpdate.messages.size)
+          assertEquals((secondMessage.message as TextMessage).text, (secondCompletedUpdate.messages.first() as TextMessage).text)
+          secondReceiverChannel.cancelAndIgnoreRemainingEvents()
+
+          secondSenderChannel.cancelAndIgnoreRemainingEvents()
         }
-
-        // If it completes, verify the message was received
-        advanceToCompletion()
-        val secondCompletedUpdate = secondReceiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
-        assertIs<ReceiveMessageStatus.Completed>(secondCompletedUpdate.status)
-        assertEquals(1, secondCompletedUpdate.messages.size)
-        assertEquals((secondMessage.message as TextMessage).text, (secondCompletedUpdate.messages.first() as TextMessage).text)
-        secondReceiverChannel.cancelAndIgnoreRemainingEvents()
-
-        secondSenderChannel.cancelAndIgnoreRemainingEvents()
       }
     }
-  }
 
 }
 
@@ -338,7 +339,7 @@ internal class KlardropTestContext(
 
     // Set up receiver flow BEFORE initiating send to avoid race conditions
     val receiverChannel = messageReceiver.messageReceivedNotifier.testIn(this)
-    
+
     // Give the receiver some time to properly set up
     coroutines.dispatcher.scheduler.runCurrent()
     coroutines.dispatcher.scheduler.advanceTimeBy(100)
@@ -355,7 +356,7 @@ internal class KlardropTestContext(
     coroutines.dispatcher.scheduler.advanceTimeBy(1000)
     coroutines.dispatcher.scheduler.runCurrent()
     coroutines.dispatcher.scheduler.advanceUntilIdle()
-    
+
     // Extra time advance to handle ACK timeouts
     coroutines.dispatcher.scheduler.advanceTimeBy(2500)
     coroutines.dispatcher.scheduler.runCurrent()
@@ -385,7 +386,8 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
     fileTransferId: Long?,
     isRead: Boolean,
     mimeType: String
-  ) {}
+  ) {
+  }
 
   override suspend fun insertFileTransfer(
     fileName: String,

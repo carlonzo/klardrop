@@ -2,6 +2,7 @@ package com.carlom.klardrop.android.di
 
 import com.carlom.klardrop.android.MainActivity
 import com.carlom.klardrop.android.share.ShareToDeviceActivity
+import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.Klardrop
 import dagger.BindsInstance
 import dagger.Component
@@ -17,7 +18,10 @@ interface ApplicationComponent {
 
   @Component.Factory
   interface Factory {
-    fun create(@BindsInstance context: android.content.Context): ApplicationComponent
+    fun create(
+      @BindsInstance context: android.content.Context,
+      @BindsInstance applicationInfo: ApplicationInfo
+    ): ApplicationComponent
   }
 
 }

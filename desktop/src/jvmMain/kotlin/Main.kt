@@ -34,7 +34,7 @@ fun main(args: Array<String>) {
 
   val k = Klardrop(
     applicationInfo = applicationInfo,
-    internalPlatformDependency = InternalPlatformDependencies()
+    internalPlatformDependency = InternalPlatformDependencies(applicationInfo)
   )
   k.init()
 

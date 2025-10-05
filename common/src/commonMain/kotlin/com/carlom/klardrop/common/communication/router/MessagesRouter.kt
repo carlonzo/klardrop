@@ -7,6 +7,7 @@ import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.readMessage
 import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.receiver.MessageReceiver
@@ -42,6 +43,29 @@ internal class MessagesRouterImpl(
   private val messengeReceiver: MessageReceiver,
   private val trustManager: TrustManager
 ) : MessagesRouter {
+
+  /**
+   * Unified method to send a message with automatic signing for trusted devices.
+   * If the device is trusted, the message will be signed. Otherwise, it's sent as-is.
+   */
+  private suspend fun sendMessageToDevice(
+    deviceId: String,
+    message: com.carlom.klardrop.common.communication.message.Message,
+    writeChannel: ByteWriteChannel
+  ) {
+    if (trustManager.isTrusted(deviceId)) {
+      val trustedMessage = trustManager.signMessage(messageSerializer.serialize(message))
+      if (trustedMessage != null) {
+        writeChannel.sendMessage(trustedMessage, messageSerializer)
+      } else {
+        log("MessagesRouter", "Failed to sign message for trusted device $deviceId")
+        writeChannel.sendMessage(message, messageSerializer) // fallback to unsigned
+      }
+    } else {
+      writeChannel.sendMessage(message, messageSerializer)
+    }
+  }
+
   override suspend fun onMessageIncoming(
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
@@ -59,7 +83,7 @@ internal class MessagesRouterImpl(
     // SECURITY: Verify signatures for trusted device communication
     val message = when {
       // Handle TrustedMessage verification
-      rawMessage is com.carlom.klardrop.common.communication.message.TrustedMessage -> {
+      rawMessage is TrustedMessage -> {
         log("MessagesRouter", "Processing TrustedMessage from $fromDeviceId")
 
         // Verify the trusted message signature
@@ -144,7 +168,9 @@ internal class MessagesRouterImpl(
     if (!isAckMessage) {
       val ackReceived = MessageAcknowledgment(AckType.RECEIVED, message.id)
       log("MessagesRouter", "About to send ACK_RECEIVED for message ${message.id} to $fromDeviceId")
-      writeChannel.sendMessage(ackReceived, messageSerializer)
+
+      sendMessageToDevice(fromDeviceId, ackReceived, writeChannel)
+
       log("MessagesRouter", "Successfully sent ACK_RECEIVED for message ${message.id} to $fromDeviceId")
     }
   }
@@ -159,22 +185,18 @@ internal class MessagesRouterImpl(
     coroutines.ioDispatcher {
       val message = sendMessageRequest.message
 
-      // NOTE: Signature verification moved to onMessageIncoming() for security
-      // We should not verify our own outgoing messages - they should be verified by the recipient
-
-      if (message.hasPayload) {
-        // message has extra payload. we need to handle it
-        val messageHandler = handlers[message.type] ?: run {
-          log("MessagesRouter", "No handler for message type ${message.type}")
-          return@ioDispatcher
-        }
-        messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress) // Passed toDeviceId
-      } else {
-        // message has no payload. we can send it directly
-        // Note: Message persistence is handled by individual message handlers
-        log("MessagesRouter", "[DEBUG] Sending message to $toDeviceId: type=${message.type}, id=${message.id}")
+      // TrustedMessage is already signed, send it directly
+      if (message is TrustedMessage) {
         writeChannel.sendMessage(message, messageSerializer)
+        return@ioDispatcher
       }
+
+      val messageHandler = handlers[message.type] ?: run {
+        log("MessagesRouter", "No handler for message type ${message.type}")
+        return@ioDispatcher
+      }
+
+      messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress)
     }
   }
 }

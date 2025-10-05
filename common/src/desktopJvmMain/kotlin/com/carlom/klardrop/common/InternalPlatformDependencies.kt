@@ -13,7 +13,7 @@ import kotlinx.io.files.Path
 import java.io.File
 
 
-actual class InternalPlatformDependencies {
+actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
   actual fun getDownloadStoragePath(): Path {
     return FileKit.downloadDir.toKotlinxIoPath()
@@ -28,7 +28,7 @@ actual class InternalPlatformDependencies {
   }
 
   actual fun driverFactory(): DriverFactory {
-    return DriverFactory(FileKit.databasesDir.toKotlinxIoPath())
+    return DriverFactory(FileKit.databasesDir.toKotlinxIoPath(), applicationInfo.disablePersistence)
   }
 
   actual fun trustStorage(): TrustStorage {
@@ -39,7 +39,7 @@ actual class InternalPlatformDependencies {
 
   actual suspend fun openFile(filePath: String): Boolean {
     return try {
-      val file = java.io.File(filePath)
+      val file = File(filePath)
       if (file.exists()) {
         if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.OPEN)) {
           java.awt.Desktop.getDesktop().open(file)

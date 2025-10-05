@@ -7,9 +7,11 @@ import com.carlom.klardrop.common.trust.IosTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
-import platform.Foundation.*
+import platform.Foundation.NSDocumentDirectory
+import platform.Foundation.NSFileManager
+import platform.Foundation.NSUserDomainMask
 
-actual class InternalPlatformDependencies {
+actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
   private val documentsDirectory: Path by lazy {
     val directory = NSFileManager.defaultManager.URLForDirectory(

@@ -1,6 +1,7 @@
 package com.carlom.klardrop.android.di
 
 import android.content.Context
+import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 import dagger.Module
@@ -11,8 +12,8 @@ import javax.inject.Singleton
 class KlardropModule {
 
   @Provides
-  fun providesInternalPlatformDependency(context: Context): InternalPlatformDependencies {
-    return InternalPlatformDependencies(context)
+  fun providesInternalPlatformDependency(context: Context, applicationInfo: ApplicationInfo): InternalPlatformDependencies {
+    return InternalPlatformDependencies(context, applicationInfo)
   }
 
   @Singleton

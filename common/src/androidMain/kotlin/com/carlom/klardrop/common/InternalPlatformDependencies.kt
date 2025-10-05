@@ -12,7 +12,7 @@ import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
 import java.io.File
 
-actual class InternalPlatformDependencies(private val context: Context) {
+actual class InternalPlatformDependencies(private val context: Context, private val applicationInfo: ApplicationInfo) {
 
   actual fun getDownloadStoragePath(): Path {
     return Path(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath)
@@ -39,15 +39,15 @@ actual class InternalPlatformDependencies(private val context: Context) {
       val intent = Intent(Intent.ACTION_VIEW).apply {
         val file = File(filePath)
         val uri = FileProvider.getUriForFile(
-          context, 
-          "${context.packageName}.provider", 
+          context,
+          "${context.packageName}.provider",
           file
         )
         setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
-      
+
       if (intent.resolveActivity(context.packageManager) != null) {
         context.startActivity(intent)
         true

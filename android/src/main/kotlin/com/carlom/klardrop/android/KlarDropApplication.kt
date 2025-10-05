@@ -6,6 +6,7 @@ import com.bugsnag.android.Bugsnag
 import com.bugsnag.android.Configuration
 import com.carlom.klardrop.android.di.ApplicationComponent
 import com.carlom.klardrop.android.di.DaggerApplicationComponent
+import com.carlom.klardrop.common.ApplicationInfo
 import com.klardrop.common.BugsnagConfig
 
 class KlarDropApplication : Application(), ApplicationComponentProvider {
@@ -22,7 +23,9 @@ class KlarDropApplication : Application(), ApplicationComponentProvider {
       Configuration(BugsnagConfig.apiKey)
     )
 
-    component = DaggerApplicationComponent.factory().create(this)
+    val applicationInfo = ApplicationInfo()
+
+    component = DaggerApplicationComponent.factory().create(this, applicationInfo)
     component.klardrop().init()
   }
 
