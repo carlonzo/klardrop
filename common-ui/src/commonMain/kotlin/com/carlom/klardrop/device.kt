@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -22,11 +23,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.trust.DeviceTrustStatus
 import com.carlom.klardrop.trust.TrustBadge
-
 
 @Composable
 fun DeviceDiscovery(
@@ -148,30 +150,46 @@ internal fun DeviceLarge(
 
 @Composable
 private fun CircleDevice(deviceUi: DeviceUi) {
-  val isSending = deviceUi.activityState is ActivityState.Sending
-  val targetCircleSize = if (isSending) 60.dp else 70.dp
+   val isSending = deviceUi.activityState is ActivityState.Sending
+   val targetCircleSize = if (isSending) 60.dp else 70.dp
 
-  val circleSize by animateDpAsState(targetValue = targetCircleSize)
+   val circleSize by animateDpAsState(targetValue = targetCircleSize)
 
+   val painter = when (deviceUi.deviceType) {
+       DeviceType.MOBILE -> painterResource("mobile.svg")
+       DeviceType.DESKTOP -> painterResource("laptop.svg")
+       else -> null
+   }
 
-  Box(modifier = Modifier.size(circleSize)) {
-    if (isSending) {
-      val progress = deviceUi.activityState.progressPercentage / 100.0f
-      CircularProgressIndicator(
-        progress = { progress },
-        modifier = Modifier.size(circleSize),
-        color = Color.Blue,
-      )
-    }
+   Box(modifier = Modifier.size(circleSize)) {
+     if (isSending) {
+       val progress = deviceUi.activityState.progressPercentage / 100.0f
+       CircularProgressIndicator(
+         progress = { progress },
+         modifier = Modifier.size(circleSize),
+         color = Color.Blue,
+       )
+     }
 
-    Canvas(
-      modifier = Modifier.size(circleSize)
-    ) {
-      drawCircle(Color.LightGray, radius = (targetCircleSize / 2 - 5.dp).toPx())
-    }
-  }
+     Canvas(
+       modifier = Modifier.size(circleSize)
+     ) {
+       drawCircle(Color.LightGray, radius = (targetCircleSize / 2 - 5.dp).toPx())
+     }
 
-}
+     painter?.let {
+       Icon(
+         painter = it,
+         contentDescription = null,
+         modifier = Modifier
+           .size(24.dp)
+           .align(Alignment.Center),
+         tint = Color.Black
+       )
+     }
+   }
+
+ }
 
 @Composable
 internal expect fun Modifier.deviceAdditions(
