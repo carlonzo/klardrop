@@ -36,6 +36,7 @@ A command-line interface for Klardrop, enabling file sharing and device discover
 ```bash
 ./gradlew :cli:jvmRun --args="send DEVICE_ID --file=/path/to/file.txt"
 ./gradlew :cli:jvmRun --args="send DEVICE_ID /path/to/file.txt"
+./gradlew :cli:jvmRun --args="send DEVICE_ID --text <text>"
 ```
 
 ### Show status

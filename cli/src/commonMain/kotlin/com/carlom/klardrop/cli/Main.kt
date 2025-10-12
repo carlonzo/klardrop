@@ -4,6 +4,7 @@ import com.carlom.klardrop.cli.commands.DiscoverCommand
 import com.carlom.klardrop.cli.commands.SendCommand
 import com.carlom.klardrop.cli.commands.StatusCommand
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.core.subcommands
 
 class KlardropCli : CliktCommand(name = "klardrop") {
@@ -18,4 +19,4 @@ class KlardropCli : CliktCommand(name = "klardrop") {
   override fun run() = Unit
 }
 
-fun main(args: Array<String>) = KlardropCli().main(args)
+fun main(args: Array<String>): Unit = KlardropCli().main(args)

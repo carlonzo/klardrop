@@ -9,7 +9,6 @@ import kotlinx.coroutines.runBlocking
 
 class StatusCommand : CliktCommand(
   name = "status",
-  help = "Show Klardrop service status and visible devices"
 ) {
 
   private val debug by option("--debug", help = "Enable debug output").flag()

@@ -48,7 +48,6 @@ class ClipboardManager(
 
   fun read(): String {
     return runCatching { readerWriter.read() }
-      .onFailure { log("ClipboardManager", "Cant read from clipboard. ${it.message}") }
       .getOrDefault("")
   }
 }

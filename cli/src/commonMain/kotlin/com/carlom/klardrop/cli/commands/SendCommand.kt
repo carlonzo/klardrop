@@ -18,7 +18,6 @@ import kotlin.random.Random
 
 class SendCommand : CliktCommand(
   name = "send",
-  help = "Send text or files to a device"
 ) {
 
   private val deviceId by argument("DEVICE_ID", help = "Target device ID")

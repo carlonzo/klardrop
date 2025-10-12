@@ -34,7 +34,7 @@ object CliController {
 
       klardrop = Klardrop(
         applicationInfo = applicationInfo,
-        internalPlatformDependency = InternalPlatformDependencies()
+        internalPlatformDependency = InternalPlatformDependencies(applicationInfo)
       )
       klardrop!!.init()
       true

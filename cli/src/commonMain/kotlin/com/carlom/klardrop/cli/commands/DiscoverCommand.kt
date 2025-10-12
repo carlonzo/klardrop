@@ -14,7 +14,6 @@ import kotlinx.coroutines.runBlocking
 
 class DiscoverCommand : CliktCommand(
   name = "discover",
-  help = "Discover nearby devices available for file sharing"
 ) {
 
   private val debug by option("--debug", help = "Enable debug output").flag()
