@@ -9,9 +9,11 @@ import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.di.CommunicationModule
+import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
@@ -20,16 +22,24 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.trust.InMemoryTrustStorage
 import com.carlom.klardrop.common.utils.Clock
 import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.test.runTest
-import kotlinx.io.Source
+import kotlinx.io.RawSource
+import kotlinx.io.Sink
+import kotlinx.io.buffered
+import kotlinx.io.files.Path
 import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 
 expect fun testClipboardReaderWriter(): ClipboardReaderWriter
+
+expect fun createTestPlatformFile(fileName: String, data: ByteArray): PlatformFile
 
 fun FakeClipboardManager() = com.carlom.klardrop.common.features.ClipboardManager(
   coroutines = TestCoroutines(),
@@ -95,6 +105,47 @@ class KlardropIntegrationTest {
 
   @Test
   fun testMessengerReconnectionFromBothSides() = testMessengerReconnection(clientDropsConnection = true, serverDropsConnection = true)
+
+  @Test
+  fun testSendFileFromClientToServer() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
+
+    turbineScope(timeout = 30.seconds) {
+      with(testContext) {
+        val testData = ByteArray(1024) { (it % 256).toByte() }
+        sendAndVerifyFile("test-document.txt", testData, "text/plain")
+      }
+    }
+  }
+
+  @Test
+  fun testSendLargeFileRequiringMultipleChunks() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
+
+    turbineScope(timeout = 60.seconds) {
+      with(testContext) {
+        // 100KB file requires multiple 32KB chunks
+        val testData = ByteArray(100_000) { (it % 256).toByte() }
+        sendAndVerifyFile("large-file.bin", testData, "application/octet-stream")
+      }
+    }
+  }
+
+  @Test
+  fun testSendTextAndFileInSequence() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
+
+    turbineScope(timeout = 60.seconds) {
+      with(testContext) {
+        sendAndVerifyMessage("Hello before file transfer")
+
+        val fileData = "Hello from file!".encodeToByteArray()
+        sendAndVerifyFile("greeting.txt", fileData, "text/plain")
+
+        sendAndVerifyMessage("Text after file transfer works too!")
+      }
+    }
+  }
 
   @Test
   fun testAckCorrelationRaceCondition() = runTest(coroutines.dispatcher) {
@@ -218,17 +269,59 @@ class KlardropIntegrationTest {
 
 }
 
-internal class KlardropTestFileManager : FileManager {
+internal class InMemoryTestFileManager : FileManager {
+  val receivedFiles = mutableMapOf<String, ByteArray>()
+  val fileDataToServe = mutableMapOf<String, ByteArray>()
+
   override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer {
-    error("not implemented")
+    return InMemoryFileTransfer(fileName)
   }
 
-  override fun getReadStreamFrom(file: PlatformFile): Source {
-    error("not implemented")
+  override fun getReadStreamFrom(file: PlatformFile): RawSource {
+    val data = fileDataToServe[file.path]
+      ?: error("No test data registered for file: ${file.path}")
+    return kotlinx.io.Buffer().apply { write(data) }
   }
 
-  override suspend fun openFile(filePath: String): Boolean {
-    return false // Return false for test implementation
+  override suspend fun openFile(filePath: String): Boolean = false
+
+  inner class InMemoryFileTransfer(
+    private val fileName: String
+  ) : FileTransfer {
+    // The production code calls bufferedSink.use { } which closes the sink after writing.
+    // Buffer.close() discards data, so we copy bytes into a separate collection
+    // via a RawSink wrapper that survives close().
+    private val chunks = mutableListOf<ByteArray>()
+
+    override val bufferedSink: Sink = object : kotlinx.io.RawSink {
+      override fun write(source: kotlinx.io.Buffer, byteCount: Long) {
+        var remaining = byteCount
+        while (remaining > 0) {
+          val toRead = minOf(remaining, 8192L).toInt()
+          val bytes = ByteArray(toRead)
+          val read = source.readAtMostTo(bytes, 0, toRead)
+          if (read <= 0) break
+          chunks.add(if (read < toRead) bytes.copyOf(read) else bytes)
+          remaining -= read
+        }
+      }
+      override fun flush() {}
+      override fun close() {}
+    }.buffered()
+
+    override suspend fun onTransferCompleted(): Path? {
+      val totalSize = chunks.sumOf { it.size }
+      val result = ByteArray(totalSize)
+      var offset = 0
+      for (chunk in chunks) {
+        chunk.copyInto(result, offset)
+        offset += chunk.size
+      }
+      receivedFiles[fileName] = result
+      return null
+    }
+
+    override suspend fun onTransferFailed() {}
   }
 }
 
@@ -240,12 +333,15 @@ internal class KlardropTestContext(
   private val serverDeviceId: String
 ) {
 
+  val clientFileManager = InMemoryTestFileManager()
+  val serverFileManager = InMemoryTestFileManager()
+
   val clientCommunicationModule = CommunicationModule(
     coroutines = coroutines,
     visibleDevices = clientVisibleDevices,
     protoBuf = ProtoBuf,
     clock = clock,
-    fileManager = KlardropTestFileManager(),
+    fileManager = clientFileManager,
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(clientDeviceId)),
     messageRepository = FakeMessageRepository(),
     clipboardManager = FakeClipboardManager(),
@@ -257,7 +353,7 @@ internal class KlardropTestContext(
     visibleDevices = FakeVisibleDevices(),
     protoBuf = ProtoBuf,
     clock = clock,
-    fileManager = KlardropTestFileManager(),
+    fileManager = serverFileManager,
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(serverDeviceId)),
     messageRepository = FakeMessageRepository(),
     clipboardManager = FakeClipboardManager(),
@@ -371,6 +467,65 @@ internal class KlardropTestContext(
     assertIs<ReceiveMessageStatus.Completed>(completedUpdate.status)
     assertEquals(1, completedUpdate.messages.size)
     assertEquals((message.message as TextMessage).text, (completedUpdate.messages.first() as TextMessage).text)
+
+    senderChannel.cancelAndIgnoreRemainingEvents()
+    receiverChannel.cancelAndIgnoreRemainingEvents()
+  }
+
+  suspend fun TurbineContext.sendAndVerifyFile(
+    fileName: String,
+    fileData: ByteArray,
+    mimeType: String = "application/octet-stream"
+  ) {
+    val platformFile = createTestPlatformFile(fileName, fileData)
+    clientFileManager.fileDataToServe[platformFile.path] = fileData
+
+    val fileMessage = FileMessage(
+      fileName = fileName,
+      fileSize = fileData.size.toLong(),
+      mimeType = mimeType
+    )
+    val sendRequest = fileMessage.toSendRequest(platformFile)
+
+    val messageReceiver = serverCommunicationModule.messageReceiver()
+    val clientMessenger = clientCommunicationModule.messenger()
+
+    val receiverChannel = messageReceiver.messageReceivedNotifier.testIn(this)
+
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceTimeBy(100)
+    coroutines.dispatcher.scheduler.runCurrent()
+
+    val senderFlow = clientMessenger.send(serverDeviceId, sendRequest)
+    val senderChannel = senderFlow.testIn(this)
+
+    // File transfer IO happens on Dispatchers.IO (real threads), but the ACK timeout
+    // uses virtual time on the TestDispatcher. We advance virtual time in small increments
+    // with real-time pauses to let IO threads complete before the 2-second ACK timeout fires.
+    repeat(10) {
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
+      coroutines.dispatcher.scheduler.advanceTimeBy(500)
+      Thread.sleep(100) // Let real IO threads complete
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
+    }
+
+    senderChannel.awaitFor { it is Completed }
+
+    coroutines.dispatcher.scheduler.advanceUntilIdle()
+    val completedUpdate = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
+    assertIs<ReceiveMessageStatus.Completed>(completedUpdate.status)
+    assertEquals(1, completedUpdate.messages.size)
+    val receivedMessage = completedUpdate.messages.first()
+    assertIs<FileMessage>(receivedMessage)
+    assertEquals(fileName, receivedMessage.fileName)
+    assertEquals(fileData.size.toLong(), receivedMessage.fileSize)
+    assertEquals(mimeType, receivedMessage.mimeType)
+
+    val receivedBytes = serverFileManager.receivedFiles[fileName]
+    assertNotNull(receivedBytes, "Server should have received file: $fileName")
+    assertTrue(fileData.contentEquals(receivedBytes), "File content should match")
 
     senderChannel.cancelAndIgnoreRemainingEvents()
     receiverChannel.cancelAndIgnoreRemainingEvents()
