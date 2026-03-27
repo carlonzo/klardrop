@@ -24,6 +24,8 @@ import com.carlom.klardrop.common.utils.Clock
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.test.runTest
+import kotlinx.io.Buffer
+import kotlinx.io.RawSink
 import kotlinx.io.RawSource
 import kotlinx.io.Sink
 import kotlinx.io.buffered
@@ -280,7 +282,7 @@ internal class InMemoryTestFileManager : FileManager {
   override fun getReadStreamFrom(file: PlatformFile): RawSource {
     val data = fileDataToServe[file.path]
       ?: error("No test data registered for file: ${file.path}")
-    return kotlinx.io.Buffer().apply { write(data) }
+    return Buffer().apply { write(data) }
   }
 
   override suspend fun openFile(filePath: String): Boolean = false
@@ -293,8 +295,8 @@ internal class InMemoryTestFileManager : FileManager {
     // via a RawSink wrapper that survives close().
     private val chunks = mutableListOf<ByteArray>()
 
-    override val bufferedSink: Sink = object : kotlinx.io.RawSink {
-      override fun write(source: kotlinx.io.Buffer, byteCount: Long) {
+    override val bufferedSink: Sink = object : RawSink {
+      override fun write(source: Buffer, byteCount: Long) {
         var remaining = byteCount
         while (remaining > 0) {
           val toRead = minOf(remaining, 8192L).toInt()
