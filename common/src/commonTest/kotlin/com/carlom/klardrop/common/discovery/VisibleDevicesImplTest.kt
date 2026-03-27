@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.discovery
 
 import app.cash.turbine.test
 import TestCoroutines
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.DeviceType
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -12,7 +13,7 @@ import kotlin.test.assertEquals
 class VisibleDevicesImplTest {
 
   private val coroutines = TestCoroutines()
-  private val visibleDevices = VisibleDevicesImpl(coroutines)
+  private val visibleDevices = VisibleDevicesImpl(coroutines, Clock())
 
   @Test
   fun addAndRemoveDevices() = runTest(coroutines.dispatcher) {

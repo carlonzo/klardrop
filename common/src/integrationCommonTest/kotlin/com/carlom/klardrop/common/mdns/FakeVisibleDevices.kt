@@ -25,7 +25,7 @@ class FakeVisibleDevices : VisibleDevices {
           deviceType = DeviceType.MOBILE,
           osType = OsType.ANDROID,
         ),
-
+        lastSeenTimestamp = 0L
         )
     )
   }
@@ -68,7 +68,7 @@ class FakeVisibleDevices : VisibleDevices {
     )
 
     val klardropConnection = DeviceConnection.KlardropConnection(address, port)
-    val discoveryDevice = DiscoveryDevice(deviceInfo, listOf(klardropConnection))
+    val discoveryDevice = DiscoveryDevice(deviceInfo, listOf(klardropConnection), lastSeenTimestamp = 0L)
 
     devices.add(discoveryDevice)
 
@@ -87,7 +87,7 @@ class FakeVisibleDevices : VisibleDevices {
     )
 
     val nearbyConnection = DeviceConnection.NearbyConnection(address, port)
-    val discoveryDevice = DiscoveryDevice(deviceInfo, listOf(nearbyConnection))
+    val discoveryDevice = DiscoveryDevice(deviceInfo, listOf(nearbyConnection), lastSeenTimestamp = 0L)
 
     devices.add(discoveryDevice)
 
