@@ -82,3 +82,4 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 
 squareup-wire = { id = "com.squareup.wire", version = "5.5.1" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
+ksp = { id = "com.google.devtools.ksp", version = "2.3.6" }
