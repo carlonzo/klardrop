@@ -17,3 +17,9 @@ actual object CommonPlatformDependencies {
     return UIDevice.currentDevice.name
   }
 }
+
+fun createInternalPlatformDependencies(
+  applicationInfo: ApplicationInfo = ApplicationInfo()
+): InternalPlatformDependencies {
+  return InternalPlatformDependencies(applicationInfo)
+}
