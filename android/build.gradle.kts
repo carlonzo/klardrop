@@ -3,7 +3,7 @@ plugins {
   alias(deps.plugins.android.application)
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
-  kotlin("kapt")
+  alias(deps.plugins.ksp)
   id("com.bugsnag.android.gradle") version "8.+"
 }
 
@@ -21,7 +21,7 @@ dependencies {
   implementation(deps.androidx.appcompat)
   implementation(deps.androidx.core)
   implementation(deps.dagger)
-  kapt(deps.dagger.compiler)
+  ksp(deps.dagger.compiler)
 
   implementation(deps.bugsnag.android)
 
