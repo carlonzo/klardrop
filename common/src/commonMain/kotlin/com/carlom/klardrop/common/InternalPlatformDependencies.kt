@@ -8,7 +8,7 @@ import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import kotlinx.io.files.Path
 
-expect class InternalPlatformDependencies {
+expect class InternalPlatformDependencies(applicationInfo: ApplicationInfo) {
   fun getDownloadStoragePath(): Path
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun clipboardReaderWriter(): ClipboardReaderWriter
