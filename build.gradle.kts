@@ -1,6 +1,4 @@
-import com.android.build.api.dsl.ApplicationExtension
-import com.android.build.api.dsl.CommonExtension
-import com.android.build.api.dsl.LibraryExtension
+import com.android.build.gradle.BaseExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
@@ -28,18 +26,32 @@ allprojects {
 
 subprojects {
 
-  val javaVersion = JavaVersion.VERSION_17
+  val javaVersion = JavaVersion.VERSION_21
   val javaTarget = JvmTarget.fromTarget(javaVersion.toString())
 
-  withAndroidPlugin {
-    compileOptions {
-      sourceCompatibility = javaVersion
-      targetCompatibility = javaVersion
+  pluginManager.withPlugin("com.android.application") {
+    configure<BaseExtension> {
+      compileOptions {
+        sourceCompatibility = javaVersion
+        targetCompatibility = javaVersion
+      }
+      compileSdkVersion(36)
+      defaultConfig {
+        minSdk = 23
+      }
     }
+  }
 
-    compileSdk = 36
-    defaultConfig {
-      minSdk = 23
+  pluginManager.withPlugin("com.android.library") {
+    configure<BaseExtension> {
+      compileOptions {
+        sourceCompatibility = javaVersion
+        targetCompatibility = javaVersion
+      }
+      compileSdkVersion(36)
+      defaultConfig {
+        minSdk = 23
+      }
     }
   }
 
@@ -52,15 +64,5 @@ subprojects {
     targetCompatibility = javaVersion.toString()
   }
 
-}
-
-fun Project.withAndroidPlugin(configureBlock: CommonExtension<*, *, *, *, *, *>.() -> Unit) {
-  pluginManager.withPlugin("com.android.application") {
-    configure<ApplicationExtension> { configureBlock() }
-  }
-
-  pluginManager.withPlugin("com.android.library") {
-    configure<LibraryExtension> { configureBlock() }
-  }
 }
 

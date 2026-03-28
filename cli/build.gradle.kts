@@ -10,7 +10,7 @@ version = "1.0-SNAPSHOT"
 kotlin {
   jvm {
     compilerOptions {
-      jvmTarget = JvmTarget.JVM_17
+      jvmTarget = JvmTarget.JVM_21
     }
 
     // Configure main class for execution

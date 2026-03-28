@@ -51,10 +51,10 @@ android {
       signingConfig = signingConfigs.getByName("debug")
     }
   }
-  android.packagingOptions.resources.pickFirsts.addAll(
-    listOf(
-      "META-INF/versions/**"
-    )
-  )
+  packaging {
+    resources {
+      pickFirsts += "META-INF/versions/**"
+    }
+  }
   namespace = "com.carlom.klardrop.android"
 }
