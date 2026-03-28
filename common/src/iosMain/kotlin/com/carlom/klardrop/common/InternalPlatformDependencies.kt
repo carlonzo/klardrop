@@ -11,7 +11,7 @@ import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
 
-actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
+actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo = ApplicationInfo()) {
 
   private val documentsDirectory: Path by lazy {
     val directory = NSFileManager.defaultManager.URLForDirectory(

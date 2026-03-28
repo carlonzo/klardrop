@@ -13,7 +13,7 @@ import kotlinx.io.files.Path
 import java.io.File
 
 
-actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
+actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo = ApplicationInfo()) {
 
   actual fun getDownloadStoragePath(): Path {
     return FileKit.downloadDir.toKotlinxIoPath()
