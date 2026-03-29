@@ -26,14 +26,15 @@ allprojects {
 
 subprojects {
 
-  val javaVersion = JavaVersion.VERSION_21
-  val javaTarget = JvmTarget.fromTarget(javaVersion.toString())
+  val androidJavaVersion = JavaVersion.VERSION_17
+  val jvmJavaVersion = JavaVersion.VERSION_21
+  val jvmTarget = JvmTarget.fromTarget(jvmJavaVersion.toString())
 
   pluginManager.withPlugin("com.android.application") {
     configure<BaseExtension> {
       compileOptions {
-        sourceCompatibility = javaVersion
-        targetCompatibility = javaVersion
+        sourceCompatibility = androidJavaVersion
+        targetCompatibility = androidJavaVersion
       }
       compileSdkVersion(36)
       defaultConfig {
@@ -45,8 +46,8 @@ subprojects {
   pluginManager.withPlugin("com.android.library") {
     configure<BaseExtension> {
       compileOptions {
-        sourceCompatibility = javaVersion
-        targetCompatibility = javaVersion
+        sourceCompatibility = androidJavaVersion
+        targetCompatibility = androidJavaVersion
       }
       compileSdkVersion(36)
       defaultConfig {
@@ -56,12 +57,12 @@ subprojects {
   }
 
   tasks.withType<KotlinJvmCompile>().configureEach {
-    compilerOptions.jvmTarget = javaTarget
+    compilerOptions.jvmTarget = jvmTarget
   }
 
   tasks.withType<JavaCompile>().configureEach {
-    sourceCompatibility = javaVersion.toString()
-    targetCompatibility = javaVersion.toString()
+    sourceCompatibility = jvmJavaVersion.toString()
+    targetCompatibility = jvmJavaVersion.toString()
   }
 
 }
