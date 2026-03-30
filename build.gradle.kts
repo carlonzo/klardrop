@@ -28,10 +28,11 @@ subprojects {
 
   val androidJavaVersion = JavaVersion.VERSION_17
   val jvmJavaVersion = JavaVersion.VERSION_21
+  val androidJvmTarget = JvmTarget.fromTarget(androidJavaVersion.toString())
   val jvmTarget = JvmTarget.fromTarget(jvmJavaVersion.toString())
 
-  pluginManager.withPlugin("com.android.application") {
-    configure<BaseExtension> {
+  fun configureAndroid(extension: BaseExtension) {
+    extension.apply {
       compileOptions {
         sourceCompatibility = androidJavaVersion
         targetCompatibility = androidJavaVersion
@@ -41,36 +42,31 @@ subprojects {
         minSdk = 23
       }
     }
+  }
+
+  pluginManager.withPlugin("com.android.application") {
+    configure<BaseExtension> { configureAndroid(this) }
   }
 
   pluginManager.withPlugin("com.android.library") {
-    configure<BaseExtension> {
-      compileOptions {
-        sourceCompatibility = androidJavaVersion
-        targetCompatibility = androidJavaVersion
-      }
-      compileSdkVersion(36)
-      defaultConfig {
-        minSdk = 23
-      }
-    }
+    configure<BaseExtension> { configureAndroid(this) }
   }
 
-  // Android Kotlin/Java tasks target Java 17; all others target Java 21
-  tasks.withType<KotlinJvmCompile>().configureEach {
-    val isAndroidTask = name.contains("Android", ignoreCase = true)
-    compilerOptions.jvmTarget = if (isAndroidTask) {
-      JvmTarget.fromTarget(androidJavaVersion.toString())
-    } else {
-      jvmTarget
+  // Set JVM target per task: Android-related tasks get 17, others get 21.
+  // In KMP modules, Android tasks contain "Android" in their name.
+  // In pure Android modules (kotlin-android plugin), tasks are "compileDebugKotlin" etc.
+  afterEvaluate {
+    val isAndroidOnlyProject = pluginManager.hasPlugin("org.jetbrains.kotlin.android")
+    tasks.withType<KotlinJvmCompile>().configureEach {
+      val isAndroidTask = isAndroidOnlyProject || name.contains("Android", ignoreCase = true)
+      compilerOptions.jvmTarget = if (isAndroidTask) androidJvmTarget else jvmTarget
     }
-  }
-
-  tasks.withType<JavaCompile>().configureEach {
-    val isAndroidTask = name.contains("Android", ignoreCase = true)
-    val version = if (isAndroidTask) androidJavaVersion else jvmJavaVersion
-    sourceCompatibility = version.toString()
-    targetCompatibility = version.toString()
+    tasks.withType<JavaCompile>().configureEach {
+      val isAndroidTask = isAndroidOnlyProject || name.contains("Android", ignoreCase = true)
+      val version = if (isAndroidTask) androidJavaVersion else jvmJavaVersion
+      sourceCompatibility = version.toString()
+      targetCompatibility = version.toString()
+    }
   }
 
 }
