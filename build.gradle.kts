@@ -56,13 +56,21 @@ subprojects {
     }
   }
 
+  // Android Kotlin/Java tasks target Java 17; all others target Java 21
   tasks.withType<KotlinJvmCompile>().configureEach {
-    compilerOptions.jvmTarget = jvmTarget
+    val isAndroidTask = name.contains("Android", ignoreCase = true)
+    compilerOptions.jvmTarget = if (isAndroidTask) {
+      JvmTarget.fromTarget(androidJavaVersion.toString())
+    } else {
+      jvmTarget
+    }
   }
 
   tasks.withType<JavaCompile>().configureEach {
-    sourceCompatibility = jvmJavaVersion.toString()
-    targetCompatibility = jvmJavaVersion.toString()
+    val isAndroidTask = name.contains("Android", ignoreCase = true)
+    val version = if (isAndroidTask) androidJavaVersion else jvmJavaVersion
+    sourceCompatibility = version.toString()
+    targetCompatibility = version.toString()
   }
 
 }
