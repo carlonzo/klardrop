@@ -15,7 +15,7 @@ bugsnag-android = "6.25.0"
 bugsnag-jvm = "3.8.0"
 filekit = "0.13.0"
 sqldelight = "2.3.2"
-cryptography = "0.5.0"
+cryptography = "0.6.0"
 coil3 = "3.4.0"
 
 [libraries]
