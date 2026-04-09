@@ -2,7 +2,7 @@
 agp = "9.1.0"
 kotlin = "2.3.20"
 coroutines = "1.10.2"
-serialization = "1.10.0"
+serialization = "1.11.0"
 jetbrains-compose = "1.10.3"
 okio = "3.17.0"
 ktor = "3.4.2"
