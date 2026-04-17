@@ -64,7 +64,8 @@ class CommonComponent(
       currentDeviceProvider,
       messageRepository,
       clipboardManager,
-      internalPlatformDependency.trustStorage()
+      internalPlatformDependency.trustStorage(),
+      internalPlatformDependency.bleTransport(),
     )
   }
 
@@ -87,6 +88,7 @@ class CommonComponent(
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
   fun server() = communicationModule.server()
+  fun bleServerListener() = communicationModule.bleServerListener()
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()

@@ -3,7 +3,16 @@ package com.carlom.klardrop.common.ble
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothGattServer
+import android.bluetooth.BluetoothGattServerCallback
+import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
@@ -19,10 +28,21 @@ import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import com.carlom.klardrop.common.discovery.CurrentDevice
 import com.carlom.klardrop.common.utils.log
+import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Android BLE transport using [BluetoothLeAdvertiser] for advertising and
@@ -164,7 +184,455 @@ actual class BleTransport(private val context: Context) {
   private fun hasPermission(permission: String): Boolean =
     ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
+  // ──────────────────────────────────────────────────────────────────────────────────────
+  // GATT Central (client) — connect to a discovered peer and expose a BleSession.
+  // ──────────────────────────────────────────────────────────────────────────────────────
+
+  @SuppressLint("MissingPermission")
+  actual suspend fun connectCentral(address: String, remoteShortDeviceId: String): BleSession {
+    val adapter = this.adapter
+      ?: throw IllegalStateException("Bluetooth adapter unavailable")
+    check(hasRuntimePermissions()) { "Missing BLUETOOTH_CONNECT permission" }
+
+    val device: BluetoothDevice = adapter.getRemoteDevice(address)
+    val serviceUuid = UUID.fromString(BleConstants.SERVICE_UUID)
+    val txUuid = UUID.fromString(BleConstants.TX_CHARACTERISTIC_UUID)
+    val rxUuid = UUID.fromString(BleConstants.RX_CHARACTERISTIC_UUID)
+    val cccdUuid = UUID.fromString(BleConstants.CCCD_UUID)
+
+    val incoming = Channel<ByteArray>(capacity = Channel.UNLIMITED)
+
+    // Step-by-step GATT setup: connect → onConnected → requestMtu → onMtuChanged →
+    // discoverServices → onServicesDiscovered → setCharacteristicNotification +
+    // write CCCD → onDescriptorWrite → session ready.
+    val holder = CentralSessionHolder(
+      remoteShortDeviceId = remoteShortDeviceId,
+      incoming = incoming,
+      txUuid = txUuid,
+    )
+
+    val callback = object : BluetoothGattCallback() {
+      override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+        if (status != BluetoothGatt.GATT_SUCCESS) {
+          holder.fail(IllegalStateException("GATT connection failed status=$status"))
+          runCatching { gatt.close() }
+          incoming.close()
+          return
+        }
+        when (newState) {
+          BluetoothProfile.STATE_CONNECTED -> {
+            log(TAG, "Central connected to $address, requesting MTU ${BleConstants.REQUESTED_MTU}")
+            gatt.requestMtu(BleConstants.REQUESTED_MTU)
+          }
+          BluetoothProfile.STATE_DISCONNECTED -> {
+            log(TAG, "Central disconnected from $address")
+            holder.markClosed()
+            runCatching { gatt.close() }
+            incoming.close()
+          }
+        }
+      }
+
+      override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+        holder.negotiatedMtu = (mtu - BleConstants.ATT_HEADER_SIZE).coerceAtLeast(20)
+        log(TAG, "MTU changed to $mtu (payload=${holder.negotiatedMtu}) status=$status")
+        gatt.discoverServices()
+      }
+
+      override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+        if (status != BluetoothGatt.GATT_SUCCESS) {
+          holder.fail(IllegalStateException("Service discovery failed status=$status"))
+          return
+        }
+        val service = gatt.getService(serviceUuid)
+        if (service == null) {
+          holder.fail(IllegalStateException("Peer does not expose Klardrop BLE service"))
+          return
+        }
+        val tx = service.getCharacteristic(txUuid)
+        val rx = service.getCharacteristic(rxUuid)
+        if (tx == null || rx == null) {
+          holder.fail(IllegalStateException("Peer service missing TX/RX characteristics"))
+          return
+        }
+        holder.txCharacteristic = tx
+        gatt.setCharacteristicNotification(rx, true)
+        val descriptor = rx.getDescriptor(cccdUuid)
+        if (descriptor == null) {
+          holder.fail(IllegalStateException("RX characteristic missing CCCD"))
+          return
+        }
+        descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+        @Suppress("DEPRECATION")
+        gatt.writeDescriptor(descriptor)
+      }
+
+      override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+        if (descriptor.uuid != cccdUuid) return
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+          holder.complete(gatt)
+        } else {
+          holder.fail(IllegalStateException("CCCD write failed status=$status"))
+        }
+      }
+
+      override fun onCharacteristicChanged(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+      ) {
+        if (characteristic.uuid != rxUuid) return
+        @Suppress("DEPRECATION")
+        val value = characteristic.value ?: return
+        if (value.isEmpty()) return
+        incoming.trySendBlocking(value.copyOf())
+      }
+
+      override fun onCharacteristicWrite(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        status: Int,
+      ) {
+        if (characteristic.uuid != txUuid) return
+        holder.onWriteAck(status == BluetoothGatt.GATT_SUCCESS)
+      }
+    }
+
+    val gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+      ?: throw IllegalStateException("connectGatt returned null for $address")
+
+    return try {
+      withTimeout(CONNECT_TIMEOUT) { holder.awaitReady() }
+      AndroidCentralBleSession(
+        gatt = gatt,
+        txCharacteristic = holder.txCharacteristic!!,
+        deviceId = remoteShortDeviceId,
+        mtu = holder.negotiatedMtu,
+        incoming = incoming,
+        writeAckWaiter = holder::awaitNextWriteAck,
+      )
+    } catch (t: Throwable) {
+      runCatching { gatt.close() }
+      incoming.close()
+      throw t
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────────────────
+  // GATT Peripheral (server) — host the Klardrop service and emit a session per client.
+  // ──────────────────────────────────────────────────────────────────────────────────────
+
+  @SuppressLint("MissingPermission")
+  actual fun serveGatt(): Flow<BleSession> = callbackFlow {
+    val adapter = this@BleTransport.adapter
+    val manager = this@BleTransport.manager
+    if (adapter == null || manager == null || !hasRuntimePermissions()) {
+      log(TAG, "Cannot start GATT server (adapter=$adapter permissions=${hasRuntimePermissions()})")
+      close()
+      return@callbackFlow
+    }
+
+    val serviceUuid = UUID.fromString(BleConstants.SERVICE_UUID)
+    val txUuid = UUID.fromString(BleConstants.TX_CHARACTERISTIC_UUID)
+    val rxUuid = UUID.fromString(BleConstants.RX_CHARACTERISTIC_UUID)
+    val cccdUuid = UUID.fromString(BleConstants.CCCD_UUID)
+
+    val service = BluetoothGattService(serviceUuid, BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
+      addCharacteristic(
+        BluetoothGattCharacteristic(
+          txUuid,
+          BluetoothGattCharacteristic.PROPERTY_WRITE,
+          BluetoothGattCharacteristic.PERMISSION_WRITE,
+        )
+      )
+      val rx = BluetoothGattCharacteristic(
+        rxUuid,
+        BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+        BluetoothGattCharacteristic.PERMISSION_READ,
+      )
+      rx.addDescriptor(
+        BluetoothGattDescriptor(
+          cccdUuid,
+          BluetoothGattDescriptor.PERMISSION_READ or BluetoothGattDescriptor.PERMISSION_WRITE,
+        )
+      )
+      addCharacteristic(rx)
+    }
+
+    // Per-central session state. MTU and subscription readiness are tracked here.
+    val sessions = ConcurrentHashMap<String, PeripheralSessionBuilder>()
+    // Keep a handle on the server so we can push notifications from the session.
+    var serverRef: BluetoothGattServer? = null
+
+    val serverCallback = object : BluetoothGattServerCallback() {
+      override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
+        val key = device.address
+        when (newState) {
+          BluetoothProfile.STATE_CONNECTED -> {
+            log(TAG, "Central ${device.address} connected to our GATT server")
+            sessions[key] = PeripheralSessionBuilder(device)
+          }
+          BluetoothProfile.STATE_DISCONNECTED -> {
+            log(TAG, "Central ${device.address} disconnected from our GATT server")
+            sessions.remove(key)?.session?.markClosed()
+          }
+        }
+      }
+
+      override fun onMtuChanged(device: BluetoothDevice, mtu: Int) {
+        sessions[device.address]?.negotiatedMtu =
+          (mtu - BleConstants.ATT_HEADER_SIZE).coerceAtLeast(20)
+        log(TAG, "GATT server MTU with ${device.address} = $mtu")
+      }
+
+      override fun onCharacteristicWriteRequest(
+        device: BluetoothDevice,
+        requestId: Int,
+        characteristic: BluetoothGattCharacteristic,
+        preparedWrite: Boolean,
+        responseNeeded: Boolean,
+        offset: Int,
+        value: ByteArray?,
+      ) {
+        val server = serverRef
+        if (characteristic.uuid == txUuid && value != null) {
+          sessions[device.address]?.pushIncoming(value.copyOf())
+        }
+        if (responseNeeded) {
+          server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
+        }
+      }
+
+      override fun onDescriptorWriteRequest(
+        device: BluetoothDevice,
+        requestId: Int,
+        descriptor: BluetoothGattDescriptor,
+        preparedWrite: Boolean,
+        responseNeeded: Boolean,
+        offset: Int,
+        value: ByteArray?,
+      ) {
+        val server = serverRef
+        if (descriptor.uuid == cccdUuid && value != null) {
+          val enabled = value.contentEquals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+          if (responseNeeded) {
+            server?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
+          }
+          if (enabled) {
+            val builder = sessions[device.address] ?: return
+            val rx = service.getCharacteristic(rxUuid)
+            val session = AndroidPeripheralBleSession(
+              server = server!!,
+              device = device,
+              rxCharacteristic = rx,
+              deviceId = device.address,
+              mtu = builder.negotiatedMtu,
+            )
+            builder.session = session
+            // New subscriber → emit the session to the flow.
+            trySend(session)
+          }
+        } else if (responseNeeded) {
+          server?.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, offset, null)
+        }
+      }
+
+      override fun onNotificationSent(device: BluetoothDevice, status: Int) {
+        sessions[device.address]?.session?.onNotificationSent(status == BluetoothGatt.GATT_SUCCESS)
+      }
+    }
+
+    val server = manager.openGattServer(context, serverCallback) ?: run {
+      log(TAG, "openGattServer returned null; cannot host Klardrop service")
+      close()
+      return@callbackFlow
+    }
+    server.addService(service)
+    serverRef = server
+
+    // Bridge incoming chunks from the server callback into each session's inbound queue.
+    for ((_, builder) in sessions) builder.attachServer(server)
+
+    awaitClose {
+      runCatching { server.clearServices() }
+      runCatching { server.close() }
+      sessions.values.forEach { it.session?.markClosed() }
+    }
+  }
+
   private companion object {
+    val CONNECT_TIMEOUT = 15.seconds
     const val TAG = "BleTransport.android"
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────
+// Helpers: central + peripheral session holders and BleSession implementations.
+// ──────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tracks the multi-step GATT handshake (connect → MTU → discover → CCCD) so the
+ * `connectCentral` caller can await a fully-ready session with a single suspend point.
+ */
+private class CentralSessionHolder(
+  val remoteShortDeviceId: String,
+  val incoming: Channel<ByteArray>,
+  val txUuid: UUID,
+) {
+  @Volatile var negotiatedMtu: Int = 20 // safe default before onMtuChanged fires
+  @Volatile var txCharacteristic: BluetoothGattCharacteristic? = null
+  private var readyCont: CancellableContinuation<Unit>? = null
+  private val writeAckQueue = Channel<Boolean>(capacity = Channel.UNLIMITED)
+  private var closed = false
+
+  suspend fun awaitReady() = suspendCancellableCoroutine<Unit> { cont ->
+    readyCont = cont
+  }
+
+  fun complete(@Suppress("UNUSED_PARAMETER") gatt: BluetoothGatt) {
+    readyCont?.takeIf { it.isActive }?.resume(Unit)
+    readyCont = null
+  }
+
+  fun fail(cause: Throwable) {
+    readyCont?.takeIf { it.isActive }?.resumeWithException(cause)
+    readyCont = null
+  }
+
+  fun markClosed() {
+    closed = true
+    readyCont?.takeIf { it.isActive }?.resumeWithException(IllegalStateException("Disconnected during handshake"))
+    readyCont = null
+    writeAckQueue.close()
+  }
+
+  fun onWriteAck(success: Boolean) {
+    writeAckQueue.trySend(success)
+  }
+
+  suspend fun awaitNextWriteAck(): Boolean = writeAckQueue.receive()
+}
+
+@SuppressLint("MissingPermission")
+private class AndroidCentralBleSession(
+  private val gatt: BluetoothGatt,
+  private val txCharacteristic: BluetoothGattCharacteristic,
+  override val deviceId: String,
+  override val mtu: Int,
+  private val incoming: Channel<ByteArray>,
+  private val writeAckWaiter: suspend () -> Boolean,
+) : BleSession {
+
+  private val writeLock = Mutex()
+  @Volatile private var open = true
+  override val isOpen: Boolean get() = open
+
+  override suspend fun sendChunk(chunk: ByteArray) {
+    require(chunk.size <= mtu) { "chunk size ${chunk.size} exceeds mtu $mtu" }
+    check(open) { "BLE central session closed" }
+    writeLock.withLock {
+      val ok: Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        gatt.writeCharacteristic(txCharacteristic, chunk, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+      } else {
+        @Suppress("DEPRECATION")
+        run {
+          txCharacteristic.value = chunk
+          txCharacteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+          if (gatt.writeCharacteristic(txCharacteristic)) BluetoothGatt.GATT_SUCCESS else BluetoothGatt.GATT_FAILURE
+        }
+      }
+      if (ok != BluetoothGatt.GATT_SUCCESS) {
+        throw IllegalStateException("writeCharacteristic returned $ok")
+      }
+      val ack = writeAckWaiter()
+      if (!ack) throw IllegalStateException("TX write failed")
+    }
+  }
+
+  override suspend fun receiveChunk(): ByteArray? =
+    incoming.receiveCatching().getOrNull()
+
+  override fun close() {
+    if (!open) return
+    open = false
+    runCatching { gatt.disconnect() }
+    runCatching { gatt.close() }
+    incoming.close()
+  }
+}
+
+/**
+ * Mutable per-central bookkeeping on the peripheral side. Collected into an
+ * [AndroidPeripheralBleSession] once the central subscribes to the RX characteristic.
+ */
+private class PeripheralSessionBuilder(val device: BluetoothDevice) {
+  @Volatile var negotiatedMtu: Int = 20
+  @Volatile var session: AndroidPeripheralBleSession? = null
+
+  fun attachServer(@Suppress("UNUSED_PARAMETER") server: BluetoothGattServer) { /* future use */ }
+
+  fun pushIncoming(bytes: ByteArray) {
+    session?.onIncomingWrite(bytes)
+  }
+}
+
+@SuppressLint("MissingPermission")
+private class AndroidPeripheralBleSession(
+  private val server: BluetoothGattServer,
+  private val device: BluetoothDevice,
+  private val rxCharacteristic: BluetoothGattCharacteristic,
+  override val deviceId: String,
+  override val mtu: Int,
+) : BleSession {
+
+  private val incoming = Channel<ByteArray>(capacity = Channel.UNLIMITED)
+  private val notificationAcks = Channel<Boolean>(capacity = Channel.UNLIMITED)
+  private val writeLock = Mutex()
+  @Volatile private var open = true
+  override val isOpen: Boolean get() = open
+
+  fun onIncomingWrite(chunk: ByteArray) {
+    if (!open) return
+    incoming.trySend(chunk.copyOf())
+  }
+
+  fun onNotificationSent(success: Boolean) {
+    notificationAcks.trySend(success)
+  }
+
+  fun markClosed() {
+    if (!open) return
+    open = false
+    incoming.close()
+    notificationAcks.close()
+  }
+
+  override suspend fun sendChunk(chunk: ByteArray) {
+    require(chunk.size <= mtu) { "chunk size ${chunk.size} exceeds mtu $mtu" }
+    check(open) { "BLE peripheral session closed" }
+    writeLock.withLock {
+      val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        server.notifyCharacteristicChanged(device, rxCharacteristic, false, chunk) == BluetoothGatt.GATT_SUCCESS
+      } else {
+        @Suppress("DEPRECATION")
+        run {
+          rxCharacteristic.value = chunk
+          server.notifyCharacteristicChanged(device, rxCharacteristic, false)
+        }
+      }
+      if (!ok) throw IllegalStateException("notifyCharacteristicChanged returned false")
+      val ack = notificationAcks.receive()
+      if (!ack) throw IllegalStateException("Notification delivery failed")
+    }
+  }
+
+  override suspend fun receiveChunk(): ByteArray? =
+    incoming.receiveCatching().getOrNull()
+
+  override fun close() {
+    if (!open) return
+    open = false
+    runCatching { server.cancelConnection(device) }
+    incoming.close()
+    notificationAcks.close()
   }
 }

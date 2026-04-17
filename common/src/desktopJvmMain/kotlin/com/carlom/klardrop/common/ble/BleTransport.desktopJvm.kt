@@ -41,6 +41,12 @@ actual class BleTransport {
     return emptyFlow()
   }
 
+  actual suspend fun connectCentral(address: String, remoteShortDeviceId: String): BleSession {
+    throw NotImplementedError("Desktop JVM BLE central not implemented yet")
+  }
+
+  actual fun serveGatt(): Flow<BleSession> = emptyFlow()
+
   private companion object {
     const val TAG = "BleTransport.desktopJvm"
   }

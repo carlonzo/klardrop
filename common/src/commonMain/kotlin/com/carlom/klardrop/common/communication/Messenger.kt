@@ -107,7 +107,9 @@ class MessengerImpl(
         messageRequest // fallback to original message
       }
 
-      val transferCompleted = if (device.hasKlardropConnection()) {
+      // BLE is treated as a Klardrop-protocol peer (same message handlers, same wire format)
+      // and funnels through handleKlardropTransfer; Client picks TCP or BLE per discoveryDevice.
+      val transferCompleted = if (device.hasKlardropConnection() || device.hasBleConnection()) {
         handleKlardropTransfer(deviceId, finalMessageRequest, flow)
       } else if (device.hasNearbyConnection()) {
         handleNearbyTransfer(deviceId, finalMessageRequest, flow)

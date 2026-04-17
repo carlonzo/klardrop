@@ -38,6 +38,22 @@ expect class BleTransport {
    * Cancelling the flow stops the scan.
    */
   fun scanForPeers(): Flow<BlePeerEvent>
+
+  /**
+   * Open a GATT central connection to the peer at [address], negotiate MTU, discover the
+   * Klardrop service and return a fully-initialised [BleSession] ready for I/O. The caller
+   * is responsible for performing the app-level handshake on top of this.
+   *
+   * @throws IllegalStateException if BLE is not supported or the connection fails.
+   */
+  suspend fun connectCentral(address: String, remoteShortDeviceId: String): BleSession
+
+  /**
+   * Start a GATT server hosting the Klardrop service. The returned flow emits a
+   * [BleSession] every time a remote central finishes MTU negotiation and subscribes to
+   * our RX characteristic. Collecting stops the server.
+   */
+  fun serveGatt(): Flow<BleSession>
 }
 
 /** Events emitted while scanning for BLE peers. */

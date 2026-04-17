@@ -2,7 +2,9 @@ package com.carlom.klardrop.common.communication.di
 
 import androidx.annotation.VisibleForTesting
 import com.carlom.klardrop.common.FileManager
+import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.communication.AckTimeoutConfig
+import com.carlom.klardrop.common.communication.BleServerListener
 import com.carlom.klardrop.common.communication.ClientImpl
 import com.carlom.klardrop.common.communication.HeartbeatConfig
 import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
@@ -51,6 +53,7 @@ class CommunicationModule(
   private val trustStorage: TrustStorage,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
+  private val bleTransport: BleTransport? = null,
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -114,7 +117,23 @@ class CommunicationModule(
       currentDeviceProvider,
       ackTimeoutConfig,
       heartbeatConfig,
+      bleTransport,
     )
+  }
+
+  private val bleServerListener by lazy {
+    bleTransport?.let {
+      BleServerListener(
+        coroutines = coroutines,
+        bleTransport = it,
+        serializer = serializer,
+        currentDeviceProvider = currentDeviceProvider,
+        messagesRouter = messagesRouter,
+        connectionsPool = connectionsPool,
+        ackTimeoutConfig = ackTimeoutConfig,
+        heartbeatConfig = heartbeatConfig,
+      )
+    }
   }
 
   private val messageReceiver: MessageReceiver by lazy {
@@ -162,6 +181,7 @@ class CommunicationModule(
 
   fun client() = client
   fun server() = server
+  fun bleServerListener() = bleServerListener
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
   fun trustManager() = trustManager

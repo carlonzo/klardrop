@@ -54,6 +54,7 @@ class Klardrop(
     // calls are no-ops on targets that don't have a BLE actual yet.
     if (applicationInfo.enableKlardropServer) {
       discoveryNetwork.startPublishBle()
+      commonComponent.bleServerListener()?.start()
     }
     discoveryNetwork.discoverBleDevices()
   }
