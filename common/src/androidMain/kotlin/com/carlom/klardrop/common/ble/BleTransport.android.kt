@@ -208,7 +208,6 @@ actual class BleTransport(private val context: Context) {
     val holder = CentralSessionHolder(
       remoteShortDeviceId = remoteShortDeviceId,
       incoming = incoming,
-      txUuid = txUuid,
     )
 
     val callback = object : BluetoothGattCallback() {
@@ -449,9 +448,6 @@ actual class BleTransport(private val context: Context) {
     server.addService(service)
     serverRef = server
 
-    // Bridge incoming chunks from the server callback into each session's inbound queue.
-    for ((_, builder) in sessions) builder.attachServer(server)
-
     awaitClose {
       runCatching { server.clearServices() }
       runCatching { server.close() }
@@ -460,10 +456,12 @@ actual class BleTransport(private val context: Context) {
   }
 
   private companion object {
-    val CONNECT_TIMEOUT = 15.seconds
     const val TAG = "BleTransport.android"
   }
 }
+
+private val CONNECT_TIMEOUT = 15.seconds
+private val WRITE_ACK_TIMEOUT = 5.seconds
 
 // ──────────────────────────────────────────────────────────────────────────────────────
 // Helpers: central + peripheral session holders and BleSession implementations.
@@ -474,9 +472,8 @@ actual class BleTransport(private val context: Context) {
  * `connectCentral` caller can await a fully-ready session with a single suspend point.
  */
 private class CentralSessionHolder(
-  val remoteShortDeviceId: String,
+  @Suppress("unused") val remoteShortDeviceId: String,
   val incoming: Channel<ByteArray>,
-  val txUuid: UUID,
 ) {
   @Volatile var negotiatedMtu: Int = 20 // safe default before onMtuChanged fires
   @Volatile var txCharacteristic: BluetoothGattCharacteristic? = null
@@ -543,7 +540,7 @@ private class AndroidCentralBleSession(
       if (ok != BluetoothGatt.GATT_SUCCESS) {
         throw IllegalStateException("writeCharacteristic returned $ok")
       }
-      val ack = writeAckWaiter()
+      val ack = withTimeout(WRITE_ACK_TIMEOUT) { writeAckWaiter() }
       if (!ack) throw IllegalStateException("TX write failed")
     }
   }
@@ -564,11 +561,9 @@ private class AndroidCentralBleSession(
  * Mutable per-central bookkeeping on the peripheral side. Collected into an
  * [AndroidPeripheralBleSession] once the central subscribes to the RX characteristic.
  */
-private class PeripheralSessionBuilder(val device: BluetoothDevice) {
+private class PeripheralSessionBuilder(@Suppress("unused") val device: BluetoothDevice) {
   @Volatile var negotiatedMtu: Int = 20
   @Volatile var session: AndroidPeripheralBleSession? = null
-
-  fun attachServer(@Suppress("UNUSED_PARAMETER") server: BluetoothGattServer) { /* future use */ }
 
   fun pushIncoming(bytes: ByteArray) {
     session?.onIncomingWrite(bytes)
@@ -620,7 +615,7 @@ private class AndroidPeripheralBleSession(
         }
       }
       if (!ok) throw IllegalStateException("notifyCharacteristicChanged returned false")
-      val ack = notificationAcks.receive()
+      val ack = withTimeout(WRITE_ACK_TIMEOUT) { notificationAcks.receive() }
       if (!ack) throw IllegalStateException("Notification delivery failed")
     }
   }

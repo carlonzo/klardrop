@@ -4,7 +4,6 @@ import com.carlom.klardrop.common.utils.log
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
-import io.ktor.utils.io.close
 import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.writeByteArray
 import kotlinx.coroutines.CancellationException
