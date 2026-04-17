@@ -78,11 +78,8 @@ internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceAct
       }
 
       if (deviceUi.hasUnreadMessages) {
-        Box(
-          modifier = Modifier
-            .align(Alignment.TopEnd)
-            .size(12.dp)
-            .background(MaterialTheme.colorScheme.error, CircleShape)
+        UnreadDot(
+          modifier = Modifier.align(Alignment.TopStart)
         )
       }
     }
@@ -131,11 +128,8 @@ internal fun DeviceLarge(
         }
 
         if (deviceUi.hasUnreadMessages) {
-          Box(
-            modifier = Modifier
-              .align(Alignment.TopEnd)
-              .size(12.dp)
-              .background(MaterialTheme.colorScheme.error, CircleShape)
+          UnreadDot(
+            modifier = Modifier.align(Alignment.TopStart)
           )
         }
       }
@@ -158,6 +152,17 @@ internal fun DeviceLarge(
       }
     }
   }
+}
+
+@Composable
+private fun UnreadDot(modifier: Modifier = Modifier) {
+  Box(
+    modifier = modifier
+      .size(12.dp)
+      .background(MaterialTheme.colorScheme.surface, CircleShape)
+      .padding(2.dp)
+      .background(MaterialTheme.colorScheme.error, CircleShape)
+  )
 }
 
 @Composable

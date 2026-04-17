@@ -37,7 +37,10 @@ import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.TextButton
 import androidx.compose.material.TextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.material3.AlertDialog
@@ -506,9 +509,10 @@ private fun RenameSheet(
       var newName by remember { mutableStateOf(currentName) }
 
       Column(
-        modifier = Modifier.padding(24.dp),
+        modifier = Modifier.padding(top = 12.dp, start = 24.dp, end = 24.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
       ) {
+        SheetHandle()
         Text(
           "Rename device",
           style = MaterialTheme.typography.titleLarge
@@ -573,17 +577,27 @@ private fun ShareSheet(
   }
 
   Column(
-    modifier = Modifier.padding(top = 24.dp, start = 24.dp, end = 24.dp, bottom = 24.dp),
+    modifier = Modifier.padding(top = 12.dp, start = 24.dp, end = 24.dp, bottom = 24.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp, alignment = Alignment.Top)
   ) {
 
-    Text(
-      text = "Share with ${deviceUiClicked().deviceName}",
-      style = MaterialTheme.typography.titleLarge
-    )
+    SheetHandle()
+
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Text(
+        text = "Share",
+        style = MaterialTheme.typography.titleLarge
+      )
+      Text(
+        text = "to ${deviceUiClicked().deviceName}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    }
 
     ShareRow(
       label = "Send text",
+      icon = Icons.AutoMirrored.Filled.Send,
       enabled = !shareText,
       onClick = {
         val clip = discoveryController.readFromClipboard()
@@ -623,17 +637,45 @@ private fun ShareSheet(
       }
     }
 
-    ShareRow(label = "Send files", onClick = { filePickerFiles.launch() })
+    ShareRow(
+      label = "Send files",
+      icon = Icons.Filled.AttachFile,
+      onClick = { filePickerFiles.launch() }
+    )
 
     if (CommonPlatformDependencies.deviceType() == DeviceType.MOBILE) {
-      ShareRow(label = "Send photos or videos", onClick = { filePickerPictures.launch() })
+      ShareRow(
+        label = "Send photos or videos",
+        icon = Icons.Filled.Image,
+        onClick = { filePickerPictures.launch() }
+      )
     }
+  }
+}
+
+@Composable
+private fun SheetHandle() {
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(bottom = 4.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Box(
+      modifier = Modifier
+        .size(width = 36.dp, height = 4.dp)
+        .background(
+          color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+          shape = RoundedCornerShape(2.dp)
+        )
+    )
   }
 }
 
 @Composable
 private fun ShareRow(
   label: String,
+  icon: androidx.compose.ui.graphics.vector.ImageVector,
   enabled: Boolean = true,
   onClick: () -> Unit
 ) {
@@ -644,12 +686,23 @@ private fun ShareRow(
       .fillMaxWidth()
       .clickable(enabled = enabled, onClick = onClick)
   ) {
-    Text(
-      text = label,
-      style = MaterialTheme.typography.titleMedium,
-      color = MaterialTheme.colorScheme.onSurface,
-      modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
-    )
+    Row(
+      modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+      Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(20.dp)
+      )
+      Text(
+        text = label,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface
+      )
+    }
   }
 }
 
