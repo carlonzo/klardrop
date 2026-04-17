@@ -3,6 +3,7 @@ package com.carlom.klardrop.common
 import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
+import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.DeviceType
@@ -14,6 +15,7 @@ expect class InternalPlatformDependencies {
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun bleTransport(): BleTransport
   fun clipboardReaderWriter(): ClipboardReaderWriter
+  fun connectionInfoJoiner(): ConnectionInfoJoiner
   fun driverFactory(): DriverFactory
   fun trustStorage(): TrustStorage
   suspend fun openFile(filePath: String): Boolean

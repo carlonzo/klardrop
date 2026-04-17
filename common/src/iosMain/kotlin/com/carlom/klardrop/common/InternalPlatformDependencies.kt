@@ -3,6 +3,8 @@ package com.carlom.klardrop.common
 import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
+import com.carlom.klardrop.common.features.ConnectionInfoJoiner
+import com.carlom.klardrop.common.features.FallbackClipboardConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.trust.IosTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
@@ -47,6 +49,12 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter()
+  }
+
+  actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
+    // iOS path TODO: NEHotspotConfiguration + NEHotspotConfigurationManager. For now we
+    // reuse the clipboard fallback so the UX still surfaces the password cleanly.
+    return FallbackClipboardConnectionInfoJoiner(clipboardReaderWriter())
   }
 
   actual fun driverFactory(): DriverFactory {

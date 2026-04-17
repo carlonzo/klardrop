@@ -6,7 +6,9 @@ import android.os.Environment
 import androidx.core.content.FileProvider
 import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.database.DriverFactory
+import com.carlom.klardrop.common.features.AndroidConnectionInfoJoiner
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
+import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.trust.AndroidTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
@@ -29,6 +31,10 @@ actual class InternalPlatformDependencies(private val context: Context, private 
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter(context)
+  }
+
+  actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
+    return AndroidConnectionInfoJoiner(context, ClipboardReaderWriter(context))
   }
 
   actual fun driverFactory(): DriverFactory {

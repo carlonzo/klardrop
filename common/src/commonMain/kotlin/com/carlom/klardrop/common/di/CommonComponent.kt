@@ -115,4 +115,6 @@ class CommonComponent(
 
   fun localPropertiesRepository() = localProperties
 
+  fun connectionInfoJoiner() = internalPlatformDependency.connectionInfoJoiner()
+
 }

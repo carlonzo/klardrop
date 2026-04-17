@@ -627,6 +627,46 @@ private fun ShareSheet(
         onClick = { filePickerPictures.launch() }
       )
     }
+
+    var shareWifi by remember { mutableStateOf(false) }
+    Text(
+      modifier = Modifier.clickable { shareWifi = true },
+      text = "Share Wi-Fi credentials",
+    )
+    if (shareWifi) {
+      var ssid by remember { mutableStateOf("") }
+      var password by remember { mutableStateOf("") }
+      Column {
+        TextField(
+          modifier = Modifier.fillMaxWidth(),
+          value = ssid,
+          onValueChange = { ssid = it },
+          label = { Text("SSID") },
+        )
+        TextField(
+          modifier = Modifier.fillMaxWidth(),
+          value = password,
+          onValueChange = { password = it },
+          label = { Text("Password") },
+        )
+        TextButton(onClick = {
+          if (ssid.isNotBlank()) {
+            discoveryController.onSendData(
+              deviceUiClicked(),
+              OnDataToSend.WifiCredentials(
+                ssid = ssid.trim(),
+                password = password.takeIf { it.isNotEmpty() },
+                kind = com.carlom.klardrop.common.communication.message.ConnectionKind.WIFI_WPA2,
+              ),
+            )
+          }
+          scope.launch { dismissSheet() }
+          shareWifi = false
+        }) {
+          Text("Send")
+        }
+      }
+    }
   }
 }
 

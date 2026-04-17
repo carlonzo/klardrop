@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
+<!--  Required for sharing Wi-Fi credentials via ConnectionInfoMessage + WifiNetworkSuggestion  -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+
 <!--  Required for BLE peer discovery + advertising (API 31+)  -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
                      android:usesPermissionFlags="neverForLocation"/>
