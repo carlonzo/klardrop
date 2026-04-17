@@ -1,10 +1,11 @@
 package com.carlom.klardrop
 
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,17 +13,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
@@ -51,34 +55,47 @@ internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceAct
 
   Column(
     modifier = Modifier
-      .padding(16.dp)
-      .sizeIn(maxWidth = 100.dp)
+      .clip(RoundedCornerShape(20.dp))
       .combinedClickable(
         onClick = {
           log("Device clicked ${deviceUi.deviceName}")
           onDeviceActionListener.onDeviceClick(deviceUi)
         },
-      ),
-    horizontalAlignment = Alignment.CenterHorizontally
+      )
+      .padding(vertical = 14.dp, horizontal = 8.dp)
+      .width(96.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.spacedBy(8.dp)
   ) {
 
     Box {
       CircleDevice(deviceUi)
 
-      // Show trust badge for trusted devices
       if (deviceUi.trustStatus == TrustStatus.Trusted) {
         TrustBadge(
           modifier = Modifier.align(Alignment.TopEnd)
+        )
+      }
+
+      if (deviceUi.hasUnreadMessages) {
+        Box(
+          modifier = Modifier
+            .align(Alignment.TopEnd)
+            .size(12.dp)
+            .background(MaterialTheme.colorScheme.error, CircleShape)
         )
       }
     }
 
     Text(
       text = deviceUi.deviceName,
-      maxLines = 2
+      style = MaterialTheme.typography.labelLarge,
+      color = MaterialTheme.colorScheme.onSurface,
+      maxLines = 2,
+      overflow = TextOverflow.Ellipsis,
+      textAlign = TextAlign.Center
     )
 
-    // Show trust status
     DeviceTrustStatus(
       isTrusted = deviceUi.trustStatus == TrustStatus.Trusted,
       isPairing = deviceUi.trustStatus == TrustStatus.Pairing
@@ -94,105 +111,99 @@ internal fun DeviceLarge(
 ) {
 
   Box(
-    modifier = Modifier.padding(16.dp)
+    modifier = Modifier
       .fillMaxWidth()
-      .clip(shape = RoundedCornerShape(24.dp))
+      .clip(shape = RoundedCornerShape(20.dp))
       .clickable { onDeviceActionListener.onDeviceClick(deviceUi) }
       .deviceAdditions(deviceUi, onDeviceActionListener)
+      .padding(horizontal = 16.dp, vertical = 12.dp)
   ) {
 
-
-    Row(
-      modifier = Modifier.padding(16.dp),
-      verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
 
       Box {
         CircleDevice(deviceUi)
 
-        // Show trust badge for trusted devices
         if (deviceUi.trustStatus == TrustStatus.Trusted) {
           TrustBadge(
             modifier = Modifier.align(Alignment.TopEnd)
           )
         }
-      }
 
-      Spacer(modifier = Modifier.size(12.dp))
-
-      Column {
-        deviceUi.connectionTypes.forEach {
-          Text(
-            text = it.name,
-            color = Color.Black,
+        if (deviceUi.hasUnreadMessages) {
+          Box(
+            modifier = Modifier
+              .align(Alignment.TopEnd)
+              .size(12.dp)
+              .background(MaterialTheme.colorScheme.error, CircleShape)
           )
         }
       }
 
       Spacer(modifier = Modifier.size(16.dp))
 
-      Column {
+      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
           text = deviceUi.deviceName,
-          color = Color.Black,
-          maxLines = 2
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.onSurface,
+          maxLines = 2,
+          overflow = TextOverflow.Ellipsis
         )
 
-        // Show trust status
         DeviceTrustStatus(
           isTrusted = deviceUi.trustStatus == TrustStatus.Trusted,
           isPairing = deviceUi.trustStatus == TrustStatus.Pairing
         )
       }
-
     }
-
   }
-
 }
 
 @Composable
 private fun CircleDevice(deviceUi: DeviceUi) {
-   val isSending = deviceUi.activityState is ActivityState.Sending
-   val targetCircleSize = if (isSending) 60.dp else 70.dp
+  val isSending = deviceUi.activityState is ActivityState.Sending
+  val targetCircleSize = if (isSending) 52.dp else 56.dp
 
-   val circleSize by animateDpAsState(targetValue = targetCircleSize)
+  val circleSize by animateDpAsState(targetValue = targetCircleSize)
 
-   val painter = when (deviceUi.deviceType) {
-       DeviceType.MOBILE -> painterResource(resource = Res.drawable.mobile)
-       DeviceType.DESKTOP -> painterResource(Res.drawable.laptop)
-       else -> null
-   }
+  val painter = when (deviceUi.deviceType) {
+    DeviceType.MOBILE -> painterResource(resource = Res.drawable.mobile)
+    DeviceType.DESKTOP -> painterResource(Res.drawable.laptop)
+    else -> null
+  }
 
-   Box(modifier = Modifier.size(circleSize)) {
-     if (isSending) {
-       val progress = deviceUi.activityState.progressPercentage / 100.0f
-       CircularProgressIndicator(
-         progress = { progress },
-         modifier = Modifier.size(circleSize),
-         color = Color.Blue,
-       )
-     }
+  Box(modifier = Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+    if (isSending) {
+      val progress = deviceUi.activityState.progressPercentage / 100.0f
+      CircularProgressIndicator(
+        progress = { progress },
+        modifier = Modifier.size(56.dp),
+        color = MaterialTheme.colorScheme.primary,
+        strokeWidth = 2.dp
+      )
+    }
 
-     Canvas(
-       modifier = Modifier.size(circleSize)
-     ) {
-       drawCircle(Color.LightGray, radius = (targetCircleSize / 2 - 5.dp).toPx())
-     }
-
-     painter?.let {
-       Icon(
-         painter = it,
-         contentDescription = null,
-         modifier = Modifier
-           .size(24.dp)
-           .align(Alignment.Center),
-         tint = Color.Black
-       )
-     }
-   }
-
- }
+    Box(
+      modifier = Modifier
+        .size(circleSize)
+        .background(
+          color = MaterialTheme.colorScheme.primaryContainer,
+          shape = CircleShape
+        ),
+      contentAlignment = Alignment.Center
+    ) {
+      painter?.let {
+        Icon(
+          painter = it,
+          contentDescription = null,
+          modifier = Modifier.size(24.dp),
+          tint = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+      }
+    }
+  }
+}
 
 @Composable
 internal expect fun Modifier.deviceAdditions(
