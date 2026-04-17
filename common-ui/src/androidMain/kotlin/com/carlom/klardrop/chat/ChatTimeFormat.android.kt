@@ -1,32 +1,40 @@
 package com.carlom.klardrop.chat
 
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
+import java.text.DateFormat
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
-private val timeFormatter: DateTimeFormatter =
-  DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(Locale.getDefault())
+private val timeFormatter: DateFormat =
+  DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault())
 
-private val dateFormatter: DateTimeFormatter =
-  DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())
+private val dateFormatter: DateFormat =
+  SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
 
-private fun localDate(epochMillis: Long): LocalDate =
-  Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+private fun startOfDayMillis(epochMillis: Long): Long {
+  val cal = Calendar.getInstance()
+  cal.timeInMillis = epochMillis
+  cal.set(Calendar.HOUR_OF_DAY, 0)
+  cal.set(Calendar.MINUTE, 0)
+  cal.set(Calendar.SECOND, 0)
+  cal.set(Calendar.MILLISECOND, 0)
+  return cal.timeInMillis
+}
 
 actual fun formatChatTime(epochMillis: Long): String =
-  Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalTime().format(timeFormatter)
+  timeFormatter.format(Date(epochMillis))
 
 actual fun formatChatDay(epochMillis: Long): String {
-  val today = LocalDate.now(ZoneId.systemDefault())
-  val day = localDate(epochMillis)
-  return when (day) {
-    today -> "Today"
-    today.minusDays(1) -> "Yesterday"
-    else -> day.format(dateFormatter)
+  val today = startOfDayMillis(System.currentTimeMillis())
+  val day = startOfDayMillis(epochMillis)
+  val msPerDay = 86_400_000L
+  return when ((today - day) / msPerDay) {
+    0L -> "Today"
+    1L -> "Yesterday"
+    else -> dateFormatter.format(Date(epochMillis))
   }
 }
 
-actual fun chatDayKey(epochMillis: Long): Long = localDate(epochMillis).toEpochDay()
+actual fun chatDayKey(epochMillis: Long): Long =
+  startOfDayMillis(epochMillis) / 86_400_000L
