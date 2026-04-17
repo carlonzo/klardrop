@@ -11,6 +11,7 @@ import platform.Foundation.NSDateFormatterMediumStyle
 import platform.Foundation.NSDateFormatterNoStyle
 import platform.Foundation.NSDateFormatterShortStyle
 import platform.Foundation.dateWithTimeIntervalSince1970
+import platform.Foundation.timeIntervalSinceDate
 
 private val timeFormatter = NSDateFormatter().apply {
   timeStyle = NSDateFormatterShortStyle
@@ -22,8 +23,13 @@ private val dayFormatter = NSDateFormatter().apply {
   timeStyle = NSDateFormatterNoStyle
 }
 
+private val epoch: NSDate = NSDate.dateWithTimeIntervalSince1970(0.0)
+
 private fun nsDate(epochMillis: Long): NSDate =
   NSDate.dateWithTimeIntervalSince1970(epochMillis / 1000.0)
+
+private fun secondsSinceEpoch(date: NSDate): Double =
+  date.timeIntervalSinceDate(epoch)
 
 private fun startOfDay(date: NSDate): NSDate {
   val cal = NSCalendar.currentCalendar
@@ -36,11 +42,10 @@ actual fun formatChatTime(epochMillis: Long): String =
   timeFormatter.stringFromDate(nsDate(epochMillis))
 
 actual fun formatChatDay(epochMillis: Long): String {
-  val cal = NSCalendar.currentCalendar
   val today = startOfDay(NSDate())
   val day = startOfDay(nsDate(epochMillis))
   val msPerDay = 86_400.0
-  val diffDays = ((today.timeIntervalSince1970 - day.timeIntervalSince1970) / msPerDay).toLong()
+  val diffDays = ((secondsSinceEpoch(today) - secondsSinceEpoch(day)) / msPerDay).toLong()
   return when (diffDays) {
     0L -> "Today"
     1L -> "Yesterday"
@@ -50,5 +55,5 @@ actual fun formatChatDay(epochMillis: Long): String {
 
 actual fun chatDayKey(epochMillis: Long): Long {
   val day = startOfDay(nsDate(epochMillis))
-  return (day.timeIntervalSince1970 / 86_400.0).toLong()
+  return (secondsSinceEpoch(day) / 86_400.0).toLong()
 }
