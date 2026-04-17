@@ -112,7 +112,7 @@ class ClientImpl(
         // The server has already created one and stored it with the same key
       } else {
         // Create a ConnectionMessenger for the client side to send messages to the server
-        val connection = Connection(socket, deviceId)
+        val connection = Connection.Tcp(socket, deviceId)
         val connectionMessenger = ConnectionMessenger(
           coroutines = coroutines,
           connection = connection,

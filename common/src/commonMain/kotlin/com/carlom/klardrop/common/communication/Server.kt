@@ -204,7 +204,7 @@ class Server(
 
     if (isAcceptedSender(request.deviceId, remoteAddress)) {
       val writeChannel = socket.openWriteChannel(autoFlush = true)
-      val connection = Connection(socket, request.deviceId)
+      val connection = Connection.Tcp(socket, request.deviceId)
       val connectionMessenger = ConnectionMessenger(
         coroutines = coroutines,
         connection = connection,
