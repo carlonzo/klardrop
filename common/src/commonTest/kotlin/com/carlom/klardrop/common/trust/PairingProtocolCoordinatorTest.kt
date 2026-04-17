@@ -1,0 +1,136 @@
+package com.carlom.klardrop.common.trust
+
+import FakeLocalPropertiesRepository
+import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.TrustPairingRequest
+import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
+import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.utils.Clock
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+/**
+ * Exercises PairingProtocolCoordinator's contract with Messenger:
+ * - Successful sends notify TrustManager and surface success.
+ * - Send failures trigger TrustManager cleanup (no dangling pairing sessions).
+ * - Pairing completion events propagate to the onPairingCompleted callback.
+ *
+ * Device IDs are 8 chars so TrustManager.finalizePairing's session lookup
+ * (keyed on shortDeviceId = deviceId.take(8)) matches across both peers.
+ */
+class PairingProtocolCoordinatorTest {
+
+  private val aliceId = "alice001"
+  private val bobId = "bob00002"
+
+  private fun newTrustManager(deviceId: String) = TrustManager(
+    crypto = TrustCrypto(),
+    storage = InMemoryTrustStorage(),
+    clock = Clock(),
+    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(deviceId))
+  )
+
+  @Test
+  fun initiatePairingSendsRequestViaMessengerOnSuccess() = runTest {
+    val trustManager = newTrustManager(aliceId)
+    val messenger = RecordingMessenger(response = MessengerSendProgress.Completed)
+
+    val coordinator = PairingProtocolCoordinator(trustManager, messenger)
+    val result = coordinator.initiatePairing(bobId)
+
+    assertTrue(result.isSuccess)
+    assertEquals(1, messenger.sentRequests.size)
+    val (deviceId, request) = messenger.sentRequests.single()
+    assertEquals(bobId, deviceId)
+    assertTrue(request.message is TrustPairingRequest)
+  }
+
+  @Test
+  fun initiatePairingFailsWhenMessengerReportsError() = runTest {
+    val trustManager = newTrustManager(aliceId)
+    val messenger = RecordingMessenger(response = MessengerSendProgress.Error("network down"))
+
+    val coordinator = PairingProtocolCoordinator(trustManager, messenger)
+    val result = coordinator.initiatePairing(bobId)
+
+    assertTrue(result.isFailure, "Messenger error must surface as Result.failure")
+    val message = result.exceptionOrNull()?.message.orEmpty()
+    assertTrue(
+      message.contains("Failed to send pairing request"),
+      "Failure should identify pairing-send path, got: $message"
+    )
+  }
+
+  @Test
+  fun onPairingCompletedCallbackFiresWhenTrustManagerEmitsCompletion() = runTest {
+    val alice = newTrustManager(aliceId)
+    val messenger = RecordingMessenger(response = MessengerSendProgress.Completed)
+    val coordinator = PairingProtocolCoordinator(alice, messenger)
+
+    val signal = CompletableDeferred<Pair<String, Boolean>>()
+    coordinator.onPairingCompleted = { deviceId, _, success ->
+      signal.complete(deviceId to success)
+    }
+
+    // Drive the flow: Alice creates a request, Bob accepts and responds back,
+    // Alice finalizes -> emits PairingCompleted(success=true) on the shared flow
+    // that the coordinator is subscribed to.
+    val bob = newTrustManager(bobId)
+    val request = alice.createPairingRequest(bobId).getOrThrow()
+    val response = bob.createPairingAcceptance(request).getOrThrow()
+    alice.finalizePairing(response)
+
+    // If the coordinator's SharedFlow subscription is wired correctly, the callback
+    // fires from Dispatchers.Default within milliseconds. runTest's default 60s timeout
+    // is our backstop if the contract regresses.
+    val (deviceId, success) = signal.await()
+    assertEquals(response.deviceId, deviceId)
+    assertEquals(true, success)
+  }
+
+  @Test
+  fun rejectedPairingStillSurfacesThroughOnPairingCompleted() = runTest {
+    val alice = newTrustManager(aliceId)
+    val messenger = RecordingMessenger(response = MessengerSendProgress.Completed)
+    val coordinator = PairingProtocolCoordinator(alice, messenger)
+
+    val signal = CompletableDeferred<Boolean>()
+    coordinator.onPairingCompleted = { _, _, success -> signal.complete(success) }
+
+    val bob = newTrustManager(bobId)
+    alice.createPairingRequest(bobId).getOrThrow()
+    val rejection = bob.createPairingRejection(aliceId)
+    alice.finalizePairing(rejection)
+
+    val success = signal.await()
+    assertFalse(success, "Rejection must produce success=false in callback")
+  }
+}
+
+private class RecordingMessenger(
+  private val response: MessengerSendProgress
+) : Messenger {
+
+  data class Sent(val deviceId: String, val request: SendMessageRequest)
+
+  val sentRequests: MutableList<Sent> = mutableListOf()
+
+  override fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress> {
+    sentRequests.add(Sent(deviceId, messageRequest))
+    return flow {
+      emit(MessengerSendProgress.Pending)
+      emit(response)
+    }
+  }
+
+  override fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>> = flowOf()
+}
