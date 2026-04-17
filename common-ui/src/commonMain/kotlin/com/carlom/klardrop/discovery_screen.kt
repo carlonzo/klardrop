@@ -102,8 +102,12 @@ fun DiscoveryScreen(
     val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
       uiDependencies.deviceChatViewModelFactory(discoveryState.navigateToChatDeviceId!!)
     }
+    val isOwned = discoveryState.devices
+      .firstOrNull { it.deviceId == discoveryState.navigateToChatDeviceId }
+      ?.trustStatus == TrustStatus.Trusted
     DeviceChatScreen(
       deviceName = discoveryState.navigateToChatDeviceName!!,
+      isOwned = isOwned,
       viewModel = chatViewModel,
       onBackClicked = { discoveryController.onBackFromChat() },
       onOpenFileRequest = { filePath -> chatViewModel.openFileClicked(filePath) }
