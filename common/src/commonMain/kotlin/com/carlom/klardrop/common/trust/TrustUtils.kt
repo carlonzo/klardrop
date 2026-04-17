@@ -122,8 +122,9 @@ object TrustPolicy {
             // These require trust
             com.carlom.klardrop.common.communication.message.MessageType.TRUSTED_MESSAGE,
             com.carlom.klardrop.common.communication.message.MessageType.CLIPBOARD_SYNC,
-            com.carlom.klardrop.common.communication.message.MessageType.TRUST_REVOCATION -> true
-            
+            com.carlom.klardrop.common.communication.message.MessageType.TRUST_REVOCATION,
+            com.carlom.klardrop.common.communication.message.MessageType.CONNECTION_INFO -> true
+
             // Handshake, ack and heartbeat messages don't require trust
             com.carlom.klardrop.common.communication.message.MessageType.HANDSHAKE,
             com.carlom.klardrop.common.communication.message.MessageType.ACK_READY,

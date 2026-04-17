@@ -48,6 +48,14 @@ class Klardrop(
     discoveryNetwork.discoveryKlardropDevices()
     discoveryNetwork.discoveryNearbyShareDevices()
 //    discoveryNetwork.discoverAirdrop()
+
+    // BLE is a fallback transport for when peers aren't on the same Wi-Fi.
+    // Platform implementations return isSupported()=false when unavailable, so these
+    // calls are no-ops on targets that don't have a BLE actual yet.
+    if (applicationInfo.enableKlardropServer) {
+      discoveryNetwork.startPublishBle()
+    }
+    discoveryNetwork.discoverBleDevices()
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()

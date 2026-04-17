@@ -26,12 +26,20 @@ data class DiscoveryDevice(
     return deviceConnections.any { it.deviceConnectionType == DeviceConnection.DeviceConnectionType.KLARDROP }
   }
 
+  fun hasBleConnection(): Boolean {
+    return deviceConnections.any { it.deviceConnectionType == DeviceConnection.DeviceConnectionType.BLE }
+  }
+
   fun getKlardropConnection(): List<DeviceConnection.KlardropConnection> {
     return deviceConnections.filterIsInstance<DeviceConnection.KlardropConnection>()
   }
 
   fun getNearbyConnection(): List<DeviceConnection.NearbyConnection> {
     return deviceConnections.filterIsInstance<DeviceConnection.NearbyConnection>()
+  }
+
+  fun getBleConnection(): List<DeviceConnection.BleConnection> {
+    return deviceConnections.filterIsInstance<DeviceConnection.BleConnection>()
   }
 }
 
@@ -55,9 +63,22 @@ sealed interface DeviceConnection {
     override val deviceConnectionType = DeviceConnectionType.KLARDROP
   }
 
+  /**
+   * Bluetooth Low Energy transport. [address] is the platform-specific peripheral identifier:
+   * BluetoothDevice MAC on Android/Linux/Windows, CBPeripheral.identifier UUID on Apple.
+   * [port] is unused (always 0) — BLE does not have ports.
+   */
+  data class BleConnection(
+    override val address: String,
+  ) : DeviceConnection {
+    override val port: Int = 0
+    override val deviceConnectionType = DeviceConnectionType.BLE
+  }
+
   enum class DeviceConnectionType {
     NEARBY,
-    KLARDROP
+    KLARDROP,
+    BLE,
   }
 }
 

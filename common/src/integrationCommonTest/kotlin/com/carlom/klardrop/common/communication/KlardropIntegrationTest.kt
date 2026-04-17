@@ -388,6 +388,7 @@ internal class KlardropTestContext(
     when (clientConnectionType) {
       DeviceConnectionType.NEARBY -> clientVisibleDevices.addNearbyDevice(serverDeviceId, "localhost", serverStatus.port)
       DeviceConnectionType.KLARDROP -> clientVisibleDevices.addKlardropDevice(serverDeviceId, "localhost", serverStatus.port)
+      DeviceConnectionType.BLE -> error("BLE is not exercised in the TCP integration harness")
     }
 
     // Give time for device discovery to propagate

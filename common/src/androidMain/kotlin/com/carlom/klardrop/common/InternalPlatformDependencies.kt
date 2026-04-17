@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Environment
 import androidx.core.content.FileProvider
+import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
@@ -14,6 +15,8 @@ import java.io.File
 
 actual class InternalPlatformDependencies(private val context: Context, private val applicationInfo: ApplicationInfo) {
 
+  private val bleTransport by lazy { BleTransport(context) }
+
   actual fun getDownloadStoragePath(): Path {
     return Path(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath)
   }
@@ -21,6 +24,8 @@ actual class InternalPlatformDependencies(private val context: Context, private 
   actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns(context)
   }
+
+  actual fun bleTransport(): BleTransport = bleTransport
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter(context)

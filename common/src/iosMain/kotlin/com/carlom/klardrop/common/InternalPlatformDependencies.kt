@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
@@ -39,6 +40,10 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
   actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns()
   }
+
+  private val bleTransport by lazy { BleTransport() }
+
+  actual fun bleTransport(): BleTransport = bleTransport
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter()

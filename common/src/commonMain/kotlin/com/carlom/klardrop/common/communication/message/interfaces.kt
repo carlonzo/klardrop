@@ -23,6 +23,9 @@ enum class MessageType(val id: Byte) {
   CLIPBOARD_SYNC(13),
   TRUST_REVOCATION(14),
 
+  // Connection info sharing (e.g. Wi-Fi credentials between own devices)
+  CONNECTION_INFO(15),
+
   // Application-level liveness probes (heartbeat)
   PING(20),
   PONG(21),

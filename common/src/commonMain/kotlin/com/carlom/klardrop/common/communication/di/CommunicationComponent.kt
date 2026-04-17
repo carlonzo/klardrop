@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerImpl
 import com.carlom.klardrop.common.communication.Server
 import com.carlom.klardrop.common.communication.message.AckMessageHandler
+import com.carlom.klardrop.common.communication.message.ConnectionInfoMessageHandler
 import com.carlom.klardrop.common.communication.message.FileMessageHandler
 import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
 import com.carlom.klardrop.common.communication.message.MessageType
@@ -85,7 +86,8 @@ class CommunicationModule(
       MessageType.ACK_RECEIVED to AckMessageHandler(),
       MessageType.TRUST_PAIRING_REQUEST to TrustPairingRequestHandler(serializer, trustManager),
       MessageType.TRUST_PAIRING_RESPONSE to TrustPairingResponseHandler(serializer, trustManager),
-      MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager)
+      MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager),
+      MessageType.CONNECTION_INFO to ConnectionInfoMessageHandler(serializer),
     )
     
     MessageHandlersImpl(handlers)
