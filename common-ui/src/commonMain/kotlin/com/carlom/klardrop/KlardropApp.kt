@@ -20,8 +20,7 @@ fun KlardropApp(
   val uiDependencies = remember { UiDependencies(klardrop.commonComponent) }
   val visibleDevicesController = remember { uiDependencies.discoveryController() }
 
-  // Apply the dark green theme app-wide
-  AppTheme(useDarkTheme = true) {
+  AppTheme {
     Surface(
       modifier = Modifier.fillMaxSize()
     ) {

@@ -1,5 +1,12 @@
 package com.carlom.klardrop
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,16 +17,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -29,7 +37,11 @@ import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.TextButton
 import androidx.compose.material.TextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,11 +49,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +61,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.chat.DeviceChatScreen
 import com.carlom.klardrop.common.CommonPlatformDependencies
@@ -66,11 +78,11 @@ fun DiscoveryScreen(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
   discoveryController: DiscoveryController,
-  uiDependencies: UiDependencies // Added
+  uiDependencies: UiDependencies
 ) {
 
-  val discoveryState by discoveryController.screenStateFlow.collectAsState() // Moved up
-  val deviceUiClicked = remember<DeviceUi?> { null } // Still used by bottom sheet logic if kept
+  val discoveryState by discoveryController.screenStateFlow.collectAsState()
+  val deviceUiClicked = remember<DeviceUi?> { null }
 
   val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
     if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
@@ -89,25 +101,27 @@ fun DiscoveryScreen(
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
 
-  // --- Navigation to Chat Screen ---
   if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
     val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
       uiDependencies.deviceChatViewModelFactory(discoveryState.navigateToChatDeviceId!!)
     }
+    val isOwned = discoveryState.devices
+      .firstOrNull { it.deviceId == discoveryState.navigateToChatDeviceId }
+      ?.trustStatus == TrustStatus.Trusted
     DeviceChatScreen(
       deviceName = discoveryState.navigateToChatDeviceName!!,
+      isOwned = isOwned,
       viewModel = chatViewModel,
       onBackClicked = { discoveryController.onBackFromChat() },
-      onOpenFileRequest = { filePath -> chatViewModel.openFileClicked(filePath) } // Added
+      onOpenFileRequest = { filePath -> chatViewModel.openFileClicked(filePath) }
     )
   } else {
-    // --- Original Discovery Screen Content (ModalBottomSheet for sending) ---
     ModalBottomSheetLayout(
-      sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+      sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
       sheetBackgroundColor = MaterialTheme.colorScheme.surface,
       sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
       sheetContent = {
-        if (deviceUiClicked != null) { // Ensure deviceUiClicked is not null before accessing
+        if (deviceUiClicked != null) {
           ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
         }
       },
@@ -127,9 +141,7 @@ fun DiscoveryScreen(
     )
   }
 
-  // --- Pairing Dialog (shown on both screens) ---
   discoveryState.pairingDialogState?.let { pairingState ->
-    println("🖥️ [DiscoveryScreen] About to show PairingApprovalDialog for device: ${pairingState.deviceName}")
     PairingApprovalDialog(
       state = pairingState,
       onDismiss = { discoveryController.dismissPairingDialog() }
@@ -148,195 +160,390 @@ private fun DiscoveryDashboard(
   onDeviceActionListener: OnDeviceActionListener,
   onDeviceRename: (String) -> Unit
 ) {
-  val containerShape = RoundedCornerShape(24.dp)
   var showRenameSheet by remember { mutableStateOf(false) }
+  var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
+
+  val gridListener = remember(onDeviceActionListener) {
+    object : OnDeviceActionListener by onDeviceActionListener {
+      override fun onAddToTrusted(deviceUi: DeviceUi) {
+        pendingLink = deviceUi
+      }
+    }
+  }
 
   Column(
     modifier = modifier
       .windowInsetsPadding(WindowInsets.statusBars)
-      .padding(horizontal = 16.dp)
+      .fillMaxSize()
   ) {
 
-    TopAppBar(
-      title = { Text("Klardrop") },
+    DiscoveryHeader(
+      appName = "Klardrop",
+      currentDeviceName = currentDeviceName,
+      onEditIdentity = { showRenameSheet = true }
     )
 
-    Spacer(Modifier.height(8.dp))
-
-    Text(
-      text = "You'll appear as",
-      style = MaterialTheme.typography.labelLarge,
-      color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-    Spacer(Modifier.height(8.dp))
-
-    androidx.compose.material3.Surface(
-      modifier = Modifier
-        .fillMaxWidth()
-        .clickable { showRenameSheet = true },
-      shape = containerShape,
-      tonalElevation = 1.dp
-    ) {
-      Row(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-      ) {
-        Text(
-          text = currentDeviceName.ifEmpty { "This device" },
-          style = MaterialTheme.typography.titleMedium
-        )
-        Icon(
-          imageVector = Icons.Filled.ChevronRight,
-          contentDescription = "Edit device name"
-        )
-      }
-    }
-
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(24.dp))
 
     val trusted = devices.filter { it.trustStatus == TrustStatus.Trusted }
     val others = devices.filter { it.trustStatus != TrustStatus.Trusted }
 
-    if (trusted.isNotEmpty()) {
-      Text(
-        text = "Send to your devices",
-        style = MaterialTheme.typography.titleMedium
-      )
-      Spacer(Modifier.height(8.dp))
+    Column(
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(horizontal = 16.dp),
+      verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
 
-      DeviceGrid(
-        devices = trusted,
-        isLargeScreen = isLargeScreen,
-        onDeviceActionListener = onDeviceActionListener,
-        containerShape = containerShape
-      )
+      if (trusted.isNotEmpty()) {
+        DeviceSection(
+          title = "Your devices",
+          devices = trusted,
+          isLargeScreen = isLargeScreen,
+          onDeviceActionListener = gridListener
+        )
+      }
 
-      Spacer(Modifier.height(16.dp))
-    }
-
-    if (others.isNotEmpty()) {
-      Text(
-        text = "Send to nearby devices",
-        style = MaterialTheme.typography.titleMedium
-      )
-      Spacer(Modifier.height(8.dp))
-
-      DeviceGrid(
+      NearbySection(
         devices = others,
         isLargeScreen = isLargeScreen,
-        onDeviceActionListener = onDeviceActionListener,
-        containerShape = containerShape
+        onDeviceActionListener = gridListener
       )
     }
   }
 
-  // Device Rename Bottom Sheet
   if (showRenameSheet) {
-    ModalBottomSheetLayout(
-      sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-      sheetBackgroundColor = MaterialTheme.colorScheme.surface,
-      sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
-      sheetContent = {
-        var newName by remember { mutableStateOf(currentDeviceName) }
-
-        Column(
-          modifier = Modifier.padding(24.dp),
-          verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-          Text(
-            "Rename Device",
-            style = MaterialTheme.typography.headlineSmall
-          )
-
-          OutlinedTextField(
-            value = newName,
-            onValueChange = { newName = it },
-            label = { Text("Device Name") },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardActions = KeyboardActions(
-              onDone = {
-                onDeviceRename(newName)
-                showRenameSheet = false
-              }
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done)
-          )
-
-          Row(
-            horizontalArrangement = Arrangement.End,
-            modifier = Modifier.fillMaxWidth()
-          ) {
-            TextButton(onClick = { showRenameSheet = false }) {
-              Text("Cancel")
-            }
-            Button(onClick = {
-              onDeviceRename(newName)
-              showRenameSheet = false
-            }) {
-              Text("Save")
-            }
-          }
-        }
-      },
-      sheetState = rememberModalBottomSheetState(ModalBottomSheetValue.Expanded)
-    ) { }
+    RenameSheet(
+      currentName = currentDeviceName,
+      onDismiss = { showRenameSheet = false },
+      onSave = {
+        onDeviceRename(it)
+        showRenameSheet = false
+      }
+    )
   }
+
+  pendingLink?.let { device ->
+    LinkDeviceConfirmDialog(
+      device = device,
+      onConfirm = {
+        onDeviceActionListener.onAddToTrusted(device)
+        pendingLink = null
+      },
+      onDismiss = { pendingLink = null }
+    )
+  }
+}
+
+@Composable
+private fun LinkDeviceConfirmDialog(
+  device: DeviceUi,
+  onConfirm: () -> Unit,
+  onDismiss: () -> Unit
+) {
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text("Add ${device.deviceName} to your devices?") },
+    text = {
+      Text(
+        text = "Only do this if it's your own device. Your devices share clipboard, files, and message history with each other automatically.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    },
+    confirmButton = {
+      Button(onClick = onConfirm) { Text("Yes, it's mine") }
+    },
+    dismissButton = {
+      TextButton(onClick = onDismiss) { Text("Cancel") }
+    }
+  )
+}
+
+@Composable
+private fun DiscoveryHeader(
+  appName: String,
+  currentDeviceName: String,
+  onEditIdentity: () -> Unit
+) {
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(horizontal = 16.dp, vertical = 12.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.spacedBy(10.dp)
+  ) {
+    Text(
+      text = appName,
+      style = MaterialTheme.typography.labelLarge,
+      color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    Spacer(Modifier.height(4.dp))
+
+    Surface(
+      shape = RoundedCornerShape(24.dp),
+      color = MaterialTheme.colorScheme.surfaceVariant,
+      modifier = Modifier.clickable { onEditIdentity() }
+    ) {
+      Row(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+      ) {
+        Text(
+          text = currentDeviceName.ifEmpty { "This device" },
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.onSurface
+        )
+        Icon(
+          imageVector = Icons.Filled.Edit,
+          contentDescription = "Edit device name",
+          tint = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.size(16.dp)
+        )
+      }
+    }
+
+    Row(
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+      Icon(
+        imageVector = Icons.Filled.Wifi,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(14.dp)
+      )
+      Text(
+        text = "Visible to devices on your Wi-Fi",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    }
+  }
+}
+
+@Composable
+private fun DeviceSection(
+  title: String,
+  devices: List<DeviceUi>,
+  isLargeScreen: Boolean,
+  onDeviceActionListener: OnDeviceActionListener
+) {
+  Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    SectionLabel(title)
+    DeviceGrid(
+      devices = devices,
+      isLargeScreen = isLargeScreen,
+      onDeviceActionListener = onDeviceActionListener
+    )
+  }
+}
+
+@Composable
+private fun NearbySection(
+  devices: List<DeviceUi>,
+  isLargeScreen: Boolean,
+  onDeviceActionListener: OnDeviceActionListener
+) {
+  Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    SectionLabel("Nearby")
+    if (devices.isEmpty()) {
+      ScanningEmptyState()
+    } else {
+      DeviceGrid(
+        devices = devices,
+        isLargeScreen = isLargeScreen,
+        onDeviceActionListener = onDeviceActionListener
+      )
+    }
+  }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+  Text(
+    text = text.uppercase(),
+    style = MaterialTheme.typography.labelMedium,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    modifier = Modifier.padding(start = 4.dp)
+  )
 }
 
 @Composable
 private fun DeviceGrid(
   devices: List<DeviceUi>,
   isLargeScreen: Boolean,
-  onDeviceActionListener: OnDeviceActionListener,
-  containerShape: RoundedCornerShape
+  onDeviceActionListener: OnDeviceActionListener
 ) {
-  val columns = if (isLargeScreen) GridCells.Adaptive(minSize = 400.dp) else GridCells.Adaptive(minSize = 180.dp)
+  val columns = if (isLargeScreen) {
+    GridCells.Adaptive(minSize = 320.dp)
+  } else {
+    GridCells.Adaptive(minSize = 104.dp)
+  }
 
-  Box(
-    modifier = Modifier
-      .fillMaxWidth()
-      .background(MaterialTheme.colorScheme.surfaceVariant, containerShape)
-      .padding(12.dp)
+  Surface(
+    shape = RoundedCornerShape(24.dp),
+    color = MaterialTheme.colorScheme.surfaceVariant,
+    modifier = Modifier.fillMaxWidth()
   ) {
     LazyVerticalGrid(
       columns = columns,
-      contentPadding = PaddingValues(0.dp),
-      horizontalArrangement = Arrangement.spacedBy(8.dp),
-      verticalArrangement = Arrangement.spacedBy(8.dp),
+      contentPadding = PaddingValues(horizontal = 8.dp, vertical = 12.dp),
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp),
       modifier = Modifier.fillMaxWidth()
     ) {
       items(devices) { device ->
-        Box(
-          modifier = Modifier
-        ) {
-          DeviceDiscovery(device, isLargeScreen, onDeviceActionListener)
-
-          if (device.hasUnreadMessages) {
-            Box(
-              modifier = Modifier
-                .padding(top = 4.dp, end = 4.dp)
-                .size(10.dp)
-                .background(MaterialTheme.colorScheme.error, RoundedCornerShape(5.dp))
-                .align(Alignment.TopEnd)
-            )
+        Box(modifier = Modifier.fillMaxWidth()) {
+          Box(modifier = Modifier.align(Alignment.Center)) {
+            DeviceDiscovery(device, isLargeScreen, onDeviceActionListener)
           }
 
-          if (device.trustStatus != TrustStatus.Unknown) {
+          if (device.trustStatus == TrustStatus.Untrusted || device.trustStatus == TrustStatus.Pairing) {
             TrustActionButton(
-              isTrusted = device.trustStatus == TrustStatus.Trusted,
+              isTrusted = false,
               isLoading = device.trustStatus == TrustStatus.Pairing,
               onAddToTrusted = { onDeviceActionListener.onAddToTrusted(device) },
               onRemoveTrust = { onDeviceActionListener.onRemoveTrust(device) },
               modifier = Modifier
-                .align(Alignment.BottomEnd)
+                .align(Alignment.TopEnd)
                 .padding(4.dp)
+                .size(28.dp)
             )
           }
         }
       }
     }
   }
+}
+
+@Composable
+private fun ScanningEmptyState() {
+  Surface(
+    shape = RoundedCornerShape(24.dp),
+    color = MaterialTheme.colorScheme.surfaceVariant,
+    modifier = Modifier.fillMaxWidth()
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 40.dp, horizontal = 24.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+      PulsingRadar()
+      Spacer(Modifier.height(4.dp))
+      Text(
+        text = "Looking for devices nearby…",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurface
+      )
+      Text(
+        text = "Make sure Klardrop is open and on the same Wi-Fi.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+    }
+  }
+}
+
+@Composable
+private fun PulsingRadar() {
+  val transition = rememberInfiniteTransition()
+  val accent = MaterialTheme.colorScheme.primary
+
+  val radius1 by transition.animateFloat(
+    initialValue = 0f,
+    targetValue = 1f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 2200, easing = LinearEasing),
+      repeatMode = RepeatMode.Restart
+    )
+  )
+  val radius2 by transition.animateFloat(
+    initialValue = 0f,
+    targetValue = 1f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(durationMillis = 2200, easing = LinearEasing, delayMillis = 1100),
+      repeatMode = RepeatMode.Restart
+    )
+  )
+
+  Box(
+    modifier = Modifier.size(96.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+      val maxR = size.minDimension / 2f
+      listOf(radius1, radius2).forEach { t ->
+        val alpha = (1f - t) * 0.45f
+        drawCircle(
+          color = accent.copy(alpha = alpha),
+          radius = maxR * t
+        )
+      }
+    }
+
+    Box(
+      modifier = Modifier
+        .size(28.dp)
+        .background(accent, CircleShape)
+    )
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RenameSheet(
+  currentName: String,
+  onDismiss: () -> Unit,
+  onSave: (String) -> Unit
+) {
+  ModalBottomSheetLayout(
+    sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    sheetBackgroundColor = MaterialTheme.colorScheme.surface,
+    sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
+    sheetContent = {
+      var newName by remember { mutableStateOf(currentName) }
+
+      Column(
+        modifier = Modifier.padding(top = 12.dp, start = 24.dp, end = 24.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+      ) {
+        SheetHandle()
+        Text(
+          "Rename device",
+          style = MaterialTheme.typography.titleLarge
+        )
+        Text(
+          "This is how others will see you when sharing.",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        OutlinedTextField(
+          value = newName,
+          onValueChange = { newName = it },
+          label = { Text("Device name") },
+          modifier = Modifier.fillMaxWidth(),
+          singleLine = true,
+          keyboardActions = KeyboardActions(onDone = { onSave(newName) }),
+          keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done)
+        )
+
+        Row(
+          horizontalArrangement = Arrangement.End,
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          TextButton(onClick = onDismiss) { Text("Cancel") }
+          Button(onClick = { onSave(newName) }) { Text("Save") }
+        }
+      }
+    },
+    sheetState = rememberModalBottomSheetState(ModalBottomSheetValue.Expanded)
+  ) { }
 }
 
 @Composable
@@ -349,82 +556,154 @@ private fun ShareSheet(
 ) {
   val scope = rememberCoroutineScope()
   var shareText by remember { mutableStateOf(false) }
+  var inputValue by remember { mutableStateOf("") }
+  var prefilledFromClipboard by remember { mutableStateOf(false) }
 
   suspend fun dismissSheet() {
     sheetState.hide()
     shareText = false
+    prefilledFromClipboard = false
+    inputValue = ""
+  }
+
+  fun sendText(text: String) {
+    if (text.isNotEmpty()) {
+      discoveryController.onSendData(
+        deviceUiClicked(),
+        OnDataToSend.Text(text)
+      )
+    }
+    scope.launch { dismissSheet() }
   }
 
   Column(
-    modifier = Modifier.padding(top = 24.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
-    verticalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.Top)
+    modifier = Modifier.padding(top = 12.dp, start = 24.dp, end = 24.dp, bottom = 24.dp),
+    verticalArrangement = Arrangement.spacedBy(16.dp, alignment = Alignment.Top)
   ) {
 
+    SheetHandle()
 
-    Text(
-      modifier = Modifier.clickable(enabled = !shareText) { shareText = true },
-      text = "Share Text"
-    )
-    var inputValue by remember { mutableStateOf(discoveryController.readFromClipboard()) }
-
-    LaunchedEffect(shareText) {
-      if (shareText) {
-        inputValue = discoveryController.readFromClipboard()
-      }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+      Text(
+        text = "Share",
+        style = MaterialTheme.typography.titleLarge
+      )
+      Text(
+        text = "to ${deviceUiClicked().deviceName}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
     }
 
-    if (shareText) {
+    ShareRow(
+      label = "Send text",
+      icon = Icons.AutoMirrored.Filled.Send,
+      enabled = !shareText,
+      onClick = {
+        val clip = discoveryController.readFromClipboard()
+        if (clip.isNotEmpty()) {
+          inputValue = clip
+          prefilledFromClipboard = true
+        } else {
+          prefilledFromClipboard = false
+        }
+        shareText = true
+      }
+    )
 
-      fun sendText(text: String) {
-        if (text.isNotEmpty()) {
-          discoveryController.onSendData(
-            deviceUiClicked(),
-            OnDataToSend.Text(text)
+    if (shareText) {
+      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (prefilledFromClipboard) {
+          Text(
+            text = "From your clipboard",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
           )
         }
-        scope.launch { dismissSheet() }
-      }
-
-      Column {
-
         TextField(
           modifier = Modifier.fillMaxWidth(),
           value = inputValue,
-          onValueChange = { inputValue = it },
-          keyboardActions = KeyboardActions(onDone = {
-            sendText(inputValue)
-          }),
+          onValueChange = {
+            inputValue = it
+            prefilledFromClipboard = false
+          },
+          placeholder = { Text("Type or paste a message") },
+          keyboardActions = KeyboardActions(onDone = { sendText(inputValue) }),
           keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done)
         )
-        TextButton(onClick = {
-          sendText(inputValue)
-        }) {
-          Text("Send")
+        Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+          TextButton(onClick = { sendText(inputValue) }) { Text("Send") }
         }
       }
     }
 
-    Text(
-      modifier = Modifier.clickable {
-        filePickerFiles.launch()
-
-      },
-      text = "Share Files"
+    ShareRow(
+      label = "Send files",
+      icon = Icons.Filled.AttachFile,
+      onClick = { filePickerFiles.launch() }
     )
 
     if (CommonPlatformDependencies.deviceType() == DeviceType.MOBILE) {
-      Text(
-        modifier = Modifier.clickable {
-          filePickerPictures.launch()
-
-        },
-        text = "Share Pictures Or Videos"
+      ShareRow(
+        label = "Send photos or videos",
+        icon = Icons.Filled.Image,
+        onClick = { filePickerPictures.launch() }
       )
     }
   }
+}
 
+@Composable
+private fun SheetHandle() {
+  Box(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(bottom = 4.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Box(
+      modifier = Modifier
+        .size(width = 36.dp, height = 4.dp)
+        .background(
+          color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+          shape = RoundedCornerShape(2.dp)
+        )
+    )
+  }
+}
 
-  Spacer(Modifier.height(40.dp))
+@Composable
+private fun ShareRow(
+  label: String,
+  icon: androidx.compose.ui.graphics.vector.ImageVector,
+  enabled: Boolean = true,
+  onClick: () -> Unit
+) {
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = if (enabled) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+    modifier = Modifier
+      .fillMaxWidth()
+      .clickable(enabled = enabled, onClick = onClick)
+  ) {
+    Row(
+      modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+      Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.size(20.dp)
+      )
+      Text(
+        text = label,
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface
+      )
+    }
+  }
 }
 
 @Composable
@@ -432,48 +711,40 @@ private fun PairingApprovalDialog(
   state: PairingDialogState,
   onDismiss: () -> Unit
 ) {
-  println("🖥️ [PairingApprovalDialog] Rendering pairing dialog for device: ${state.deviceName}")
-
   AlertDialog(
-    onDismissRequest = {
-      println("🖥️ [PairingApprovalDialog] Dialog dismissed - calling onDismiss")
-      onDismiss()
-    },
+    onDismissRequest = onDismiss,
     title = {
-      Text("Pairing Request")
+      Text(
+        text = if (state.isError) "Couldn't link device" else "Is this your device?"
+      )
     },
     text = {
       if (state.isError) {
-        Text("Error: ${state.errorMessage ?: "Unknown error occurred during pairing"}")
+        Text(state.errorMessage ?: "Something went wrong while linking. Please try again.")
       } else {
-        Text("Device '${state.deviceName}' (${state.deviceType}) wants to pair with this device. Do you want to accept?")
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          Text(
+            text = "${state.deviceName} wants to link with this device.",
+            style = MaterialTheme.typography.bodyLarge
+          )
+          Text(
+            text = "Only accept if it's your own device. Linked devices stay in sync — clipboard, files, and message history are shared between them.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
       }
     },
     confirmButton = {
       if (state.isError) {
-        Button(onClick = {
-          println("🖥️ [PairingApprovalDialog] Error dialog - Close button clicked")
-          onDismiss()
-        }) {
-          Text("Close")
-        }
+        Button(onClick = onDismiss) { Text("Close") }
       } else {
-        Button(onClick = {
-          println("🖥️ [PairingApprovalDialog] Accept button clicked for ${state.deviceName}")
-          state.onAccept()
-        }) {
-          Text("Accept")
-        }
+        Button(onClick = { state.onAccept() }) { Text("Yes, it's mine") }
       }
     },
     dismissButton = {
       if (!state.isError) {
-        Button(onClick = {
-          println("🖥️ [PairingApprovalDialog] Reject button clicked for ${state.deviceName}")
-          state.onReject()
-        }) {
-          Text("Reject")
-        }
+        TextButton(onClick = { state.onReject() }) { Text("Not mine") }
       }
     }
   )
