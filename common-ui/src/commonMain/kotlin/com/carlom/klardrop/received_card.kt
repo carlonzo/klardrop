@@ -13,12 +13,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.TextSnippet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -46,14 +48,15 @@ import kotlin.math.absoluteValue
 fun ReceiveNotification(
   modifier: Modifier = Modifier,
   receiveUpdate: ReceiveMessageUpdate,
-  callbacks: ReceiveNotificationsCallbacks
+  onClicked: () -> Unit,
+  onDismissed: () -> Unit
 ) {
 
   val dismissState = rememberSwipeToDismissBoxState(
     initialValue = SwipeToDismissBoxValue.Settled,
     confirmValueChange = {
       if (it != SwipeToDismissBoxValue.Settled) {
-        callbacks.onCardDismissed(receiveUpdate)
+        onDismissed()
       }
       true
     }
@@ -78,7 +81,7 @@ fun ReceiveNotification(
           .heightIn(min = 72.dp)
           .padding(horizontal = 12.dp, vertical = 8.dp)
           .alpha(cardAlpha)
-          .clickable { callbacks.onReceivedCardClicked(receiveUpdate) }
+          .clickable { onClicked() }
       ) {
         Row(
           modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -89,10 +92,23 @@ fun ReceiveNotification(
           IconBubble(icon = icon, tint = tint)
 
           Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+              .weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp)
           ) {
             ReceiveBody(receiveUpdate)
+          }
+
+          IconButton(
+            onClick = onDismissed,
+            modifier = Modifier.size(28.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Filled.Close,
+              contentDescription = "Dismiss",
+              tint = MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.size(18.dp)
+            )
           }
         }
       }
@@ -245,5 +261,5 @@ private fun headerLine(verb: String, update: ReceiveMessageUpdate): String {
 
 interface ReceiveNotificationsCallbacks {
   fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate)
-  fun onCardDismissed(receiveUpdate: ReceiveMessageUpdate)
+  fun onCardDismissed(id: Int)
 }

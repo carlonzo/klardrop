@@ -75,6 +75,8 @@ import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 
 private const val GROUP_GAP_MILLIS: Long = 5 * 60 * 1000L
 
+enum class DeviceChatMode { Screen, Pane }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceChatScreen(
@@ -82,7 +84,8 @@ fun DeviceChatScreen(
   isOwned: Boolean,
   viewModel: DeviceChatViewModel,
   onBackClicked: () -> Unit,
-  onOpenFileRequest: (filePath: String) -> Unit
+  onOpenFileRequest: (filePath: String) -> Unit,
+  mode: DeviceChatMode = DeviceChatMode.Screen
 ) {
   val messagesState by viewModel.messages.collectAsState()
   val uiState by viewModel.uiState.collectAsState()
@@ -149,8 +152,10 @@ fun DeviceChatScreen(
           }
         },
         navigationIcon = {
-          IconButton(onClick = onBackClicked) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+          if (mode == DeviceChatMode.Screen) {
+            IconButton(onClick = onBackClicked) {
+              Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
           }
         },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -256,7 +261,19 @@ private fun MessagesList(
   onOpenFileRequest: (filePath: String) -> Unit,
   modifier: Modifier = Modifier
 ) {
+  val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+  LaunchedEffect(messages.firstOrNull()?.id) {
+    if (messages.isEmpty()) return@LaunchedEffect
+    // Only snap to newest when the user is already viewing the latest messages,
+    // so we don't yank them out of reading older history.
+    if (listState.firstVisibleItemIndex < 3) {
+      listState.animateScrollToItem(0)
+    }
+  }
+
   LazyColumn(
+    state = listState,
     modifier = modifier.fillMaxWidth(),
     reverseLayout = true,
     contentPadding = androidx.compose.foundation.layout.PaddingValues(
