@@ -4,7 +4,6 @@ import com.carlom.klardrop.DeviceDiscovery
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.OnDeviceActionListener
 import com.carlom.klardrop.ReceiveNotification
-import com.carlom.klardrop.ReceiveNotificationsCallbacks
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.DeviceInfo
@@ -64,7 +63,8 @@ fun ReceivedCardPreviewProgress() {
         )
       ),
     ),
-    callbacks = noopCallback
+    onClicked = {},
+    onDismissed = {}
   )
 }
 
@@ -81,15 +81,7 @@ fun ReceivedCardPreviewReceived() {
       messages = listOf(FileMessage("flower.jpg", 1234, "image/jpeg")),
       status = ReceiveMessageStatus.Completed
     ),
-    callbacks = noopCallback
+    onClicked = {},
+    onDismissed = {}
   )
-}
-
-private val noopCallback = object : ReceiveNotificationsCallbacks {
-  override fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate) {
-
-  }
-
-  override fun onCardDismissed(receiveUpdate: ReceiveMessageUpdate) {
-  }
 }

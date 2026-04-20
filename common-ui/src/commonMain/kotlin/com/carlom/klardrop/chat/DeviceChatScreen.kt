@@ -261,7 +261,19 @@ private fun MessagesList(
   onOpenFileRequest: (filePath: String) -> Unit,
   modifier: Modifier = Modifier
 ) {
+  val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+  LaunchedEffect(messages.firstOrNull()?.id) {
+    if (messages.isEmpty()) return@LaunchedEffect
+    // Only snap to newest when the user is already viewing the latest messages,
+    // so we don't yank them out of reading older history.
+    if (listState.firstVisibleItemIndex < 3) {
+      listState.animateScrollToItem(0)
+    }
+  }
+
   LazyColumn(
+    state = listState,
     modifier = modifier.fillMaxWidth(),
     reverseLayout = true,
     contentPadding = androidx.compose.foundation.layout.PaddingValues(

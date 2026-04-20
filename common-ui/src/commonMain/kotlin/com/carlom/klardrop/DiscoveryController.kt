@@ -218,16 +218,11 @@ class DiscoveryController(
 
   }
 
-  override fun onCardDismissed(receiveUpdate: ReceiveMessageUpdate) {
+  override fun onCardDismissed(id: Int) {
     screenStateFlow.update {
-      val key = it.receivingMessages.entries.firstOrNull { entry -> entry.value == receiveUpdate }?.key
-
-      if (key == null) it
-      else it.copy(
-        receivingMessages = it.receivingMessages - key
-      )
+      if (id !in it.receivingMessages) it
+      else it.copy(receivingMessages = it.receivingMessages - id)
     }
-
   }
 
   fun onBackFromChat() {

@@ -13,7 +13,7 @@ internal fun IncomingBannerStack(
   state: DiscoveryScreenState,
   callbacks: ReceiveNotificationsCallbacks
 ) {
-  val updates = state.receivingMessages.values.toList()
+  val updates = state.receivingMessages
   if (updates.isEmpty()) return
 
   Column(
@@ -22,10 +22,11 @@ internal fun IncomingBannerStack(
       .padding(horizontal = 4.dp, vertical = 4.dp),
     verticalArrangement = Arrangement.spacedBy(4.dp)
   ) {
-    updates.forEach { update ->
+    updates.forEach { (id, update) ->
       ReceiveNotification(
         receiveUpdate = update,
-        callbacks = callbacks
+        onClicked = { callbacks.onReceivedCardClicked(update) },
+        onDismissed = { callbacks.onCardDismissed(id) }
       )
     }
   }
