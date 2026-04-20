@@ -32,7 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -43,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.chat.DeviceChatMode
 import com.carlom.klardrop.chat.DeviceChatScreen
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.trust.TrustActionButton
 import com.carlom.klardrop.trust.TrustBadge
 
 private val SidebarWidth = 300.dp
@@ -55,6 +58,7 @@ fun WideLayout(
 ) {
   val state by discoveryController.screenStateFlow.collectAsState()
   val activeDeviceId = state.navigateToChatDeviceId
+  var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
 
   Row(modifier = modifier.fillMaxSize()) {
 
@@ -65,7 +69,9 @@ fun WideLayout(
       currentDeviceName = state.currentDeviceName ?: state.systemDeviceName ?: "",
       devices = state.devices,
       activeDeviceId = activeDeviceId,
-      onDeviceSelected = { discoveryController.onDeviceClick(it) }
+      onDeviceSelected = { discoveryController.onDeviceClick(it) },
+      onRequestTrust = { pendingLink = it },
+      onRemoveTrust = { discoveryController.onRemoveTrust(it) }
     )
 
     Column(
@@ -99,6 +105,24 @@ fun WideLayout(
       }
     }
   }
+
+  pendingLink?.let { device ->
+    LinkDeviceConfirmDialog(
+      device = device,
+      onConfirm = {
+        discoveryController.onAddToTrusted(device)
+        pendingLink = null
+      },
+      onDismiss = { pendingLink = null }
+    )
+  }
+
+  state.pairingDialogState?.let { pairingState ->
+    PairingApprovalDialog(
+      state = pairingState,
+      onDismiss = { discoveryController.dismissPairingDialog() }
+    )
+  }
 }
 
 @Composable
@@ -107,7 +131,9 @@ private fun WideSidebar(
   currentDeviceName: String,
   devices: List<DeviceUi>,
   activeDeviceId: String?,
-  onDeviceSelected: (DeviceUi) -> Unit
+  onDeviceSelected: (DeviceUi) -> Unit,
+  onRequestTrust: (DeviceUi) -> Unit,
+  onRemoveTrust: (DeviceUi) -> Unit
 ) {
   val trusted = devices.filter { it.trustStatus == TrustStatus.Trusted }
   val others = devices.filter { it.trustStatus != TrustStatus.Trusted }
@@ -152,7 +178,9 @@ private fun WideSidebar(
             SidebarDeviceRow(
               device = device,
               isActive = device.deviceId == activeDeviceId,
-              onClick = { onDeviceSelected(device) }
+              onClick = { onDeviceSelected(device) },
+              onRequestTrust = { onRequestTrust(device) },
+              onRemoveTrust = { onRemoveTrust(device) }
             )
           }
         }
@@ -165,7 +193,9 @@ private fun WideSidebar(
             SidebarDeviceRow(
               device = device,
               isActive = device.deviceId == activeDeviceId,
-              onClick = { onDeviceSelected(device) }
+              onClick = { onDeviceSelected(device) },
+              onRequestTrust = { onRequestTrust(device) },
+              onRemoveTrust = { onRemoveTrust(device) }
             )
           }
         }
@@ -190,7 +220,9 @@ private fun SidebarSectionLabel(text: String) {
 private fun SidebarDeviceRow(
   device: DeviceUi,
   isActive: Boolean,
-  onClick: () -> Unit
+  onClick: () -> Unit,
+  onRequestTrust: () -> Unit,
+  onRemoveTrust: () -> Unit
 ) {
   val rowColor = if (isActive) {
     MaterialTheme.colorScheme.primary
@@ -265,7 +297,11 @@ private fun SidebarDeviceRow(
         }
       }
 
-      Column(modifier = Modifier.widthIn(max = 200.dp)) {
+      Column(
+        modifier = Modifier
+          .weight(1f)
+          .widthIn(max = 200.dp)
+      ) {
         Text(
           text = device.deviceName,
           style = MaterialTheme.typography.titleSmall,
@@ -281,6 +317,19 @@ private fun SidebarDeviceRow(
           maxLines = 1,
           overflow = TextOverflow.Ellipsis
         )
+      }
+
+      when (device.trustStatus) {
+        TrustStatus.Untrusted, TrustStatus.Pairing -> {
+          TrustActionButton(
+            isTrusted = false,
+            isLoading = device.trustStatus == TrustStatus.Pairing,
+            onAddToTrusted = onRequestTrust,
+            onRemoveTrust = onRemoveTrust,
+            modifier = Modifier.size(32.dp)
+          )
+        }
+        else -> Unit
       }
     }
   }
@@ -434,25 +483,3 @@ private fun OnboardingRow(
   }
 }
 
-@Composable
-private fun IncomingBannerStack(
-  state: DiscoveryScreenState,
-  callbacks: ReceiveNotificationsCallbacks
-) {
-  val updates = state.receivingMessages.values.toList()
-  if (updates.isEmpty()) return
-
-  Column(
-    modifier = Modifier
-      .fillMaxWidth()
-      .padding(horizontal = 4.dp, vertical = 4.dp),
-    verticalArrangement = Arrangement.spacedBy(4.dp)
-  ) {
-    updates.forEach { update ->
-      ReceiveNotification(
-        receiveUpdate = update,
-        callbacks = callbacks
-      )
-    }
-  }
-}
