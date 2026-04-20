@@ -75,6 +75,8 @@ import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 
 private const val GROUP_GAP_MILLIS: Long = 5 * 60 * 1000L
 
+enum class DeviceChatMode { Screen, Pane }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceChatScreen(
@@ -82,7 +84,8 @@ fun DeviceChatScreen(
   isOwned: Boolean,
   viewModel: DeviceChatViewModel,
   onBackClicked: () -> Unit,
-  onOpenFileRequest: (filePath: String) -> Unit
+  onOpenFileRequest: (filePath: String) -> Unit,
+  mode: DeviceChatMode = DeviceChatMode.Screen
 ) {
   val messagesState by viewModel.messages.collectAsState()
   val uiState by viewModel.uiState.collectAsState()
@@ -149,8 +152,10 @@ fun DeviceChatScreen(
           }
         },
         navigationIcon = {
-          IconButton(onClick = onBackClicked) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+          if (mode == DeviceChatMode.Screen) {
+            IconButton(onClick = onBackClicked) {
+              Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
           }
         },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(

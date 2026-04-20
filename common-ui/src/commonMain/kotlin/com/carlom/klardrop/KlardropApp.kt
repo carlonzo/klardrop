@@ -27,12 +27,20 @@ fun KlardropApp(
       BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isLargeScreen = isLargeScreen
 
-        DiscoveryScreen(
-          modifier = Modifier.fillMaxSize(),
-          isLargeScreen = isLargeScreen,
-          discoveryController = visibleDevicesController,
-          uiDependencies = uiDependencies // Added
-        )
+        if (isLargeScreen) {
+          WideLayout(
+            modifier = Modifier.fillMaxSize(),
+            discoveryController = visibleDevicesController,
+            uiDependencies = uiDependencies
+          )
+        } else {
+          DiscoveryScreen(
+            modifier = Modifier.fillMaxSize(),
+            isLargeScreen = false,
+            discoveryController = visibleDevicesController,
+            uiDependencies = uiDependencies
+          )
+        }
       }
     }
   }
