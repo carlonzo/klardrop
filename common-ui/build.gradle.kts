@@ -5,6 +5,7 @@ plugins {
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
   alias(deps.plugins.android.library)
+  alias(deps.plugins.kotlin.serialization)
   kotlin("native.cocoapods")
 }
 
@@ -81,6 +82,8 @@ kotlin {
         implementation(compose.uiTooling)
         implementation(deps.androidx.activity)
         implementation(deps.androidx.activity.compose)
+        implementation(deps.androidx.navigation3.runtime)
+        implementation(deps.androidx.navigation3.ui)
       }
     }
 

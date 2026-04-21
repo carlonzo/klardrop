@@ -17,6 +17,7 @@ filekit = "0.13.0"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
 coil3 = "3.4.0"
+nav3 = "1.1.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -67,6 +68,9 @@ cryptography-random = { module = "dev.whyoleg.cryptography:cryptography-random",
 
 coil3-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil3" }
 coil3-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil3" }
+
+androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "nav3" }
+androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "nav3" }
 
 
 [plugins]

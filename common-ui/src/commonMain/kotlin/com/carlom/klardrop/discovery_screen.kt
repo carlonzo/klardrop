@@ -63,7 +63,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.carlom.klardrop.chat.DeviceChatScreen
 import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.trust.TrustActionButton
@@ -78,7 +77,8 @@ fun DiscoveryScreen(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
   discoveryController: DiscoveryController,
-  uiDependencies: UiDependencies
+  uiDependencies: UiDependencies,
+  onNavigateToChat: (deviceId: String, deviceName: String) -> Unit
 ) {
 
   val discoveryState by discoveryController.screenStateFlow.collectAsState()
@@ -100,46 +100,41 @@ fun DiscoveryScreen(
 
   val sheetState = rememberModalBottomSheetState(initialValue = ModalBottomSheetValue.Hidden)
 
-
-  if (discoveryState.navigateToChatDeviceId != null && discoveryState.navigateToChatDeviceName != null) {
-    val chatViewModel = remember(discoveryState.navigateToChatDeviceId) {
-      uiDependencies.deviceChatViewModelFactory(discoveryState.navigateToChatDeviceId!!)
-    }
-    val isOwned = discoveryState.devices
-      .firstOrNull { it.deviceId == discoveryState.navigateToChatDeviceId }
-      ?.trustStatus == TrustStatus.Trusted
-    DeviceChatScreen(
-      deviceName = discoveryState.navigateToChatDeviceName!!,
-      isOwned = isOwned,
-      viewModel = chatViewModel,
-      onBackClicked = { discoveryController.onBackFromChat() },
-      onOpenFileRequest = { filePath -> chatViewModel.openFileClicked(filePath) }
-    )
-  } else {
-    ModalBottomSheetLayout(
-      sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-      sheetBackgroundColor = MaterialTheme.colorScheme.surface,
-      sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
-      sheetContent = {
-        if (deviceUiClicked != null) {
-          ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
-        }
-      },
-      sheetState = sheetState,
-      content = {
-
-        DiscoveryDashboard(
-          modifier = modifier,
-          isLargeScreen = isLargeScreen,
-          state = discoveryState,
-          onDeviceActionListener = discoveryController,
-          receiveCallbacks = discoveryController,
-          onDeviceRename = { newName -> discoveryController.saveCustomDeviceName(newName) }
-        )
-
+  // Decorate the controller so tapping a device also pushes the chat onto the
+  // navigator's back stack. Navigation is the navigator's concern; the controller
+  // still handles the side-effects (marking messages read, clearing unread flag).
+  val dashboardListener = remember(discoveryController, onNavigateToChat) {
+    object : OnDeviceActionListener by discoveryController {
+      override fun onDeviceClick(deviceUi: DeviceUi) {
+        discoveryController.onDeviceClick(deviceUi)
+        onNavigateToChat(deviceUi.deviceId, deviceUi.deviceName)
       }
-    )
+    }
   }
+
+  ModalBottomSheetLayout(
+    sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    sheetBackgroundColor = MaterialTheme.colorScheme.surface,
+    sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
+    sheetContent = {
+      if (deviceUiClicked != null) {
+        ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
+      }
+    },
+    sheetState = sheetState,
+    content = {
+
+      DiscoveryDashboard(
+        modifier = modifier,
+        isLargeScreen = isLargeScreen,
+        state = discoveryState,
+        onDeviceActionListener = dashboardListener,
+        receiveCallbacks = discoveryController,
+        onDeviceRename = { newName -> discoveryController.saveCustomDeviceName(newName) }
+      )
+
+    }
+  )
 
   discoveryState.pairingDialogState?.let { pairingState ->
     PairingApprovalDialog(

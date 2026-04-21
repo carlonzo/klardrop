@@ -63,6 +63,12 @@ class DiscoveryController(
 
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 
+  private var activeChatDeviceId: String? = null
+
+  fun setActiveChatDeviceId(deviceId: String?) {
+    activeChatDeviceId = deviceId
+  }
+
   init {
     controllerScope.launch {
       messenger.receive().collect { (remoteDeviceId, flowOfUpdates) -> // Changed
@@ -126,23 +132,18 @@ class DiscoveryController(
 
   override fun onDeviceClick(deviceUi: DeviceUi) {
     log("DiscoveryController", "on device click for chat: ${deviceUi.deviceName}")
-    
-    // Mark messages as read in the database
+
     controllerScope.launch {
       messageRepository.markMessagesAsRead(deviceUi.deviceId)
     }
-    
+
     screenStateFlow.update { currentState ->
       val updatedDevices = currentState.devices.map {
         if (it.deviceId == deviceUi.deviceId) {
-          it.copy(hasUnreadMessages = false) // Clear unread on click
+          it.copy(hasUnreadMessages = false)
         } else it
       }
-      currentState.copy(
-        devices = updatedDevices,
-        navigateToChatDeviceId = deviceUi.deviceId,
-        navigateToChatDeviceName = deviceUi.deviceName
-      )
+      currentState.copy(devices = updatedDevices)
     }
   }
 
@@ -175,14 +176,14 @@ class DiscoveryController(
 
           var updatedDevices = currentState.devices
           if (!messageProcessedForUnreadUpdate && receiveMessageUpdate.status.isFinished() && receiveMessageUpdate.status !is ReceiveMessageStatus.Failed) {
-            if (remoteDeviceId != currentState.navigateToChatDeviceId) {
+            if (remoteDeviceId != activeChatDeviceId) {
               updatedDevices = currentState.devices.map { deviceUi ->
                 if (deviceUi.deviceId == remoteDeviceId) {
                   deviceUi.copy(hasUnreadMessages = true)
                 } else deviceUi
               }
             }
-            messageProcessedForUnreadUpdate = true // Mark as processed for this flow instance
+            messageProcessedForUnreadUpdate = true
           }
 
           currentState.copy(
@@ -222,12 +223,6 @@ class DiscoveryController(
     screenStateFlow.update {
       if (id !in it.receivingMessages) it
       else it.copy(receivingMessages = it.receivingMessages - id)
-    }
-  }
-
-  fun onBackFromChat() {
-    screenStateFlow.update {
-      it.copy(navigateToChatDeviceId = null, navigateToChatDeviceName = null)
     }
   }
 
@@ -387,8 +382,6 @@ class DiscoveryController(
 data class DiscoveryScreenState(
   val devices: List<DeviceUi> = emptyList(),
   val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap(),
-  val navigateToChatDeviceId: String? = null,    // New
-  val navigateToChatDeviceName: String? = null,   // New
   val pairingDialogState: PairingDialogState? = null,
   val currentDeviceName: String? = null,
   val systemDeviceName: String? = null
