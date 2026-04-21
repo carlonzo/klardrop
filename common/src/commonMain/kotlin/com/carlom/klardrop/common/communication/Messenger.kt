@@ -204,12 +204,16 @@ class MessengerImpl(
         )
         log("Messenger", "[DEBUG] Full exception for attempt $attempt", exception)
 
-        // Check if this is an ACK timeout (connection lost)
+        // Check if this is a recoverable transport-level error (ACK timeout or
+        // a freshly-detected closed connection). Both have the same recovery:
+        // close pool entry → reconnect → resend.
         val exceptionMessage = exception.message ?: ""
         val isAckTimeout = exceptionMessage.contains("ACK timeout")
-        log("Messenger", "[DEBUG] Is ACK timeout: $isAckTimeout, exception message: '$exceptionMessage'")
+        val isClosedConnection = exceptionMessage.contains("is closed")
+        val isRetryable = isAckTimeout || isClosedConnection
+        log("Messenger", "[DEBUG] Is retryable: $isRetryable (ackTimeout=$isAckTimeout, closed=$isClosedConnection), exception message: '$exceptionMessage'")
 
-        if (isAckTimeout && attempt <= maxRetries) {
+        if (isRetryable && attempt <= maxRetries) {
           log("Messenger", "[DEBUG] ACK timeout detected, will retry connection to $deviceId (attempt $attempt)")
           // Force cleanup of the connection
           connectionsPool.closeConnection(deviceId)

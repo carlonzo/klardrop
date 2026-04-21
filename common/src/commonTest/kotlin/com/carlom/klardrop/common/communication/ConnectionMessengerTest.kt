@@ -2,8 +2,14 @@ package com.carlom.klardrop.common.communication
 
 import TestCoroutines
 import com.carlom.klardrop.common.FakeMessagesRouter
+import com.carlom.klardrop.common.communication.message.AckType
+import com.carlom.klardrop.common.communication.message.FileMessage
+import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
+import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.toSendRequest
+import com.carlom.klardrop.common.communication.router.MessagesRouter
 import io.ktor.network.selector.SelectorManager
 import io.ktor.network.sockets.InetSocketAddress
 import io.ktor.network.sockets.Socket
@@ -12,13 +18,17 @@ import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -55,6 +65,99 @@ class ConnectionMessengerTest {
     assertTrue(
       error.message?.contains("ACK timeout") == true,
       "Expected ACK timeout message, got: ${error.message}",
+    )
+  }
+
+  @Test
+  fun payloadSendWaitsForAckReadyBeforeStreamingPayload() = runTest(coroutines.dispatcher, timeout = 30.seconds) {
+    val handle = openLoopbackClientSocket()
+    val payloadStreamCalled = CompletableDeferred<Unit>()
+    val headerSentBeforeReady = CompletableDeferred<Boolean>()
+
+    val router = object : FakeMessagesRouter() {
+      override suspend fun <S : SendMessageRequest> onSendingMessage(
+        toDeviceId: String,
+        sendMessageRequest: S,
+        writeChannel: ByteWriteChannel,
+        readChannel: ByteReadChannel,
+        progress: MutableSharedFlow<MessengerSendProgress>,
+        awaitReadyAck: suspend () -> Unit,
+      ) {
+        // Simulate the FileMessageHandler ordering: send header, await ready, stream payload.
+        // Mark "header was sent and we're about to await ready" without proceeding past awaitReadyAck.
+        headerSentBeforeReady.complete(true)
+        awaitReadyAck()
+        payloadStreamCalled.complete(Unit)
+      }
+    }
+
+    val payloadMessage = FileMessage(fileName = "fake.bin", fileSize = 10L, mimeType = "application/octet-stream")
+    val messenger = ConnectionMessenger(
+      coroutines = coroutines,
+      connection = Connection(handle.clientSocket, "peer01"),
+      messagesRouter = router,
+      readChannel = handle.readChannel,
+      writeChannel = handle.writeChannel,
+      ackTimeoutMs = 5_000L,
+    )
+
+    val progress = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 10)
+    val sendJob = launch {
+      messenger.send(SimpleSendMessageRequest(payloadMessage), progress)
+    }
+
+    headerSentBeforeReady.await()
+    assertFalse(payloadStreamCalled.isCompleted, "Payload streaming must wait for ACK_READY")
+
+    messenger.handleAckMessage(MessageAcknowledgment(AckType.READY, payloadMessage.id))
+
+    payloadStreamCalled.await()  // proves awaitReady() returned and handler proceeded to payload
+
+    messenger.handleAckMessage(MessageAcknowledgment(AckType.RECEIVED, payloadMessage.id))
+    sendJob.join()
+  }
+
+  @Test
+  fun payloadSendThrowsOnAckReadyTimeout() = runTest(coroutines.dispatcher, timeout = 30.seconds) {
+    val handle = openLoopbackClientSocket()
+    // Router that sends the header then awaits ready forever (no ACK_READY ever delivered).
+    val router = object : FakeMessagesRouter() {
+      override suspend fun <S : SendMessageRequest> onSendingMessage(
+        toDeviceId: String,
+        sendMessageRequest: S,
+        writeChannel: ByteWriteChannel,
+        readChannel: ByteReadChannel,
+        progress: MutableSharedFlow<MessengerSendProgress>,
+        awaitReadyAck: suspend () -> Unit,
+      ) {
+        awaitReadyAck()
+      }
+    }
+
+    val config = AckTimeoutConfig(
+      readyAckTimeout = 200.milliseconds,
+      receivedAckTimeout = 30.seconds,
+      noPayloadAckTimeout = 30.seconds,
+    )
+    val messenger = ConnectionMessenger(
+      coroutines = coroutines,
+      connection = Connection(handle.clientSocket, "peer01"),
+      messagesRouter = router,
+      readChannel = handle.readChannel,
+      writeChannel = handle.writeChannel,
+      ackTimeoutConfig = config,
+    )
+
+    val progress = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 10)
+    val error = assertFailsWith<IllegalStateException> {
+      messenger.send(
+        SimpleSendMessageRequest(FileMessage(fileName = "x.bin", fileSize = 1L, mimeType = "application/octet-stream")),
+        progress,
+      )
+    }
+    assertTrue(
+      error.message?.contains("ACK timeout") == true && error.message?.contains("READY") == true,
+      "Expected ACK_READY timeout, got: ${error.message}",
     )
   }
 
@@ -124,4 +227,5 @@ class ConnectionMessengerTest {
   ) : AutoCloseableHandle {
     override fun close() = cleanup()
   }
+
 }

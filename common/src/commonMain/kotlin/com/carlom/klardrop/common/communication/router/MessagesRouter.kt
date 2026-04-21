@@ -27,12 +27,20 @@ interface MessagesRouter {
     ackCallback: (suspend (MessageAcknowledgment) -> Unit)
   )
 
+  /**
+   * Sends a message. For payload-bearing messages, [awaitReadyAck] should be a
+   * callback that suspends until the receiver has sent ACK_READY for this
+   * message id; the handler is responsible for invoking it between the
+   * header write and the payload stream. Default no-op for backward-compat
+   * with message types that have no payload.
+   */
   suspend fun <S : SendMessageRequest> onSendingMessage(
     toDeviceId: String,
     sendMessageRequest: S,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    progress: MutableSharedFlow<MessengerSendProgress>
+    progress: MutableSharedFlow<MessengerSendProgress>,
+    awaitReadyAck: suspend () -> Unit = {},
   )
 }
 
@@ -180,7 +188,8 @@ internal class MessagesRouterImpl(
     sendMessageRequest: S,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    progress: MutableSharedFlow<MessengerSendProgress>
+    progress: MutableSharedFlow<MessengerSendProgress>,
+    awaitReadyAck: suspend () -> Unit,
   ) {
     coroutines.ioDispatcher {
       val message = sendMessageRequest.message
@@ -196,7 +205,11 @@ internal class MessagesRouterImpl(
         return@ioDispatcher
       }
 
-      messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress)
+      if (message.hasPayload) {
+        messageHandler.handleOutgoingWithReadyAck(toDeviceId, sendMessageRequest, writeChannel, progress, awaitReadyAck)
+      } else {
+        messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress)
+      }
     }
   }
 }

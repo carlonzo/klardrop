@@ -8,7 +8,7 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 
-class FakeMessagesRouter: MessagesRouter {
+open class FakeMessagesRouter: MessagesRouter {
   override suspend fun onMessageIncoming(
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
@@ -23,8 +23,9 @@ class FakeMessagesRouter: MessagesRouter {
     sendMessageRequest: S,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    progress: MutableSharedFlow<MessengerSendProgress>
+    progress: MutableSharedFlow<MessengerSendProgress>,
+    awaitReadyAck: suspend () -> Unit,
   ) {
   }
-  
+
 }

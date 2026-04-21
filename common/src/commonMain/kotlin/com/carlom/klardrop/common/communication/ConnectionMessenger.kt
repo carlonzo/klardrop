@@ -44,10 +44,11 @@ class ConnectionMessenger internal constructor(
     ackTimeoutConfig = AckTimeoutConfig.uniform(ackTimeoutMs),
   )
 
-  // ACK correlation system
-  private data class PendingAck(val type: AckType, val channel: Channel<Unit>)
+  // ACK correlation system - keyed by (messageId, ackType) since the same message
+  // id can have both an ACK_READY and an ACK_RECEIVED outstanding (for payload sends).
+  private data class AckKey(val messageId: Int, val ackType: AckType)
 
-  private val pendingAcks = mutableMapOf<Int, PendingAck>()
+  private val pendingAcks = mutableMapOf<AckKey, Channel<Unit>>()
   private val ackMutex = Mutex()
 
   init {
@@ -82,13 +83,14 @@ class ConnectionMessenger internal constructor(
   suspend fun handleAckMessage(ack: MessageAcknowledgment) {
     log("ConnectionMessenger: Received ACK ${ack.ackType} for message ${ack.id} from ${connection.deviceId}")
 
+    val key = AckKey(ack.id, ack.ackType)
     ackMutex.withLock {
-      val pendingAck = pendingAcks[ack.id]
-      if (pendingAck != null && pendingAck.type == ack.ackType) {
+      val channel = pendingAcks[key]
+      if (channel != null) {
         // Signal the waiting sender
-        val sendResult = pendingAck.channel.trySend(Unit)
+        val sendResult = channel.trySend(Unit)
         if (sendResult.isSuccess) {
-          pendingAcks.remove(ack.id)
+          pendingAcks.remove(key)
           log("ConnectionMessenger: Successfully signaled ACK ${ack.ackType} for message ${ack.id}")
         } else {
           log("ConnectionMessenger: Failed to signal ACK ${ack.ackType} for message ${ack.id}: ${sendResult.exceptionOrNull()}")
@@ -106,11 +108,11 @@ class ConnectionMessenger internal constructor(
   private suspend fun registerPendingAck(messageId: Int, ackType: AckType): Channel<Unit> {
     val channel = Channel<Unit>(capacity = 1)
     log("ConnectionMessenger: [DEBUG] Registering pending ACK $ackType for message $messageId to ${connection.deviceId}")
-    
+
     ackMutex.withLock {
-      pendingAcks[messageId] = PendingAck(ackType, channel)
+      pendingAcks[AckKey(messageId, ackType)] = channel
     }
-    
+
     return channel
   }
 
@@ -138,7 +140,7 @@ class ConnectionMessenger internal constructor(
       log("ConnectionMessenger: [DEBUG] ACK timeout for message $messageId, cleaning up pending request")
       // Cleanup pending ACK on timeout or error
       ackMutex.withLock {
-        pendingAcks.remove(messageId)
+        pendingAcks.remove(AckKey(messageId, ackType))
       }
       channel.close()
       throw IllegalStateException("ACK timeout: Expected $ackType for message $messageId from ${connection.deviceId}")
@@ -154,15 +156,25 @@ class ConnectionMessenger internal constructor(
 
     try {
       coroutines.ioDispatcher {
-        // Register pending ACK BEFORE sending message to prevent race condition.
-        // For both payload (FILE) and no-payload (TEXT) messages we currently only
-        // await ACK_RECEIVED here; ACK_READY handshake for payload messages is owned
-        // by the per-message handler and is wired separately.
-        val ackChannel = registerPendingAck(message.id, AckType.RECEIVED)
+        // Register pending ACKs BEFORE sending message to prevent race conditions
+        // (ACK could otherwise arrive before we register and be dropped as
+        // "unexpected").
+        val receivedChannel = registerPendingAck(message.id, AckType.RECEIVED)
 
-        messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
+        if (message.hasPayload) {
+          // Two-phase: header → wait ACK_READY → payload → wait ACK_RECEIVED.
+          val readyChannel = registerPendingAck(message.id, AckType.READY)
+          val awaitReady: suspend () -> Unit = {
+            awaitRegisteredAck(message.id, AckType.READY, readyChannel, hasPayload = true)
+          }
+          messagesRouter.onSendingMessage(
+            connection.deviceId, sendRequest, writeChannel, readChannel, flow, awaitReady,
+          )
+        } else {
+          messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
+        }
 
-        awaitRegisteredAck(message.id, AckType.RECEIVED, ackChannel, hasPayload = message.hasPayload)
+        awaitRegisteredAck(message.id, AckType.RECEIVED, receivedChannel, hasPayload = message.hasPayload)
       }
     } catch (exception: Throwable) {
       log("ConnectionMessenger: Exception while sending message ${message.id} to ${connection.deviceId}", exception)
