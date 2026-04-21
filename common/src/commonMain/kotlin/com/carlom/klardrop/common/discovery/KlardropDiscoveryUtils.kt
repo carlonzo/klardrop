@@ -48,7 +48,9 @@ internal class KlardropDiscoveryUtils {
   }
 
   fun isValidService(serviceInfo: ServiceInfo): Boolean {
-    return serviceInfo.addresses.isNotEmpty() && serviceInfo.attributes.isNotEmpty()
+    if (serviceInfo.attributes.isEmpty()) return false
+    if (serviceInfo.port <= 0) return false
+    return serviceInfo.hasReachableAddress()
   }
 
   fun getDeviceId(serviceInfo: ServiceInfo): String {
