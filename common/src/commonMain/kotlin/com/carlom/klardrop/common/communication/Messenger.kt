@@ -41,7 +41,8 @@ class MessengerImpl(
   private val messageReceiver: MessageReceiver,
   private val trustChecker: Lazy<TrustChecker>,
   private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
-  private val messageSerializer: MessageSerializer
+  private val messageSerializer: MessageSerializer,
+  private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
 ) : Messenger {
 
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -157,7 +158,7 @@ class MessengerImpl(
     messageRequest: SendMessageRequest,
     flow: MutableSharedFlow<MessengerSendProgress>
   ): Boolean {
-    val config = AckTimeoutConfig.DEFAULT
+    val config = ackTimeoutConfig
     val maxRetries = config.maxRetries
     var attempt = 0
 

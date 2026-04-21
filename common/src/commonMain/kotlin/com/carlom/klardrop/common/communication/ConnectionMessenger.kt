@@ -24,18 +24,31 @@ class ConnectionMessenger internal constructor(
   private val messagesRouter: MessagesRouter,
   private val readChannel: ByteReadChannel,
   private val writeChannel: ByteWriteChannel,
-  private val ackTimeoutMs: Long = ACK_TIMEOUT_MS
+  private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
 ) {
+
+  // Test-only constructor that lets a test override every ACK timeout with a single value.
+  internal constructor(
+    coroutines: Coroutines,
+    connection: Connection,
+    messagesRouter: MessagesRouter,
+    readChannel: ByteReadChannel,
+    writeChannel: ByteWriteChannel,
+    ackTimeoutMs: Long,
+  ) : this(
+    coroutines = coroutines,
+    connection = connection,
+    messagesRouter = messagesRouter,
+    readChannel = readChannel,
+    writeChannel = writeChannel,
+    ackTimeoutConfig = AckTimeoutConfig.uniform(ackTimeoutMs),
+  )
 
   // ACK correlation system
   private data class PendingAck(val type: AckType, val channel: Channel<Unit>)
 
   private val pendingAcks = mutableMapOf<Int, PendingAck>()
   private val ackMutex = Mutex()
-
-  companion object {
-    private const val ACK_TIMEOUT_MS = 2_000L
-  }
 
   init {
     if (connection.socket.isClosed) {
@@ -105,8 +118,13 @@ class ConnectionMessenger internal constructor(
    * Waits for a previously registered ACK to arrive.
    */
   @OptIn(ExperimentalTime::class)
-  private suspend fun awaitRegisteredAck(messageId: Int, ackType: AckType, channel: Channel<Unit>) {
-    val timeoutMs = ackTimeoutMs
+  private suspend fun awaitRegisteredAck(
+    messageId: Int,
+    ackType: AckType,
+    channel: Channel<Unit>,
+    hasPayload: Boolean,
+  ) {
+    val timeoutMs = ackTimeoutConfig.timeoutFor(ackType, hasPayload).inWholeMilliseconds
     log("ConnectionMessenger: [DEBUG] Awaiting ACK $ackType for message $messageId from ${connection.deviceId} (timeout: ${timeoutMs}ms)")
     
     try {
@@ -131,44 +149,28 @@ class ConnectionMessenger internal constructor(
     val message = sendRequest.message
 
     if (isClosed()) {
-      flow.emit(MessengerSendProgress.Error("Connection is closed"))
-      return
+      throw IllegalStateException("Connection with ${connection.deviceId} is closed")
     }
 
-    runCatching {
+    try {
       coroutines.ioDispatcher {
+        // Register pending ACK BEFORE sending message to prevent race condition.
+        // For both payload (FILE) and no-payload (TEXT) messages we currently only
+        // await ACK_RECEIVED here; ACK_READY handshake for payload messages is owned
+        // by the per-message handler and is wired separately.
+        val ackChannel = registerPendingAck(message.id, AckType.RECEIVED)
 
-        if (message.hasPayload) {
-          // For payload messages (FILE): Register ACK → Send metadata → Wait for ACK_READY → Send payload → Wait for ACK_RECEIVED
+        messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
 
-          // FIXED: Register pending ACK BEFORE sending message to prevent race condition
-          val ackChannel = registerPendingAck(message.id, AckType.RECEIVED)
-          
-          // Send the message metadata through the router (this includes the payload sending)
-          messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
-
-          // Wait for ACK_RECEIVED since the message handler manages the payload flow internally
-          awaitRegisteredAck(message.id, AckType.RECEIVED, ackChannel)
-
-        } else {
-          // For no-payload messages (TEXT): Register ACK → Send message → Wait for ACK_RECEIVED
-
-          // FIXED: Register pending ACK BEFORE sending message to prevent race condition
-          val ackChannel = registerPendingAck(message.id, AckType.RECEIVED)
-          
-          // Send the message through the router
-          messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
-
-          // Wait for ACK_RECEIVED
-          awaitRegisteredAck(message.id, AckType.RECEIVED, ackChannel)
-        }
-
-        flow.emit(MessengerSendProgress.Completed)
+        awaitRegisteredAck(message.id, AckType.RECEIVED, ackChannel, hasPayload = message.hasPayload)
       }
-    }.onFailure { exception: Throwable ->
+    } catch (exception: Throwable) {
       log("ConnectionMessenger: Exception while sending message ${message.id} to ${connection.deviceId}", exception)
-      flow.emit(MessengerSendProgress.Error("Send failed: ${exception.message}"))
-      close() // Close the connection on error
+      // Close the socket so the next send forces a fresh connection and so the
+      // pool's isClosed() check evicts this entry. Do NOT emit a terminal flow
+      // event here - retry/terminal is owned by Messenger.handleKlardropTransfer.
+      close()
+      throw exception
     }
   }
 

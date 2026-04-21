@@ -25,7 +25,8 @@ class ClientImpl(
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,
   visibleDevices: VisibleDevices,
-  private val currentDeviceProvider: CurrentDeviceProvider
+  private val currentDeviceProvider: CurrentDeviceProvider,
+  private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
 ) : Client {
 
   private val clientScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -111,7 +112,8 @@ class ClientImpl(
           connection = connection,
           messagesRouter = messagesRouter,
           readChannel = readChannel,
-          writeChannel = writeChannel
+          writeChannel = writeChannel,
+          ackTimeoutConfig = ackTimeoutConfig,
         )
         
         // Store the connection in the client's pool keyed by the server's device ID
