@@ -15,13 +15,17 @@ enum class MessageType(val id: Byte) {
   FILE(2),
   ACK_READY(3),
   ACK_RECEIVED(4),
-  
+
   // Trust system messages
   TRUST_PAIRING_REQUEST(10),
   TRUST_PAIRING_RESPONSE(11),
   TRUSTED_MESSAGE(12), // Handled directly in MessagesRouter for security verification
   CLIPBOARD_SYNC(13),
   TRUST_REVOCATION(14),
+
+  // Application-level liveness probes (heartbeat)
+  PING(20),
+  PONG(21),
 
   ;
 

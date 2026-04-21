@@ -83,6 +83,7 @@ class Server(
   private val messageReceiver: MessageReceiver,
   private val protoBuf: ProtoBuf,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
+  private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
 ) {
   data class ServerConfig(val host: String, val port: Int)
 
@@ -214,6 +215,8 @@ class Server(
         readChannel = readChannel,
         writeChannel = writeChannel,
         ackTimeoutConfig = ackTimeoutConfig,
+        heartbeatConfig = heartbeatConfig,
+        messageSerializer = serializer,
       )
 
       connectionsPool.updateConnection(request.deviceId, connectionMessenger)

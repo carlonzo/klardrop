@@ -2,6 +2,7 @@ package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
+import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import io.ktor.utils.io.ByteReadChannel
@@ -13,7 +14,8 @@ open class FakeMessagesRouter: MessagesRouter {
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    ackCallback: (suspend (MessageAcknowledgment) -> Unit)
+    ackCallback: (suspend (MessageAcknowledgment) -> Unit),
+    pongCallback: (suspend (PongMessage) -> Unit),
   ) {
 
   }
