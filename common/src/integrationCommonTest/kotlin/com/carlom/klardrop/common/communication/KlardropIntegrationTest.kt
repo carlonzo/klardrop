@@ -234,30 +234,24 @@ class KlardropIntegrationTest {
           val secondSendFlow = clientMessenger.send(serverDeviceId, secondMessage)
           val secondSenderChannel = secondSendFlow.testIn(this@turbineScope)
 
-          // Since connections were dropped, this should trigger timeouts and retries
-          // We need to give enough time for reconnection attempts
-          coroutines.dispatcher.scheduler.runCurrent()
-          coroutines.dispatcher.scheduler.advanceUntilIdle()
-
-          // Advance past the ACK timeout (2 seconds) to trigger retry logic
-          advanceTimeAndComplete(2100) // Past 2-second ACK timeout
-
-          // Additional time for reconnection and retry
-          coroutines.dispatcher.scheduler.advanceTimeBy(3000)
-          coroutines.dispatcher.scheduler.runCurrent()
-          coroutines.dispatcher.scheduler.advanceUntilIdle()
+          // The reconnection flow mixes virtual time (ACK withTimeout + retry backoff run on
+          // mainDispatcher = StandardTestDispatcher) with real time (reconnect handshake and
+          // ACK roundtrip run on ioDispatcher = Dispatchers.IO). Advancing virtual time in a
+          // single big chunk fires the 2s ACK withTimeout on the retry attempt before the
+          // real-time socket work has caught up, which exhausts retries and emits Error.
+          // Instead, pump virtual time in small increments interleaved with short real-time
+          // sleeps, matching the pattern used by sendAndVerifyFile above.
+          pumpVirtualAndRealTime(iterations = 40, virtualStepMs = 250, realSleepMs = 100)
 
           // Wait for second message to be sent
-          try {
-            secondSenderChannel.awaitFor {
-              it is Completed
-            }
-          } catch (e: Exception) {
-            throw e
+          secondSenderChannel.awaitFor {
+            it is Completed
           }
 
-          // If it completes, verify the message was received
-          advanceToCompletion()
+          // If it completes, verify the message was received. The receiver's pipeline also
+          // has real-IO steps (read from socket, persist, notify), so pump the clock again
+          // rather than relying on a single advanceUntilIdle.
+          pumpVirtualAndRealTime(iterations = 10, virtualStepMs = 250, realSleepMs = 50)
           val secondCompletedUpdate = secondReceiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
           assertIs<ReceiveMessageStatus.Completed>(secondCompletedUpdate.status)
           assertEquals(1, secondCompletedUpdate.messages.size)
@@ -402,6 +396,22 @@ internal class KlardropTestContext(
     coroutines.dispatcher.scheduler.advanceTimeBy(timeMs)
     coroutines.dispatcher.scheduler.runCurrent()
     coroutines.dispatcher.scheduler.advanceUntilIdle()
+  }
+
+  // Bridges virtual time (mainDispatcher = TestDispatcher) and real time (ioDispatcher =
+  // Dispatchers.IO, where sockets actually run). Advancing virtual time in a single large
+  // chunk fires virtual-time timeouts (e.g. ACK withTimeout) before the real IO work has a
+  // chance to progress. Small virtual steps interleaved with Thread.sleep let the real
+  // socket threads catch up between virtual-time events.
+  fun pumpVirtualAndRealTime(iterations: Int, virtualStepMs: Long, realSleepMs: Long) {
+    repeat(iterations) {
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
+      coroutines.dispatcher.scheduler.advanceTimeBy(virtualStepMs)
+      Thread.sleep(realSleepMs)
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
+    }
   }
 
   @Suppress("VisibleForTests")
