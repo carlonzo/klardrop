@@ -63,7 +63,6 @@ class DiscoveryController(
 
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 
-  @Volatile
   private var activeChatDeviceId: String? = null
 
   fun setActiveChatDeviceId(deviceId: String?) {
