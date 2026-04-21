@@ -166,7 +166,7 @@ class DiscoveryNetwork internal constructor(
   }
 
   private suspend fun onDiscoveredService(serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {
-    serviceInfo.addresses.forEach { address ->
+    serviceInfo.addresses.filter { it.isReachableAddress() }.forEach { address ->
 
       val deviceConnection = when (connectionType) {
         DeviceConnectionType.NEARBY -> DeviceConnection.NearbyConnection(address, serviceInfo.port)
@@ -183,8 +183,9 @@ class DiscoveryNetwork internal constructor(
   }
 
   private fun onLostService(deviceId: String, serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {
-    if (serviceInfo.addresses.isNotEmpty()) {
-      serviceInfo.addresses.forEach { address ->
+    val reachableAddresses = serviceInfo.addresses.filter { it.isReachableAddress() }
+    if (reachableAddresses.isNotEmpty()) {
+      reachableAddresses.forEach { address ->
         val deviceConnection = when (connectionType) {
           DeviceConnectionType.NEARBY -> DeviceConnection.NearbyConnection(address, serviceInfo.port)
           DeviceConnectionType.KLARDROP -> DeviceConnection.KlardropConnection(address, serviceInfo.port)

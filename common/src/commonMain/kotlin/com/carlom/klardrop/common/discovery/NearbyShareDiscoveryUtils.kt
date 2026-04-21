@@ -82,7 +82,20 @@ internal class NearbyShareDiscoveryUtils {
   }
 
   fun isValidService(serviceInfo: ServiceInfo): Boolean {
-    return serviceInfo.addresses.isNotEmpty() && serviceInfo.attributes.isNotEmpty()
+    if (serviceInfo.attributes.isEmpty()) return false
+    if (serviceInfo.port <= 0) return false
+    if (!serviceInfo.hasReachableAddress()) return false
+
+    // Require a parseable, non-empty device name in the endpoint info.
+    // Without it, we can only fall back to a generic label and the peer is
+    // almost always unreachable in practice.
+    val endpointInfo = serviceInfo.attributes["n"] ?: return false
+    val bytes = runCatching { urlSafeBase64DecodeString(endpointInfo) }.getOrNull() ?: return false
+    if (bytes.size <= 18) return false
+    val nameLength = bytes[17].toInt()
+    if (nameLength <= 0) return false
+    if (18 + nameLength > bytes.size) return false
+    return true
   }
 
   private fun buildDeviceId(currentDevice: CurrentDevice): ByteArray {
@@ -159,6 +172,21 @@ internal fun urlSafeBase64DecodeString(data: String): ByteArray {
 //  }.joinToString(separator = "").let {
 //    Base64.UrlSafe.decode(it.encodeToByteArray())
 //  }
+}
+
+/**
+ * Returns true if the service advertises at least one address that could
+ * represent a remote peer (i.e. not the unspecified or loopback address).
+ */
+internal fun ServiceInfo.hasReachableAddress(): Boolean = addresses.any { it.isReachableAddress() }
+
+internal fun String.isReachableAddress(): Boolean {
+  if (isBlank()) return false
+  if (this == "0.0.0.0" || this == "::" || this == "::0") return false
+  if (startsWith("127.")) return false
+  // IPv6 loopback, tolerating an optional zone id like "::1%eth0".
+  if (substringBefore('%').equals("::1", ignoreCase = true)) return false
+  return true
 }
 
 /**

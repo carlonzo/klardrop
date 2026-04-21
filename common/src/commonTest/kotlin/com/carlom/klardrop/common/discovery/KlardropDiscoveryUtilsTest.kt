@@ -93,6 +93,54 @@ class KlardropDiscoveryUtilsTest {
   }
 
   @Test
+  fun serviceWithZeroPortIsInvalid() {
+    val info = ServiceInfo(
+      port = 0,
+      serviceName = "x",
+      serviceType = KlardropDiscoveryUtils.KLARDROP_SERVICE_TYPE,
+      attributes = mapOf("dn" to "x", "d" to "1"),
+      addresses = listOf("192.168.1.10")
+    )
+    assertFalse(utils.isValidService(info))
+  }
+
+  @Test
+  fun serviceWithOnlyLoopbackAddressesIsInvalid() {
+    val info = ServiceInfo(
+      port = 5555,
+      serviceName = "x",
+      serviceType = KlardropDiscoveryUtils.KLARDROP_SERVICE_TYPE,
+      attributes = mapOf("dn" to "x", "d" to "1"),
+      addresses = listOf("127.0.0.1", "::1")
+    )
+    assertFalse(utils.isValidService(info))
+  }
+
+  @Test
+  fun serviceWithOnlyUnspecifiedAddressIsInvalid() {
+    val info = ServiceInfo(
+      port = 5555,
+      serviceName = "x",
+      serviceType = KlardropDiscoveryUtils.KLARDROP_SERVICE_TYPE,
+      attributes = mapOf("dn" to "x", "d" to "1"),
+      addresses = listOf("0.0.0.0", "::")
+    )
+    assertFalse(utils.isValidService(info))
+  }
+
+  @Test
+  fun serviceWithMixedAddressesPassesIfAnyIsReachable() {
+    val info = ServiceInfo(
+      port = 5555,
+      serviceName = "x",
+      serviceType = KlardropDiscoveryUtils.KLARDROP_SERVICE_TYPE,
+      attributes = mapOf("dn" to "x", "d" to "1"),
+      addresses = listOf("127.0.0.1", "192.168.1.10")
+    )
+    assertTrue(utils.isValidService(info))
+  }
+
+  @Test
   fun packedDeviceInfoByteOverflowIsRejected() {
     // The packing fits device type in the high nibble and os type in the low nibble.
     // DeviceType.UNKNOWN has nearbyId = 15 (0xF), which packed gives 0xF0, still < 0xFF.
