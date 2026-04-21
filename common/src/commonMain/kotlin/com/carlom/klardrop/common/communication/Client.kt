@@ -83,7 +83,12 @@ class ClientImpl(
   private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) =
     runCatching {
 
-    val socket = aSocket(selectorManager).tcp().connect(address, port)
+    val socket = aSocket(selectorManager).tcp().connect(address, port) {
+      // Enable kernel-level TCP keep-alive so the OS reaps a half-open connection
+      // (peer crashed / off-network without sending FIN). The application-level
+      // ACK timeout is the fast-path recovery; keep-alive is a coarse backstop.
+      keepAlive = true
+    }
     log("Client", "Connected to $address:$port. Sending greetings")
 
     val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)

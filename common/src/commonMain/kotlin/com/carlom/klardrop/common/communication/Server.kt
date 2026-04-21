@@ -111,6 +111,9 @@ class Server(
     serverScope.launch {
       while (isActive) {
         val socket = serverSocket.accept()
+        // NIO does not propagate SO_KEEPALIVE from listener to accepted sockets;
+        // enable it explicitly so half-open connections eventually get reaped.
+        socket.enableTcpKeepAlive()
         val remoteAddress = socket.remoteAddress.toString()
         log("Server", "New connection from: $remoteAddress")
 
