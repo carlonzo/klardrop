@@ -9,13 +9,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.Klardrop
+import com.carlom.klardrop.navigation.KlardropNavigator
 import com.carlom.klardrop.theme.AppTheme
 
 @Composable
 fun KlardropApp(
   klardrop: Klardrop,
-  // uiDependencies is now created inside, or passed as the new class type
-  // For simplicity, let's assume it's created here based on klardrop.commonComponent
 ) {
   val uiDependencies = remember { UiDependencies(klardrop.commonComponent) }
   val visibleDevicesController = remember { uiDependencies.discoveryController() }
@@ -25,22 +24,12 @@ fun KlardropApp(
       modifier = Modifier.fillMaxSize()
     ) {
       BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val isLargeScreen = isLargeScreen
-
-        if (isLargeScreen) {
-          WideLayout(
-            modifier = Modifier.fillMaxSize(),
-            discoveryController = visibleDevicesController,
-            uiDependencies = uiDependencies
-          )
-        } else {
-          DiscoveryScreen(
-            modifier = Modifier.fillMaxSize(),
-            isLargeScreen = false,
-            discoveryController = visibleDevicesController,
-            uiDependencies = uiDependencies
-          )
-        }
+        KlardropNavigator(
+          uiDependencies = uiDependencies,
+          discoveryController = visibleDevicesController,
+          isLargeScreen = isLargeScreen,
+          modifier = Modifier.fillMaxSize()
+        )
       }
     }
   }

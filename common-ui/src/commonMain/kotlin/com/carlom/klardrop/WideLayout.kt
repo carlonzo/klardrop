@@ -57,8 +57,14 @@ fun WideLayout(
   uiDependencies: UiDependencies
 ) {
   val state by discoveryController.screenStateFlow.collectAsState()
-  val activeDeviceId = state.navigateToChatDeviceId
+  var activeDeviceId by remember { mutableStateOf<String?>(null) }
   var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
+
+  // Keep the controller aware of which chat is currently open so unread-badge
+  // bookkeeping suppresses badges for that device.
+  androidx.compose.runtime.LaunchedEffect(activeDeviceId) {
+    discoveryController.setActiveChatDeviceId(activeDeviceId)
+  }
 
   Row(modifier = modifier.fillMaxSize()) {
 
@@ -69,7 +75,10 @@ fun WideLayout(
       currentDeviceName = state.currentDeviceName ?: state.systemDeviceName ?: "",
       devices = state.devices,
       activeDeviceId = activeDeviceId,
-      onDeviceSelected = { discoveryController.onDeviceClick(it) },
+      onDeviceSelected = {
+        discoveryController.onDeviceClick(it)
+        activeDeviceId = it.deviceId
+      },
       onRequestTrust = { pendingLink = it },
       onRemoveTrust = { discoveryController.onRemoveTrust(it) }
     )
@@ -86,16 +95,17 @@ fun WideLayout(
       )
 
       Box(modifier = Modifier.fillMaxSize()) {
-        val activeDevice = state.devices.firstOrNull { it.deviceId == activeDeviceId }
-        if (activeDeviceId != null && activeDevice != null) {
-          val chatViewModel = remember(activeDeviceId) {
-            uiDependencies.deviceChatViewModelFactory(activeDeviceId)
+        val currentId = activeDeviceId
+        val activeDevice = currentId?.let { id -> state.devices.firstOrNull { it.deviceId == id } }
+        if (currentId != null && activeDevice != null) {
+          val chatViewModel = remember(currentId) {
+            uiDependencies.deviceChatViewModelFactory(currentId)
           }
           DeviceChatScreen(
-            deviceName = state.navigateToChatDeviceName ?: activeDevice.deviceName,
+            deviceName = activeDevice.deviceName,
             isOwned = activeDevice.trustStatus == TrustStatus.Trusted,
             viewModel = chatViewModel,
-            onBackClicked = { discoveryController.onBackFromChat() },
+            onBackClicked = { activeDeviceId = null },
             onOpenFileRequest = { path -> chatViewModel.openFileClicked(path) },
             mode = DeviceChatMode.Pane
           )
