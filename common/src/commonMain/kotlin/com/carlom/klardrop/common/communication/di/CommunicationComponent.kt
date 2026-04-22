@@ -2,7 +2,9 @@ package com.carlom.klardrop.common.communication.di
 
 import androidx.annotation.VisibleForTesting
 import com.carlom.klardrop.common.FileManager
+import com.carlom.klardrop.common.communication.AckTimeoutConfig
 import com.carlom.klardrop.common.communication.ClientImpl
+import com.carlom.klardrop.common.communication.HeartbeatConfig
 import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.Messenger
@@ -45,7 +47,9 @@ class CommunicationModule(
   private val currentDeviceProvider: CurrentDeviceProvider,
   private val messageRepository: MessageRepository,
   private val clipboardManager: ClipboardManager,
-  private val trustStorage: TrustStorage
+  private val trustStorage: TrustStorage,
+  private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
+  private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -105,7 +109,9 @@ class CommunicationModule(
       messagesRouter,
       serializer,
       visibleDevices,
-      currentDeviceProvider
+      currentDeviceProvider,
+      ackTimeoutConfig,
+      heartbeatConfig,
     )
   }
 
@@ -123,7 +129,9 @@ class CommunicationModule(
       NearbyReceiverConnectionHandlerFactory(fileManager, coroutines),
       visibleDevices,
       messageReceiver,
-      protoBuf
+      protoBuf,
+      ackTimeoutConfig,
+      heartbeatConfig,
     )
   }
 
@@ -145,7 +153,8 @@ class CommunicationModule(
       messageReceiver,
       lazy { trustChecker },
       trustManager,
-      serializer
+      serializer,
+      ackTimeoutConfig,
     )
   }
 

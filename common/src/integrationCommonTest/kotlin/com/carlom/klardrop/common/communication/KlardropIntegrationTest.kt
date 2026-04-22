@@ -462,19 +462,10 @@ internal class KlardropTestContext(
     val senderFlow = clientMessenger.send(serverDeviceId, message)
     val senderChannel = senderFlow.testIn(this)
 
-    // Start coroutines and advance time to complete the operation
-    coroutines.dispatcher.scheduler.runCurrent()
-    coroutines.dispatcher.scheduler.advanceUntilIdle()
-
-    // For Nearby protocol, give extra time for protocol detection and connection setup
-    coroutines.dispatcher.scheduler.advanceTimeBy(1000)
-    coroutines.dispatcher.scheduler.runCurrent()
-    coroutines.dispatcher.scheduler.advanceUntilIdle()
-
-    // Extra time advance to handle ACK timeouts
-    coroutines.dispatcher.scheduler.advanceTimeBy(2500)
-    coroutines.dispatcher.scheduler.runCurrent()
-    coroutines.dispatcher.scheduler.advanceUntilIdle()
+    // Interleave small virtual-time advances with real-time pauses so the
+    // receiver's IO thread can deliver the ACK before the virtual ACK timeout
+    // fires. See pumpVirtualAndRealTime() doc.
+    pumpVirtualAndRealTime(iterations = 15, virtualStepMs = 200, realSleepMs = 100)
 
     // Wait for send completion
     senderChannel.awaitFor { it is Completed }
@@ -517,17 +508,8 @@ internal class KlardropTestContext(
     val senderFlow = clientMessenger.send(serverDeviceId, sendRequest)
     val senderChannel = senderFlow.testIn(this)
 
-    // File transfer IO happens on Dispatchers.IO (real threads), but the ACK timeout
-    // uses virtual time on the TestDispatcher. We advance virtual time in small increments
-    // with real-time pauses to let IO threads complete before the 2-second ACK timeout fires.
-    repeat(10) {
-      coroutines.dispatcher.scheduler.runCurrent()
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
-      coroutines.dispatcher.scheduler.advanceTimeBy(500)
-      Thread.sleep(100) // Let real IO threads complete
-      coroutines.dispatcher.scheduler.runCurrent()
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
-    }
+    // See pumpVirtualAndRealTime() doc — file transfer IO happens on real threads.
+    pumpVirtualAndRealTime(iterations = 15, virtualStepMs = 500, realSleepMs = 100)
 
     senderChannel.awaitFor { it is Completed }
 

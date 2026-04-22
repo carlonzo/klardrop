@@ -6,6 +6,8 @@ import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.MessageType
+import com.carlom.klardrop.common.communication.message.PingMessage
+import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
@@ -58,6 +60,8 @@ class MessageSerializer(
       MessageType.TRUSTED_MESSAGE -> TrustedMessage.serializer() as KSerializer<E>
       MessageType.CLIPBOARD_SYNC -> ClipboardSyncMessage.serializer() as KSerializer<E>
       MessageType.TRUST_REVOCATION -> TrustRevocationMessage.serializer() as KSerializer<E>
+      MessageType.PING -> PingMessage.serializer() as KSerializer<E>
+      MessageType.PONG -> PongMessage.serializer() as KSerializer<E>
     }
   }
 }

@@ -124,10 +124,12 @@ object TrustPolicy {
             com.carlom.klardrop.common.communication.message.MessageType.CLIPBOARD_SYNC,
             com.carlom.klardrop.common.communication.message.MessageType.TRUST_REVOCATION -> true
             
-            // Handshake and ack messages don't require trust
+            // Handshake, ack and heartbeat messages don't require trust
             com.carlom.klardrop.common.communication.message.MessageType.HANDSHAKE,
             com.carlom.klardrop.common.communication.message.MessageType.ACK_READY,
-            com.carlom.klardrop.common.communication.message.MessageType.ACK_RECEIVED -> false
+            com.carlom.klardrop.common.communication.message.MessageType.ACK_RECEIVED,
+            com.carlom.klardrop.common.communication.message.MessageType.PING,
+            com.carlom.klardrop.common.communication.message.MessageType.PONG -> false
         }
     }
     

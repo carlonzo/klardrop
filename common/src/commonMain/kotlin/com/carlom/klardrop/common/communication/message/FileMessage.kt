@@ -179,6 +179,20 @@ class FileMessageHandler(
     writeChannel: ByteWriteChannel,
     progressFlow: MutableSharedFlow<MessengerSendProgress>
   ) {
+    // Delegate to the ready-ack-aware variant with a no-op awaitReady so the
+    // single implementation handles both call sites. ConnectionMessenger always
+    // routes payload sends through handleOutgoingWithReadyAck, so this code
+    // path is only reached if a caller bypasses the router.
+    handleOutgoingWithReadyAck(toDeviceId, request, writeChannel, progressFlow, awaitReady = {})
+  }
+
+  override suspend fun handleOutgoingWithReadyAck(
+    toDeviceId: String,
+    request: FileMessage.FileSendRequest,
+    writeChannel: ByteWriteChannel,
+    progressFlow: MutableSharedFlow<MessengerSendProgress>,
+    awaitReady: suspend () -> Unit,
+  ) {
     // Create database records for all outgoing file messages
     val fileTransferId = messageRepository.insertFileTransfer(
       fileName = request.message.fileName,
@@ -187,7 +201,7 @@ class FileMessageHandler(
       status = FileTransferStatus.IN_PROGRESS,
       mimeType = request.message.mimeType
     )
-    
+
     messageRepository.insertMessage(
       remoteDeviceId = toDeviceId,
       content = request.message.fileName,
@@ -201,8 +215,13 @@ class FileMessageHandler(
     coroutines.ioDispatcher.invoke {
       updateSentProgress(progressFlow, 0, request.message.fileSize)
 
-      // Send initial message with metadata
+      // Send initial message with metadata (header)
       writeChannel.sendMessage(request.message, serializer)
+
+      // Wait for the receiver to acknowledge it's ready to accept the payload
+      // before streaming bytes. Avoids dumping a large file onto a peer that
+      // can't accept it (e.g. permission denied, disk full).
+      awaitReady()
 
       val sourceFile = request.file
 

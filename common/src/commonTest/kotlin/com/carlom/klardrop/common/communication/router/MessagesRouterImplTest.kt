@@ -232,7 +232,7 @@ class MessagesRouterImplTest {
     val readChannel = ByteReadChannel(serializedMessage)
     val writeChannel = ByteChannel(true)
 
-    messagesRouter.onMessageIncoming(fromDeviceId, writeChannel, readChannel) { }
+    messagesRouter.onMessageIncoming(fromDeviceId, writeChannel, readChannel, ackCallback = { })
 
     // Verify the handler was called with the message
     assertEquals(textMessage, mockHandler.incomingMessageHandled)
@@ -269,7 +269,7 @@ class MessagesRouterImplTest {
     val readChannel = ByteReadChannel(serializedMessage + byteArrayOf(1, 2, 3)) // Add some dummy payload bytes
     val writeChannel = ByteChannel(true)
 
-    messagesRouter.onMessageIncoming(fromDeviceId, writeChannel, readChannel) { }
+    messagesRouter.onMessageIncoming(fromDeviceId, writeChannel, readChannel, ackCallback = { })
 
     assertEquals(0, mockMessageRepository.calls.size) // MessageRepository should not be called directly by router for handled messages
     assertEquals(fileMessage, mockHandler.incomingMessageHandled)

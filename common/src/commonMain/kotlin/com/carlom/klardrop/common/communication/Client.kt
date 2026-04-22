@@ -25,7 +25,9 @@ class ClientImpl(
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,
   visibleDevices: VisibleDevices,
-  private val currentDeviceProvider: CurrentDeviceProvider
+  private val currentDeviceProvider: CurrentDeviceProvider,
+  private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
+  private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
 ) : Client {
 
   private val clientScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -82,7 +84,12 @@ class ClientImpl(
   private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) =
     runCatching {
 
-    val socket = aSocket(selectorManager).tcp().connect(address, port)
+    val socket = aSocket(selectorManager).tcp().connect(address, port) {
+      // Coarse OS-level backstop. The application-level heartbeat is the
+      // primary liveness mechanism; keep-alive only helps if the heartbeat
+      // coroutine is itself wedged.
+      keepAlive = true
+    }
     log("Client", "Connected to $address:$port. Sending greetings")
 
     val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
@@ -111,7 +118,10 @@ class ClientImpl(
           connection = connection,
           messagesRouter = messagesRouter,
           readChannel = readChannel,
-          writeChannel = writeChannel
+          writeChannel = writeChannel,
+          ackTimeoutConfig = ackTimeoutConfig,
+          heartbeatConfig = heartbeatConfig,
+          messageSerializer = serializer,
         )
         
         // Store the connection in the client's pool keyed by the server's device ID

@@ -2,18 +2,20 @@ package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
+import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 
-class FakeMessagesRouter: MessagesRouter {
+open class FakeMessagesRouter: MessagesRouter {
   override suspend fun onMessageIncoming(
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    ackCallback: (suspend (MessageAcknowledgment) -> Unit)
+    ackCallback: (suspend (MessageAcknowledgment) -> Unit),
+    pongCallback: (suspend (PongMessage) -> Unit),
   ) {
 
   }
@@ -23,8 +25,9 @@ class FakeMessagesRouter: MessagesRouter {
     sendMessageRequest: S,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    progress: MutableSharedFlow<MessengerSendProgress>
+    progress: MutableSharedFlow<MessengerSendProgress>,
+    awaitReadyAck: suspend () -> Unit,
   ) {
   }
-  
+
 }

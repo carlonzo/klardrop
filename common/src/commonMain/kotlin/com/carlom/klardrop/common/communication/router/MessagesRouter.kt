@@ -6,6 +6,8 @@ import com.carlom.klardrop.common.communication.message.AckType
 import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.MessageType
+import com.carlom.klardrop.common.communication.message.PingMessage
+import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.readMessage
@@ -24,15 +26,24 @@ interface MessagesRouter {
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    ackCallback: (suspend (MessageAcknowledgment) -> Unit)
+    ackCallback: (suspend (MessageAcknowledgment) -> Unit),
+    pongCallback: (suspend (PongMessage) -> Unit) = {},
   )
 
+  /**
+   * Sends a message. For payload-bearing messages, [awaitReadyAck] should be a
+   * callback that suspends until the receiver has sent ACK_READY for this
+   * message id; the handler is responsible for invoking it between the
+   * header write and the payload stream. Default no-op for backward-compat
+   * with message types that have no payload.
+   */
   suspend fun <S : SendMessageRequest> onSendingMessage(
     toDeviceId: String,
     sendMessageRequest: S,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    progress: MutableSharedFlow<MessengerSendProgress>
+    progress: MutableSharedFlow<MessengerSendProgress>,
+    awaitReadyAck: suspend () -> Unit = {},
   )
 }
 
@@ -70,7 +81,8 @@ internal class MessagesRouterImpl(
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    ackCallback: (suspend (MessageAcknowledgment) -> Unit)
+    ackCallback: (suspend (MessageAcknowledgment) -> Unit),
+    pongCallback: (suspend (PongMessage) -> Unit),
   ) = coroutines.ioDispatcher {
 
     val rawMessage = readChannel.readMessage(messageSerializer)
@@ -135,8 +147,23 @@ internal class MessagesRouterImpl(
       return@ioDispatcher
     }
 
-    // Skip ACK generation for ACK messages to prevent loops
-    val isAckMessage = message.type == MessageType.ACK_READY || message.type == MessageType.ACK_RECEIVED
+    // Heartbeat: PING => reply with PONG immediately; PONG => signal sender via callback.
+    if (message is PingMessage) {
+      log("MessagesRouter", "Received PING ${message.id} from $fromDeviceId, replying with PONG")
+      writeChannel.sendMessage(PongMessage(pingId = message.id), messageSerializer)
+      return@ioDispatcher
+    }
+    if (message is PongMessage) {
+      log("MessagesRouter", "Received PONG for ping ${message.pingId} from $fromDeviceId")
+      pongCallback(message)
+      return@ioDispatcher
+    }
+
+    // Skip ACK generation for ACK / heartbeat messages to prevent loops
+    val isAckMessage = message.type == MessageType.ACK_READY ||
+        message.type == MessageType.ACK_RECEIVED ||
+        message.type == MessageType.PING ||
+        message.type == MessageType.PONG
 
     val receiveFlow = messengeReceiver.onReceiveMessage(fromDeviceId)
 
@@ -180,7 +207,8 @@ internal class MessagesRouterImpl(
     sendMessageRequest: S,
     writeChannel: ByteWriteChannel,
     readChannel: ByteReadChannel,
-    progress: MutableSharedFlow<MessengerSendProgress>
+    progress: MutableSharedFlow<MessengerSendProgress>,
+    awaitReadyAck: suspend () -> Unit,
   ) {
     coroutines.ioDispatcher {
       val message = sendMessageRequest.message
@@ -196,7 +224,11 @@ internal class MessagesRouterImpl(
         return@ioDispatcher
       }
 
-      messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress)
+      if (message.hasPayload) {
+        messageHandler.handleOutgoingWithReadyAck(toDeviceId, sendMessageRequest, writeChannel, progress, awaitReadyAck)
+      } else {
+        messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress)
+      }
     }
   }
 }

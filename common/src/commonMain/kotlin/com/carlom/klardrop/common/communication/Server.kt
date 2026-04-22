@@ -81,7 +81,9 @@ class Server(
   private val nearbyReceiverConnectionHandlerFactory: NearbyReceiverConnectionHandlerFactory,
   private val visibleDevices: VisibleDevices,
   private val messageReceiver: MessageReceiver,
-  private val protoBuf: ProtoBuf
+  private val protoBuf: ProtoBuf,
+  private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
+  private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
 ) {
   data class ServerConfig(val host: String, val port: Int)
 
@@ -203,7 +205,16 @@ class Server(
     if (isAcceptedSender(request.deviceId, remoteAddress)) {
       val writeChannel = socket.openWriteChannel(autoFlush = true)
       val connection = Connection(socket, request.deviceId)
-      val connectionMessenger = ConnectionMessenger(coroutines, connection, messagesRouter, readChannel, writeChannel)
+      val connectionMessenger = ConnectionMessenger(
+        coroutines = coroutines,
+        connection = connection,
+        messagesRouter = messagesRouter,
+        readChannel = readChannel,
+        writeChannel = writeChannel,
+        ackTimeoutConfig = ackTimeoutConfig,
+        heartbeatConfig = heartbeatConfig,
+        messageSerializer = serializer,
+      )
 
       connectionsPool.updateConnection(request.deviceId, connectionMessenger)
 

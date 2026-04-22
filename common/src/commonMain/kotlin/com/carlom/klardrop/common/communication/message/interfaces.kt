@@ -15,13 +15,17 @@ enum class MessageType(val id: Byte) {
   FILE(2),
   ACK_READY(3),
   ACK_RECEIVED(4),
-  
+
   // Trust system messages
   TRUST_PAIRING_REQUEST(10),
   TRUST_PAIRING_RESPONSE(11),
   TRUSTED_MESSAGE(12), // Handled directly in MessagesRouter for security verification
   CLIPBOARD_SYNC(13),
   TRUST_REVOCATION(14),
+
+  // Application-level liveness probes (heartbeat)
+  PING(20),
+  PONG(21),
 
   ;
 
@@ -138,4 +142,22 @@ interface MessageHandler<E : Message, R : SendMessageRequest> {
   suspend fun handleIncoming(message: E, readChannel: ByteReadChannel, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>)
   suspend fun handleOutgoing(toDeviceId: String, request: R, writeChannel: ByteWriteChannel, progressFlow: MutableSharedFlow<MessengerSendProgress>)
 
+  /**
+   * Variant for messages that have a payload. The handler MUST send the
+   * message header first, then call [awaitReady] (which will block until the
+   * receiver has sent ACK_READY for this message id), then stream the payload.
+   *
+   * Default implementation ignores [awaitReady] and delegates to [handleOutgoing] -
+   * only payload-bearing handlers need to override this to add the ACK_READY
+   * handshake between header and payload streaming.
+   */
+  suspend fun handleOutgoingWithReadyAck(
+    toDeviceId: String,
+    request: R,
+    writeChannel: ByteWriteChannel,
+    progressFlow: MutableSharedFlow<MessengerSendProgress>,
+    awaitReady: suspend () -> Unit,
+  ) {
+    handleOutgoing(toDeviceId, request, writeChannel, progressFlow)
+  }
 }
