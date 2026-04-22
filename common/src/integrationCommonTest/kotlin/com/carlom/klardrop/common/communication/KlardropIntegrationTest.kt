@@ -150,11 +150,11 @@ class KlardropIntegrationTest {
   }
 
   @Test
-  fun testAckCorrelationRaceCondition() = runTest(coroutines.dispatcher) {
+  fun testAckCorrelationRaceCondition() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
     // This test verifies our fix for the ACK correlation race condition
     testContext.setupServerAndClient()
 
-    turbineScope {
+    turbineScope(timeout = 30.seconds) {
       with(testContext) {
         val messageReceiver = serverCommunicationModule.messageReceiver()
         val clientMessenger = clientCommunicationModule.messenger()
@@ -169,8 +169,14 @@ class KlardropIntegrationTest {
           val senderFlow = clientMessenger.send(serverDeviceId, message)
           val senderChannel = senderFlow.testIn(this@turbineScope)
 
-          // Advance to complete the send operation
-          advanceToCompletion()
+          // The ACK withTimeout (2s) runs on mainDispatcher = StandardTestDispatcher
+          // (virtual time), while the socket roundtrip runs on ioDispatcher =
+          // Dispatchers.IO (real time). A single large virtual-time advance can fire
+          // the ACK timeout before the real IO has delivered the ACK. Interleave
+          // small virtual-time steps with short real-time sleeps so the IO threads
+          // can make progress between virtual-time timeout checks, matching the
+          // pattern used by sendAndVerifyFile / testMessengerReconnection.
+          pumpVirtualAndRealTime(iterations = 10, virtualStepMs = 500, realSleepMs = 100)
 
           // Verify send completed successfully (no ACK timeout)
           val result = senderChannel.awaitFor { it is Completed }
