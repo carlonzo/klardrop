@@ -85,9 +85,9 @@ class ClientImpl(
     runCatching {
 
     val socket = aSocket(selectorManager).tcp().connect(address, port) {
-      // Enable kernel-level TCP keep-alive so the OS reaps a half-open connection
-      // (peer crashed / off-network without sending FIN). The application-level
-      // ACK timeout is the fast-path recovery; keep-alive is a coarse backstop.
+      // Coarse OS-level backstop. The application-level heartbeat is the
+      // primary liveness mechanism; keep-alive only helps if the heartbeat
+      // coroutine is itself wedged.
       keepAlive = true
     }
     log("Client", "Connected to $address:$port. Sending greetings")
