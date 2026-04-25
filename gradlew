@@ -116,6 +116,26 @@ esac
 
 CLASSPATH="\\\"\\\""
 
+# Work around Gradle Kotlin DSL parsing failures on Java 25 in some environments.
+# If a local Java 21 installation is available via mise and the current runtime
+# resolves to Java 25, force Gradle to run on Java 21.
+if [ -x "$HOME/.local/share/mise/installs/java/21.0.2/bin/java" ] ; then
+    if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ] ; then
+        java_version_output=$("$JAVA_HOME/bin/java" -version 2>&1 | head -n 1)
+    elif command -v java >/dev/null 2>&1 ; then
+        java_version_output=$(java -version 2>&1 | head -n 1)
+    else
+        java_version_output=""
+    fi
+
+    case "$java_version_output" in
+      *\"25.*)
+        JAVA_HOME="$HOME/.local/share/mise/installs/java/21.0.2"
+        export JAVA_HOME
+      ;;
+    esac
+fi
+
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then

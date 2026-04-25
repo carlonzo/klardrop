@@ -1,6 +1,6 @@
 plugins {
-    kotlin("jvm") version "2.2.0"
-    kotlin("plugin.serialization") version "2.2.0"
+    kotlin("jvm") version "2.3.21"
+    kotlin("plugin.serialization") version "2.3.21"
     id("com.github.johnrengelman.shadow") version "8.1.1"
     application
 }
@@ -13,59 +13,44 @@ repositories {
 }
 
 dependencies {
-    // Ktor Server
-    implementation("io.ktor:ktor-server-core:3.2.1")
-    implementation("io.ktor:ktor-server-netty:3.2.1")
-    implementation("io.ktor:ktor-server-content-negotiation:3.2.1")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:3.2.1")
-    implementation("io.ktor:ktor-server-auth:3.2.1")
-    implementation("io.ktor:ktor-server-auth-jwt:3.2.1")
-    implementation("io.ktor:ktor-server-call-logging:3.2.1")
-    implementation("io.ktor:ktor-server-metrics-micrometer:3.2.1")
-    implementation("io.ktor:ktor-server-status-pages:3.2.1")
-    implementation("io.ktor:ktor-server-cors:3.2.1")
-    implementation("io.ktor:ktor-server-swagger:3.2.1")
-    
-    // Database
-    implementation("org.jetbrains.exposed:exposed-core:0.60.0")
-    implementation("org.jetbrains.exposed:exposed-dao:0.60.0")
-    implementation("org.jetbrains.exposed:exposed-jdbc:0.60.0")
-    implementation("org.jetbrains.exposed:exposed-java-time:0.60.0")
-    implementation("com.zaxxer:HikariCP:6.2.1")
-    implementation("org.postgresql:postgresql:42.8.0")
-    
-    // Redis
-    implementation("io.lettuce:lettuce-core:6.5.1.RELEASE")
-    
-    // Kafka
-    implementation("org.apache.kafka:kafka-clients:3.10.0")
-    
-    // Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-protobuf:1.9.0")
-    
-    // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-    
-    // Monitoring
-    implementation("io.micrometer:micrometer-registry-prometheus:1.15.2")
-    
-    // Logging
-    implementation("ch.qos.logback:logback-classic:1.6.2")
-    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
-    
-    // Configuration
-    implementation("io.github.config4k:config4k:0.9.0")
-    
-    // JWT
-    implementation("com.auth0:java-jwt:4.4.0")
-    
-    // Testing
+    implementation(backendLibs.ktor.server.core)
+    implementation(backendLibs.ktor.server.netty)
+    implementation(backendLibs.ktor.server.content.negotiation)
+    implementation(backendLibs.ktor.serialization.kotlinx.json)
+    implementation(backendLibs.ktor.server.auth)
+    implementation(backendLibs.ktor.server.auth.jwt)
+    implementation(backendLibs.ktor.server.call.logging)
+    implementation(backendLibs.ktor.server.metrics.micrometer)
+    implementation(backendLibs.ktor.server.status.pages)
+    implementation(backendLibs.ktor.server.cors)
+    implementation(backendLibs.ktor.server.swagger)
+
+    implementation(backendLibs.exposed.core)
+    implementation(backendLibs.exposed.dao)
+    implementation(backendLibs.exposed.jdbc)
+    implementation(backendLibs.exposed.java.time)
+    implementation(backendLibs.hikaricp)
+    implementation(backendLibs.postgresql)
+
+    implementation(backendLibs.lettuce.core)
+    implementation(backendLibs.kafka.clients)
+
+    implementation(backendLibs.kotlinx.serialization.json)
+    implementation(backendLibs.kotlinx.serialization.protobuf)
+    implementation(backendLibs.kotlinx.coroutines.core)
+
+    implementation(backendLibs.micrometer.registry.prometheus)
+    implementation(backendLibs.logback.classic)
+    implementation(backendLibs.kotlin.logging.jvm)
+    implementation(backendLibs.config4k)
+    implementation(backendLibs.java.jwt)
+    implementation(backendLibs.jwks.rsa)
+
     testImplementation(kotlin("test"))
-    testImplementation("io.ktor:ktor-server-tests:3.2.1")
-    testImplementation("io.mockk:mockk:1.13.13")
-    testImplementation("org.testcontainers:testcontainers:1.20.3")
-    testImplementation("org.testcontainers:postgresql:1.20.3")
+    testImplementation(backendLibs.ktor.server.test.host)
+    testImplementation(backendLibs.mockk)
+    testImplementation(backendLibs.testcontainers)
+    testImplementation(backendLibs.testcontainers.postgresql)
 }
 
 kotlin {

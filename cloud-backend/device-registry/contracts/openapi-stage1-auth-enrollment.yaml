@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: Klardrop Cloud Device Registry - Stage 1 Auth & Enrollment API
+  version: 0.1.0
+servers:
+  - url: https://api.klardrop.example.com
+paths:
+  /v1/auth/session/exchange:
+    post:
+      summary: Exchange Auth0 magic-link ID token for Klardrop session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken]
+              properties:
+                idToken:
+                  type: string
+      responses:
+        '200':
+          description: Session issued
+  /v1/users/bootstrap:
+    post:
+      summary: Create private user scope and defaults if missing
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User scope ready
+  /v1/devices/pairing-codes:
+    post:
+      summary: Issue one-time pairing code (requires 2FA gate)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secondFactorToken:
+                  type: string
+                approvedChallengeId:
+                  type: string
+                  nullable: true
+              oneOf:
+                - required: [secondFactorToken]
+                - required: [approvedChallengeId]
+      responses:
+        '201':
+          description: Pairing code issued
+  /v1/devices/enroll:
+    post:
+      summary: Enroll new device and issue broker credential
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pairingCode, deviceName, platform, devicePublicKey]
+              properties:
+                pairingCode:
+                  type: string
+                deviceName:
+                  type: string
+                platform:
+                  type: string
+                  enum: [android, ios, macos, windows, linux, web]
+                devicePublicKey:
+                  type: string
+      responses:
+        '201':
+          description: Device enrolled
+  /v1/devices/{deviceId}/revoke:
+    post:
+      summary: Revoke device, disconnect active MQTT session, and block reconnect
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: deviceId
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Revocation accepted
+  /v1/users/{userId}/devices:
+    get:
+      summary: List devices in the user's private scope
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device list
+  /v1/devices/{deviceId}/rotate:
+    post:
+      summary: Rotate broker credential for a trusted device
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: deviceId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Credential rotated
+  /v1/devices/approval-challenges:
+    post:
+      summary: Create trusted-device approval challenge for enrollment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requesterDeviceId]
+              properties:
+                requesterDeviceId:
+                  type: string
+      responses:
+        '201':
+          description: Challenge created
+  /v1/devices/approval-challenges/{challengeId}/approve:
+    post:
+      summary: Approve enrollment challenge from trusted device context
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: challengeId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Challenge approval result
+  /v1/transfers/route-decision:
+    post:
+      summary: Decide local vs cloud transfer route
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiverReachableLocally]
+              properties:
+                receiverReachableLocally:
+                  type: boolean
+      responses:
+        '200':
+          description: Route decision
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

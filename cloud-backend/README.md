@@ -167,6 +167,35 @@ klardrop/
     └── notifications # System-wide notifications
 ```
 
+
+## Authentication and Device Onboarding (Required for MQTT Cloud)
+
+To support cloud transfers safely, authentication must be layered:
+
+1. **User authentication (v1)**: Auth0 email magic-link login.
+2. **Device authentication**: per-device keypair and backend-issued credential.
+3. **Group authorization**: only devices in the same user group can exchange transfer topics.
+
+### Baseline onboarding flow
+
+1. User logs in and creates/opens their private group.
+2. Existing trusted session requests a short-lived pairing code.
+3. New device submits pairing code + generated public key.
+4. Backend verifies ownership and enrolls the device into the group.
+5. Backend returns scoped MQTT credential + topic ACL + certificate metadata.
+6. Device connects to MQTT and publishes signed presence.
+
+### Mandatory revocation behavior
+
+- Removing a device must revoke MQTT credentials immediately.
+- Revoked devices must be disconnected and denied reconnect.
+- Group devices must receive revocation events to reject stale senders.
+
+See `docs/mqtt-production-readiness-review.md` for the complete production-readiness checklist and proposed rollout plan.
+
+For staged execution details (auth provider decision, enrollment APIs, trust sync, and rollout milestones), see `docs/mqtt-auth-trust-production-plan.md`.
+API contract draft for Stage 1 implementation: `cloud-backend/device-registry/contracts/openapi-stage1-auth-enrollment.yaml`.
+
 ## Configuration
 
 Services are configured using environment variables:
