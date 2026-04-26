@@ -13,7 +13,7 @@ Sister docs (don't duplicate, link):
 - `docs/mqtt-production-readiness-review.md` — gap analysis driving the
   staged plan.
 - `docs/adr/0001-self-hosted-mqtt-cloud-stack.md` — architecture decision
-  for EMQX OSS + Keycloak + shared-secret broker webhook.
+  for Mosquitto + mosquitto-go-auth + Keycloak + shared-secret broker webhook.
 
 ---
 
@@ -24,14 +24,20 @@ Sister docs (don't duplicate, link):
 | **M0** Lock contracts | docs | done | topic tree, JWT claims, ACL matrix all pinned in code + OpenAPI. |
 | **M1** Harden device-registry | `cloud-backend/device-registry` | done | session/broker key split, audience-binding, mosquitto-go-auth webhook, audit, prod fail-fast. |
 | **M2** Stand up the broker | ops + compose | partial | self-host compose ready (Mosquitto + go-auth); TLS certs + prod k8s manifest pending. |
-| **M3** Client `common/` MQTT | `common/` KMP | partial | trust-set + sig + replay primitives done; platform MQTT client + DI wiring pending. |
-| **M4** Trust + auto-accept | `common/` + `device-registry` | partial | receiver gate done; trust-event publisher + MessageReceiver branch pending. |
+| **M3** Client `common/` MQTT | `common/` KMP | partial | trust + sig + replay primitives, Ed25519 actuals (JVM/Android), SecureKeyStore (file-backed JVM), HTTP DeviceRegistryClient, MqttCredentialsStore + Refresher all done. **Platform MQTT client (Paho/HiveMQ) + DI wiring still pending.** |
+| **M4** Trust + auto-accept | `common/` + `device-registry` | partial | receiver gate + trust-event publisher (server-side) done. **MessageReceiver branch still pending — needs M3's MQTT client first.** |
 | **M5** Smart routing | `common/` | todo | needs M3 platform client first. |
 | **M6** Hardening + launch | cross-cutting | todo | feature flag, kill switch, conformance tests, metrics, alerts. |
 
 Source-of-truth commits on `claude/review-mqtt-server-UPVot`:
-- `50e9a3b` self-host stack + EMQX webhook + OIDC + hardening
+- `50e9a3b` self-host stack + EMQX webhook + OIDC + hardening (superseded by `da299e7`)
 - `10790db` common/mqtt trust + auto-accept primitives
+- `da299e7` broker switch — EMQX → Mosquitto + mosquitto-go-auth
+- `<ed25519>` Ed25519 EnvelopeSigner / Verifier actuals (JVM/Android)
+- `<keystore>` SecureKeyStore — file-backed JVM impl + InMemory for tests
+- `571205d`  ktor-client DeviceRegistryClientHttp + MockEngine tests
+- `6a6e204`  TrustEventPublisher in device-registry (Paho)
+- `08539d3`  MqttCredentialsStore (DataStore) + Refresher decision logic
 
 ---
 
@@ -85,90 +91,127 @@ Source-of-truth commits on `claude/review-mqtt-server-UPVot`:
 - **`MqttPayload`** — sealed class of every body type (TransferRequest /
   Response / FileChunk / Progress / Control / Complete + Presence + TrustEvent).
 - **`EnvelopeSigner`/`EnvelopeVerifier`/`Clock`/`NonceProvider`** SPIs.
+- **`Ed25519` actuals** — `generateEd25519KeyPair`, `ed25519Signer(seed)`,
+  `ed25519Verifier()` via `java.security` Ed25519 on JVM/Android (Java 15+ /
+  Android API 33+). RFC 8032 raw 32-byte encoding for both seed and public
+  key. iOS stubbed (CryptoKit impl tracked under M3-iOS).
 - **`ReplayProtector`** — TTL+cap LRU keyed by `(senderDeviceId, nonce)`.
 - **`TrustedDeviceCache`** — interface + `InMemoryTrustedDeviceCache`.
-- **`DeviceRegistryClient`** — interface + `InMemoryDeviceRegistryClient`.
+- **`SecureKeyStore`** — `interface { loadOrGenerate(); clear() }` +
+  `InMemorySecureKeyStore` for tests + `FileSystemSecureKeyStore` for
+  desktop JVM (atomic 64-byte write, POSIX 0600). Android Keystore-backed
+  impl deferred until DI lands.
+- **`DeviceRegistryClient`** — interface + `InMemoryDeviceRegistryClient` +
+  **`DeviceRegistryClientHttp`** (ktor-client multiplatform; OkHttp on
+  JVM/Android, Darwin on iOS). `refreshCredentials(userId, deviceId)`
+  assembles a fully-formed `MqttCredentials` from the server's bare-bones
+  broker-token response. `DeviceRegistryException` for non-2xx.
 - **`MqttCredentials` / `MqttTopics` / `MqttConnectionState`** — single source
   of truth for client-side MQTT routing.
+- **`MqttCredentialsStore`** — interface + `InMemoryMqttCredentialsStore` +
+  `DataStoreMqttCredentialsStore` (protobuf-encoded under one preferences
+  key). Plus **`MqttCredentialsRefresher`** — `loadOrRefresh(userId,
+  deviceId)` returns cached or hits the registry; `decideFor(...)` is the
+  pure decision logic (UseCached / Refresh / NoCachedNorRefresh) driven by
+  TTL window + user/device match.
 - **`MqttIncomingMessageHandler`** — the auto-accept invariant. Returns
   `Outcome.Deliver` only when sender ∈ trust set ∧ signature valid ∧ fresh ∧
   receiver matches. `Outcome.Drop` is total and never throws.
 - **`MqttOutgoingMessageEncoder`** — sender-side complement using the same
   canonical layout.
 
+### Trust events — server side
+
+- **`TrustEventPublisher`** in `device-registry/services/`:
+    * `interface { publishEnrolled(userId, device); publishRevoked(userId, deviceId); close() }`.
+    * `LoggingTrustEventPublisher` — wired by default in dev; logs the event
+      so enrollment/revocation are observable without a running broker.
+    * `PahoTrustEventPublisher` — Eclipse Paho v3 client, lazy connect with
+      auto-reconnect, QoS 1, no retain. Wired in production when
+      `BrokerServiceConfig.isConfigured` (env: `MQTT_SERVICE_USERNAME` +
+      `MQTT_SERVICE_PASSWORD`).
+    * Hooked in `DeviceService.enrollDevice` and `revokeDevice` — failures
+      logged but never propagated to the transaction.
+
 ### Tests
 
-- `:device-registry:test` — **21 green** (12 BrokerAuthService [auth + ACL
-  matrix] + 2 nonce + 7 DeviceService).
-- `:klardrop-common:desktopJvmTest` (mqtt subset) — **19 green** (9 incoming
-  handler + 4 replay + 4 trust cache + 2 canonical).
+- `:device-registry:test` — **24 green**:
+    * 12 BrokerAuthServiceTest — JWT auth + ACL matrix.
+    * 7 DeviceServiceTest.
+    * 2 RedisServiceNonceTest.
+    * 3 TrustEventPublisherTest.
+- `:klardrop-common:desktopJvmTest` (mqtt subset) — **37 green**:
+    * 9 MqttIncomingMessageHandlerTest.
+    * 4 ReplayProtectorTest.
+    * 4 TrustedDeviceCacheTest.
+    * 2 SignedEnvelopeCanonicalTest.
+    * 5 Ed25519Test (round-trip, tamper, key mismatch, garbage, full
+      envelope round-trip via encoder + handler).
+    * 2 InMemorySecureKeyStoreTest.
+    * 3 FileSystemSecureKeyStoreTest.
+    * 6 DeviceRegistryClientHttpTest (MockEngine).
+    * 2 InMemoryMqttCredentialsStoreTest.
+    * 5 MqttCredentialsRefresherDecisionTest.
+
+Total: **61 tests across both modules, all green.**
 
 ---
 
 ## In progress / next up
 
-Listed in the order I plan to tackle them. Dependencies marked `→`.
+Listed in the order to tackle. Anything that needs a running broker is
+flagged — that's the boundary where this branch's scope ends until you can
+boot the self-host stack.
 
-1. `[wip]` **Ed25519 crypto actuals** for `EnvelopeSigner`/`EnvelopeVerifier`.
-   - JVM (`desktopJvmMain` and `androidMain`): use `java.security` Ed25519
-     (Java 15+; on Android needs API 33+ or BouncyCastle fallback).
-   - iOS: CryptoKit Curve25519 — stub for now, real impl when we tackle iOS.
-   - Test: round-trip sign/verify + tampered-bytes negative test.
+1. `[todo]` **`MqttModule` (DI wiring)** — extend `CommonComponent` to expose:
+   - `secureKeyStore()` (FileSystemSecureKeyStore on desktop / Android),
+   - `mqttCredentialsStore()` (DataStoreMqttCredentialsStore),
+   - `deviceRegistryClient()` (DeviceRegistryClientHttp with platform engine),
+   - `mqttCredentialsRefresher()`, `trustedDeviceCache()`,
+     `mqttIncomingMessageHandler()`, `mqttOutgoingMessageEncoder()`.
+   Add `enableMqttCloud: Boolean` to `ApplicationInfo`. **No broker needed.**
 
-2. `[todo]` **`SecureKeyStore` expect/actual** for the device's private signing key.
-   - `expect class SecureKeyStore` in commonMain; actuals on Android (Keystore-
-     backed cipher), JVM (PKCS#12 keystore in `~/.config/klardrop/`), iOS
-     (Keychain, deferred).
-   - Key generated at first launch; never leaves the device.
+2. `[todo]` **Platform `MqttConnectionManager` actual** — `expect class`
+   in commonMain; `desktopJvmMain` + `androidMain` use Eclipse Paho v3
+   (already a backend-side dep, easy to add to client) or HiveMQ v5 client.
+   - Auto-reconnect with exp backoff, JWT refresh at `expiresAtEpochMs - 60s`
+     (uses `MqttCredentialsRefresher`).
+   - Retained presence message + Last Will & Testament.
+   - iOS: stub throwing `NotImplementedError("M3-iOS")`.
+   **Needs a broker to verify end-to-end.**
 
-3. `[todo]` **`DeviceRegistryClientHttp`** (ktor-client multiplatform) +
-   MockEngine tests.
-   - Endpoints: `POST /v1/auth/session/exchange`, `GET /v1/users/{userId}/devices`,
-     `POST /v1/devices/me/broker-token`.
-   - Adds `ktor-client-core`/`-content-negotiation`/`-serialization-json` to
-     `commonMain`, OkHttp engine to JVM/Android, Darwin engine to iOS.
+3. `[todo]` **`MqttDiscoveryService`** — subscribes to
+   `klardrop/v1/users/{userId}/presence/+`, transforms presence events into
+   `DiscoveryDevice` with `DeviceConnectionType.MQTT`, feeds into the
+   existing `VisibleDevices`. **Needs broker.**
 
-4. `[todo]` **`MqttCredentialsStore`** (DataStore-backed persistence) so the
-   broker JWT survives restarts and the refresh loop knows when to ask.
+4. `[todo]` **Trust event subscriber on the client** — subscribes to
+   `klardrop/v1/users/{userId}/trust/events`, decodes
+   `TrustEventPublisher`'s JSON shape, calls
+   `TrustedDeviceCache.upsert/remove`. **Needs broker.**
 
-5. `[todo]` **Trust event publisher in device-registry** — when a device is
-   enrolled or revoked, publish a `MqttPayload.TrustEvent` to
-   `klardrop/v1/users/{userId}/trust/events` so all online devices update their
-   `TrustedDeviceCache` within seconds (without polling the HTTP API).
-   - Use Eclipse Paho Java client (already on the classpath via `transfer-service`).
-   - Hook into `DeviceService.enrollDevice` / `revokeDevice`.
-   - Sign the event with a **server signing key** (added to `BrokerJwtConfig`)
-     so clients verify it came from the registry, not a peer.
-
-6. `[todo]` **`MqttModule` (DI) — interfaces only.**
-   - Add `mqttConnectionManager()`, `mqttDiscoveryService()`,
-     `mqttTransferTransport()`, `trustedDeviceCache()`, `deviceRegistryClient()`,
-     `mqttIncomingMessageHandler()`, `mqttCredentialsStore()`, `secureKeyStore()`
-     to `CommonComponent`.
-   - Provide everything *except* the platform MQTT client (that's M3-deferred).
-   - Put the `enableMqttCloud` flag on `ApplicationInfo`.
-
-7. `[todo]` **Platform MQTT client actuals** (M3 finisher; needs a broker to
-   verify end-to-end).
-   - `MqttConnectionManager` expect class.
-   - JVM/Android actual: HiveMQ MQTT 5 client (or Paho fallback).
-   - iOS actual: stub throwing `NotImplementedError("M3-iOS")` — track in §Backlog.
-   - Auto-reconnect with exp backoff, JWT refresh at `expiresAtEpochMs - 60s`,
-     retained presence + LWT.
-
-8. `[todo]` **MessageReceiver branch for MQTT inbound** — when
+5. `[todo]` **MessageReceiver branch for MQTT inbound** — when
    `MqttIncomingMessageHandler.Outcome.Deliver` arrives, push directly to
    `ReceiveMessageStatus.Progress` (skip `PendingAuthorization`). Mirror of
    `NearbyReceiverConnectionHandler.kt:103-111` minus the prompt.
+   **Wireup-only; integration test needs broker.**
 
-9. `[todo]` **`SmartTransferManager`** — picks LOCAL_TCP if reachable in
+6. `[todo]` **`SmartTransferManager`** — picks LOCAL_TCP if reachable in
    `VisibleDevices`, else MQTT. Single sender entrypoint for the UI.
 
-10. `[todo]` **Conformance tests against live EMQX** (testcontainers).
-    - Cross-user isolation (broker rejects cross-user subscribe).
-    - Revoke → disconnect within 30s.
-    - Replayed signed envelope rejected by client.
-    - Local-then-cloud preference.
+7. `[todo]` **Android Keystore-backed `SecureKeyStore`** — replace
+   `FileSystemSecureKeyStore` on Android with an AES-GCM-encrypted blob
+   under a Keystore-protected key. Wire from DI.
+
+8. `[todo]` **iOS actuals** — `Ed25519.ios.kt` via CryptoKit Curve25519,
+   `SecureKeyStore` via Keychain. Tracked under M3-iOS.
+
+9. `[todo]` **Conformance tests against live Mosquitto** (testcontainers
+   running `iegomez/mosquitto-go-auth`).
+   - Cross-user isolation (broker rejects cross-user subscribe).
+   - Revoke → disconnect within 30s.
+   - Replayed signed envelope rejected by client.
+   - Local-then-cloud preference.
 
 ---
 
@@ -276,10 +319,10 @@ Listed in the order I plan to tackle them. Dependencies marked `→`.
 ### Verification commands
 
 ```bash
-# Server
+# Server (24 expected)
 cd cloud-backend/device-registry && gradle --no-daemon test
 
-# Client (mqtt subset)
+# Client mqtt subset (37 expected — Ed25519 + KeyStore + ktor + replay + ...)
 ./gradlew :klardrop-common:desktopJvmTest \
   --tests "com.carlom.klardrop.common.mqtt.*"
 
@@ -310,6 +353,17 @@ grep -rn 'BrokerSessionManager' --include='*.kt' cloud-backend
 
 Update top-down (newest first) when you finish a meaningful chunk.
 
+- **2026-04-26 (08539d3)** MqttCredentialsStore (DataStore + InMemory) +
+  MqttCredentialsRefresher decision logic. 7 new tests.
+- **2026-04-26 (6a6e204)** TrustEventPublisher in device-registry —
+  Logging/Noop/Paho variants; hooked into enroll + revoke. 3 new tests.
+- **2026-04-26 (571205d)** ktor-client DeviceRegistryClientHttp using
+  MockEngine; OkHttp on JVM/Android, Darwin on iOS. 6 new tests.
+- **2026-04-26 (SecureKeyStore)** SecureKeyStore — InMemory + file-based
+  JVM impl. 5 new tests.
+- **2026-04-26 (Ed25519)** Ed25519 EnvelopeSigner / Verifier actuals on
+  JVM/Android via java.security; iOS stubbed. 5 new tests. New
+  `jvmAndAndroidMain` source set.
 - **2026-04-26 (broker switch)** Replaced EMQX OSS with Eclipse Mosquitto +
   mosquitto-go-auth. Compose / config / ADR 0001 / OpenAPI / progress doc
   updated. `BrokerAuthService` split into `authenticateUser` + `checkAcl`
