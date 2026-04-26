@@ -18,6 +18,7 @@ mockk = "1.14.9"
 testcontainers = "2.0.5"
 testcontainersPostgresql = "1.21.4"
 shadow = "8.1.1"
+paho = "1.2.5"
 
 [libraries]
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
@@ -53,3 +54,6 @@ jwks-rsa = { module = "com.auth0:jwks-rsa", version.ref = "jwksRsa" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainersPostgresql" }
+
+# Eclipse Paho — used by TrustEventPublisher to push trust/events on enroll/revoke.
+paho-mqtt-client = { module = "org.eclipse.paho:org.eclipse.paho.client.mqttv3", version.ref = "paho" }

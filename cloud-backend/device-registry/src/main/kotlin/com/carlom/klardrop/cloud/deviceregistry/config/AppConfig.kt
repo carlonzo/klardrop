@@ -7,6 +7,7 @@ data class AppConfig(
     val sessionJwt: JwtConfig,
     val brokerJwt: BrokerJwtConfig,
     val mqtt: MqttBrokerConfig,
+    val brokerService: BrokerServiceConfig,
     val oidc: OidcConfig,
     val internalAuth: InternalAuthConfig,
     val environment: AppEnvironment
@@ -37,6 +38,12 @@ data class AppConfig(
                 mqtt = MqttBrokerConfig(
                     brokerUrl = env("MQTT_BROKER_URL", "ssl://broker.example.com:8883"),
                     topicRoot = env("MQTT_TOPIC_ROOT", "klardrop/v1")
+                ),
+                brokerService = BrokerServiceConfig(
+                    brokerUrl = env("MQTT_BROKER_SERVICE_URL", env("MQTT_BROKER_URL", "")),
+                    clientId = env("MQTT_SERVICE_CLIENT_ID", "klardrop-registry-service"),
+                    username = env("MQTT_SERVICE_USERNAME", ""),
+                    password = env("MQTT_SERVICE_PASSWORD", "")
                 ),
                 oidc = OidcConfig.load(),
                 internalAuth = InternalAuthConfig(
@@ -91,6 +98,22 @@ data class BrokerJwtConfig(
 
 data class MqttBrokerConfig(val brokerUrl: String, val topicRoot: String) {
     fun userScope(userId: String): String = "$topicRoot/users/$userId"
+}
+
+/**
+ * Credentials the device-registry uses to **publish** trust events to the
+ * broker (`klardrop/v1/users/{userId}/trust/events`). Optional — when
+ * unset, `LoggingTrustEventPublisher` is wired instead and clients fall back
+ * to `GET /v1/users/{userId}/devices` polling.
+ */
+data class BrokerServiceConfig(
+    val brokerUrl: String,
+    val clientId: String,
+    val username: String,
+    val password: String
+) {
+    val isConfigured: Boolean get() =
+        brokerUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank()
 }
 
 data class InternalAuthConfig(val sharedSecret: String) {

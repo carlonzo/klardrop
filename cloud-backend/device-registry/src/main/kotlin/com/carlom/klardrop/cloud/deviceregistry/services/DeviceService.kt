@@ -15,7 +15,8 @@ class DeviceService(
     private val brokerSessionManager: BrokerSessionManager,
     private val approvalService: ApprovalService,
     private val transferService: TransferService,
-    private val auditLogger: AuditLogger = NoopAuditLogger
+    private val auditLogger: AuditLogger = NoopAuditLogger,
+    private val trustEventPublisher: TrustEventPublisher = NoopTrustEventPublisher
 ) {
     // Stage 1
     fun exchangeSession(request: SessionExchangeRequest): SessionExchangeResponse {
@@ -66,6 +67,7 @@ class DeviceService(
         brokerSessionManager.registerSession(deviceId, UUID.randomUUID().toString())
         val brokerToken = tokenService.issueBrokerToken(userId, deviceId)
         auditLogger.record(AuditEvent.DeviceEnrolled(userId = userId, deviceId = deviceId))
+        trustEventPublisher.publishEnrolled(userId, device)
 
         return EnrollDeviceResponse(
             device = device,
@@ -82,6 +84,7 @@ class DeviceService(
         if (deviceRepository.revokeDevice(userId, deviceId)) {
             brokerSessionManager.disconnectDevice(userId, deviceId)
             auditLogger.record(AuditEvent.DeviceRevoked(userId = userId, deviceId = deviceId))
+            trustEventPublisher.publishRevoked(userId, deviceId)
         }
     }
 

@@ -34,6 +34,7 @@ dependencies {
 
     implementation(backendLibs.lettuce.core)
     implementation(backendLibs.kafka.clients)
+    implementation(backendLibs.paho.mqtt.client)
 
     implementation(backendLibs.kotlinx.serialization.json)
     implementation(backendLibs.kotlinx.serialization.protobuf)

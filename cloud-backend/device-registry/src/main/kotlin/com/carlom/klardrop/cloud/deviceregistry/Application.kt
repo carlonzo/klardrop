@@ -18,11 +18,14 @@ import com.carlom.klardrop.cloud.deviceregistry.services.DeviceService
 import com.carlom.klardrop.cloud.deviceregistry.services.IdentityProviderVerifier
 import com.carlom.klardrop.cloud.deviceregistry.services.InMemoryBrokerSessionManager
 import com.carlom.klardrop.cloud.deviceregistry.services.LoggingAuditLogger
+import com.carlom.klardrop.cloud.deviceregistry.services.LoggingTrustEventPublisher
 import com.carlom.klardrop.cloud.deviceregistry.services.MosquittoBrokerSessionManager
 import com.carlom.klardrop.cloud.deviceregistry.services.OidcIdentityProviderVerifier
+import com.carlom.klardrop.cloud.deviceregistry.services.PahoTrustEventPublisher
 import com.carlom.klardrop.cloud.deviceregistry.services.RedisService
 import com.carlom.klardrop.cloud.deviceregistry.services.StubIdentityProviderVerifier
 import com.carlom.klardrop.cloud.deviceregistry.services.TransferService
+import com.carlom.klardrop.cloud.deviceregistry.services.TrustEventPublisher
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -71,6 +74,17 @@ fun Application.module(config: AppConfig) {
         LoggingAuditLogger()
     }
 
+    val trustEventPublisher: TrustEventPublisher = if (config.brokerService.isConfigured) {
+        logger.info { "Broker service credentials present; using PahoTrustEventPublisher." }
+        PahoTrustEventPublisher(config.mqtt, config.brokerService)
+    } else {
+        logger.warn {
+            "Broker service credentials missing (MQTT_SERVICE_USERNAME/PASSWORD); " +
+                "trust events will be logged only — clients must reconcile via HTTP polling."
+        }
+        LoggingTrustEventPublisher()
+    }
+
     val deviceService = DeviceService(
         redisService = redisService,
         tokenService = tokenService,
@@ -80,7 +94,8 @@ fun Application.module(config: AppConfig) {
         brokerSessionManager = brokerSessionManager,
         approvalService = ApprovalService(),
         transferService = TransferService(),
-        auditLogger = auditLogger
+        auditLogger = auditLogger,
+        trustEventPublisher = trustEventPublisher
     )
 
     val brokerAuthService = BrokerAuthService(
@@ -105,6 +120,7 @@ fun Application.module(config: AppConfig) {
     }
 
     environment.monitor.subscribe(ApplicationStopping) {
+        runCatching { trustEventPublisher.close() }
         redisService.close()
         DatabaseFactory.close()
     }
