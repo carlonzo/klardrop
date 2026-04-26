@@ -30,6 +30,10 @@ kotlin {
 
         implementation(deps.ktor.network)
         implementation(deps.ktor.serialization.protobuf)
+        implementation(deps.ktor.client.core)
+        implementation(deps.ktor.client.content.negotiation)
+        implementation(deps.ktor.serialization.kotlinx.json)
+        implementation(deps.kotlinx.serialization.json)
 
         implementation(deps.kotlinx.io.core)
         implementation(deps.kotlinx.io.okio)
@@ -49,6 +53,7 @@ kotlin {
         implementation(kotlin("test"))
         implementation(deps.turbine)
         implementation(deps.kotlinx.coroutines.test)
+        implementation(deps.ktor.client.mock)
       }
 
       kotlin.srcDir("src/integrationCommonTest/kotlin")
@@ -58,6 +63,9 @@ kotlin {
     // code that depends on `java.security` etc. but should not leak to iOS.
     val jvmAndAndroidMain by creating {
       dependsOn(commonMain.get())
+      dependencies {
+        implementation(deps.ktor.client.okhttp)
+      }
     }
 
     val androidMain by getting {
@@ -80,7 +88,7 @@ kotlin {
       dependencies {
         implementation(deps.bugsnag.kmp)
         implementation(deps.sqldelight.native.driver)
-
+        implementation(deps.ktor.client.darwin)
       }
     }
 
