@@ -1,0 +1,154 @@
+# Self-hosted Klardrop cloud stack: device-registry + EMQX OSS + Keycloak +
+# Postgres + Redis. Boots a complete control + data plane on a single machine
+# so a developer can exercise the full enrollment + MQTT flow end-to-end.
+#
+# Prereqs: Docker Engine 24+, ~2GB RAM, ports 1883/8081/8083/9001/8443/5432/6379 free.
+#
+# Usage:
+#   cp .env.selfhost.example .env
+#   docker compose -f docker-compose.selfhost.yml up -d
+#   # then visit http://localhost:8083 (Keycloak admin, kc-admin / kc-admin)
+#   #            http://localhost:18083 (EMQX dashboard, admin / public)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: klardrop
+      POSTGRES_USER: klardrop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-klardrop123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U klardrop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Identity provider — replaces Auth0 in the self-hosted topology.
+  # First run will boot an empty Keycloak; create the `klardrop` realm and a
+  # client with audience=klardrop-device-registry from the admin console.
+  # ────────────────────────────────────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: ${KC_ADMIN_USER:-kc-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-kc-admin}
+      KC_DB: dev-mem
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    volumes:
+      - ./keycloak/realm-export:/opt/keycloak/data/import:ro
+    ports:
+      - "8083:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && head -1 <&3 | grep '200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # MQTT broker — EMQX OSS. JWT auth + HTTP ACL wired to device-registry.
+  # ────────────────────────────────────────────────────────────────────────────
+  emqx:
+    image: emqx/emqx:5.8
+    environment:
+      EMQX_NODE__COOKIE: "klardropcookie"
+      # Allow the dashboard with default admin / public for local dev.
+      EMQX_DASHBOARD__DEFAULT_USERNAME: "admin"
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: "public"
+      # Tell EMQX to disable anonymous auth — only JWT'd clients allowed.
+      EMQX_LISTENERS__TCP__DEFAULT__ENABLE_AUTHN: "true"
+      EMQX_AUTHENTICATION__1__MECHANISM: "password_based"
+      EMQX_AUTHENTICATION__1__BACKEND: "http"
+      EMQX_AUTHENTICATION__1__METHOD: "post"
+      EMQX_AUTHENTICATION__1__URL: "http://device-registry:8081/api/v1/internal/broker/auth"
+      EMQX_AUTHENTICATION__1__HEADERS__CONTENT_TYPE: "application/json"
+      EMQX_AUTHENTICATION__1__HEADERS__AUTHORIZATION: "Bearer ${INTERNAL_SHARED_SECRET:-internal-dev-secret}"
+      EMQX_AUTHENTICATION__1__BODY__USERNAME: "${username}"
+      EMQX_AUTHENTICATION__1__BODY__PASSWORD: "${password}"
+      EMQX_AUTHENTICATION__1__BODY__CLIENT_ID: "${clientid}"
+      EMQX_AUTHORIZATION__SOURCES__1__TYPE: "http"
+      EMQX_AUTHORIZATION__SOURCES__1__METHOD: "post"
+      EMQX_AUTHORIZATION__SOURCES__1__URL: "http://device-registry:8081/api/v1/internal/broker/auth"
+      EMQX_AUTHORIZATION__SOURCES__1__HEADERS__CONTENT_TYPE: "application/json"
+      EMQX_AUTHORIZATION__SOURCES__1__HEADERS__AUTHORIZATION: "Bearer ${INTERNAL_SHARED_SECRET:-internal-dev-secret}"
+      EMQX_AUTHORIZATION__SOURCES__1__BODY__USERNAME: "${username}"
+      EMQX_AUTHORIZATION__SOURCES__1__BODY__CLIENT_ID: "${clientid}"
+      EMQX_AUTHORIZATION__NO_MATCH: "deny"
+    ports:
+      - "1883:1883"        # MQTT (plain — for local dev only; use 8883 in prod)
+      - "8083:8083"        # MQTT over WebSocket
+      - "8084:8084"        # MQTT over WSS
+      - "8883:8883"        # MQTT over TLS
+      - "18083:18083"      # Dashboard
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    depends_on:
+      device-registry:
+        condition: service_started
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Klardrop device-registry — the control plane.
+  # ────────────────────────────────────────────────────────────────────────────
+  device-registry:
+    build:
+      context: ../device-registry
+      dockerfile: ../docker/Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HOST: 0.0.0.0
+      PORT: 8081
+      DATABASE_URL: jdbc:postgresql://postgres:5432/klardrop
+      DATABASE_USER: klardrop
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-klardrop123}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev-session-secret-change-me}
+      JWT_ISSUER: klardrop-cloud
+      JWT_AUDIENCE: klardrop-device-registry
+      BROKER_JWT_SECRET: ${BROKER_JWT_SECRET:-dev-broker-secret-change-me}
+      BROKER_JWT_AUDIENCE: klardrop-mqtt-broker
+      BROKER_JWT_TTL_SECONDS: "900"
+      MQTT_BROKER_URL: ssl://emqx:8883
+      MQTT_TOPIC_ROOT: klardrop/v1
+      OIDC_ISSUER: http://keycloak:8080/realms/klardrop
+      OIDC_AUDIENCE: klardrop-device-registry
+      EMQX_API_URL: http://emqx:18083
+      EMQX_API_KEY: ${EMQX_API_KEY:-emqx-api-key-change-me}
+      EMQX_API_SECRET: ${EMQX_API_SECRET:-emqx-api-secret-change-me}
+      INTERNAL_SHARED_SECRET: ${INTERNAL_SHARED_SECRET:-internal-dev-secret}
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:
+  emqx_data:
+  emqx_log:

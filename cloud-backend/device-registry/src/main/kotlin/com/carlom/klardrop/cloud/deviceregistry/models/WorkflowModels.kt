@@ -5,7 +5,9 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class RotateDeviceCredentialResponse(
     val deviceId: String,
-    val brokerToken: String
+    val brokerToken: String,
+    val brokerTokenExpiresAt: Long,
+    val brokerTokenTtlSeconds: Long
 )
 
 @Serializable
@@ -39,4 +41,39 @@ enum class TransferRoute {
 @Serializable
 data class RouteDecisionResponse(
     val route: TransferRoute
+)
+
+/** Request body for the broker authn/ACL webhook (`/v1/internal/broker/auth`). */
+@Serializable
+data class BrokerAuthRequest(
+    val username: String? = null,
+    val password: String,
+    val clientId: String? = null
+)
+
+@Serializable
+data class BrokerAuthResponse(
+    val result: BrokerAuthResult,
+    val isSuperuser: Boolean = false,
+    val userId: String? = null,
+    val deviceId: String? = null,
+    val publishAcl: List<String> = emptyList(),
+    val subscribeAcl: List<String> = emptyList(),
+    val expireAt: Long? = null,
+    val reason: String? = null
+)
+
+@Serializable
+enum class BrokerAuthResult {
+    @kotlinx.serialization.SerialName("allow") ALLOW,
+    @kotlinx.serialization.SerialName("deny")  DENY,
+    @kotlinx.serialization.SerialName("ignore") IGNORE
+}
+
+@Serializable
+data class BrokerTokenRefreshResponse(
+    val deviceId: String,
+    val brokerToken: String,
+    val brokerTokenExpiresAt: Long,
+    val brokerTokenTtlSeconds: Long
 )

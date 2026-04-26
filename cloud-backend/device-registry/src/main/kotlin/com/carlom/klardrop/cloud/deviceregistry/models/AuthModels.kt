@@ -44,7 +44,10 @@ data class EnrollDeviceRequest(
 data class EnrollDeviceResponse(
     val device: Device,
     val brokerToken: String,
-    val topicScope: String
+    val brokerTokenExpiresAt: Long,
+    val brokerTokenTtlSeconds: Long,
+    val topicScope: String,
+    val mqttClientId: String
 )
 
 @Serializable

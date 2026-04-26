@@ -4,7 +4,8 @@ import com.auth0.jwk.JwkProviderBuilder
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.interfaces.RSAKeyProvider
-import com.carlom.klardrop.cloud.deviceregistry.config.Auth0Config
+import com.carlom.klardrop.cloud.deviceregistry.config.OidcConfig
+import java.net.URI
 import java.security.MessageDigest
 import java.security.interfaces.RSAPrivateKey
 import java.security.interfaces.RSAPublicKey
@@ -16,7 +17,7 @@ interface IdentityProviderVerifier {
 
 data class VerifiedIdentity(
     val providerUserId: String,
-    val provider: String = "auth0"
+    val provider: String = "oidc"
 ) {
     fun internalUserId(): String {
         val raw = "$provider:$providerUserId"
@@ -26,23 +27,33 @@ data class VerifiedIdentity(
     }
 }
 
-class Auth0IdentityProviderVerifier(auth0Config: Auth0Config) : IdentityProviderVerifier {
-    private val jwtVerifier = JWT.require(Algorithm.RSA256(Auth0RsaKeyProvider(auth0Config.domain)))
-        .withIssuer(auth0Config.issuer)
-        .withAudience(auth0Config.audience)
+/**
+ * OIDC token verifier that fetches the issuer's JWKS and validates RS256
+ * signatures, issuer, and audience. Works with Auth0, Keycloak, Authentik,
+ * Ory Hydra, or any other compliant provider.
+ */
+class OidcIdentityProviderVerifier(private val oidcConfig: OidcConfig) : IdentityProviderVerifier {
+    private val jwtVerifier = JWT.require(Algorithm.RSA256(RemoteJwksKeyProvider(oidcConfig.jwksUrl)))
+        .withIssuer(oidcConfig.issuer.trimEnd('/'))
+        .withAudience(oidcConfig.audience)
+        .acceptLeeway(LEEWAY_SECONDS)
         .build()
 
     override fun verify(idToken: String): VerifiedIdentity {
         require(idToken.isNotBlank()) { "idToken is required" }
         val decoded = jwtVerifier.verify(idToken)
         val subject = decoded.subject?.trim().orEmpty()
-        require(subject.isNotBlank()) { "Auth0 subject is missing" }
-        return VerifiedIdentity(providerUserId = subject)
+        require(subject.isNotBlank()) { "Identity provider subject is missing" }
+        return VerifiedIdentity(providerUserId = subject, provider = oidcConfig.provider)
+    }
+
+    companion object {
+        private const val LEEWAY_SECONDS = 30L
     }
 }
 
-private class Auth0RsaKeyProvider(domain: String) : RSAKeyProvider {
-    private val jwkProvider = JwkProviderBuilder(domain)
+private class RemoteJwksKeyProvider(jwksUrl: String) : RSAKeyProvider {
+    private val jwkProvider = JwkProviderBuilder(URI.create(jwksUrl).toURL())
         .cached(10, 24, TimeUnit.HOURS)
         .rateLimited(10, 1, TimeUnit.MINUTES)
         .build()
@@ -58,9 +69,13 @@ private class Auth0RsaKeyProvider(domain: String) : RSAKeyProvider {
     override fun getPrivateKeyId(): String? = null
 }
 
+/**
+ * Local-only verifier for development. Accepts tokens shaped `sub:<user-id>`
+ * and uses the bare user-id as the OIDC subject. Never enable in production.
+ */
 class StubIdentityProviderVerifier : IdentityProviderVerifier {
     override fun verify(idToken: String): VerifiedIdentity {
         require(idToken.startsWith("sub:")) { "Unsupported token format for stub verifier" }
-        return VerifiedIdentity(providerUserId = idToken.removePrefix("sub:").trim())
+        return VerifiedIdentity(providerUserId = idToken.removePrefix("sub:").trim(), provider = "stub")
     }
 }

@@ -6,14 +6,23 @@ import com.carlom.klardrop.cloud.deviceregistry.plugins.*
 import com.carlom.klardrop.cloud.deviceregistry.repository.ExposedDeviceRepository
 import com.carlom.klardrop.cloud.deviceregistry.repository.InMemoryDeviceRepository
 import com.carlom.klardrop.cloud.deviceregistry.routes.deviceRoutes
+import com.carlom.klardrop.cloud.deviceregistry.routes.internalRoutes
 import com.carlom.klardrop.cloud.deviceregistry.security.TokenService
 import com.carlom.klardrop.cloud.deviceregistry.services.ApprovalService
-import com.carlom.klardrop.cloud.deviceregistry.services.Auth0IdentityProviderVerifier
+import com.carlom.klardrop.cloud.deviceregistry.services.AuditLogger
+import com.carlom.klardrop.cloud.deviceregistry.services.BrokerAuthService
+import com.carlom.klardrop.cloud.deviceregistry.services.BrokerSessionManager
+import com.carlom.klardrop.cloud.deviceregistry.services.CompositeAuditLogger
+import com.carlom.klardrop.cloud.deviceregistry.services.DatabaseAuditLogger
 import com.carlom.klardrop.cloud.deviceregistry.services.DeviceService
+import com.carlom.klardrop.cloud.deviceregistry.services.EmqxBrokerSessionManager
+import com.carlom.klardrop.cloud.deviceregistry.services.IdentityProviderVerifier
 import com.carlom.klardrop.cloud.deviceregistry.services.InMemoryBrokerSessionManager
+import com.carlom.klardrop.cloud.deviceregistry.services.LoggingAuditLogger
+import com.carlom.klardrop.cloud.deviceregistry.services.OidcIdentityProviderVerifier
 import com.carlom.klardrop.cloud.deviceregistry.services.RedisService
-import com.carlom.klardrop.cloud.deviceregistry.services.TransferService
 import com.carlom.klardrop.cloud.deviceregistry.services.StubIdentityProviderVerifier
+import com.carlom.klardrop.cloud.deviceregistry.services.TransferService
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -34,18 +43,34 @@ fun main() {
 }
 
 fun Application.module(config: AppConfig) {
+    enforceProductionInvariants(config)
+
     DatabaseFactory.init(config.database)
 
     val redisService = RedisService(config.redis)
-    val tokenService = TokenService(config.jwt)
-    val identityProviderVerifier = if (config.auth0.domain.isBlank()) {
-        logger.warn { "AUTH0_DOMAIN is empty. Falling back to stub identity verifier for local development." }
-        StubIdentityProviderVerifier()
+    val tokenService = TokenService(config.sessionJwt, config.brokerJwt)
+    val identityProviderVerifier = buildIdentityProviderVerifier(config)
+    val deviceRepository = if (DatabaseFactory.connected) ExposedDeviceRepository() else InMemoryDeviceRepository()
+    val brokerSessionManager: BrokerSessionManager = if (config.emqx.isConfigured && redisService.isConnected) {
+        logger.info { "EMQX admin API and Redis are configured; using EmqxBrokerSessionManager." }
+        EmqxBrokerSessionManager(
+            emqxConfig = config.emqx,
+            redis = redisService.requireCommands(),
+            brokerTokenTtlSeconds = config.brokerJwt.ttlSeconds
+        )
     } else {
-        Auth0IdentityProviderVerifier(config.auth0)
+        logger.warn {
+            "EMQX admin API or Redis not configured; using InMemoryBrokerSessionManager " +
+                "(will NOT meet the 30s revocation SLA in multi-replica deployments)."
+        }
+        InMemoryBrokerSessionManager()
     }
 
-    val deviceRepository = if (DatabaseFactory.connected) ExposedDeviceRepository() else InMemoryDeviceRepository()
+    val auditLogger: AuditLogger = if (DatabaseFactory.connected) {
+        CompositeAuditLogger(listOf(LoggingAuditLogger(), DatabaseAuditLogger()))
+    } else {
+        LoggingAuditLogger()
+    }
 
     val deviceService = DeviceService(
         redisService = redisService,
@@ -53,20 +78,30 @@ fun Application.module(config: AppConfig) {
         mqttBrokerConfig = config.mqtt,
         identityProviderVerifier = identityProviderVerifier,
         deviceRepository = deviceRepository,
-        brokerSessionManager = InMemoryBrokerSessionManager(),
+        brokerSessionManager = brokerSessionManager,
         approvalService = ApprovalService(),
-        transferService = TransferService()
+        transferService = TransferService(),
+        auditLogger = auditLogger
+    )
+
+    val brokerAuthService = BrokerAuthService(
+        tokenService = tokenService,
+        mqttConfig = config.mqtt,
+        deviceRepository = deviceRepository,
+        brokerSessionManager = brokerSessionManager,
+        auditLogger = auditLogger
     )
 
     configureSerialization()
     configureMonitoring()
-    configureSecurity(config.jwt)
+    configureSecurity(config.sessionJwt)
     configureHTTP()
     configureLogging()
 
     routing {
         route("/api/v1") {
             deviceRoutes(deviceService)
+            internalRoutes(brokerAuthService, config.internalAuth)
         }
     }
 
@@ -75,5 +110,43 @@ fun Application.module(config: AppConfig) {
         DatabaseFactory.close()
     }
 
-    logger.info { "Device Registry Service started on ${config.server.host}:${config.server.port}" }
+    logger.info {
+        "Device Registry Service started on ${config.server.host}:${config.server.port} " +
+            "(env=${config.environment}, oidc=${config.oidc.provider}, broker=${if (config.emqx.isConfigured) "emqx" else "in-memory"})"
+    }
+}
+
+private fun buildIdentityProviderVerifier(config: AppConfig): IdentityProviderVerifier {
+    if (!config.oidc.isConfigured) {
+        logger.warn { "OIDC issuer not configured; falling back to stub identity verifier for local dev." }
+        return StubIdentityProviderVerifier()
+    }
+    logger.info { "Identity provider configured: issuer=${config.oidc.issuer} provider=${config.oidc.provider}" }
+    return OidcIdentityProviderVerifier(config.oidc)
+}
+
+/**
+ * Hard-fails startup when running in production with development defaults that
+ * would silently weaken security or break revocation.
+ */
+private fun enforceProductionInvariants(config: AppConfig) {
+    if (!config.environment.isProduction) return
+
+    val violations = buildList {
+        if (config.sessionJwt.secret == "dev-session-secret-change-me") add("JWT_SECRET is the dev default")
+        if (config.brokerJwt.secret == config.sessionJwt.secret + "-broker") add("BROKER_JWT_SECRET not set; derived from JWT_SECRET")
+        if (config.brokerJwt.secret == config.sessionJwt.secret) add("BROKER_JWT_SECRET equals JWT_SECRET")
+        if (!config.database.isConfigured) add("DATABASE_URL not set (would use in-memory device repository)")
+        if (!config.redis.isConfigured) add("REDIS_URL not set (pairing codes / revocations would be per-replica)")
+        if (!config.oidc.isConfigured) add("OIDC issuer not set (stub verifier accepts arbitrary IDs)")
+        if (!config.emqx.isConfigured) add("EMQX_API_URL/KEY/SECRET not set (revoke would not kick live MQTT sessions)")
+        if (!config.internalAuth.isConfigured) add("INTERNAL_SHARED_SECRET not set (broker authn webhook would refuse all)")
+        if (config.brokerJwt.ttlSeconds > 3600) add("BROKER_JWT_TTL_SECONDS=${config.brokerJwt.ttlSeconds} > 3600; reduce for revocation SLA")
+    }
+    if (violations.isNotEmpty()) {
+        val message = "Refusing to start in production with insecure config:\n" +
+            violations.joinToString("\n") { "  - $it" }
+        logger.error { message }
+        throw IllegalStateException(message)
+    }
 }

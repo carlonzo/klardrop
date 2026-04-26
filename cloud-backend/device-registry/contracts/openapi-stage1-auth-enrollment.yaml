@@ -1,13 +1,18 @@
 openapi: 3.0.3
 info:
-  title: Klardrop Cloud Device Registry - Stage 1 Auth & Enrollment API
-  version: 0.1.0
+  title: Klardrop Cloud Device Registry - Auth, Enrollment & Broker API
+  version: 0.2.0
+  description: |
+    Two listener surfaces:
+      * Public API (`/v1/...`)        — bearer JWT (session token) auth.
+      * Internal API (`/v1/internal/...`) — bearer shared-secret; consumed by
+        the MQTT broker only. Must NOT be exposed to the public internet.
 servers:
   - url: https://api.klardrop.example.com
 paths:
   /v1/auth/session/exchange:
     post:
-      summary: Exchange Auth0 magic-link ID token for Klardrop session
+      summary: Exchange OIDC (Auth0/Keycloak/...) ID token for Klardrop session
       requestBody:
         required: true
         content:
@@ -151,6 +156,78 @@ paths:
       responses:
         '200':
           description: Challenge approval result
+  /v1/devices/me/broker-token:
+    post:
+      summary: Refresh the short-lived MQTT broker JWT for a trusted device
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceId]
+              properties:
+                deviceId:
+                  type: string
+      responses:
+        '200':
+          description: New broker token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deviceId: { type: string }
+                  brokerToken: { type: string }
+                  brokerTokenExpiresAt: { type: integer, format: int64 }
+                  brokerTokenTtlSeconds: { type: integer, format: int64 }
+  /v1/internal/broker/auth:
+    post:
+      summary: MQTT broker authn + authz webhook (internal listener only)
+      description: |
+        Called by the EMQX HTTP authentication and HTTP authorization sources
+        on every CONNECT (and cached for the JWT lifetime). Returns the topic
+        ACL for the user's private subtree, or denies if the broker JWT is
+        invalid / the device is revoked / clientId doesn't match.
+
+        Authenticated by `Authorization: Bearer ${INTERNAL_SHARED_SECRET}`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                username: { type: string, nullable: true, description: "MQTT username (unused)" }
+                password: { type: string, description: "MQTT password = broker JWT" }
+                clientId: { type: string, nullable: true, description: "MQTT clientId, must equal klardrop_<userId>_<deviceId>" }
+      responses:
+        '200':
+          description: Allow or deny payload (HTTP 200 in both cases per EMQX contract)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result: { type: string, enum: [allow, deny, ignore] }
+                  isSuperuser: { type: boolean }
+                  userId: { type: string, nullable: true }
+                  deviceId: { type: string, nullable: true }
+                  publishAcl:
+                    type: array
+                    items: { type: string }
+                  subscribeAcl:
+                    type: array
+                    items: { type: string }
+                  expireAt: { type: integer, format: int64, nullable: true }
+                  reason: { type: string, nullable: true }
+        '401':
+          description: Internal shared-secret missing or wrong
+        '503':
+          description: Internal auth not configured on this deployment
   /v1/transfers/route-decision:
     post:
       summary: Decide local vs cloud transfer route

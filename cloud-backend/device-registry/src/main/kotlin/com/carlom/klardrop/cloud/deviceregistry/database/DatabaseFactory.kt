@@ -1,6 +1,7 @@
 package com.carlom.klardrop.cloud.deviceregistry.database
 
 import com.carlom.klardrop.cloud.deviceregistry.config.DatabaseConfig
+import com.carlom.klardrop.cloud.deviceregistry.database.tables.AuditEventsTable
 import com.carlom.klardrop.cloud.deviceregistry.database.tables.DevicesTable
 import com.carlom.klardrop.cloud.deviceregistry.database.tables.UsersTable
 import com.zaxxer.hikari.HikariConfig
@@ -40,7 +41,7 @@ object DatabaseFactory {
         Database.connect(dataSource!!)
 
         transaction {
-            SchemaUtils.createMissingTablesAndColumns(UsersTable, DevicesTable)
+            SchemaUtils.createMissingTablesAndColumns(UsersTable, DevicesTable, AuditEventsTable)
         }
 
         connected = true

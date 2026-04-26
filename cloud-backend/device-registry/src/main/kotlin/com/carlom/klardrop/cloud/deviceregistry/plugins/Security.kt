@@ -15,12 +15,16 @@ fun Application.configureSecurity(jwtConfig: JwtConfig) {
                 JWT
                     .require(Algorithm.HMAC256(jwtConfig.secret))
                     .withIssuer(jwtConfig.issuer)
+                    .withAudience(jwtConfig.audience)
+                    .acceptLeeway(JWT_LEEWAY_SECONDS)
                     .build()
             )
             validate { credential ->
-                if (credential.payload.getClaim("user_id").asString().isNullOrBlank()) null
-                else JWTPrincipal(credential.payload)
+                val userId = credential.payload.getClaim("user_id").asString()
+                if (userId.isNullOrBlank()) null else JWTPrincipal(credential.payload)
             }
         }
     }
 }
+
+private const val JWT_LEEWAY_SECONDS = 30L

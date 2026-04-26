@@ -194,7 +194,16 @@ To support cloud transfers safely, authentication must be layered:
 See `docs/mqtt-production-readiness-review.md` for the complete production-readiness checklist and proposed rollout plan.
 
 For staged execution details (auth provider decision, enrollment APIs, trust sync, and rollout milestones), see `docs/mqtt-auth-trust-production-plan.md`.
-API contract draft for Stage 1 implementation: `cloud-backend/device-registry/contracts/openapi-stage1-auth-enrollment.yaml`.
+
+For the **self-hosted topology** (Keycloak + EMQX OSS + device-registry +
+Postgres + Redis), see `docs/adr/0001-self-hosted-mqtt-cloud-stack.md`. A
+complete one-machine dev stack lives at
+`cloud-backend/docker/docker-compose.selfhost.yml` — copy
+`cloud-backend/docker/.env.selfhost.example` to `.env` and run
+`docker compose -f cloud-backend/docker/docker-compose.selfhost.yml up -d`.
+
+API contract: `cloud-backend/device-registry/contracts/openapi-stage1-auth-enrollment.yaml`
+(includes the `/v1/internal/broker/auth` webhook called by EMQX).
 
 ## Configuration
 
