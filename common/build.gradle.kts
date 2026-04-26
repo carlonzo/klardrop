@@ -54,7 +54,14 @@ kotlin {
       kotlin.srcDir("src/integrationCommonTest/kotlin")
     }
 
+    // Manual intermediate source set shared between Android + JVM. Used for
+    // code that depends on `java.security` etc. but should not leak to iOS.
+    val jvmAndAndroidMain by creating {
+      dependsOn(commonMain.get())
+    }
+
     val androidMain by getting {
+      dependsOn(jvmAndAndroidMain)
       dependencies {
         implementation(deps.kotlinx.coroutines.android)
         implementation(deps.simplestorage)
@@ -78,6 +85,7 @@ kotlin {
     }
 
     val desktopJvmMain by getting {
+      dependsOn(jvmAndAndroidMain)
       dependencies {
         implementation(deps.jmdns)
         implementation(deps.bugsnag.jvm)
