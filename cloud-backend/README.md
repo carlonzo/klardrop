@@ -195,8 +195,8 @@ See `docs/mqtt-production-readiness-review.md` for the complete production-readi
 
 For staged execution details (auth provider decision, enrollment APIs, trust sync, and rollout milestones), see `docs/mqtt-auth-trust-production-plan.md`.
 
-For the **self-hosted topology** (Keycloak + EMQX OSS + device-registry +
-Postgres + Redis), see `docs/adr/0001-self-hosted-mqtt-cloud-stack.md`. A
+For the **self-hosted topology** (Keycloak + Mosquitto + mosquitto-go-auth +
+device-registry + Postgres + Redis), see `docs/adr/0001-self-hosted-mqtt-cloud-stack.md`. A
 complete one-machine dev stack lives at
 `cloud-backend/docker/docker-compose.selfhost.yml` — copy
 `cloud-backend/docker/.env.selfhost.example` to `.env` and run

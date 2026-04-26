@@ -15,10 +15,10 @@ import com.carlom.klardrop.cloud.deviceregistry.services.BrokerSessionManager
 import com.carlom.klardrop.cloud.deviceregistry.services.CompositeAuditLogger
 import com.carlom.klardrop.cloud.deviceregistry.services.DatabaseAuditLogger
 import com.carlom.klardrop.cloud.deviceregistry.services.DeviceService
-import com.carlom.klardrop.cloud.deviceregistry.services.EmqxBrokerSessionManager
 import com.carlom.klardrop.cloud.deviceregistry.services.IdentityProviderVerifier
 import com.carlom.klardrop.cloud.deviceregistry.services.InMemoryBrokerSessionManager
 import com.carlom.klardrop.cloud.deviceregistry.services.LoggingAuditLogger
+import com.carlom.klardrop.cloud.deviceregistry.services.MosquittoBrokerSessionManager
 import com.carlom.klardrop.cloud.deviceregistry.services.OidcIdentityProviderVerifier
 import com.carlom.klardrop.cloud.deviceregistry.services.RedisService
 import com.carlom.klardrop.cloud.deviceregistry.services.StubIdentityProviderVerifier
@@ -51,16 +51,15 @@ fun Application.module(config: AppConfig) {
     val tokenService = TokenService(config.sessionJwt, config.brokerJwt)
     val identityProviderVerifier = buildIdentityProviderVerifier(config)
     val deviceRepository = if (DatabaseFactory.connected) ExposedDeviceRepository() else InMemoryDeviceRepository()
-    val brokerSessionManager: BrokerSessionManager = if (config.emqx.isConfigured && redisService.isConnected) {
-        logger.info { "EMQX admin API and Redis are configured; using EmqxBrokerSessionManager." }
-        EmqxBrokerSessionManager(
-            emqxConfig = config.emqx,
+    val brokerSessionManager: BrokerSessionManager = if (redisService.isConnected) {
+        logger.info { "Redis configured; using MosquittoBrokerSessionManager." }
+        MosquittoBrokerSessionManager(
             redis = redisService.requireCommands(),
             brokerTokenTtlSeconds = config.brokerJwt.ttlSeconds
         )
     } else {
         logger.warn {
-            "EMQX admin API or Redis not configured; using InMemoryBrokerSessionManager " +
+            "Redis not configured; using InMemoryBrokerSessionManager " +
                 "(will NOT meet the 30s revocation SLA in multi-replica deployments)."
         }
         InMemoryBrokerSessionManager()
@@ -112,7 +111,8 @@ fun Application.module(config: AppConfig) {
 
     logger.info {
         "Device Registry Service started on ${config.server.host}:${config.server.port} " +
-            "(env=${config.environment}, oidc=${config.oidc.provider}, broker=${if (config.emqx.isConfigured) "emqx" else "in-memory"})"
+            "(env=${config.environment}, oidc=${config.oidc.provider}, " +
+            "broker=mosquitto, sessions=${if (redisService.isConnected) "redis" else "in-memory"})"
     }
 }
 
@@ -139,7 +139,6 @@ private fun enforceProductionInvariants(config: AppConfig) {
         if (!config.database.isConfigured) add("DATABASE_URL not set (would use in-memory device repository)")
         if (!config.redis.isConfigured) add("REDIS_URL not set (pairing codes / revocations would be per-replica)")
         if (!config.oidc.isConfigured) add("OIDC issuer not set (stub verifier accepts arbitrary IDs)")
-        if (!config.emqx.isConfigured) add("EMQX_API_URL/KEY/SECRET not set (revoke would not kick live MQTT sessions)")
         if (!config.internalAuth.isConfigured) add("INTERNAL_SHARED_SECRET not set (broker authn webhook would refuse all)")
         if (config.brokerJwt.ttlSeconds > 3600) add("BROKER_JWT_TTL_SECONDS=${config.brokerJwt.ttlSeconds} > 3600; reduce for revocation SLA")
     }

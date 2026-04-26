@@ -43,31 +43,20 @@ data class RouteDecisionResponse(
     val route: TransferRoute
 )
 
-/** Request body for the broker authn/ACL webhook (`/v1/internal/broker/auth`). */
+/**
+ * Access kind for an MQTT ACL check, matching mosquitto-go-auth's `acc` field.
+ *  1 = MOSQ_ACL_READ      (subscribe-time topic match)
+ *  2 = MOSQ_ACL_WRITE     (publish)
+ *  4 = MOSQ_ACL_SUBSCRIBE (subscribe-time topic filter check)
+ */
 @Serializable
-data class BrokerAuthRequest(
-    val username: String? = null,
-    val password: String,
-    val clientId: String? = null
-)
+enum class BrokerAclAccess(val mosquittoCode: Int) {
+    READ(1), WRITE(2), SUBSCRIBE(4);
 
-@Serializable
-data class BrokerAuthResponse(
-    val result: BrokerAuthResult,
-    val isSuperuser: Boolean = false,
-    val userId: String? = null,
-    val deviceId: String? = null,
-    val publishAcl: List<String> = emptyList(),
-    val subscribeAcl: List<String> = emptyList(),
-    val expireAt: Long? = null,
-    val reason: String? = null
-)
-
-@Serializable
-enum class BrokerAuthResult {
-    @kotlinx.serialization.SerialName("allow") ALLOW,
-    @kotlinx.serialization.SerialName("deny")  DENY,
-    @kotlinx.serialization.SerialName("ignore") IGNORE
+    companion object {
+        fun fromMosquittoCode(code: Int): BrokerAclAccess? =
+            entries.firstOrNull { it.mosquittoCode == code }
+    }
 }
 
 @Serializable

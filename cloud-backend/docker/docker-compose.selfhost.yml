@@ -1,14 +1,15 @@
-# Self-hosted Klardrop cloud stack: device-registry + EMQX OSS + Keycloak +
-# Postgres + Redis. Boots a complete control + data plane on a single machine
-# so a developer can exercise the full enrollment + MQTT flow end-to-end.
+# Self-hosted Klardrop cloud stack: device-registry + Mosquitto (with
+# mosquitto-go-auth) + Keycloak + Postgres + Redis. Boots a complete control +
+# data plane on a single machine for end-to-end exercise of the enrollment +
+# MQTT flow.
 #
-# Prereqs: Docker Engine 24+, ~2GB RAM, ports 1883/8081/8083/9001/8443/5432/6379 free.
+# Prereqs: Docker Engine 24+, ~1.5 GB RAM, ports 1883/8081/8083/8883/9001/5432/6379 free.
 #
 # Usage:
 #   cp .env.selfhost.example .env
 #   docker compose -f docker-compose.selfhost.yml up -d
-#   # then visit http://localhost:8083 (Keycloak admin, kc-admin / kc-admin)
-#   #            http://localhost:18083 (EMQX dashboard, admin / public)
+#   # Keycloak admin UI: http://localhost:8083  (kc-admin / kc-admin)
+#   # Mosquitto:         tcp://localhost:1883   (TLS on 8883 in prod only)
 
 services:
   postgres:
@@ -67,43 +68,26 @@ services:
       start_period: 30s
 
   # ────────────────────────────────────────────────────────────────────────────
-  # MQTT broker — EMQX OSS. JWT auth + HTTP ACL wired to device-registry.
+  # MQTT broker — Eclipse Mosquitto with the mosquitto-go-auth plugin (HTTP
+  # backend pointed at device-registry).
+  #
+  # Image: iegomez/mosquitto-go-auth ships an upstream Mosquitto 2.x build with
+  # the plugin compiled in. Apache 2.0 licence (Mosquitto is EPL/EDL).
   # ────────────────────────────────────────────────────────────────────────────
-  emqx:
-    image: emqx/emqx:5.8
-    environment:
-      EMQX_NODE__COOKIE: "klardropcookie"
-      # Allow the dashboard with default admin / public for local dev.
-      EMQX_DASHBOARD__DEFAULT_USERNAME: "admin"
-      EMQX_DASHBOARD__DEFAULT_PASSWORD: "public"
-      # Tell EMQX to disable anonymous auth — only JWT'd clients allowed.
-      EMQX_LISTENERS__TCP__DEFAULT__ENABLE_AUTHN: "true"
-      EMQX_AUTHENTICATION__1__MECHANISM: "password_based"
-      EMQX_AUTHENTICATION__1__BACKEND: "http"
-      EMQX_AUTHENTICATION__1__METHOD: "post"
-      EMQX_AUTHENTICATION__1__URL: "http://device-registry:8081/api/v1/internal/broker/auth"
-      EMQX_AUTHENTICATION__1__HEADERS__CONTENT_TYPE: "application/json"
-      EMQX_AUTHENTICATION__1__HEADERS__AUTHORIZATION: "Bearer ${INTERNAL_SHARED_SECRET:-internal-dev-secret}"
-      EMQX_AUTHENTICATION__1__BODY__USERNAME: "${username}"
-      EMQX_AUTHENTICATION__1__BODY__PASSWORD: "${password}"
-      EMQX_AUTHENTICATION__1__BODY__CLIENT_ID: "${clientid}"
-      EMQX_AUTHORIZATION__SOURCES__1__TYPE: "http"
-      EMQX_AUTHORIZATION__SOURCES__1__METHOD: "post"
-      EMQX_AUTHORIZATION__SOURCES__1__URL: "http://device-registry:8081/api/v1/internal/broker/auth"
-      EMQX_AUTHORIZATION__SOURCES__1__HEADERS__CONTENT_TYPE: "application/json"
-      EMQX_AUTHORIZATION__SOURCES__1__HEADERS__AUTHORIZATION: "Bearer ${INTERNAL_SHARED_SECRET:-internal-dev-secret}"
-      EMQX_AUTHORIZATION__SOURCES__1__BODY__USERNAME: "${username}"
-      EMQX_AUTHORIZATION__SOURCES__1__BODY__CLIENT_ID: "${clientid}"
-      EMQX_AUTHORIZATION__NO_MATCH: "deny"
-    ports:
-      - "1883:1883"        # MQTT (plain — for local dev only; use 8883 in prod)
-      - "8083:8083"        # MQTT over WebSocket
-      - "8084:8084"        # MQTT over WSS
-      - "8883:8883"        # MQTT over TLS
-      - "18083:18083"      # Dashboard
+  mosquitto:
+    image: iegomez/mosquitto-go-auth:latest
     volumes:
-      - emqx_data:/opt/emqx/data
-      - emqx_log:/opt/emqx/log
+      - ./mosquitto/mosquitto.conf:/etc/mosquitto/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    ports:
+      - "1883:1883"        # MQTT (plain — local dev only; use 8883 in prod)
+      - "8883:8883"        # MQTT over TLS (mount certs in /mosquitto/certs)
+      - "9001:9001"        # MQTT over WebSocket
+    environment:
+      # Templated into mosquitto.conf via envsubst at start; see image docs.
+      DEVICE_REGISTRY_URL: http://device-registry:8081
+      INTERNAL_SHARED_SECRET: ${INTERNAL_SHARED_SECRET:-internal-dev-secret}
     depends_on:
       device-registry:
         condition: service_started
@@ -129,13 +113,10 @@ services:
       BROKER_JWT_SECRET: ${BROKER_JWT_SECRET:-dev-broker-secret-change-me}
       BROKER_JWT_AUDIENCE: klardrop-mqtt-broker
       BROKER_JWT_TTL_SECONDS: "900"
-      MQTT_BROKER_URL: ssl://emqx:8883
+      MQTT_BROKER_URL: tcp://mosquitto:1883
       MQTT_TOPIC_ROOT: klardrop/v1
       OIDC_ISSUER: http://keycloak:8080/realms/klardrop
       OIDC_AUDIENCE: klardrop-device-registry
-      EMQX_API_URL: http://emqx:18083
-      EMQX_API_KEY: ${EMQX_API_KEY:-emqx-api-key-change-me}
-      EMQX_API_SECRET: ${EMQX_API_SECRET:-emqx-api-secret-change-me}
       INTERNAL_SHARED_SECRET: ${INTERNAL_SHARED_SECRET:-internal-dev-secret}
     ports:
       - "8081:8081"
@@ -150,5 +131,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  emqx_data:
-  emqx_log:
+  mosquitto_data:
+  mosquitto_log:

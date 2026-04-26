@@ -183,51 +183,88 @@ paths:
                   brokerToken: { type: string }
                   brokerTokenExpiresAt: { type: integer, format: int64 }
                   brokerTokenTtlSeconds: { type: integer, format: int64 }
-  /v1/internal/broker/auth:
+  /v1/internal/broker/auth/user:
     post:
-      summary: MQTT broker authn + authz webhook (internal listener only)
+      summary: Mosquitto authn webhook — validate device on CONNECT
       description: |
-        Called by the EMQX HTTP authentication and HTTP authorization sources
-        on every CONNECT (and cached for the JWT lifetime). Returns the topic
-        ACL for the user's private subtree, or denies if the broker JWT is
-        invalid / the device is revoked / clientId doesn't match.
-
+        Called by mosquitto-go-auth's HTTP backend on every MQTT CONNECT.
         Authenticated by `Authorization: Bearer ${INTERNAL_SHARED_SECRET}`.
+
+        Body is `application/x-www-form-urlencoded` per mosquitto-go-auth's
+        contract:
+          - `username`  (ignored — JWT is the source of truth)
+          - `password`  (broker JWT issued by /v1/devices/me/broker-token)
+          - `clientid`  (must equal klardrop_<userId>_<deviceId>)
+
+        Response is HTTP-status only (`auth_opt_http_response_mode = status`):
+          - 200 → allow
+          - 403 → deny (with plain-text reason in the body)
       requestBody:
         required: true
         content:
-          application/json:
+          application/x-www-form-urlencoded:
             schema:
               type: object
               required: [password]
               properties:
-                username: { type: string, nullable: true, description: "MQTT username (unused)" }
-                password: { type: string, description: "MQTT password = broker JWT" }
-                clientId: { type: string, nullable: true, description: "MQTT clientId, must equal klardrop_<userId>_<deviceId>" }
+                username: { type: string }
+                password: { type: string }
+                clientid: { type: string }
       responses:
         '200':
-          description: Allow or deny payload (HTTP 200 in both cases per EMQX contract)
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  result: { type: string, enum: [allow, deny, ignore] }
-                  isSuperuser: { type: boolean }
-                  userId: { type: string, nullable: true }
-                  deviceId: { type: string, nullable: true }
-                  publishAcl:
-                    type: array
-                    items: { type: string }
-                  subscribeAcl:
-                    type: array
-                    items: { type: string }
-                  expireAt: { type: integer, format: int64, nullable: true }
-                  reason: { type: string, nullable: true }
+          description: Authentication allowed
+        '403':
+          description: Authentication denied (invalid token / revoked / clientId mismatch)
         '401':
           description: Internal shared-secret missing or wrong
         '503':
           description: Internal auth not configured on this deployment
+  /v1/internal/broker/auth/acl:
+    post:
+      summary: Mosquitto ACL webhook — validate publish/subscribe topic
+      description: |
+        Called by mosquitto-go-auth's HTTP backend on every PUBLISH and
+        SUBSCRIBE not covered by the in-broker cache (TTL 20s).
+
+        Body fields per mosquitto-go-auth:
+          - `clientid`  (encodes user_id + device_id)
+          - `username`  (ignored)
+          - `topic`
+          - `acc`       (1 = read, 2 = write, 4 = subscribe)
+
+        Response is HTTP-status only.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [clientid, topic, acc]
+              properties:
+                clientid: { type: string }
+                username: { type: string }
+                topic:    { type: string }
+                acc:      { type: integer, enum: [1, 2, 4] }
+      responses:
+        '200':
+          description: ACL allowed
+        '403':
+          description: ACL denied (revoked / outside user scope / not in role's allowed set)
+        '400':
+          description: Missing clientid/topic/acc
+        '401':
+          description: Internal shared-secret missing or wrong
+  /v1/internal/broker/auth/superuser:
+    post:
+      summary: Mosquitto superuser check — always denies
+      description: |
+        Klardrop has no superusers. Always returns 403 — present so
+        mosquitto-go-auth's superuser probe doesn't 404.
+      responses:
+        '403':
+          description: No superusers
+        '401':
+          description: Internal shared-secret missing or wrong
   /v1/transfers/route-decision:
     post:
       summary: Decide local vs cloud transfer route

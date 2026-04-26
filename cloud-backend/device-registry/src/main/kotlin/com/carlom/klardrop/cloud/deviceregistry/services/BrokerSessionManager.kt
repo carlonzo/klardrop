@@ -1,26 +1,24 @@
 package com.carlom.klardrop.cloud.deviceregistry.services
 
-import com.carlom.klardrop.cloud.deviceregistry.config.EmqxAdminConfig
 import io.lettuce.core.api.sync.RedisCommands
 import mu.KotlinLogging
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
-import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Tracks which devices are currently connected to the MQTT broker and is the
- * single integration point used by the device-registry to revoke access.
+ * Tracks which devices have been revoked and is the integration point used
+ * by the device-registry to enforce the revocation SLA against the MQTT
+ * broker.
  *
- * Two responsibilities:
- *  1. **Force-disconnect** an active session when a device is revoked, so the
- *     30-second revocation SLA is met.
- *  2. **Block reconnect** until the device's outstanding broker JWT(s) have
- *     expired naturally — done by adding the device to a "revoked" set that the
- *     broker authn webhook (`/v1/internal/broker/auth`) consults on CONNECT.
+ * Mosquitto has no native REST API to force-disconnect a client, so the
+ * production `MosquittoBrokerSessionManager` relies on:
+ *
+ *  1. **Redis revoked-set** — every device-registry replica writes to it on
+ *     `revokeDevice`; the broker authn webhook reads it on every CONNECT,
+ *     PUBLISH, and SUBSCRIBE (subject to mosquitto-go-auth's auth_cache_seconds).
+ *  2. **Short auth-cache TTL** in mosquitto-go-auth (~15-20s) — bounds the
+ *     time between the registry recording revocation and the broker actually
+ *     denying the next operation. Together with the revoked-set this meets
+ *     our ≤30s SLA without needing a kick API.
  */
 interface BrokerSessionManager {
     fun registerSession(deviceId: String, sessionId: String)
@@ -54,67 +52,43 @@ class InMemoryBrokerSessionManager : BrokerSessionManager {
 }
 
 /**
- * Production implementation backed by:
- *  - **EMQX REST API** for live force-disconnect ("kick client").
- *  - **Redis** for the revoked-device set, so any device-registry replica can
- *    write the revocation and the broker authn webhook can read it.
+ * Production implementation backed by Redis.
  *
- * The revoked entry lives slightly longer than the broker JWT TTL — after the
- * JWT expires there's nothing left to reject, so the entry can age out.
+ * `disconnectDevice` writes a revoked-marker keyed by deviceId with a TTL
+ * slightly longer than the broker JWT TTL — after the JWT naturally expires
+ * there's nothing to deny anyway, so the entry can age out and stop bloating
+ * Redis.
+ *
+ * On a multi-replica device-registry deployment all replicas read/write the
+ * same Redis, so any replica's revocation is immediately visible to the
+ * broker auth webhook regardless of which replica the broker is hitting.
  */
-class EmqxBrokerSessionManager(
-    private val emqxConfig: EmqxAdminConfig,
+class MosquittoBrokerSessionManager(
     private val redis: RedisCommands<String, String>,
-    private val brokerTokenTtlSeconds: Long,
-    private val httpClient: HttpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(5))
-        .build()
+    private val brokerTokenTtlSeconds: Long
 ) : BrokerSessionManager {
 
     private val logger = KotlinLogging.logger {}
-    private val authHeader: String = "Basic " + Base64.getEncoder()
-        .encodeToString("${emqxConfig.apiKey}:${emqxConfig.apiSecret}".toByteArray())
 
     override fun registerSession(deviceId: String, sessionId: String) {
-        // EMQX is the source of truth for live sessions; nothing to record locally.
-        // Clear any stale revocation if this device is being re-enrolled.
+        // Re-enrolling clears any stale revocation (defence in case a deviceId
+        // is recycled — which we don't, but cheap to be safe).
         runCatching { redis.del(revokedKey(deviceId)) }
+            .onFailure { logger.warn(it) { "Failed to clear stale revocation for $deviceId" } }
     }
 
     override fun disconnectDevice(userId: String, deviceId: String) {
-        // 1. Mark device as revoked so the broker authn webhook denies new CONNECTs.
         val ttl = brokerTokenTtlSeconds + REVOCATION_BUFFER_SECONDS
         runCatching { redis.setex(revokedKey(deviceId), ttl, "1") }
             .onFailure { logger.error(it) { "Failed to record revocation for $deviceId in Redis" } }
-
-        // 2. Kick any currently connected session via EMQX REST API.
-        val clientId = mqttClientId(userId, deviceId)
-        val url = "${emqxConfig.apiUrl.trimEnd('/')}/api/v5/clients/$clientId"
-        val request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .header("Authorization", authHeader)
-            .header("Accept", "application/json")
-            .timeout(Duration.ofSeconds(5))
-            .DELETE()
-            .build()
-
-        try {
-            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-            if (response.statusCode() in 200..299 || response.statusCode() == 404) {
-                logger.info { "EMQX kicked client $clientId (status ${response.statusCode()})" }
-            } else {
-                logger.warn {
-                    "EMQX kick for $clientId returned ${response.statusCode()} body=${response.body().take(200)}"
-                }
-            }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to call EMQX REST API to kick $clientId" }
-        }
+        // Mosquitto provides no native kick, but mosquitto-go-auth re-checks
+        // ACL with a small cache TTL (auth_opt_acl_cache_seconds), so the next
+        // PUBLISH or SUBSCRIBE within ~20s will hit isRevoked() and be denied,
+        // dropping the session.
     }
 
     override fun isConnected(deviceId: String): Boolean {
-        // Liveness is surfaced through MQTT presence topics on the data plane,
-        // so the device-registry never needs to ask the broker directly.
+        // Liveness is surfaced via MQTT presence topics on the data plane.
         return false
     }
 

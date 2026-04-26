@@ -8,7 +8,6 @@ data class AppConfig(
     val brokerJwt: BrokerJwtConfig,
     val mqtt: MqttBrokerConfig,
     val oidc: OidcConfig,
-    val emqx: EmqxAdminConfig,
     val internalAuth: InternalAuthConfig,
     val environment: AppEnvironment
 ) {
@@ -40,11 +39,6 @@ data class AppConfig(
                     topicRoot = env("MQTT_TOPIC_ROOT", "klardrop/v1")
                 ),
                 oidc = OidcConfig.load(),
-                emqx = EmqxAdminConfig(
-                    apiUrl = env("EMQX_API_URL", ""),
-                    apiKey = env("EMQX_API_KEY", ""),
-                    apiSecret = env("EMQX_API_SECRET", "")
-                ),
                 internalAuth = InternalAuthConfig(
                     sharedSecret = env("INTERNAL_SHARED_SECRET", "")
                 ),
@@ -97,14 +91,6 @@ data class BrokerJwtConfig(
 
 data class MqttBrokerConfig(val brokerUrl: String, val topicRoot: String) {
     fun userScope(userId: String): String = "$topicRoot/users/$userId"
-}
-
-data class EmqxAdminConfig(
-    val apiUrl: String,
-    val apiKey: String,
-    val apiSecret: String
-) {
-    val isConfigured: Boolean get() = apiUrl.isNotBlank() && apiKey.isNotBlank() && apiSecret.isNotBlank()
 }
 
 data class InternalAuthConfig(val sharedSecret: String) {

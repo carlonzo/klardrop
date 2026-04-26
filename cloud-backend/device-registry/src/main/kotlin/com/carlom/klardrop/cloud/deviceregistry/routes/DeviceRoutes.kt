@@ -2,6 +2,8 @@ package com.carlom.klardrop.cloud.deviceregistry.routes
 
 import com.carlom.klardrop.cloud.deviceregistry.config.InternalAuthConfig
 import com.carlom.klardrop.cloud.deviceregistry.models.*
+import com.carlom.klardrop.cloud.deviceregistry.services.BrokerAclDecision
+import com.carlom.klardrop.cloud.deviceregistry.services.BrokerAuthDecision
 import com.carlom.klardrop.cloud.deviceregistry.services.BrokerAuthService
 import com.carlom.klardrop.cloud.deviceregistry.services.DeviceService
 import io.ktor.http.*
@@ -69,8 +71,6 @@ fun Route.deviceRoutes(deviceService: DeviceService) {
             call.respond(HttpStatusCode.OK, response)
         }
 
-        // Refresh broker JWT before it expires. Convenience over rotate: caller
-        // sends its deviceId and the session JWT proves the user scope.
         post("/devices/me/broker-token") {
             val request = call.receive<BrokerTokenRefreshRequest>()
             val response = try {
@@ -127,30 +127,76 @@ fun Route.deviceRoutes(deviceService: DeviceService) {
 }
 
 /**
- * Endpoints called by infrastructure (the MQTT broker) rather than end clients.
- * Authenticated by a shared secret in `Authorization: Bearer <secret>` header
- * — this listener should never be exposed to the public internet.
+ * Endpoints called by Mosquitto (via mosquitto-go-auth) on the internal
+ * listener. **Never expose to the public internet.**
+ *
+ * mosquitto-go-auth's HTTP backend uses three endpoints by default:
+ *   - getuser    -> validate username/password (here: clientId/JWT)
+ *   - aclcheck   -> validate (clientId, topic, access)
+ *   - superuser  -> we always say no
+ *
+ * Bodies are `application/x-www-form-urlencoded`. With
+ * `auth_opt_http_response_mode = status`, mosquitto-go-auth treats:
+ *   - HTTP 200 → allow
+ *   - any other status → deny
+ *
+ * The shared-secret header (`Authorization: Bearer …`) gates all three.
  */
 fun Route.internalRoutes(
     brokerAuthService: BrokerAuthService,
     internalAuthConfig: InternalAuthConfig
 ) {
-    post("/internal/broker/auth") {
-        if (!internalAuthConfig.isConfigured) {
-            call.respond(HttpStatusCode.ServiceUnavailable, ApiError("internal auth not configured"))
-            return@post
+    post("/internal/broker/auth/user") {
+        if (!authorizeInternal(call, internalAuthConfig)) return@post
+        val params = call.receiveParameters()
+        val password = params["password"].orEmpty()
+        val clientId = params["clientid"]
+        when (val decision = brokerAuthService.authenticateUser(password, clientId)) {
+            is BrokerAuthDecision.Allow -> call.respond(HttpStatusCode.OK)
+            is BrokerAuthDecision.Deny -> call.respond(HttpStatusCode.Forbidden, decision.reason)
         }
-        val authHeader = call.request.headers[HttpHeaders.Authorization].orEmpty()
-        val expected = "Bearer ${internalAuthConfig.sharedSecret}"
-        if (!constantTimeEquals(authHeader, expected)) {
-            call.respond(HttpStatusCode.Unauthorized, ApiError("unauthorized"))
-            return@post
-        }
-        val request = call.receive<BrokerAuthRequest>()
-        val response = brokerAuthService.authenticate(request)
-        // EMQX expects HTTP 200 with a JSON body for both allow and deny.
-        call.respond(HttpStatusCode.OK, response)
     }
+
+    post("/internal/broker/auth/acl") {
+        if (!authorizeInternal(call, internalAuthConfig)) return@post
+        val params = call.receiveParameters()
+        val clientId = params["clientid"].orEmpty()
+        val topic = params["topic"].orEmpty()
+        val accCode = params["acc"]?.toIntOrNull()
+        val access = accCode?.let { BrokerAclAccess.fromMosquittoCode(it) }
+        if (clientId.isBlank() || topic.isBlank() || access == null) {
+            call.respond(HttpStatusCode.BadRequest, "missing clientid/topic/acc")
+            return@post
+        }
+        when (val decision = brokerAuthService.checkAcl(clientId, topic, access)) {
+            is BrokerAclDecision.Allow -> call.respond(HttpStatusCode.OK)
+            is BrokerAclDecision.Deny -> call.respond(HttpStatusCode.Forbidden, decision.reason)
+        }
+    }
+
+    post("/internal/broker/auth/superuser") {
+        if (!authorizeInternal(call, internalAuthConfig)) return@post
+        // No superusers in the Klardrop model.
+        call.respond(HttpStatusCode.Forbidden, "no superusers")
+    }
+}
+
+/** Returns true if the call carries the expected internal shared-secret. */
+private suspend fun authorizeInternal(
+    call: io.ktor.server.application.ApplicationCall,
+    cfg: InternalAuthConfig
+): Boolean {
+    if (!cfg.isConfigured) {
+        call.respond(HttpStatusCode.ServiceUnavailable, "internal auth not configured")
+        return false
+    }
+    val expected = "Bearer ${cfg.sharedSecret}"
+    val provided = call.request.headers[HttpHeaders.Authorization].orEmpty()
+    if (!constantTimeEquals(provided, expected)) {
+        call.respond(HttpStatusCode.Unauthorized, "unauthorized")
+        return false
+    }
+    return true
 }
 
 @kotlinx.serialization.Serializable
