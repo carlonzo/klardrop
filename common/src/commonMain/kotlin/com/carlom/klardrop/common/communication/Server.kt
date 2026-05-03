@@ -219,8 +219,13 @@ class Server(
       connectionsPool.updateConnection(request.deviceId, connectionMessenger)
 
       // Send back introduction
-      val deviceId = currentDeviceProvider.get().shortDeviceId
-      val intro = HandshakeMessage(deviceId)
+      val self = currentDeviceProvider.get()
+      val intro = HandshakeMessage(
+        deviceId = self.shortDeviceId,
+        deviceName = self.deviceName,
+        osType = self.osType,
+        deviceType = self.deviceType,
+      )
       log("Server", "Sending Klardrop greetings back to ${request.deviceId} on $remoteAddress")
 
       writeChannel.sendMessage(intro, serializer)

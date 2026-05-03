@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.communication.AckTimeoutConfig
+import com.carlom.klardrop.common.communication.BleEagerConnector
 import com.carlom.klardrop.common.communication.BleServerListener
 import com.carlom.klardrop.common.communication.ClientImpl
 import com.carlom.klardrop.common.communication.HeartbeatConfig
@@ -130,11 +131,25 @@ class CommunicationModule(
         currentDeviceProvider = currentDeviceProvider,
         messagesRouter = messagesRouter,
         connectionsPool = connectionsPool,
+        visibleDevices = visibleDevices,
         ackTimeoutConfig = ackTimeoutConfig,
         heartbeatConfig = heartbeatConfig,
       )
     }
   }
+
+  private val bleEagerConnector by lazy {
+    bleTransport?.let {
+      BleEagerConnector(
+        coroutines = coroutines,
+        visibleDevices = visibleDevices,
+        currentDeviceProvider = currentDeviceProvider,
+        client = client,
+        connectionsPool = connectionsPool,
+      )
+    }
+  }
+
 
   private val messageReceiver: MessageReceiver by lazy {
     MessageReceiverImpl(coroutines, visibleDevices)
@@ -182,6 +197,7 @@ class CommunicationModule(
   fun client() = client
   fun server() = server
   fun bleServerListener() = bleServerListener
+  fun bleEagerConnector() = bleEagerConnector
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
   fun trustManager() = trustManager

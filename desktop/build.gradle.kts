@@ -51,6 +51,12 @@ compose.desktop {
       val icon = file("icon_launcher.png")
       macOS {
         iconFile.set(icon)
+        infoPlist {
+          extraKeysRawXml = """
+            <key>NSBluetoothAlwaysUsageDescription</key>
+            <string>Klardrop uses Bluetooth to discover and share with nearby devices when Wi-Fi is unavailable.</string>
+          """.trimIndent()
+        }
       }
       windows {
         iconFile.set(icon)

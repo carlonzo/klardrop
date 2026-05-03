@@ -88,20 +88,21 @@ actual class BleTransport(private val context: Context) {
     advertiseCallback?.let { runCatching { advertiser.stopAdvertising(it) } }
 
     val settings = AdvertiseSettings.Builder()
-      .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
-      .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+      // LOW_LATENCY = ~100ms advertise interval (vs BALANCED's ~250ms),
+      // HIGH tx power maximises range. Matches the LOW_LATENCY scan mode so
+      // Android-Android peers see each other reliably without needing to be
+      // within a few centimeters of one another.
+      .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+      .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
       .setConnectable(true)
       .build()
 
-    val serviceUuid = ParcelUuid(UUID.fromString(BleConstants.SERVICE_UUID))
-    // Short device id (≤8 chars, ASCII) is carried as the service-data payload so peers
-    // can recognise this peripheral without connecting. Kept short to fit the 31-byte
-    // advertisement budget. A 128-bit service UUID plus 128-bit service data is too large
-    // for legacy advertising, so the service-data UUID is the protocol marker.
-    val data = AdvertiseData.Builder()
-      .setIncludeDeviceName(false)
-      .addServiceData(serviceUuid, currentDevice.shortDeviceId.encodeToByteArray())
-      .build()
+    // The AD layout decision (which records go in primary vs scan response, and
+    // which AD type carries the service UUID) is centralised in
+    // `klardropAdvertisePayload` and unit-tested in `BleAdvertisePayloadTest`.
+    val payload = klardropAdvertisePayload(currentDevice.shortDeviceId)
+    val data = payload.primary.toAndroid()
+    val scanResponse = payload.scanResponse?.toAndroid()
 
     val callback = object : AdvertiseCallback() {
       override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
@@ -113,7 +114,11 @@ actual class BleTransport(private val context: Context) {
       }
     }
     advertiseCallback = callback
-    advertiser.startAdvertising(settings, data, callback)
+    if (scanResponse != null) {
+      advertiser.startAdvertising(settings, data, scanResponse, callback)
+    } else {
+      advertiser.startAdvertising(settings, data, callback)
+    }
   }
 
   @SuppressLint("MissingPermission")
@@ -135,26 +140,52 @@ actual class BleTransport(private val context: Context) {
     }
 
     val serviceUuid = ParcelUuid(UUID.fromString(BleConstants.SERVICE_UUID))
+    // Match by service UUID alone. Apple peers (iOS + macOS helper) cannot include
+    // custom service-data in their advertisements, so a service-data filter would
+    // exclude them. We extract the short device id from service-data when present
+    // (Android ↔ Android) or fall back to the local name (Android ↔ Apple).
     val filter = ScanFilter.Builder()
-      .setServiceData(serviceUuid, byteArrayOf(), byteArrayOf())
+      .setServiceUuid(serviceUuid)
       .build()
     val settings = ScanSettings.Builder()
-      .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
+      // LOW_LATENCY = ~100% duty-cycle scanning. BALANCED gives ~50% windows that
+      // commonly miss the other peer's advertisement bursts when both Android
+      // peers are simultaneously advertising + scanning (half-duplex radio
+      // schedules don't align). Trades battery for reliable peer-to-peer Android
+      // BLE discovery, which is the primary fallback transport for Klardrop.
+      .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
       .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
       .build()
 
     val callback = object : ScanCallback() {
       override fun onScanResult(callbackType: Int, result: ScanResult) {
         val record = result.scanRecord ?: return
-        val shortDeviceId = record.serviceData
-          ?.get(serviceUuid)
-          ?.decodeToString()
-          ?: return
+        // Both peer types may encode `<shortId>|<friendlyName>` when possible:
+        // Android peers carry the bare shortId in service-data (no friendly name
+        // — the AD packet is full); Apple peers carry the combined string in the
+        // local name (CB auto-spills to scan response when long).
+        val rawServiceData = record.serviceData?.get(serviceUuid)?.decodeToString()
+        val rawName = record.deviceName
+        val combined = listOfNotNull(rawServiceData, rawName).firstOrNull { it.contains('|') }
+        val shortDeviceId: String
+        val friendlyName: String?
+        if (combined != null) {
+          val parts = combined.split('|', limit = 2)
+          shortDeviceId = parts[0]
+          friendlyName = parts.getOrNull(1)
+        } else {
+          // No combined payload — use whichever bare identifier is present. We do
+          // NOT fall back to the BT MAC here because that would surface the same
+          // peer twice (once with MAC, once with shortId once a scan response with
+          // the local name arrives).
+          shortDeviceId = rawServiceData ?: rawName ?: return
+          friendlyName = rawName
+        }
         trySend(
           BlePeerEvent.Found(
             address = result.device.address,
             shortDeviceId = shortDeviceId,
-            localName = record.deviceName,
+            localName = friendlyName,
             rssi = result.rssi,
           )
         )
@@ -632,4 +663,14 @@ private class AndroidPeripheralBleSession(
     incoming.close()
     notificationAcks.close()
   }
+}
+
+
+private fun BleAdvertisePayload.AdRecords.toAndroid(): AdvertiseData {
+  val builder = AdvertiseData.Builder().setIncludeDeviceName(false)
+  serviceUuids.forEach { builder.addServiceUuid(ParcelUuid(UUID.fromString(it))) }
+  serviceData.forEach { (uuid, bytes) ->
+    builder.addServiceData(ParcelUuid(UUID.fromString(uuid)), bytes)
+  }
+  return builder.build()
 }

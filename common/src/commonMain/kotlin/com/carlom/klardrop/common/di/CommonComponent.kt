@@ -89,6 +89,7 @@ class CommonComponent(
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
   fun server() = communicationModule.server()
   fun bleServerListener() = communicationModule.bleServerListener()
+  fun bleEagerConnector() = communicationModule.bleEagerConnector()
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()

@@ -1,53 +1,82 @@
 package com.carlom.klardrop.common.ble
 
+import com.carlom.klardrop.common.ble.mac.HelperBinaryResolver
+import com.carlom.klardrop.common.ble.mac.MacBleHelperProcess
 import com.carlom.klardrop.common.discovery.CurrentDevice
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
 
 /**
- * JVM desktop BLE transport placeholder.
+ * Desktop JVM BLE transport.
  *
- * Real implementation will be per-OS:
- *   - Linux:   BlueZ via D-Bus (`org.bluez.LEAdvertisement1` + `org.bluez.GattApplication1`);
- *              `dbus-java` or `tinyb` as candidate libraries.
- *   - Windows: WinRT `GattServiceProvider` + `BluetoothLEAdvertisement*` APIs via JNA
- *              or `jextract`-generated bindings. Requires Windows 10 1803+.
- *   - macOS-JVM: no clean bridge to CoreBluetooth from a pure JVM — documented out of
- *              scope; Mac users should run the native macOS module instead.
+ * macOS: backed by a Swift `klardrop-ble-helper` subprocess that wraps CoreBluetooth.
+ *        See `desktop/native/macos/`.
  *
- * Stubbed for now so the desktop target compiles; `isSupported()` reports false so BLE
- * discovery is a no-op on desktop until the per-OS implementations land.
+ * Linux/Windows: not implemented yet; `isSupported()` returns false so BLE is a
+ * no-op on those hosts. Future implementations will plug an OS-specific helper
+ * binary into the same [MacBleHelperProcess]-style IPC.
  */
-actual class BleTransport {
+actual class BleTransport internal constructor(
+  private val helper: MacBleHelperProcess?,
+) {
+
+  constructor() : this(defaultHelper())
+
 
   actual suspend fun isSupported(): Boolean {
-    val os = System.getProperty("os.name")?.lowercase().orEmpty()
-    log(TAG, "Desktop BLE transport not implemented for '$os' yet")
-    return false
+    val h = helper ?: return false
+    return h.awaitPoweredOn()
   }
 
   actual suspend fun startAdvertising(currentDevice: CurrentDevice) {
-    // TODO: BlueZ LEAdvertisement1 on Linux; WinRT GattServiceProvider on Windows.
+    val h = helper ?: return
+    if (!h.ensureStarted()) return
+    runCatching {
+      // BLE advertisements are public — anyone within range with a BLE scanner can
+      // read the local name. We only broadcast the 8-char shortDeviceId (which is
+      // app-specific and not user-identifying). The friendly device name, OS type,
+      // and device type are exchanged inside the encrypted Klardrop handshake
+      // after the GATT connection opens, so non-Klardrop scanners never see them.
+      h.startAdvertising(currentDevice.shortDeviceId, currentDevice.shortDeviceId)
+    }.onFailure { log(TAG, "startAdvertising failed", it) }
   }
 
   actual suspend fun stopAdvertising() {
-    // TODO: tear down platform-specific advertiser.
+    helper?.stopAdvertising()
   }
 
   actual fun scanForPeers(): Flow<BlePeerEvent> {
-    // TODO: BlueZ StartDiscovery + DeviceFound signals on Linux; WinRT
-    //       BluetoothLEAdvertisementWatcher on Windows.
-    return emptyFlow()
+    val h = helper ?: return emptyFlow()
+    return h.scanForPeers()
   }
 
   actual suspend fun connectCentral(address: String, remoteShortDeviceId: String): BleSession {
-    throw NotImplementedError("Desktop JVM BLE central not implemented yet")
+    val h = helper ?: throw IllegalStateException("BLE not supported on this host")
+    return h.connectCentral(address, remoteShortDeviceId)
   }
 
-  actual fun serveGatt(): Flow<BleSession> = emptyFlow()
+  actual fun serveGatt(): Flow<BleSession> {
+    val h = helper ?: return emptyFlow()
+    return h.serveGatt().map { it as BleSession }
+  }
 
   private companion object {
     const val TAG = "BleTransport.desktopJvm"
+
+    private fun defaultHelper(): MacBleHelperProcess? {
+      val os = System.getProperty("os.name")?.lowercase().orEmpty()
+      val isMac = os.contains("mac") || os.contains("darwin")
+      if (!isMac) {
+        log(TAG, "Desktop BLE not implemented for '$os' yet")
+        return null
+      }
+      return MacBleHelperProcess(
+        commandProvider = {
+          HelperBinaryResolver.resolve()?.let { listOf(it.absolutePath) }
+        },
+      )
+    }
   }
 }

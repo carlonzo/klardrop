@@ -28,6 +28,60 @@ Klardrop uses a TCP socket-based protocol with length-prefixed messages and auto
 | `ACK_READY` | 3 | Acknowledgment: ready to receive payload | No | None |
 | `ACK_RECEIVED` | 4 | Acknowledgment: message/payload received | No | None |
 
+## Transports
+
+Klardrop is **transport-agnostic**: the same Klardrop wire format
+(`[4-byte length][1-byte type][protobuf payload]`) flows over any of the
+available media. Discovery and transfer can use any combination, and `Client`
+picks the best transport per connection.
+
+| Transport | Discovery | Used for transfer when… | Speed |
+|---|---|---|---|
+| **Klardrop TCP** (mDNS `_klardrop._tcp.`) | jmDNS / NSD | Both peers on the same Wi-Fi LAN | Fast |
+| **Nearby Share TCP** (mDNS `_FC9F5ED42C8A._tcp.`) | jmDNS / NSD | Cross-app interop (e.g., Google Quick Share) | Fast |
+| **Bluetooth Low Energy (BLE)** | Service-UUID scan | Wi-Fi unreachable; falls back to BLE GATT | Slow (≤ ~244-byte chunks) |
+
+### Bluetooth as a fallback medium
+
+BLE is treated as **one more transport in the discovery list**, not a
+replacement. It only gets used for transfers when no Wi-Fi-based path is
+available, because BLE GATT is significantly slower than TCP over Wi-Fi.
+
+How it works:
+
+- **Discovery**: every Klardrop instance simultaneously *advertises* a
+  well-known service UUID (`a5b7c3e1-7f5a-4b62-9a3c-1d8e2f4b6c8a`) and *scans*
+  for other devices broadcasting the same UUID. The advertisement carries the
+  device's `shortDeviceId` (8 hex chars, the same id used in mDNS service
+  names) in **scan-response service-data** so peers can match it without
+  opening a connection. The friendly name / OS / device-type are intentionally
+  *not* in the advertisement (it's public airwaves) — they're delivered later
+  via the encrypted Klardrop handshake.
+- **Eager handshake**: as soon as a BLE peer is discovered, the side picked by
+  `BleRoleSelector` (the device with the lexicographically smaller short id)
+  opens a quick GATT session, exchanges a `HandshakeMessage` carrying
+  `(deviceId, deviceName, osType, deviceType)`, and the peer's `VisibleDevices`
+  entry gets enriched. The session stays in the connection pool so subsequent
+  user-initiated transfers reuse it.
+- **GATT service**: a single primary service exposes two characteristics — TX
+  (write-with-response, central → server) and RX (notifications,
+  server → client). Both carry the same length-prefixed Klardrop wire format,
+  reassembled across MTU-sized chunks (`BleFraming` / `BleReassembler`).
+- **Platform implementations**: Android uses `BluetoothLeAdvertiser` /
+  `BluetoothGattServer`. iOS / macOS use CoreBluetooth (`CBPeripheralManager` /
+  `CBCentralManager`). The macOS desktop JVM build delegates to a small Swift
+  helper subprocess (`klardrop-ble-helper`) because the JVM has no direct
+  CoreBluetooth bindings; the helper speaks newline-delimited JSON over
+  stdin/stdout.
+- **Permissions**: Android requires the BLUETOOTH_SCAN, BLUETOOTH_ADVERTISE,
+  and BLUETOOTH_CONNECT runtime permissions on API 31+. macOS bundles request
+  Bluetooth via `NSBluetoothAlwaysUsageDescription` in Info.plist. iOS already
+  has the same plist key.
+
+The wire-format decision (which AD record types carry the service UUID vs the
+short device id) is centralised in `BleAdvertisePayload.kt` and unit-tested in
+`BleAdvertisePayloadTest` so this can't silently regress.
+
 ## Connection Establishment
 
 ### Sequence Diagram

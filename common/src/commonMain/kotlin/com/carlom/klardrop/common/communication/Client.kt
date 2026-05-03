@@ -28,7 +28,7 @@ class ClientImpl(
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,
-  visibleDevices: VisibleDevices,
+  private val visibleDevices: VisibleDevices,
   private val currentDeviceProvider: CurrentDeviceProvider,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
@@ -107,7 +107,13 @@ class ClientImpl(
     }
     log("Client", "Connected to $address:$port. Sending greetings")
 
-    val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+    val self = currentDeviceProvider.get()
+    val handshakeMessage = HandshakeMessage(
+      deviceId = self.shortDeviceId,
+      deviceName = self.deviceName,
+      osType = self.osType,
+      deviceType = self.deviceType,
+    )
     val writeChannel = socket.openWriteChannel(autoFlush = true)
     writeChannel.sendMessage(handshakeMessage, serializer)
 
@@ -166,9 +172,19 @@ class ClientImpl(
     val session = transport.connectCentral(bleConnection.address, deviceId)
     val bridge = BleChannelBridge(session, clientScope).start()
 
-    val selfId = currentDeviceProvider.get().shortDeviceId
-    // Central speaks first.
-    bridge.writeChannel.sendMessage(HandshakeMessage(selfId), serializer)
+    val self = currentDeviceProvider.get()
+    // Central speaks first — send the rich handshake so the server can enrich its
+    // VisibleDevices entry. BLE advertisements only carry the bare shortDeviceId
+    // for privacy; this is the first place the friendly name is revealed.
+    bridge.writeChannel.sendMessage(
+      HandshakeMessage(
+        deviceId = self.shortDeviceId,
+        deviceName = self.deviceName,
+        osType = self.osType,
+        deviceType = self.deviceType,
+      ),
+      serializer,
+    )
     val serverHandshake = bridge.readChannel.readMessage(serializer) as HandshakeMessage
 
     if (serverHandshake.deviceId != deviceId) {
@@ -176,6 +192,23 @@ class ClientImpl(
       bridge.close()
       connectionJob.complete(false)
       return@runCatching
+    }
+
+    // Server's reply may carry rich identity — enrich our VisibleDevices entry so
+    // the BLE peer shows up with friendly name + OS/device type instead of the
+    // shortDeviceId placeholder.
+    if (serverHandshake.deviceName.isNotEmpty()) {
+      runCatching {
+        visibleDevices.onNewDeviceVisible(
+          com.carlom.klardrop.common.discovery.DeviceInfo(
+            deviceId = serverHandshake.deviceId,
+            name = serverHandshake.deviceName,
+            deviceType = serverHandshake.deviceType,
+            osType = serverHandshake.osType,
+          ),
+          bleConnection,
+        )
+      }
     }
 
     val connection = Connection.Ble(session, deviceId)

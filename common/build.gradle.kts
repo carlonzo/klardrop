@@ -97,6 +97,7 @@ kotlin {
         implementation(deps.jmdns)
         implementation(deps.bugsnag.jvm)
         implementation(deps.sqldelight.sqlite.driver)
+        implementation(deps.kotlinx.serialization.json)
       }
     }
 

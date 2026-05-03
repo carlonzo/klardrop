@@ -57,6 +57,14 @@ class Klardrop(
       commonComponent.bleServerListener()?.start()
     }
     discoveryNetwork.discoverBleDevices()
+    // BLE is one discovery medium alongside mDNS. To populate the friendly
+    // identity (name + OS + device type) for BLE-only peers without waiting on
+    // user action, the role-selector-picked initiator opens an eager GATT
+    // session as soon as a BLE peer is discovered. The other transports
+    // (mDNS/Klardrop, Nearby) continue to work in parallel; for transfers, the
+    // Client picks the best available transport and falls back to BLE only
+    // when no Wi-Fi reachability exists.
+    commonComponent.bleEagerConnector()?.start()
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()

@@ -109,3 +109,29 @@ compose.resources {
   packageOfResClass = "com.klardrop.resources"
   generateResClass = auto
 }
+
+// Workaround for Compose Multiplatform 1.10 + AGP 9 KMP-DSL: the
+// CopyResourcesToAndroidAssetsTask doesn't get its outputDirectory auto-wired
+// when using the new `kotlin { android { } }` DSL, so the Android APK ships
+// without composeResources/. We pin it to a known directory and feed that
+// directory into the Android main source set's assets.
+val androidComposeResourcesDir = layout.buildDirectory.dir("intermediates/compose-resources/androidAssets")
+
+afterEvaluate {
+  tasks.findByName("copyAndroidMainComposeResourcesToAndroidAssets")?.let { task ->
+    // The task's class is `internal` in the Compose plugin, so use reflection
+    // to grab its outputDirectory DirectoryProperty.
+    val getter = task.javaClass.getMethod("getOutputDirectory")
+    @Suppress("UNCHECKED_CAST")
+    val prop = getter.invoke(task) as org.gradle.api.file.DirectoryProperty
+    prop.set(androidComposeResourcesDir)
+  }
+}
+
+kotlin {
+  sourceSets {
+    val androidMain by getting {
+      resources.srcDir(androidComposeResourcesDir)
+    }
+  }
+}

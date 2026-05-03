@@ -6,7 +6,9 @@ import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
-import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.discovery.DeviceConnection
+import com.carlom.klardrop.common.discovery.DeviceInfo
+import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -22,12 +24,13 @@ import kotlinx.coroutines.launch
  * tear down the GATT server.
  */
 class BleServerListener(
-  private val coroutines: Coroutines,
+  private val coroutines: com.carlom.klardrop.common.utils.Coroutines,
   private val bleTransport: BleTransport,
   private val serializer: MessageSerializer,
   private val currentDeviceProvider: CurrentDeviceProvider,
   private val messagesRouter: MessagesRouter,
   private val connectionsPool: ConnectionsPool,
+  private val visibleDevices: VisibleDevices,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
 ) {
@@ -59,7 +62,24 @@ class BleServerListener(
     try {
       // Central speaks first with its HandshakeMessage.
       val clientHandshake = bridge.readChannel.readMessage(serializer) as HandshakeMessage
-      log(TAG, "BLE central ${session.deviceId} announced as ${clientHandshake.deviceId}")
+      log(TAG, "BLE central ${session.deviceId} announced as ${clientHandshake.deviceId} (${clientHandshake.deviceName})")
+
+      // Enrich the discovered-device entry with the friendly identity carried in
+      // the handshake. BLE advertisements only ship the shortDeviceId — the rich
+      // info arrives only after a Klardrop-to-Klardrop GATT session is open.
+      if (clientHandshake.deviceName.isNotEmpty()) {
+        runCatching {
+          visibleDevices.onNewDeviceVisible(
+            DeviceInfo(
+              deviceId = clientHandshake.deviceId,
+              name = clientHandshake.deviceName,
+              deviceType = clientHandshake.deviceType,
+              osType = clientHandshake.osType,
+            ),
+            DeviceConnection.BleConnection(address = session.deviceId),
+          )
+        }
+      }
 
       val connection = Connection.Ble(session, clientHandshake.deviceId)
       val connectionMessenger = ConnectionMessenger(
@@ -75,8 +95,16 @@ class BleServerListener(
       connectionsPool.updateConnection(clientHandshake.deviceId, connectionMessenger)
 
       // Reply with our handshake so the central side can unblock its read.
-      val selfId = currentDeviceProvider.get().shortDeviceId
-      bridge.writeChannel.sendMessage(HandshakeMessage(selfId), serializer)
+      val self = currentDeviceProvider.get()
+      bridge.writeChannel.sendMessage(
+        HandshakeMessage(
+          deviceId = self.shortDeviceId,
+          deviceName = self.deviceName,
+          osType = self.osType,
+          deviceType = self.deviceType,
+        ),
+        serializer,
+      )
 
       scope.launch { connectionMessenger.acceptIncomingMessages() }
     } catch (t: Throwable) {
