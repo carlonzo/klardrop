@@ -182,11 +182,18 @@ class KlardropIntegrationTest {
           val result = senderChannel.awaitFor { it is Completed }
           assertEquals(Completed, result)
 
-          // Verify message was received
-          val update = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
+          // Verify message was received. The receiverChannel is shared across
+          // iterations, so an earlier iteration's Completed event may still be
+          // queued — match on message text rather than status alone, otherwise we
+          // can pick up stale events from a previous send.
+          val expectedText = (message.message as TextMessage).text
+          val update = receiverChannel.awaitFor {
+            it.status is ReceiveMessageStatus.Completed &&
+              (it.messages.firstOrNull() as? TextMessage)?.text == expectedText
+          }
           assertIs<ReceiveMessageStatus.Completed>(update.status)
           assertEquals(1, update.messages.size)
-          assertEquals((message.message as TextMessage).text, (update.messages.first() as TextMessage).text)
+          assertEquals(expectedText, (update.messages.first() as TextMessage).text)
 
           senderChannel.cancelAndIgnoreRemainingEvents()
         }
