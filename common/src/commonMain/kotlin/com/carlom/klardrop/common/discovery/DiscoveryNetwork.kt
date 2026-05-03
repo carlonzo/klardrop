@@ -1,5 +1,7 @@
 package com.carlom.klardrop.common.discovery
 
+import com.carlom.klardrop.common.ble.BlePeerEvent
+import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils.Companion.ATTRIBUTE_DEVICE_NAME
@@ -29,7 +31,8 @@ class DiscoveryNetwork internal constructor(
   private val serviceDiscoveryMdns: ServiceDiscoveryMdns,
   private val nearbyShareDiscoveryUtils: NearbyShareDiscoveryUtils,
   private val klardropDiscoveryUtils: KlardropDiscoveryUtils,
-  private val currentDeviceProvider: CurrentDeviceProvider
+  private val currentDeviceProvider: CurrentDeviceProvider,
+  private val bleTransport: BleTransport,
 ) {
 
   private val discoveryScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -40,6 +43,9 @@ class DiscoveryNetwork internal constructor(
   private var nearbySharePort: Int? = null
   private var klardropPort: Int? = null
   private var deviceFlowSubscription: Job? = null
+
+  private var bleAdvertiseJob: Job? = null
+  private var bleScanJob: Job? = null
 
 
   fun startPublishNearbyShare(port: Int) {
@@ -151,6 +157,60 @@ class DiscoveryNetwork internal constructor(
 
   }
 
+  fun startPublishBle() {
+    log("DiscoveryNetwork", "startPublishBle")
+    bleAdvertiseJob?.cancel()
+    bleAdvertiseJob = discoveryScope.launch {
+      if (!bleTransport.isSupported()) {
+        log("DiscoveryNetwork", "BLE not supported on this platform/device; skipping advertising")
+        return@launch
+      }
+      runCatching { bleTransport.startAdvertising(currentDeviceProvider.get()) }
+        .onFailure { log("DiscoveryNetwork", "BLE advertise failed: ${it.message}") }
+    }
+  }
+
+  fun stopPublishBle() {
+    bleAdvertiseJob?.cancel()
+    bleAdvertiseJob = null
+    discoveryScope.launch { runCatching { bleTransport.stopAdvertising() } }
+  }
+
+  fun discoverBleDevices() {
+    if (bleScanJob?.isActive == true) return
+    bleScanJob = discoveryScope.launch {
+      if (!bleTransport.isSupported()) {
+        log("DiscoveryNetwork", "BLE not supported; skipping scan")
+        return@launch
+      }
+      bleTransport.scanForPeers()
+        .onCompletion { log("DiscoveryNetwork", "BLE scan completed") }
+        .onEach { event ->
+          val selfId = currentDevice.await().shortDeviceId
+          when (event) {
+            is BlePeerEvent.Found -> {
+              if (event.shortDeviceId == selfId) return@onEach
+              val deviceInfo = DeviceInfo(
+                deviceId = event.shortDeviceId,
+                name = event.localName ?: event.shortDeviceId,
+                deviceType = DeviceType.UNKNOWN,
+                osType = OsType.UNKNOWN,
+              )
+              visibleDevices.onNewDeviceVisible(deviceInfo, DeviceConnection.BleConnection(event.address))
+            }
+            is BlePeerEvent.Lost -> {
+              val device = visibleDevices.visibleDevices.value.values
+                .firstOrNull { d -> d.deviceConnections.any { it is DeviceConnection.BleConnection && it.address == event.address } }
+              if (device != null) {
+                visibleDevices.onDeviceLost(device.deviceInfo.deviceId, DeviceConnection.BleConnection(event.address))
+              }
+            }
+          }
+        }
+        .launchIn(discoveryScope)
+    }
+  }
+
   fun discoverAirdrop() {
 
     discoveryScope.launch {
@@ -171,11 +231,13 @@ class DiscoveryNetwork internal constructor(
       val deviceConnection = when (connectionType) {
         DeviceConnectionType.NEARBY -> DeviceConnection.NearbyConnection(address, serviceInfo.port)
         DeviceConnectionType.KLARDROP -> DeviceConnection.KlardropConnection(address, serviceInfo.port)
+        DeviceConnectionType.BLE -> error("BLE connections are not discovered via mDNS")
       }
 
       val deviceInfo = when (connectionType) {
         DeviceConnectionType.NEARBY -> nearbyShareDiscoveryUtils.toDeviceInfo(serviceInfo)
         DeviceConnectionType.KLARDROP -> klardropDiscoveryUtils.toDeviceInfo(serviceInfo)
+        DeviceConnectionType.BLE -> error("BLE connections are not discovered via mDNS")
       }
 
       visibleDevices.onNewDeviceVisible(deviceInfo, deviceConnection)
@@ -189,6 +251,7 @@ class DiscoveryNetwork internal constructor(
         val deviceConnection = when (connectionType) {
           DeviceConnectionType.NEARBY -> DeviceConnection.NearbyConnection(address, serviceInfo.port)
           DeviceConnectionType.KLARDROP -> DeviceConnection.KlardropConnection(address, serviceInfo.port)
+          DeviceConnectionType.BLE -> error("BLE connections are not discovered via mDNS")
         }
         visibleDevices.onDeviceLost(deviceId, deviceConnection)
       }

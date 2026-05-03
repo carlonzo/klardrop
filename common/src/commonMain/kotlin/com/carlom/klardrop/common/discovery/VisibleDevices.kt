@@ -3,6 +3,8 @@ package com.carlom.klardrop.common.discovery
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.utils.OsType
 import io.ktor.network.sockets.InetSocketAddress
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -42,6 +44,12 @@ internal class VisibleDevicesImpl(
   }
 
   private val visibleDevicesFlow = MutableStateFlow(emptyMap<String, DiscoveryDevice>())
+
+  // Identity cache that survives staleness eviction. Once the BLE handshake
+  // enriches a device with friendly name + types, those facts are remembered;
+  // when the same deviceId is re-discovered later we re-apply them immediately
+  // instead of regressing to "<shortId>, UNKNOWN, UNKNOWN".
+  private val identityCache = mutableMapOf<String, DeviceInfo>()
 
   override val visibleDevices: StateFlow<Map<String, DiscoveryDevice>> = visibleDevicesFlow.asStateFlow()
 
@@ -126,6 +134,27 @@ internal class VisibleDevicesImpl(
     }
   }
 
+  /**
+   * Pick the richer of two `DeviceInfo` snapshots for the same device. Treats a
+   * name equal to the deviceId as a placeholder (BLE discovery sets it that way).
+   */
+  private fun mergeDeviceInfo(existing: DeviceInfo, incoming: DeviceInfo): DeviceInfo {
+    val name = pickRicherName(existing, incoming)
+    val deviceType = if (incoming.deviceType != DeviceType.UNKNOWN) incoming.deviceType else existing.deviceType
+    val osType = if (incoming.osType != OsType.UNKNOWN) incoming.osType else existing.osType
+    return existing.copy(name = name, deviceType = deviceType, osType = osType)
+  }
+
+  private fun pickRicherName(a: DeviceInfo, b: DeviceInfo): String {
+    val aIsPlaceholder = a.name.isBlank() || a.name == a.deviceId
+    val bIsPlaceholder = b.name.isBlank() || b.name == b.deviceId
+    return when {
+      !bIsPlaceholder -> b.name
+      !aIsPlaceholder -> a.name
+      else -> b.name.ifBlank { a.name }
+    }
+  }
+
   override fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice? {
     val hostname = address.hostname
 
@@ -137,11 +166,20 @@ internal class VisibleDevicesImpl(
    */
   private suspend fun addDevice(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection): Boolean {
     return coroutines.ioDispatcher {
-      val containsAlready = visibleDevicesFlow.value.containsKey(deviceInfo.deviceId)
+      val existing = visibleDevicesFlow.value[deviceInfo.deviceId]
+      val containsAlready = existing != null
 
-      if (containsAlready) {
-
-        if (visibleDevicesFlow.value.getValue(deviceInfo.deviceId).deviceConnections.contains(deviceConnection)) {
+      if (existing != null) {
+        // Skip the early return when the incoming DeviceInfo carries a richer
+        // identity than what's stored — we still need to fall through to the
+        // merge step below so the friendly name / type can land on the entry.
+        val existingIsRicher =
+          (existing.deviceInfo.name.isNotBlank() && existing.deviceInfo.name != existing.deviceInfo.deviceId) &&
+            existing.deviceInfo.deviceType != DeviceType.UNKNOWN &&
+            existing.deviceInfo.osType != OsType.UNKNOWN
+        val incomingIsPlaceholder = deviceInfo.name == deviceInfo.deviceId &&
+          deviceInfo.deviceType == DeviceType.UNKNOWN && deviceInfo.osType == OsType.UNKNOWN
+        if (existing.deviceConnections.contains(deviceConnection) && (existingIsRicher || incomingIsPlaceholder)) {
           return@ioDispatcher false
         }
 
@@ -149,17 +187,35 @@ internal class VisibleDevicesImpl(
 
       visibleDevicesFlow.update {
         val now = clock.currentTimeMillis()
-        val storedDiscoveryDevice = (it[deviceInfo.deviceId] ?: DiscoveryDevice(deviceInfo, lastSeenTimestamp = now))
+        // Seed from the existing entry if present, otherwise from the identity
+        // cache so a re-discovery after eviction picks up the previously-learned
+        // friendly identity.
+        val seedInfo = it[deviceInfo.deviceId]?.deviceInfo
+          ?: identityCache[deviceInfo.deviceId]
+          ?: deviceInfo
+        val storedDiscoveryDevice = it[deviceInfo.deviceId]
+          ?: DiscoveryDevice(seedInfo, lastSeenTimestamp = now)
 
         val newConnections = storedDiscoveryDevice.deviceConnections
           // removes connections same connection type and address. Probably new connection with new port that did not expire yet from mdns
           .filterNot { it.deviceConnectionType == deviceConnection.deviceConnectionType && it.address == deviceConnection.address }
           .toMutableList().also { it.add(deviceConnection) }
 
+        // Merge identity fields: prefer the richer one from either side. The BLE
+        // discovery layer surfaces a placeholder DeviceInfo with name=shortId and
+        // UNKNOWN type/os; the BLE handshake later supplies the real values. mDNS
+        // already arrives rich. Always upgrade, never downgrade.
+        val mergedInfo = mergeDeviceInfo(seedInfo, deviceInfo)
+        // Remember the enriched identity for future eviction-recovery cycles.
+        if (mergedInfo.name != mergedInfo.deviceId || mergedInfo.deviceType != DeviceType.UNKNOWN || mergedInfo.osType != OsType.UNKNOWN) {
+          identityCache[deviceInfo.deviceId] = mergedInfo
+        }
+
         it.toMutableMap().apply {
 
           put(
             deviceInfo.deviceId, storedDiscoveryDevice.copy(
+              deviceInfo = mergedInfo,
               deviceConnections = newConnections,
               lastSeenTimestamp = now
             )

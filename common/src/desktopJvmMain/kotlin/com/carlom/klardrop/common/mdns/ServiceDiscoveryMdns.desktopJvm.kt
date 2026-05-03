@@ -18,13 +18,17 @@ import javax.jmdns.ServiceListener
 actual class ServiceDiscoveryMdns {
 
   private val jmdns by lazy {
-
     val addresses = getAddresses()
-
+    log("ServiceDiscoveryMdns", "jmDNS binding to addresses: ${addresses.map { it.hostAddress }}")
+    // Note: on macOS, jmDNS publishing works (other devices see our records via
+    // OS-level Bonjour) but inbound browse callbacks may never fire because
+    // mDNSResponder owns port 5353 and/or the macOS Application Firewall blocks
+    // inbound multicast for unsigned JVM processes. If discovery isn't working
+    // there, check System Settings → Network → Firewall and either disable it or
+    // explicitly allow incoming connections for the JVM/Klardrop binary.
     addresses.map { address ->
       JmDNS.create(address, address.hostAddress)
     }
-
   }
 
   private fun getAddresses(): List<Inet4Address> {
@@ -120,22 +124,19 @@ actual class ServiceDiscoveryMdns {
   private fun createServiceListener(producerScope: ProducerScope<ServiceDiscoveryEvent>): ServiceListener {
     return object : ServiceListener {
       override fun serviceAdded(event: ServiceEvent) {
+        log("ServiceDiscoveryMdns", "serviceAdded: type=${event.type} name=${event.name}")
       }
 
       override fun serviceRemoved(event: ServiceEvent) {
-//        log("ServiceDiscoveryMdns", "serviceRemoved: ${event.info}")
-
+        log("ServiceDiscoveryMdns", "serviceRemoved: ${event.info}")
         producerScope.trySend(ServiceDiscoveryEvent.ServiceLost(event.toServiceInfo()))
       }
 
       override fun serviceResolved(event: ServiceEvent) {
-
+        log("ServiceDiscoveryMdns", "serviceResolved: name=${event.name} addrs=${event.info.inet4Addresses.map { it.hostAddress }} txt=${event.info.propertyNames.toList()}")
         if (event.info.inet4Addresses.isEmpty()) {
           return
-        } else {
-//          log("ServiceDiscoveryMdns", "serviceResolved: ${event.name} ${event.info.inet4Addresses.map { it.hostAddress }}")
         }
-
         producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(event.toServiceInfo()))
       }
 

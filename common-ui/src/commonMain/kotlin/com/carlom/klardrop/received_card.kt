@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
@@ -49,8 +52,10 @@ fun ReceiveNotification(
   modifier: Modifier = Modifier,
   receiveUpdate: ReceiveMessageUpdate,
   onClicked: () -> Unit,
-  onDismissed: () -> Unit
+  onDismissed: () -> Unit,
+  onConnectionInfoAccepted: (ConnectionInfoMessage) -> Unit = {},
 ) {
+  val connectionInfo = receiveUpdate.messages.firstOrNull() as? ConnectionInfoMessage
 
   @Suppress("DEPRECATION")
   val dismissState = rememberSwipeToDismissBoxState(
@@ -98,6 +103,14 @@ fun ReceiveNotification(
             verticalArrangement = Arrangement.spacedBy(4.dp)
           ) {
             ReceiveBody(receiveUpdate)
+
+            if (connectionInfo != null && receiveUpdate.status is ReceiveMessageStatus.Completed) {
+              Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = { onConnectionInfoAccepted(connectionInfo) }) {
+                  Text("Join Wi-Fi")
+                }
+              }
+            }
           }
 
           IconButton(
@@ -149,6 +162,7 @@ private fun ReceiveBody(update: ReceiveMessageUpdate) {
         val preview = when (msg) {
           is TextMessage -> msg.text
           is FileMessage -> msg.fileName
+          is ConnectionInfoMessage -> "Wi-Fi: ${msg.ssid}"
           else -> "Unknown"
         }
         Text(
@@ -231,13 +245,16 @@ private fun IconBubble(icon: ImageVector, tint: Color) {
 }
 
 private fun iconAndTint(update: ReceiveMessageUpdate): Pair<ImageVector, Color> {
-  val isFile = update.messages.firstOrNull() is FileMessage
+  val first = update.messages.firstOrNull()
+  val isFile = first is FileMessage
+  val isWifi = first is ConnectionInfoMessage
   val isComplete = update.status is ReceiveMessageStatus.Completed
   val isError = update.status is ReceiveMessageStatus.Failed
   val isPending = update.status is ReceiveMessageStatus.PendingAuthorization
   return when {
     isError -> Icons.Filled.ErrorOutline to Color(0xFFCF6679)
     isPending -> Icons.Filled.LockOpen to Color(0xFFE2A03F)
+    isWifi -> Icons.Filled.Wifi to Color(0xFF4CAF50)
     isComplete -> Icons.Filled.CheckCircle to Color(0xFF4CAF50)
     isFile -> Icons.AutoMirrored.Filled.InsertDriveFile to Color(0xFF7B8CFF)
     else -> Icons.AutoMirrored.Filled.TextSnippet to Color(0xFF7B8CFF)
@@ -245,10 +262,11 @@ private fun iconAndTint(update: ReceiveMessageUpdate): Pair<ImageVector, Color> 
 }
 
 private fun messageType(update: ReceiveMessageUpdate): String {
-  val isText = update.messages.firstOrNull() is TextMessage
+  val first = update.messages.firstOrNull()
   return when {
-    isText && update.messages.size == 1 -> "text"
-    isText -> "texts"
+    first is ConnectionInfoMessage -> "Wi-Fi credentials"
+    first is TextMessage && update.messages.size == 1 -> "text"
+    first is TextMessage -> "texts"
     update.messages.size == 1 -> "file"
     else -> "files"
   }
@@ -263,4 +281,5 @@ private fun headerLine(verb: String, update: ReceiveMessageUpdate): String {
 interface ReceiveNotificationsCallbacks {
   fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate)
   fun onCardDismissed(id: Int)
+  fun onConnectionInfoAccepted(message: ConnectionInfoMessage) {}
 }

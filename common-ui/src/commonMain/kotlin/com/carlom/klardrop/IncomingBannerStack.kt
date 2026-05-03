@@ -26,7 +26,8 @@ internal fun IncomingBannerStack(
       ReceiveNotification(
         receiveUpdate = update,
         onClicked = { callbacks.onReceivedCardClicked(update) },
-        onDismissed = { callbacks.onCardDismissed(id) }
+        onDismissed = { callbacks.onCardDismissed(id) },
+        onConnectionInfoAccepted = { callbacks.onConnectionInfoAccepted(it) }
       )
     }
   }

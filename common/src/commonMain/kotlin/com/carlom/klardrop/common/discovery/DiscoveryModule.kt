@@ -20,7 +20,8 @@ internal class DiscoveryModule(
       internalPlatformDependency.serviceDiscoveryMdns(),
       NearbyShareDiscoveryUtils(),
       KlardropDiscoveryUtils(),
-      currentDeviceProvider
+      currentDeviceProvider,
+      internalPlatformDependency.bleTransport(),
     )
   }
 

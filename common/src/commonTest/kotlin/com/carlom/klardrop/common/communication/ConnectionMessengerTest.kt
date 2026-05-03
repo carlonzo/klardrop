@@ -51,7 +51,7 @@ class ConnectionMessengerTest {
     val handle = openLoopbackClientSocket()
     val messenger = ConnectionMessenger(
       coroutines = coroutines,
-      connection = Connection(handle.clientSocket, "peer01"),
+      connection = Connection.Tcp(handle.clientSocket, "peer01"),
       messagesRouter = FakeMessagesRouter(),
       readChannel = handle.readChannel,
       writeChannel = handle.writeChannel,
@@ -96,7 +96,7 @@ class ConnectionMessengerTest {
     val payloadMessage = FileMessage(fileName = "fake.bin", fileSize = 10L, mimeType = "application/octet-stream")
     val messenger = ConnectionMessenger(
       coroutines = coroutines,
-      connection = Connection(handle.clientSocket, "peer01"),
+      connection = Connection.Tcp(handle.clientSocket, "peer01"),
       messagesRouter = router,
       readChannel = handle.readChannel,
       writeChannel = handle.writeChannel,
@@ -143,7 +143,7 @@ class ConnectionMessengerTest {
     )
     val messenger = ConnectionMessenger(
       coroutines = coroutines,
-      connection = Connection(handle.clientSocket, "peer01"),
+      connection = Connection.Tcp(handle.clientSocket, "peer01"),
       messagesRouter = router,
       readChannel = handle.readChannel,
       writeChannel = handle.writeChannel,
@@ -169,7 +169,7 @@ class ConnectionMessengerTest {
     val heartbeat = HeartbeatConfig.forTest(intervalMs = 100, timeoutMs = 100)
     val messenger = ConnectionMessenger(
       coroutines = coroutines,
-      connection = Connection(handle.clientSocket, "peer01"),
+      connection = Connection.Tcp(handle.clientSocket, "peer01"),
       messagesRouter = FakeMessagesRouter(),
       readChannel = handle.readChannel,
       writeChannel = handle.writeChannel,
@@ -196,7 +196,7 @@ class ConnectionMessengerTest {
     val heartbeat = HeartbeatConfig.forTest(intervalMs = 100, timeoutMs = 500)
     val messenger = ConnectionMessenger(
       coroutines = coroutines,
-      connection = Connection(handle.clientSocket, "peer01"),
+      connection = Connection.Tcp(handle.clientSocket, "peer01"),
       messagesRouter = FakeMessagesRouter(),
       readChannel = handle.readChannel,
       writeChannel = handle.writeChannel,
@@ -233,7 +233,7 @@ class ConnectionMessengerTest {
     )
     val messenger = ConnectionMessenger(
       coroutines = coroutines,
-      connection = Connection(handle.clientSocket, "peer01"),
+      connection = Connection.Tcp(handle.clientSocket, "peer01"),
       messagesRouter = FakeMessagesRouter(),
       readChannel = handle.readChannel,
       writeChannel = handle.writeChannel,

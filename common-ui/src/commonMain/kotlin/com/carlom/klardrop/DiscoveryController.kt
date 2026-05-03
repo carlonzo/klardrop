@@ -1,6 +1,7 @@
 package com.carlom.klardrop
 
 import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
@@ -10,6 +11,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
@@ -41,7 +43,8 @@ class DiscoveryController(
   private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
   private val pairingProtocolCoordinator: PairingProtocolCoordinator,
   private val currentDeviceProvider: com.carlom.klardrop.common.discovery.CurrentDeviceProvider,
-  private val localPropertiesRepository: com.carlom.klardrop.common.persistence.LocalPropertiesRepository
+  private val localPropertiesRepository: com.carlom.klardrop.common.persistence.LocalPropertiesRepository,
+  private val connectionInfoJoiner: ConnectionInfoJoiner,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -55,7 +58,8 @@ class DiscoveryController(
     commonComponent.trustManager(),
     commonComponent.pairingProtocolCoordinator(),
     commonComponent.currentDeviceProvider(),
-    commonComponent.localPropertiesRepository()
+    commonComponent.localPropertiesRepository(),
+    commonComponent.connectionInfoJoiner(),
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
@@ -155,8 +159,23 @@ class DiscoveryController(
     when (onDataToSend) {
       is OnDataToSend.FilesList -> sendFiles(deviceUi.deviceId, onDataToSend.files)
       is OnDataToSend.Text -> sendText(deviceUi.deviceId, onDataToSend.text)
+      is OnDataToSend.WifiCredentials -> sendWifiCredentials(deviceUi.deviceId, onDataToSend)
     }
 
+  }
+
+  private fun sendWifiCredentials(deviceId: String, data: OnDataToSend.WifiCredentials) {
+    coroutines.appScope.launch {
+      messenger.send(
+        deviceId,
+        ConnectionInfoMessage(
+          kind = data.kind,
+          ssid = data.ssid,
+          password = data.password,
+          hidden = data.hidden,
+        ).toSimpleSendRequest()
+      ).untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
+    }
   }
 
   private fun listenNewMessagesReceived(remoteDeviceId: String, flow: Flow<ReceiveMessageUpdate>) { // Changed
@@ -223,6 +242,17 @@ class DiscoveryController(
     screenStateFlow.update {
       if (id !in it.receivingMessages) it
       else it.copy(receivingMessages = it.receivingMessages - id)
+    }
+  }
+
+  override fun onConnectionInfoAccepted(message: ConnectionInfoMessage) {
+    coroutines.appScope.launch {
+      val joined = connectionInfoJoiner.tryJoin(message)
+      log(
+        "DiscoveryController",
+        if (joined) "Requested OS join for Wi-Fi '${message.ssid}'"
+        else "Fallback: copied password for '${message.ssid}' to clipboard"
+      )
     }
   }
 

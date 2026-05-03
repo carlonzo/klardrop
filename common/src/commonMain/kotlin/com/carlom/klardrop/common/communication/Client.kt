@@ -1,8 +1,12 @@
 package com.carlom.klardrop.common.communication
 
+import com.carlom.klardrop.common.ble.BleChannelBridge
+import com.carlom.klardrop.common.ble.BleRoleSelector
+import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
+import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -24,10 +28,11 @@ class ClientImpl(
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,
-  visibleDevices: VisibleDevices,
+  private val visibleDevices: VisibleDevices,
   private val currentDeviceProvider: CurrentDeviceProvider,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
+  private val bleTransport: BleTransport? = null,
 ) : Client {
 
   private val clientScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -48,32 +53,42 @@ class ClientImpl(
       return@ioDispatcher
     }
 
-    val connections = discoveryDevice.getKlardropConnection()
+    val tcpConnections = discoveryDevice.getKlardropConnection()
+    val bleConnections = discoveryDevice.getBleConnection()
 
-    require(connections.isNotEmpty()) {
-      "Cant connect to $deviceId. Klardrop connection is not available"
+    require(tcpConnections.isNotEmpty() || bleConnections.isNotEmpty()) {
+      "Cant connect to $deviceId. No Klardrop TCP or BLE connection is available"
     }
 
     val connectionJob = CompletableDeferred<Boolean>()
 
-    // launch coroutine to connect and await for the connection to stay alive
+    // launch coroutine to connect and await for the connection to stay alive. TCP is
+    // preferred (higher throughput); BLE is only tried if no TCP path worked, and only
+    // when this device is the lex-smaller initiator per BleRoleSelector.
     launch {
-      connections.forEach { connection ->
-        val address = connection.address
-        val port = connection.port
-
-        log("Client", "Connecting to $deviceId with address $address port $port")
-
-        establishConnection(address, port, deviceId, connectionJob)
-          .onSuccess {
-            // if connected, return
-            return@forEach
-          }
-          .onFailure {
-            log("Client", "Failed to connect to $deviceId with address $address", it)
-          }
+      for (connection in tcpConnections) {
+        log("Client", "Connecting to $deviceId with address ${connection.address} port ${connection.port}")
+        establishConnection(connection.address, connection.port, deviceId, connectionJob)
+          .onFailure { log("Client", "Failed TCP connect to $deviceId @ ${connection.address}", it) }
+        if (connectionJob.isCompleted) return@launch
       }
 
+      if (bleTransport != null && bleConnections.isNotEmpty()) {
+        val selfId = currentDeviceProvider.get().shortDeviceId
+        if (!BleRoleSelector.shouldInitiate(selfShortDeviceId = selfId, peerShortDeviceId = deviceId)) {
+          log("Client", "Not the initiator for BLE to $deviceId (self=$selfId); awaiting inbound GATT")
+          connectionJob.complete(false)
+          return@launch
+        }
+        for (ble in bleConnections) {
+          log("Client", "Connecting via BLE to $deviceId (address=${ble.address})")
+          establishBleConnection(ble, deviceId, connectionJob)
+            .onFailure { log("Client", "Failed BLE connect to $deviceId @ ${ble.address}", it) }
+          if (connectionJob.isCompleted) return@launch
+        }
+      }
+
+      if (!connectionJob.isCompleted) connectionJob.complete(false)
     }
 
     // await for the connection to be established and connectionpool to be updated
@@ -92,7 +107,13 @@ class ClientImpl(
     }
     log("Client", "Connected to $address:$port. Sending greetings")
 
-    val handshakeMessage = HandshakeMessage(currentDeviceProvider.get().shortDeviceId)
+    val self = currentDeviceProvider.get()
+    val handshakeMessage = HandshakeMessage(
+      deviceId = self.shortDeviceId,
+      deviceName = self.deviceName,
+      osType = self.osType,
+      deviceType = self.deviceType,
+    )
     val writeChannel = socket.openWriteChannel(autoFlush = true)
     writeChannel.sendMessage(handshakeMessage, serializer)
 
@@ -112,7 +133,7 @@ class ClientImpl(
         // The server has already created one and stored it with the same key
       } else {
         // Create a ConnectionMessenger for the client side to send messages to the server
-        val connection = Connection(socket, deviceId)
+        val connection = Connection.Tcp(socket, deviceId)
         val connectionMessenger = ConnectionMessenger(
           coroutines = coroutines,
           connection = connection,
@@ -140,5 +161,69 @@ class ClientImpl(
       socket.close()
     }
 
+  }
+
+  private suspend fun establishBleConnection(
+    bleConnection: DeviceConnection.BleConnection,
+    deviceId: String,
+    connectionJob: CompletableDeferred<Boolean>,
+  ) = runCatching {
+    val transport = checkNotNull(bleTransport) { "No BLE transport injected" }
+    val session = transport.connectCentral(bleConnection.address, deviceId)
+    val bridge = BleChannelBridge(session, clientScope).start()
+
+    val self = currentDeviceProvider.get()
+    // Central speaks first — send the rich handshake so the server can enrich its
+    // VisibleDevices entry. BLE advertisements only carry the bare shortDeviceId
+    // for privacy; this is the first place the friendly name is revealed.
+    bridge.writeChannel.sendMessage(
+      HandshakeMessage(
+        deviceId = self.shortDeviceId,
+        deviceName = self.deviceName,
+        osType = self.osType,
+        deviceType = self.deviceType,
+      ),
+      serializer,
+    )
+    val serverHandshake = bridge.readChannel.readMessage(serializer) as HandshakeMessage
+
+    if (serverHandshake.deviceId != deviceId) {
+      log("Client", "BLE handshake id mismatch: expected $deviceId got ${serverHandshake.deviceId}")
+      bridge.close()
+      connectionJob.complete(false)
+      return@runCatching
+    }
+
+    // Server's reply may carry rich identity — enrich our VisibleDevices entry so
+    // the BLE peer shows up with friendly name + OS/device type instead of the
+    // shortDeviceId placeholder.
+    if (serverHandshake.deviceName.isNotEmpty()) {
+      runCatching {
+        visibleDevices.onNewDeviceVisible(
+          com.carlom.klardrop.common.discovery.DeviceInfo(
+            deviceId = serverHandshake.deviceId,
+            name = serverHandshake.deviceName,
+            deviceType = serverHandshake.deviceType,
+            osType = serverHandshake.osType,
+          ),
+          bleConnection,
+        )
+      }
+    }
+
+    val connection = Connection.Ble(session, deviceId)
+    val connectionMessenger = ConnectionMessenger(
+      coroutines = coroutines,
+      connection = connection,
+      messagesRouter = messagesRouter,
+      readChannel = bridge.readChannel,
+      writeChannel = bridge.writeChannel,
+      ackTimeoutConfig = ackTimeoutConfig,
+      heartbeatConfig = heartbeatConfig,
+      messageSerializer = serializer,
+    )
+    connectionsPool.updateConnection(deviceId, connectionMessenger)
+    clientScope.launch { connectionMessenger.acceptIncomingMessages() }
+    connectionJob.complete(true)
   }
 }

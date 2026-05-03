@@ -2,7 +2,10 @@ package com.carlom.klardrop.common.communication.di
 
 import androidx.annotation.VisibleForTesting
 import com.carlom.klardrop.common.FileManager
+import com.carlom.klardrop.common.ble.BleTransport
 import com.carlom.klardrop.common.communication.AckTimeoutConfig
+import com.carlom.klardrop.common.communication.BleEagerConnector
+import com.carlom.klardrop.common.communication.BleServerListener
 import com.carlom.klardrop.common.communication.ClientImpl
 import com.carlom.klardrop.common.communication.HeartbeatConfig
 import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
@@ -11,6 +14,7 @@ import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerImpl
 import com.carlom.klardrop.common.communication.Server
 import com.carlom.klardrop.common.communication.message.AckMessageHandler
+import com.carlom.klardrop.common.communication.message.ConnectionInfoMessageHandler
 import com.carlom.klardrop.common.communication.message.FileMessageHandler
 import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
 import com.carlom.klardrop.common.communication.message.MessageType
@@ -50,6 +54,7 @@ class CommunicationModule(
   private val trustStorage: TrustStorage,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
+  private val bleTransport: BleTransport? = null,
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -85,7 +90,8 @@ class CommunicationModule(
       MessageType.ACK_RECEIVED to AckMessageHandler(),
       MessageType.TRUST_PAIRING_REQUEST to TrustPairingRequestHandler(serializer, trustManager),
       MessageType.TRUST_PAIRING_RESPONSE to TrustPairingResponseHandler(serializer, trustManager),
-      MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager)
+      MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager),
+      MessageType.CONNECTION_INFO to ConnectionInfoMessageHandler(serializer),
     )
     
     MessageHandlersImpl(handlers)
@@ -112,8 +118,38 @@ class CommunicationModule(
       currentDeviceProvider,
       ackTimeoutConfig,
       heartbeatConfig,
+      bleTransport,
     )
   }
+
+  private val bleServerListener by lazy {
+    bleTransport?.let {
+      BleServerListener(
+        coroutines = coroutines,
+        bleTransport = it,
+        serializer = serializer,
+        currentDeviceProvider = currentDeviceProvider,
+        messagesRouter = messagesRouter,
+        connectionsPool = connectionsPool,
+        visibleDevices = visibleDevices,
+        ackTimeoutConfig = ackTimeoutConfig,
+        heartbeatConfig = heartbeatConfig,
+      )
+    }
+  }
+
+  private val bleEagerConnector by lazy {
+    bleTransport?.let {
+      BleEagerConnector(
+        coroutines = coroutines,
+        visibleDevices = visibleDevices,
+        currentDeviceProvider = currentDeviceProvider,
+        client = client,
+        connectionsPool = connectionsPool,
+      )
+    }
+  }
+
 
   private val messageReceiver: MessageReceiver by lazy {
     MessageReceiverImpl(coroutines, visibleDevices)
@@ -160,6 +196,8 @@ class CommunicationModule(
 
   fun client() = client
   fun server() = server
+  fun bleServerListener() = bleServerListener
+  fun bleEagerConnector() = bleEagerConnector
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
   fun trustManager() = trustManager

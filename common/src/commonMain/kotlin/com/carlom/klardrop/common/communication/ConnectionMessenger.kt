@@ -8,7 +8,6 @@ import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
-import io.ktor.network.sockets.isClosed
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.CoroutineScope
@@ -70,8 +69,8 @@ class ConnectionMessenger internal constructor(
   private var heartbeatJob: Job? = null
 
   init {
-    if (connection.socket.isClosed) {
-      throw IllegalStateException("Socket with ${connection.deviceId} is closed.")
+    if (connection.isClosed) {
+      throw IllegalStateException("Connection with ${connection.deviceId} is closed.")
     }
   }
 
@@ -288,32 +287,32 @@ class ConnectionMessenger internal constructor(
 
 
   fun close() = runCatching {
-    if (!connection.socket.isClosed) {
+    if (!connection.isClosed) {
       log("ConnectionMessenger: [DEBUG] Explicitly closing connection with ${connection.deviceId}")
-      connection.socket.close()
-      log("ConnectionMessenger: [DEBUG] Socket closed for ${connection.deviceId}")
+      connection.close()
+      log("ConnectionMessenger: [DEBUG] Connection closed for ${connection.deviceId}")
     } else {
-      log("ConnectionMessenger: [DEBUG] close() called but socket already closed for ${connection.deviceId}")
+      log("ConnectionMessenger: [DEBUG] close() called but connection already closed for ${connection.deviceId}")
     }
   }
 
   fun isClosed(): Boolean {
-    // Check if socket is explicitly closed
-    if (connection.socket.isClosed) {
-      log("ConnectionMessenger: [DEBUG] isClosed() = true - socket is explicitly closed for ${connection.deviceId}")
+    // Check if the transport is explicitly closed (socket / BLE session).
+    if (connection.isClosed) {
+      log("ConnectionMessenger: [DEBUG] isClosed() = true - transport is explicitly closed for ${connection.deviceId}")
       return true
     }
 
-    // Check if read/write channels are closed (indicates remote closure)
+    // Check if read/write channels are closed (indicates remote closure).
     val readClosed = readChannel.isClosedForRead
     val writeClosed = writeChannel.isClosedForWrite
-    
+
     log("ConnectionMessenger: [DEBUG] isClosed() check for ${connection.deviceId}: readClosed=$readClosed, writeClosed=$writeClosed")
-    
+
     if (readClosed || writeClosed) {
-      log("ConnectionMessenger: [DEBUG] Detected channel closure for ${connection.deviceId}, closing socket (readClosed=$readClosed, writeClosed=$writeClosed)")
-      runCatching { connection.socket.close() }
-        .onFailure { log("Failed closing the socket", it) }
+      log("ConnectionMessenger: [DEBUG] Detected channel closure for ${connection.deviceId}, closing transport (readClosed=$readClosed, writeClosed=$writeClosed)")
+      runCatching { connection.close() }
+        .onFailure { log("Failed closing the connection", it) }
       return true
     }
 

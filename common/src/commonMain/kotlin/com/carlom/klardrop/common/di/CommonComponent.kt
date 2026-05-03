@@ -56,15 +56,16 @@ class CommonComponent(
 
   private val communicationModule by lazy {
     CommunicationModule(
-      coroutines,
-      discoveryModule.visibleDevices(),
-      protoBuf,
-      clock,
-      fileManager,
-      currentDeviceProvider,
-      messageRepository,
-      clipboardManager,
-      internalPlatformDependency.trustStorage()
+      coroutines = coroutines,
+      visibleDevices = discoveryModule.visibleDevices(),
+      protoBuf = protoBuf,
+      clock = clock,
+      fileManager = fileManager,
+      currentDeviceProvider = currentDeviceProvider,
+      messageRepository = messageRepository,
+      clipboardManager = clipboardManager,
+      trustStorage = internalPlatformDependency.trustStorage(),
+      bleTransport = internalPlatformDependency.bleTransport(),
     )
   }
 
@@ -87,6 +88,8 @@ class CommonComponent(
 
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
   fun server() = communicationModule.server()
+  fun bleServerListener() = communicationModule.bleServerListener()
+  fun bleEagerConnector() = communicationModule.bleEagerConnector()
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()
@@ -112,5 +115,7 @@ class CommonComponent(
   fun currentDeviceProvider() = currentDeviceProvider
 
   fun localPropertiesRepository() = localProperties
+
+  fun connectionInfoJoiner() = internalPlatformDependency.connectionInfoJoiner()
 
 }

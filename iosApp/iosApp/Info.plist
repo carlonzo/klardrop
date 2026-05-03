@@ -58,6 +58,13 @@
 		<string>_FC9F5ED42C8A._tcp.</string>
 		<string>_klardrop._tcp.</string>
 	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Used to discover and pair with your nearby Klardrop devices over Bluetooth when you are not on the same Wi-Fi network.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+		<string>bluetooth-peripheral</string>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 </dict>

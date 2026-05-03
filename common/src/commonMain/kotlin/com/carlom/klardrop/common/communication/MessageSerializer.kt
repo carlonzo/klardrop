@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.communication.message.ClipboardSyncMessage
+import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.message.Message
@@ -62,6 +63,7 @@ class MessageSerializer(
       MessageType.TRUST_REVOCATION -> TrustRevocationMessage.serializer() as KSerializer<E>
       MessageType.PING -> PingMessage.serializer() as KSerializer<E>
       MessageType.PONG -> PongMessage.serializer() as KSerializer<E>
+      MessageType.CONNECTION_INFO -> ConnectionInfoMessage.serializer() as KSerializer<E>
     }
   }
 }

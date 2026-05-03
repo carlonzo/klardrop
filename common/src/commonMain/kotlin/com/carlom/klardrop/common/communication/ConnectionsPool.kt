@@ -1,7 +1,9 @@
 package com.carlom.klardrop.common.communication
 
+import com.carlom.klardrop.common.ble.BleSession
 import com.carlom.klardrop.common.utils.log
-import io.ktor.network.sockets.*
+import io.ktor.network.sockets.Socket
+import io.ktor.network.sockets.isClosed
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -118,8 +120,29 @@ internal class ConnectionsPoolImpl : ConnectionsPool {
 
 }
 
-data class Connection(
-  val socket: Socket,
-  val deviceId: String
-)
+/**
+ * A live peer connection owned by [ConnectionMessenger]. Backed by either a TCP socket
+ * (the mDNS/Klardrop-over-TCP path) or a BLE GATT [BleSession]. Consumers only need
+ * [deviceId], [isClosed], and [close] — the transport-specific handle stays internal to
+ * the variant.
+ */
+sealed class Connection {
+  abstract val deviceId: String
+  abstract val isClosed: Boolean
+  abstract fun close()
+
+  class Tcp(val socket: Socket, override val deviceId: String) : Connection() {
+    override val isClosed: Boolean get() = socket.isClosed
+    override fun close() {
+      if (!socket.isClosed) socket.close()
+    }
+  }
+
+  class Ble(val session: BleSession, override val deviceId: String) : Connection() {
+    override val isClosed: Boolean get() = !session.isOpen
+    override fun close() {
+      if (session.isOpen) session.close()
+    }
+  }
+}
 
