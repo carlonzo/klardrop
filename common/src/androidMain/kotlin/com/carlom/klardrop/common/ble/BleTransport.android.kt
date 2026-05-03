@@ -96,10 +96,10 @@ actual class BleTransport(private val context: Context) {
     val serviceUuid = ParcelUuid(UUID.fromString(BleConstants.SERVICE_UUID))
     // Short device id (≤8 chars, ASCII) is carried as the service-data payload so peers
     // can recognise this peripheral without connecting. Kept short to fit the 31-byte
-    // advertisement budget alongside the 128-bit service UUID.
+    // advertisement budget. A 128-bit service UUID plus 128-bit service data is too large
+    // for legacy advertising, so the service-data UUID is the protocol marker.
     val data = AdvertiseData.Builder()
       .setIncludeDeviceName(false)
-      .addServiceUuid(serviceUuid)
       .addServiceData(serviceUuid, currentDevice.shortDeviceId.encodeToByteArray())
       .build()
 
@@ -135,7 +135,9 @@ actual class BleTransport(private val context: Context) {
     }
 
     val serviceUuid = ParcelUuid(UUID.fromString(BleConstants.SERVICE_UUID))
-    val filter = ScanFilter.Builder().setServiceUuid(serviceUuid).build()
+    val filter = ScanFilter.Builder()
+      .setServiceData(serviceUuid, byteArrayOf(), byteArrayOf())
+      .build()
     val settings = ScanSettings.Builder()
       .setScanMode(ScanSettings.SCAN_MODE_BALANCED)
       .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)

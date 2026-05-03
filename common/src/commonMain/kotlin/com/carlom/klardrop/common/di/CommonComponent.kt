@@ -56,16 +56,16 @@ class CommonComponent(
 
   private val communicationModule by lazy {
     CommunicationModule(
-      coroutines,
-      discoveryModule.visibleDevices(),
-      protoBuf,
-      clock,
-      fileManager,
-      currentDeviceProvider,
-      messageRepository,
-      clipboardManager,
-      internalPlatformDependency.trustStorage(),
-      internalPlatformDependency.bleTransport(),
+      coroutines = coroutines,
+      visibleDevices = discoveryModule.visibleDevices(),
+      protoBuf = protoBuf,
+      clock = clock,
+      fileManager = fileManager,
+      currentDeviceProvider = currentDeviceProvider,
+      messageRepository = messageRepository,
+      clipboardManager = clipboardManager,
+      trustStorage = internalPlatformDependency.trustStorage(),
+      bleTransport = internalPlatformDependency.bleTransport(),
     )
   }
 

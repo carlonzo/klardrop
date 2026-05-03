@@ -4,8 +4,10 @@ import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.OnDataToSend
 import com.carlom.klardrop.OnDataToSend.FilesList
 import com.carlom.klardrop.OnDataToSend.Text
+import com.carlom.klardrop.OnDataToSend.WifiCredentials
 import com.carlom.klardrop.ShowDevicesControllerHelper
 import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
@@ -61,6 +63,7 @@ class ShareToDeviceController(
     when (data) {
       is FilesList -> sendFiles(deviceUi.deviceId, data.files)
       is Text -> sendText(deviceUi.deviceId, data.text)
+      is WifiCredentials -> sendWifiCredentials(deviceUi.deviceId, data)
     }
   }
 
@@ -89,5 +92,18 @@ class ShareToDeviceController(
 
   }
 
+  private fun sendWifiCredentials(deviceId: String, data: WifiCredentials) {
+    coroutines.appScope.launch {
+      messenger.send(
+        deviceId,
+        ConnectionInfoMessage(
+          kind = data.kind,
+          ssid = data.ssid,
+          password = data.password,
+          hidden = data.hidden,
+        ).toSimpleSendRequest()
+      ).untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
+    }
+  }
 
 }
