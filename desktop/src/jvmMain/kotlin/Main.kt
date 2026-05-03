@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf

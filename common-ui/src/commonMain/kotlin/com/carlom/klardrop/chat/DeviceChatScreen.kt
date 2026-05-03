@@ -32,7 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -158,7 +158,7 @@ fun DeviceChatScreen(
             }
           }
         },
-        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+        colors = TopAppBarDefaults.topAppBarColors(
           containerColor = MaterialTheme.colorScheme.surface
         )
       )
@@ -488,9 +488,9 @@ private fun FileMessageBubble(
   val filePath = fileTransferState?.file_path
   val fileName = fileTransferState?.file_name ?: message.content
 
-  val isCompletedReceivedFile = !isSender &&
-    currentStatus == FileTransferStatus.COMPLETED.name &&
-    filePath != null
+  val openableFilePath = filePath
+    ?.takeIf { !isSender && currentStatus == FileTransferStatus.COMPLETED.name }
+  val isCompletedReceivedFile = openableFilePath != null
 
   val container = if (isSender) {
     MaterialTheme.colorScheme.primaryContainer
@@ -503,8 +503,8 @@ private fun FileMessageBubble(
     MaterialTheme.colorScheme.onSurface
   }
 
-  val bubbleModifier = if (isCompletedReceivedFile) {
-    Modifier.clickable { onOpenFileRequest(filePath!!) }
+  val bubbleModifier = if (openableFilePath != null) {
+    Modifier.clickable { onOpenFileRequest(openableFilePath) }
   } else {
     Modifier
   }
@@ -609,7 +609,7 @@ private fun FileMessageBubble(
 private fun FileBubbleHeader(fileName: String, onContainer: Color) {
   Row(verticalAlignment = Alignment.CenterVertically) {
     Icon(
-      imageVector = Icons.Default.InsertDriveFile,
+      imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
       contentDescription = null,
       tint = onContainer.copy(alpha = 0.8f),
       modifier = Modifier.size(18.dp)

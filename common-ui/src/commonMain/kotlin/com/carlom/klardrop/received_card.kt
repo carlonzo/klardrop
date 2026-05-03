@@ -15,9 +15,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.TextSnippet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +52,7 @@ fun ReceiveNotification(
   onDismissed: () -> Unit
 ) {
 
+  @Suppress("DEPRECATION")
   val dismissState = rememberSwipeToDismissBoxState(
     initialValue = SwipeToDismissBoxValue.Settled,
     confirmValueChange = {
@@ -238,8 +239,8 @@ private fun iconAndTint(update: ReceiveMessageUpdate): Pair<ImageVector, Color> 
     isError -> Icons.Filled.ErrorOutline to Color(0xFFCF6679)
     isPending -> Icons.Filled.LockOpen to Color(0xFFE2A03F)
     isComplete -> Icons.Filled.CheckCircle to Color(0xFF4CAF50)
-    isFile -> Icons.Filled.InsertDriveFile to Color(0xFF7B8CFF)
-    else -> Icons.Filled.TextSnippet to Color(0xFF7B8CFF)
+    isFile -> Icons.AutoMirrored.Filled.InsertDriveFile to Color(0xFF7B8CFF)
+    else -> Icons.AutoMirrored.Filled.TextSnippet to Color(0xFF7B8CFF)
   }
 }
 

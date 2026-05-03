@@ -7,6 +7,16 @@ kotlin {
   jvm()
   iosArm64()
   iosSimulatorArm64()
+
+  targets.all {
+    compilations.all {
+      compileTaskProvider.configure {
+        compilerOptions {
+          suppressWarnings.set(true)
+        }
+      }
+    }
+  }
 }
 
 wire {

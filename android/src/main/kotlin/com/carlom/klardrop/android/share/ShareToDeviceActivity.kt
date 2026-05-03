@@ -2,6 +2,7 @@ package com.carlom.klardrop.android.share
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import androidx.activity.compose.setContent
@@ -123,17 +124,27 @@ class ShareToDeviceActivity : AppCompatActivity() {
   }
 
   private fun handleSendFile(intent: Intent) {
-    (intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri)?.let {
+    val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+    } else {
+      @Suppress("DEPRECATION")
+      intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri
+    }
+    uri?.let {
       shareToDeviceController.initializeItemToShare(OnDataToSend.FilesList(listOf(PlatformFile(it))))
     }
   }
 
   private fun handleSendMultipleFiles(intent: Intent) {
-    intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM)?.let {
-      shareToDeviceController.initializeItemToShare(OnDataToSend.FilesList(it.toList().map {
-        it as Uri
-        PlatformFile(it)
-      }))
+    val list = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+    } else {
+      @Suppress("DEPRECATION", "UNCHECKED_CAST")
+      intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM)
+        ?.let { it as ArrayList<Uri> }
+    }
+    list?.let {
+      shareToDeviceController.initializeItemToShare(OnDataToSend.FilesList(it.map { uri -> PlatformFile(uri) }))
     }
   }
 
