@@ -1,19 +1,19 @@
 [versions]
 agp = "9.2.0"
-kotlin = "2.3.20"
+kotlin = "2.3.21"
 coroutines = "1.10.2"
 serialization = "1.11.0"
 jetbrains-compose = "1.10.3"
 okio = "3.17.0"
-ktor = "3.4.2"
+ktor = "3.4.3"
 datastore = "1.2.1"
 dagger = "2.59.2"
 androidx-activity = "1.13.0"
 kotlinx-io = "0.9.0"
 bugsnag-kmp = "1.0.0"
 bugsnag-android = "6.26.0"
-bugsnag-jvm = "3.8.0"
-filekit = "0.13.0"
+bugsnag-jvm = "4.0.0"
+filekit = "0.14.0"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
 coil3 = "3.4.0"
@@ -76,9 +76,9 @@ androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", vers
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
 jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "jetbrains-compose" }
@@ -86,4 +86,4 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 
 squareup-wire = { id = "com.squareup.wire", version = "6.2.0" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
-ksp = { id = "com.google.devtools.ksp", version = "2.3.6" }
+ksp = { id = "com.google.devtools.ksp", version = "2.3.7" }

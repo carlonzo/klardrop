@@ -1,13 +1,20 @@
 plugins {
-  alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.multiplatform)
+  alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
   alias(deps.plugins.sqldelight)
   kotlin("native.cocoapods")
 }
 
 kotlin {
-  androidTarget()
+  android {
+    namespace = "com.klardrop.common"
+    compileSdk = 37
+    minSdk = 23
+    withHostTestBuilder { }.configure {
+      isReturnDefaultValues = true
+    }
+  }
   jvm("desktopJvm")
 //  macosArm64()
   iosArm64()
@@ -68,7 +75,7 @@ kotlin {
       }
     }
 
-    val androidUnitTest by getting {
+    val androidHostTest by getting {
       dependencies {
         implementation(deps.sqldelight.sqlite.driver)
       }
@@ -78,8 +85,11 @@ kotlin {
       dependencies {
         implementation(deps.bugsnag.kmp)
         implementation(deps.sqldelight.native.driver)
-
       }
+    }
+
+    matching { it.name.startsWith("ios") }.configureEach {
+      languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
     }
 
     val desktopJvmMain by getting {
@@ -93,7 +103,6 @@ kotlin {
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
-      languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
       languageSettings.optIn("kotlin.time.ExperimentalTime")
     }
   }
@@ -109,14 +118,6 @@ kotlin {
   }
 }
 
-
-android {
-  namespace = "com.klardrop.common"
-
-  testOptions {
-    unitTests.isReturnDefaultValues = true
-  }
-}
 
 sqldelight {
   databases {

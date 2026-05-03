@@ -118,7 +118,7 @@ fun DiscoveryScreen(
     sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
     sheetContent = {
       if (deviceUiClicked != null) {
-        ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked!! }
+        ShareSheet(filePickerLauncher, picturesPickerLauncher, discoveryController, sheetState) { deviceUiClicked }
       }
     },
     sheetState = sheetState,

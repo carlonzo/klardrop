@@ -78,7 +78,7 @@ class StorageModule(
     )
   }
 
-  private inline fun Path.toOkioPath(): okio.Path {
+  private fun Path.toOkioPath(): okio.Path {
     return this.toString().toPath()
   }
 }

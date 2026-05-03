@@ -1,5 +1,4 @@
 plugins {
-  alias(deps.plugins.kotlin.android)
   alias(deps.plugins.android.application)
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
@@ -30,7 +29,7 @@ dependencies {
 }
 
 android {
-  compileSdk = 36
+  compileSdk = 37
   defaultConfig {
     applicationId = "com.carlom.klardrop.android"
     minSdk = 24

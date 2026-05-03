@@ -6,7 +6,6 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.ext.SdkExtensions
-import androidx.annotation.RequiresExtension
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.awaitClose
@@ -48,19 +47,44 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceFound: $serviceInfo")
 
-          nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
-            override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-              log("ServiceDiscoveryMdns", "onResolveFailed: $serviceInfo $errorCode")
+          val resolveListener = object : NsdManager.ServiceInfoCallback {
+            override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
+              log("ServiceDiscoveryMdns", "onServiceInfoCallbackRegistrationFailed: $errorCode")
             }
 
-            override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-              log("ServiceDiscoveryMdns", "onServiceResolved: $serviceInfo")
+            override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
+              log("ServiceDiscoveryMdns", "onServiceUpdated: $serviceInfo")
               producer.launch {
                 send(ServiceDiscoveryEvent.ServiceFound(serviceInfo.toServiceInfo()))
               }
             }
 
-          })
+            override fun onServiceLost() {
+              log("ServiceDiscoveryMdns", "onServiceLost (callback)")
+            }
+
+            override fun onServiceInfoCallbackUnregistered() {
+              log("ServiceDiscoveryMdns", "onServiceInfoCallbackUnregistered")
+            }
+          }
+
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            nsdManager.registerServiceInfoCallback(serviceInfo, { it.run() }, resolveListener)
+          } else {
+            @Suppress("DEPRECATION")
+            nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+              override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                log("ServiceDiscoveryMdns", "onResolveFailed: $serviceInfo $errorCode")
+              }
+
+              override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                log("ServiceDiscoveryMdns", "onServiceResolved: $serviceInfo")
+                producer.launch {
+                  send(ServiceDiscoveryEvent.ServiceFound(serviceInfo.toServiceInfo()))
+                }
+              }
+            })
+          }
         }
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
@@ -157,6 +181,7 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.TIRAMISU) >= 7) {
         this.hostAddresses.mapNotNull { it.hostAddress }
       } else {
+        @Suppress("DEPRECATION")
         this.host?.hostAddress?.let { listOf(it) } ?: emptyList()
       }
 
