@@ -4,14 +4,18 @@ plugins {
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
-  alias(deps.plugins.android.library)
+  alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
   kotlin("native.cocoapods")
 }
 
 kotlin {
 
-  androidTarget()
+  android {
+    namespace = "com.klardrop.common.ui"
+    compileSdk = 37
+    minSdk = 23
+  }
   jvm("desktopJvm") {
     compilerOptions {
       jvmTarget = JvmTarget.JVM_21
@@ -40,11 +44,8 @@ kotlin {
     ios.deploymentTarget = "14.1"
     podfile = project.file("../iosApp/Podfile")
 
-//    pod("Bugsnag", "~> 6.0")
-
     framework {
       baseName = "common_ui"
-      export(project(":klardrop-common"))
     }
   }
 
@@ -66,7 +67,7 @@ kotlin {
         api(deps.coil3.compose)
         api(deps.coil3.network.ktor)
 
-        api(project(":klardrop-common"))
+        implementation(project(":klardrop-common"))
       }
     }
 
@@ -100,14 +101,6 @@ kotlin {
         }
       }
     }
-  }
-}
-
-android {
-  namespace = "com.klardrop.common.ui"
-  compileSdk = 36
-  defaultConfig {
-    minSdk = 23
   }
 }
 

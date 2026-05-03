@@ -1,13 +1,20 @@
 plugins {
-  alias(deps.plugins.android.library)
   alias(deps.plugins.kotlin.multiplatform)
+  alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
   alias(deps.plugins.sqldelight)
   kotlin("native.cocoapods")
 }
 
 kotlin {
-  androidTarget()
+  android {
+    namespace = "com.klardrop.common"
+    compileSdk = 37
+    minSdk = 23
+    withHostTestBuilder { }.configure {
+      isReturnDefaultValues = true
+    }
+  }
   jvm("desktopJvm")
 //  macosArm64()
   iosArm64()
@@ -68,7 +75,7 @@ kotlin {
       }
     }
 
-    val androidUnitTest by getting {
+    val androidHostTest by getting {
       dependencies {
         implementation(deps.sqldelight.sqlite.driver)
       }
@@ -109,14 +116,6 @@ kotlin {
   }
 }
 
-
-android {
-  namespace = "com.klardrop.common"
-
-  testOptions {
-    unitTests.isReturnDefaultValues = true
-  }
-}
 
 sqldelight {
   databases {

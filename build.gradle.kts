@@ -1,4 +1,5 @@
-import com.android.build.gradle.BaseExtension
+import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
@@ -7,9 +8,9 @@ version = "1.0-SNAPSHOT"
 
 plugins {
   alias(deps.plugins.kotlin.multiplatform) apply false
-  alias(deps.plugins.kotlin.android) apply false
   alias(deps.plugins.android.application) apply false
   alias(deps.plugins.android.library) apply false
+  alias(deps.plugins.android.kmp.library) apply false
   alias(deps.plugins.jetbrains.compose) apply false
   alias(deps.plugins.compose.compiler) apply false
   alias(deps.plugins.kotlin.serialization) apply false
@@ -30,12 +31,12 @@ subprojects {
   val javaTarget = JvmTarget.fromTarget(javaVersion.toString())
 
   pluginManager.withPlugin("com.android.application") {
-    configure<BaseExtension> {
+    configure<ApplicationExtension> {
       compileOptions {
         sourceCompatibility = javaVersion
         targetCompatibility = javaVersion
       }
-      compileSdkVersion(36)
+      compileSdk = 37
       defaultConfig {
         minSdk = 23
       }
@@ -43,12 +44,12 @@ subprojects {
   }
 
   pluginManager.withPlugin("com.android.library") {
-    configure<BaseExtension> {
+    configure<LibraryExtension> {
       compileOptions {
         sourceCompatibility = javaVersion
         targetCompatibility = javaVersion
       }
-      compileSdkVersion(36)
+      compileSdk = 37
       defaultConfig {
         minSdk = 23
       }
