@@ -71,4 +71,11 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     // A proper implementation would need platform-specific UI integration
     return false
   }
+
+  // iOS keeps using FileKit.saveImageToGallery (no tracked path); the caller falls back.
+  actual suspend fun saveMediaToGallery(
+    tempPath: kotlinx.io.files.Path,
+    mimeType: String,
+    displayName: String,
+  ): String? = null
 }

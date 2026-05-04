@@ -19,6 +19,17 @@ expect class InternalPlatformDependencies {
   fun driverFactory(): DriverFactory
   fun trustStorage(): TrustStorage
   suspend fun openFile(filePath: String): Boolean
+
+  /**
+   * Save the file at [tempPath] into the platform's media gallery and return a string the
+   * caller can persist as the file's location (a `content://` URI on Android, a file path
+   * elsewhere). When the platform doesn't expose a usable identifier — e.g. older
+   * `FileKit.saveImageToGallery` paths — this returns null and the caller falls back to
+   * its existing strategy (gallery save without a tracked path, etc.).
+   *
+   * On success the temp file SHOULD be removed by the implementation.
+   */
+  suspend fun saveMediaToGallery(tempPath: Path, mimeType: String, displayName: String): String?
 }
 
 expect object CommonPlatformDependencies {

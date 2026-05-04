@@ -76,4 +76,12 @@ actual class InternalPlatformDependencies {
     // A proper implementation would need platform-specific integration
     return false
   }
+
+  // Native macOS has no "media gallery" concept distinct from Downloads; rely on the
+  // regular Downloads-folder save.
+  actual suspend fun saveMediaToGallery(
+    tempPath: kotlinx.io.files.Path,
+    mimeType: String,
+    displayName: String,
+  ): String? = null
 }

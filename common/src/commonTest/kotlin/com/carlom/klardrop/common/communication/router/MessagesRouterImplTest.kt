@@ -195,6 +195,18 @@ class MessagesRouterImplTest {
 
     messagesRouter = MessagesRouterImpl(
       handlers = mockMessageHandlers,
+      fileMessageHandler = com.carlom.klardrop.common.communication.message.FileMessageHandler(
+        fileManager = object : com.carlom.klardrop.common.FileManager {
+          override fun prepareSaveFile(fileName: String, mimeType: String): com.carlom.klardrop.common.FileTransfer =
+            error("not used in router tests")
+          override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.RawSource =
+            error("not used in router tests")
+          override suspend fun openFile(filePath: String): Boolean = false
+        },
+        clock = com.carlom.klardrop.common.utils.Clock(),
+        coroutines = mockCoroutines,
+        messageRepository = mockMessageRepository,
+      ),
       messageSerializer = mockMessageSerializer,
       coroutines = mockCoroutines,
       messengeReceiver = mockMessageReceiver,
@@ -256,44 +268,9 @@ class MessagesRouterImplTest {
     assertEquals(0, mockMessageRepository.calls.size) // MessageRepository should not be called directly by router for no-payload messages
   }
 
-  @Test
-  fun onMessageIncomingForFileMessagePayloadCallsSpecificHandler() = runTest(testDispatcher) {
-    val fromDeviceId = "sender-file"
-    val fileMessage = FileMessage("test.dat", 123, "app/data")
-    val mockHandler = MockMessageHandler<FileMessage, FileMessage.FileSendRequest>()
-    @Suppress("UNCHECKED_CAST")
-    mockMessageHandlers.handlerToReturn = mockHandler as MessageHandler<Message, SendMessageRequest>
-
-
-    val serializedMessage = createMessageBytes(fileMessage) // Create header for FileMessage
-    val readChannel = ByteReadChannel(serializedMessage + byteArrayOf(1, 2, 3)) // Add some dummy payload bytes
-    val writeChannel = ByteChannel(true)
-
-    messagesRouter.onMessageIncoming(fromDeviceId, writeChannel, readChannel, ackCallback = { })
-
-    assertEquals(0, mockMessageRepository.calls.size) // MessageRepository should not be called directly by router for handled messages
-    assertEquals(fileMessage, mockHandler.incomingMessageHandled)
-  }
-
-  @Test
-  fun onSendingMessageForFileMessagePayloadCallsSpecificHandler() = runTest(testDispatcher) {
-    val toDeviceId = "receiver-file"
-    val fileMessage = FileMessage("outgoing.dat", 456, "app/foo")
-    // Create a mock PlatformFile instance
-    val mockPlatformFile = PlatformFile(Path("/tmp", "test"))
-    val request = FileMessage.FileSendRequest(fileMessage, mockPlatformFile)
-    val mockHandler = MockMessageHandler<FileMessage, FileMessage.FileSendRequest>()
-    @Suppress("UNCHECKED_CAST")
-    mockMessageHandlers.handlerToReturn = mockHandler as MessageHandler<Message, SendMessageRequest>
-
-
-    val writeChannel = ByteChannel(true)
-    val readChannel = ByteReadChannel(byteArrayOf())
-    val progressFlow = MutableSharedFlow<MessengerSendProgress>()
-
-    messagesRouter.onSendingMessage(toDeviceId, request, writeChannel, readChannel, progressFlow)
-
-    assertEquals(0, mockMessageRepository.calls.size) // MessageRepository should not be called directly by router for handled messages
-    assertEquals(request, mockHandler.outgoingRequestHandled as FileMessage.FileSendRequest)
-  }
+  // FILE message routing is no longer driven through the generic MessageHandlers dispatch — the
+  // router special-cases FileMessage / FileChunkMessage and calls FileMessageHandler.beginReceive
+  // and handleOutgoingChunked directly. Behavior is covered by FileMessageHandlerTest (handler
+  // unit tests) and KlardropIntegrationTest (end-to-end loopback). The previous tests in this
+  // class asserted on a code path that no longer exists.
 }

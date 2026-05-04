@@ -82,10 +82,14 @@ class CommunicationModule(
     ClipboardSyncManager(clipboardManager, visibleDevices, trustManager, clock, coroutines, lazy { messenger })
   }
 
+  private val fileMessageHandler by lazy {
+    FileMessageHandler(fileManager, clock, coroutines, messageRepository)
+  }
+
   private val messageHandlers by lazy {
     val handlers = mapOf(
       MessageType.TEXT to TextMessageHandler(serializer, messageRepository),
-      MessageType.FILE to FileMessageHandler(serializer, fileManager, clock, coroutines, messageRepository),
+      MessageType.FILE to fileMessageHandler,
       MessageType.ACK_READY to AckMessageHandler(),
       MessageType.ACK_RECEIVED to AckMessageHandler(),
       MessageType.TRUST_PAIRING_REQUEST to TrustPairingRequestHandler(serializer, trustManager),
@@ -93,7 +97,7 @@ class CommunicationModule(
       MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager),
       MessageType.CONNECTION_INFO to ConnectionInfoMessageHandler(serializer),
     )
-    
+
     MessageHandlersImpl(handlers)
   }
 
@@ -101,6 +105,7 @@ class CommunicationModule(
   private val messagesRouter by lazy {
     MessagesRouterImpl(
       messageHandlers,
+      fileMessageHandler,
       serializer,
       coroutines,
       messageReceiver,
