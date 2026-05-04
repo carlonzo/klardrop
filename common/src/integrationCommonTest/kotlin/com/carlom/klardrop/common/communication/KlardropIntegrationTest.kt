@@ -173,20 +173,19 @@ class KlardropIntegrationTest {
         val textSendFlow = clientMessenger.send(serverDeviceId, textRequest)
         val textSenderChannel = textSendFlow.testIn(this@turbineScope)
 
-        // Pump generously - the file transfer is ~8 chunks of 256KB and chunks/text/heartbeats
-        // all interleave on the same socket. This is real IO so we need real-time slices.
-        pumpVirtualAndRealTime(iterations = 60, virtualStepMs = 500, realSleepMs = 100)
-
-        // Both sends must complete; the text doesn't have to wait for the file.
-        textSenderChannel.awaitFor { it is Completed }
-        fileSenderChannel.awaitFor { it is Completed }
+        // Both sends must complete; the text doesn't have to wait for the file. Use
+        // awaitForPumping (not awaitFor) — the file transfer is ~8 chunks of 256 KB and
+        // chunks/text/heartbeats all interleave on the same socket. Slow CI runners can't
+        // finish the transfer in any fixed-size pre-pump, and a plain awaitItem suspends
+        // the test dispatcher so virtual-time progress (heartbeats, ACK retries) stalls.
+        textSenderChannel.awaitForPumping { it is Completed }
+        fileSenderChannel.awaitForPumping { it is Completed }
 
         // Receiver must have observed both the text and the file (at least one Completed each).
-        coroutines.dispatcher.scheduler.advanceUntilIdle()
         var sawText = false
         var sawFile = false
         while (!(sawText && sawFile)) {
-          val update = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
+          val update = receiverChannel.awaitForPumping { it.status is ReceiveMessageStatus.Completed }
           val msg = update.messages.firstOrNull()
           if (msg is TextMessage && msg.text == "interleaved-during-transfer") sawText = true
           if (msg is FileMessage && msg.fileName == fileName) sawFile = true
@@ -540,6 +539,52 @@ internal class KlardropTestContext(
       item = awaitItem()
     } while (!block(item))
     return item
+  }
+
+  /**
+   * Polls for a matching item while interleaving small virtual-time and real-time pumps. Use
+   * this (instead of [awaitFor]) for end-to-end paths whose progress depends on real I/O AND
+   * virtual-time scheduling — `awaitItem` suspends the test dispatcher, so virtual time stops
+   * moving and any flow waiting on a virtual-time delay (heartbeats, ACK retries, progress
+   * emission throttles) stalls until the surrounding `turbineScope` timeout fires.
+   *
+   * Implementation note: deliberately uses `runCurrent` (NOT `advanceUntilIdle`) inside the
+   * poll loop. `advanceUntilIdle` chases all scheduled delays in a single jump, which fires
+   * ACK/heartbeat timeouts long before real socket I/O has had time to advance. The pump
+   * cadence below mirrors [pumpVirtualAndRealTime]'s small-step pattern.
+   *
+   * The [maxRealTimeMs] cap is real wall-clock time; pick something well under the
+   * surrounding `turbineScope`/`runTest` timeout so the failure surfaces here with a useful
+   * message instead of as a generic Turbine timeout.
+   */
+  suspend fun <T> ReceiveTurbine<T>.awaitForPumping(
+    maxRealTimeMs: Long = 90_000,
+    pollVirtualStepMs: Long = 200,
+    pollRealSleepMs: Long = 50,
+    block: (T) -> Boolean,
+  ): T {
+    val channel = asChannel()
+    val deadline = System.currentTimeMillis() + maxRealTimeMs
+    while (System.currentTimeMillis() < deadline) {
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceTimeBy(pollVirtualStepMs)
+      coroutines.dispatcher.scheduler.runCurrent()
+      Thread.sleep(pollRealSleepMs)
+      coroutines.dispatcher.scheduler.runCurrent()
+
+      while (true) {
+        val result = channel.tryReceive()
+        if (result.isSuccess) {
+          val item = result.getOrThrow()
+          if (block(item)) return item
+        } else if (result.isClosed) {
+          error("Channel closed before predicate matched: ${result.exceptionOrNull()}")
+        } else {
+          break
+        }
+      }
+    }
+    error("awaitForPumping timed out after ${maxRealTimeMs}ms with no item matching predicate")
   }
 
 
