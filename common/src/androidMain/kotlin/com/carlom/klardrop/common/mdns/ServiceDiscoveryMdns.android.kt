@@ -165,6 +165,17 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
   }
 
+  /**
+   * Android delegates discovery lifecycle to [NsdManager], which already reacts
+   * to network transitions via the system. The DiscoveryNetwork still cancels
+   * and re-launches its discovery jobs on a [com.carlom.klardrop.common.network.NetworkChangeEvent]
+   * — that re-creates fresh [NsdManager.discoverServices] subscriptions and is
+   * sufficient. Nothing to tear down here.
+   */
+  actual suspend fun restart() {
+    log("ServiceDiscoveryMdns", "restart: no-op on Android (NsdManager handles network transitions)")
+  }
+
   private fun acquireWifiLock(): WifiManager.MulticastLock {
     val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     val lock = wifi.createMulticastLock("klardrop-multicast-lock")

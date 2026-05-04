@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import javax.jmdns.JmDNS
@@ -16,12 +18,19 @@ import javax.jmdns.ServiceListener
 
 internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
 
-  private val jmdns by lazy {
-    val addresses = getAddresses()
-    log("JmDnsMdns", "jmDNS binding to addresses: ${addresses.map { it.hostAddress }}")
-    addresses.map { address ->
-      JmDNS.create(address, address.hostAddress)
+  // jmDNS instances are torn down + rebuilt on demand so [restart] can recover from
+  // a stale set of NIC bindings (post-sleep/wake or NIC change). The mutex serializes
+  // restart against in-flight discovery / register calls.
+  private val mutex = Mutex()
+  private var jmdnsInstances: List<JmDNS> = emptyList()
+
+  private suspend fun acquireJmdns(): List<JmDNS> = mutex.withLock {
+    if (jmdnsInstances.isEmpty()) {
+      val addresses = getAddresses()
+      log("JmDnsMdns", "jmDNS binding to addresses: ${addresses.map { it.hostAddress }}")
+      jmdnsInstances = addresses.map { address -> JmDNS.create(address, address.hostAddress) }
     }
+    jmdnsInstances
   }
 
   private fun getAddresses(): List<Inet4Address> {
@@ -42,20 +51,20 @@ internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
     val serviceTypeLocal = "${serviceType}local."
 
     return callbackFlow {
-      val listenersHolder = mutableListOf<ServiceListener>()
+      val jmdns = acquireJmdns()
       val listener = createServiceListener(this)
       jmdns.forEach { instance -> instance.addServiceListener(serviceTypeLocal, listener) }
-      listenersHolder.add(listener)
 
       awaitClose {
-        listenersHolder.forEach { listener ->
-          jmdns.forEach { instance -> instance.removeServiceListener(serviceTypeLocal, listener) }
+        jmdns.forEach { instance ->
+          runCatching { instance.removeServiceListener(serviceTypeLocal, listener) }
         }
       }
     }.flowOn(Dispatchers.IO)
   }
 
   override suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
+    val jmdns = acquireJmdns()
     suspendCancellableCoroutine<Unit> {
       val registrations = jmdns.map { instance ->
         val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
@@ -74,9 +83,22 @@ internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
 
       it.invokeOnCancellation {
         registrations.forEach { jmdnsServiceInfo ->
-          jmdns.forEach { instance -> instance.unregisterService(jmdnsServiceInfo) }
+          jmdns.forEach { instance ->
+            runCatching { instance.unregisterService(jmdnsServiceInfo) }
+          }
         }
       }
+    }
+  }
+
+  override suspend fun restart() {
+    mutex.withLock {
+      log("JmDnsMdns", "restart: closing ${jmdnsInstances.size} jmDNS instance(s)")
+      jmdnsInstances.forEach { instance ->
+        runCatching { instance.unregisterAllServices() }
+        runCatching { instance.close() }
+      }
+      jmdnsInstances = emptyList()
     }
   }
 

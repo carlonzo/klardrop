@@ -66,6 +66,7 @@ class CommonComponent(
       clipboardManager = clipboardManager,
       trustStorage = internalPlatformDependency.trustStorage(),
       bleTransport = internalPlatformDependency.bleTransport(),
+      networkLifecycleMonitor = internalPlatformDependency.networkLifecycleMonitor(),
     )
   }
 
@@ -90,6 +91,7 @@ class CommonComponent(
   fun server() = communicationModule.server()
   fun bleServerListener() = communicationModule.bleServerListener()
   fun bleEagerConnector() = communicationModule.bleEagerConnector()
+  fun eagerReachabilityConnector() = communicationModule.eagerReachabilityConnector()
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()

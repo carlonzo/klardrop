@@ -7,6 +7,7 @@ import com.carlom.klardrop.common.communication.AckTimeoutConfig
 import com.carlom.klardrop.common.communication.BleEagerConnector
 import com.carlom.klardrop.common.communication.BleServerListener
 import com.carlom.klardrop.common.communication.ClientImpl
+import com.carlom.klardrop.common.communication.EagerReachabilityConnector
 import com.carlom.klardrop.common.communication.HeartbeatConfig
 import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
 import com.carlom.klardrop.common.communication.MessageSerializer
@@ -26,6 +27,7 @@ import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.mdns.NearbyClient
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
+import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.MessageReceiverImpl
@@ -62,6 +64,7 @@ class CommunicationModule(
    * to keep their assertions focused on transport behavior rather than the prompt UX.
    */
   private val incomingAuthorizerOverride: IncomingAuthorizer? = null,
+  private val networkLifecycleMonitor: NetworkLifecycleMonitor? = null,
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -108,7 +111,7 @@ class CommunicationModule(
     MessageHandlersImpl(handlers)
   }
 
-  private val connectionsPool by lazy { ConnectionsPoolImpl() }
+  private val connectionsPool by lazy { ConnectionsPoolImpl(coroutines, networkLifecycleMonitor) }
 
   /**
    * Single shared authorizer instance — process-scoped first-contact set must be the same
@@ -174,6 +177,19 @@ class CommunicationModule(
     }
   }
 
+  private val eagerReachabilityConnector by lazy {
+    networkLifecycleMonitor?.let {
+      EagerReachabilityConnector(
+        coroutines = coroutines,
+        visibleDevices = visibleDevices,
+        currentDeviceProvider = currentDeviceProvider,
+        client = client,
+        connectionsPool = connectionsPool,
+        networkLifecycleMonitor = it,
+      )
+    }
+  }
+
 
   private val messageReceiver: MessageReceiver by lazy {
     MessageReceiverImpl(coroutines, visibleDevices)
@@ -222,6 +238,7 @@ class CommunicationModule(
   fun server() = server
   fun bleServerListener() = bleServerListener
   fun bleEagerConnector() = bleEagerConnector
+  fun eagerReachabilityConnector() = eagerReachabilityConnector
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
   fun trustManager() = trustManager

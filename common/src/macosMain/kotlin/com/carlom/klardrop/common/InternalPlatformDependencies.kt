@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.features.FallbackClipboardConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
+import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.trust.IosTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
@@ -47,6 +48,10 @@ actual class InternalPlatformDependencies {
   actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns()
   }
+
+  private val networkLifecycleMonitor by lazy { NetworkLifecycleMonitor() }
+
+  actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
   private val bleTransport by lazy { BleTransport() }
 

@@ -1,9 +1,14 @@
 package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.ble.BleSession
+import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
+import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.network.sockets.Socket
 import io.ktor.network.sockets.isClosed
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -20,10 +25,29 @@ interface ConnectionsPool {
   suspend fun closeConnection(deviceId: String)
 }
 
-internal class ConnectionsPoolImpl : ConnectionsPool {
+internal class ConnectionsPoolImpl(
+  coroutines: Coroutines? = null,
+  networkLifecycleMonitor: NetworkLifecycleMonitor? = null,
+) : ConnectionsPool {
 
   private val mutex = Mutex(locked = false)
   private val connections = mutableMapOf<String, ConnectionMessenger>()
+
+  init {
+    // Pool subscribes to coarse network events directly so a single source of
+    // truth (the lifecycle monitor) drives both mDNS rebuilds and connection
+    // flushing. After NIC up/down or post-wake we have to assume every pooled
+    // socket is half-open; dropping them forces the next send to redial fresh.
+    if (coroutines != null && networkLifecycleMonitor != null) {
+      val scope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
+      networkLifecycleMonitor.observe()
+        .onEach {
+          log("ConnectionPool", "Network change detected; flushing all pooled connections")
+          closeAllConnections()
+        }
+        .launchIn(scope)
+    }
+  }
 
   override suspend fun isAvailable(deviceId: String): Boolean {
     mutex.withLock {

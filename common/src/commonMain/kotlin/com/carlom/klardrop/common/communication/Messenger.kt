@@ -189,7 +189,17 @@ class MessengerImpl(
         if (connectionMessenger == null) {
           log("Messenger", "[DEBUG] Failed to establish connection to $deviceId (attempt $attempt)")
           if (attempt <= maxRetries) {
-            // Don't emit error yet, we'll retry
+            // Back off before re-trying. Without this delay, connection
+            // failures (host unreachable / refused) burn through every retry
+            // attempt in milliseconds and the user sees an "all retries
+            // failed" toast that feels instant. The wait gives the eager
+            // reachability probe + mDNS re-resolution time to recover the
+            // peer's endpoint before we redial.
+            val delay = (1.seconds * config.retryBackoffMultiplier.pow(attempt - 1))
+            log("Messenger", "[DEBUG] Connection failed; waiting ${delay.inWholeMilliseconds}ms before retry $attempt")
+            withContext(coroutines.mainDispatcher) {
+              kotlinx.coroutines.delay(delay)
+            }
             return@runCatching false
           } else {
             log("Messenger", "[DEBUG] All connection attempts exhausted for $deviceId")
@@ -214,22 +224,20 @@ class MessengerImpl(
         )
         log("Messenger", "[DEBUG] Full exception for attempt $attempt", exception)
 
-        // Check if this is a recoverable transport-level error (ACK timeout or
-        // a freshly-detected closed connection). Both have the same recovery:
-        // close pool entry → reconnect → resend.
-        val exceptionMessage = exception.message ?: ""
-        val isAckTimeout = exceptionMessage.contains("ACK timeout")
-        val isClosedConnection = exceptionMessage.contains("is closed")
-        val isRetryable = isAckTimeout || isClosedConnection
-        log("Messenger", "[DEBUG] Is retryable: $isRetryable (ackTimeout=$isAckTimeout, closed=$isClosedConnection), exception message: '$exceptionMessage'")
+        // Treat every exception caught here as transport-level and worth
+        // retrying. Force a fresh redial on the next attempt by evicting the
+        // pool entry so a stale half-open socket can't keep returning the
+        // same error. The terminal outcome is decided by the while-loop's
+        // attempt counter, not by classifying exception messages here.
+        log(
+          "Messenger",
+          "[DEBUG] Transport-level error for $deviceId (attempt $attempt): ${exception.message}"
+        )
 
-        if (isRetryable && attempt <= maxRetries) {
-          log("Messenger", "[DEBUG] ACK timeout detected, will retry connection to $deviceId (attempt $attempt)")
-          // Force cleanup of the connection
+        if (attempt <= maxRetries) {
           connectionsPool.closeConnection(deviceId)
           log("Messenger", "[DEBUG] Closed connection to $deviceId, starting backoff delay")
 
-          // Wait before retry with exponential backoff
           val delay = (1.seconds * config.retryBackoffMultiplier.pow(attempt - 1))
           log("Messenger", "[DEBUG] Waiting ${delay.inWholeMilliseconds}ms before retry (attempt $attempt)")
           withContext(coroutines.mainDispatcher) {
@@ -238,8 +246,7 @@ class MessengerImpl(
 
           return@getOrElse false // Signal to retry
         } else {
-          // Final failure or non-timeout error
-          log("Messenger", "[DEBUG] Final failure for $deviceId: not ACK timeout or max retries exceeded")
+          log("Messenger", "[DEBUG] Retries exhausted for $deviceId")
           val errorMessage = exception.message ?: "Unknown connection error"
           flow.emit(Error("Transfer failed: $errorMessage"))
           return false

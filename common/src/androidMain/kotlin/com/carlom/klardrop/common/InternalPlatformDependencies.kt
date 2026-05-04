@@ -14,6 +14,7 @@ import com.carlom.klardrop.common.features.AndroidConnectionInfoJoiner
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
+import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.trust.AndroidTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.FileTypeUtils
@@ -35,6 +36,10 @@ actual class InternalPlatformDependencies(private val context: Context, private 
   actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns(context)
   }
+
+  private val networkLifecycleMonitor by lazy { NetworkLifecycleMonitor(context) }
+
+  actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
   actual fun bleTransport(): BleTransport = bleTransport
 
