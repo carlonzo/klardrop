@@ -113,7 +113,8 @@ object TrustPolicy {
         return when (messageType) {
             // Regular file/text transfers don't require trust by default
             com.carlom.klardrop.common.communication.message.MessageType.TEXT,
-            com.carlom.klardrop.common.communication.message.MessageType.FILE -> false
+            com.carlom.klardrop.common.communication.message.MessageType.FILE,
+            com.carlom.klardrop.common.communication.message.MessageType.FILE_CHUNK -> false
             
             // Trust system messages
             com.carlom.klardrop.common.communication.message.MessageType.TRUST_PAIRING_REQUEST,

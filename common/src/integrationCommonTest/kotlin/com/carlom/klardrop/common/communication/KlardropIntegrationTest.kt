@@ -126,9 +126,99 @@ class KlardropIntegrationTest {
 
     turbineScope(timeout = 60.seconds) {
       with(testContext) {
-        // 100KB file requires multiple 32KB chunks
-        val testData = ByteArray(100_000) { (it % 256).toByte() }
+        // 700KB ensures multiple FILE_CHUNK frames at the 256KB chunk size.
+        val testData = ByteArray(700_000) { (it % 256).toByte() }
         sendAndVerifyFile("large-file.bin", testData, "application/octet-stream")
+      }
+    }
+  }
+
+  /**
+   * Stress test for the chunked-framing change: send a 2 MB file (~8 chunks at 256KB) AND
+   * pump a TextMessage between chunks AND let heartbeats run. With the old unframed-payload
+   * model the writer mutex would have been held for the whole transfer and the text send
+   * would have been serialized behind it; with chunked framing the text frame interleaves
+   * between chunks and arrives quickly. This also exercises the writeLock contention path
+   * end-to-end (heartbeat + outgoing send + incoming-reply writes all on the same socket).
+   */
+  @Test
+  fun testFileTransferAllowsConcurrentTextAndHeartbeat() = runTest(coroutines.dispatcher, timeout = 180.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
+
+    turbineScope(timeout = 120.seconds) {
+      with(testContext) {
+        val fileBytes = ByteArray(2 * 1024 * 1024) { (it % 256).toByte() }
+        val fileName = "stress.bin"
+        val platformFile = createTestPlatformFile(fileName, fileBytes)
+        clientFileManager.fileDataToServe[platformFile.path] = fileBytes
+        val fileMessage = FileMessage(fileName = fileName, fileSize = fileBytes.size.toLong(), mimeType = "application/octet-stream")
+
+        val messageReceiver = serverCommunicationModule.messageReceiver()
+        val clientMessenger = clientCommunicationModule.messenger()
+        val receiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
+
+        coroutines.dispatcher.scheduler.runCurrent()
+        coroutines.dispatcher.scheduler.advanceTimeBy(100)
+        coroutines.dispatcher.scheduler.runCurrent()
+
+        // Kick off the file send first.
+        val fileSendFlow = clientMessenger.send(serverDeviceId, fileMessage.toSendRequest(platformFile))
+        val fileSenderChannel = fileSendFlow.testIn(this@turbineScope)
+
+        // Give the header + first couple of chunks a chance to land before injecting the text.
+        pumpVirtualAndRealTime(iterations = 4, virtualStepMs = 100, realSleepMs = 50)
+
+        // Send a TextMessage on the same connection while the file transfer is in flight.
+        val textRequest = textSendRequest("interleaved-during-transfer")
+        val textSendFlow = clientMessenger.send(serverDeviceId, textRequest)
+        val textSenderChannel = textSendFlow.testIn(this@turbineScope)
+
+        // Pump generously - the file transfer is ~8 chunks of 256KB and chunks/text/heartbeats
+        // all interleave on the same socket. This is real IO so we need real-time slices.
+        pumpVirtualAndRealTime(iterations = 60, virtualStepMs = 500, realSleepMs = 100)
+
+        // Both sends must complete; the text doesn't have to wait for the file.
+        textSenderChannel.awaitFor { it is Completed }
+        fileSenderChannel.awaitFor { it is Completed }
+
+        // Receiver must have observed both the text and the file (at least one Completed each).
+        coroutines.dispatcher.scheduler.advanceUntilIdle()
+        var sawText = false
+        var sawFile = false
+        while (!(sawText && sawFile)) {
+          val update = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
+          val msg = update.messages.firstOrNull()
+          if (msg is TextMessage && msg.text == "interleaved-during-transfer") sawText = true
+          if (msg is FileMessage && msg.fileName == fileName) sawFile = true
+        }
+
+        // File bytes arrived intact (chunk reassembly correct).
+        val received = serverFileManager.receivedFiles[fileName]
+        assertNotNull(received, "Server should have received file: $fileName")
+        assertTrue(fileBytes.contentEquals(received), "Reassembled file must match original")
+
+        textSenderChannel.cancelAndIgnoreRemainingEvents()
+        fileSenderChannel.cancelAndIgnoreRemainingEvents()
+        receiverChannel.cancelAndIgnoreRemainingEvents()
+      }
+    }
+  }
+
+  /**
+   * Reusing the same connection for many sequential sends after a file transfer. Validates
+   * the connection survives a multi-MB transfer (heartbeat doesn't kill it mid-transfer thanks
+   * to writeLock-release-per-chunk) and remains usable for further messages afterwards.
+   */
+  @Test
+  fun testTextSendsAfterFileTransferReuseSameConnection() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
+
+    turbineScope(timeout = 90.seconds) {
+      with(testContext) {
+        val fileBytes = ByteArray(1 * 1024 * 1024) { (it % 256).toByte() }
+        sendAndVerifyFile("post-transfer.bin", fileBytes, "application/octet-stream")
+        sendAndVerifyMessage("after-transfer-1")
+        sendAndVerifyMessage("after-transfer-2")
       }
     }
   }

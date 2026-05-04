@@ -30,6 +30,13 @@ enum class MessageType(val id: Byte) {
   PING(20),
   PONG(21),
 
+  // Per-chunk frame for chunked file transfers. The FILE message is a header that
+  // declares fileSize/name/mime; the actual bytes flow as a sequence of FILE_CHUNK
+  // messages keyed by the header's id. Framing each chunk lets unrelated messages
+  // (PING, ACK, TEXT, other FILE_CHUNK from another transfer) interleave between
+  // chunks - no single writer holds the wire for the whole transfer.
+  FILE_CHUNK(16),
+
   ;
 
   companion object {

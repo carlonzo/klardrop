@@ -84,6 +84,7 @@ class ConnectionMessengerTest {
         readChannel: ByteReadChannel,
         progress: MutableSharedFlow<MessengerSendProgress>,
         awaitReadyAck: suspend () -> Unit,
+        writeLock: kotlinx.coroutines.sync.Mutex,
       ) {
         // Simulate the FileMessageHandler ordering: send header, await ready, stream payload.
         // Mark "header was sent and we're about to await ready" without proceeding past awaitReadyAck.
@@ -131,6 +132,7 @@ class ConnectionMessengerTest {
         readChannel: ByteReadChannel,
         progress: MutableSharedFlow<MessengerSendProgress>,
         awaitReadyAck: suspend () -> Unit,
+        writeLock: kotlinx.coroutines.sync.Mutex,
       ) {
         awaitReadyAck()
       }
