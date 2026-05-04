@@ -57,3 +57,30 @@ android {
   }
   namespace = "com.carlom.klardrop.android"
 }
+
+// Pull the compose multiplatform Android assets from :common-ui into this
+// app's assets. The KMP Android library plugin's AAR pipeline silently
+// drops them, so we wire the producing directory in directly.
+val composeAndroidAssetsFromCommonUi by configurations.creating {
+  isCanBeConsumed = false
+  isCanBeResolved = true
+}
+
+dependencies {
+  composeAndroidAssetsFromCommonUi(
+    project(mapOf("path" to ":common-ui", "configuration" to "composeAndroidAssets"))
+  )
+}
+
+androidComponents {
+  onVariants { variant ->
+    variant.sources.assets?.addStaticSourceDirectory(
+      composeAndroidAssetsFromCommonUi.singleFile.absolutePath
+    )
+  }
+}
+
+afterEvaluate {
+  tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
+    .configureEach { dependsOn(composeAndroidAssetsFromCommonUi) }
+}

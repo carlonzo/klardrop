@@ -110,15 +110,20 @@ compose.resources {
   generateResClass = auto
 }
 
-// Workaround for Compose Multiplatform 1.10 + AGP 9 KMP-DSL: the
-// CopyResourcesToAndroidAssetsTask doesn't get its outputDirectory auto-wired
-// when using the new `kotlin { android { } }` DSL, so the Android APK ships
-// without composeResources/. We pin it to a known directory and feed that
-// directory into the Android main source set's assets.
+// Workaround for Compose Multiplatform 1.10 + AGP 9 KMP-DSL: when using the
+// new `com.android.kotlin.multiplatform.library` plugin, the AAR build pipeline
+// has no merge-assets step, so registering an asset source on the variant is a
+// no-op and the composeResources/ tree is silently dropped from the AAR.
+// We pin the copy task's output to a known directory and expose it as a
+// `composeAndroidAssets` configuration; the consuming Android application
+// module wires that directory into its own assets so the resources end up in
+// the APK at `assets/composeResources/...` (where AssetManager - and thus
+// Compose's resource reader - can find them at runtime).
 val androidComposeResourcesDir = layout.buildDirectory.dir("intermediates/compose-resources/androidAssets")
+val copyComposeResourcesTaskName = "copyAndroidMainComposeResourcesToAndroidAssets"
 
 afterEvaluate {
-  tasks.findByName("copyAndroidMainComposeResourcesToAndroidAssets")?.let { task ->
+  tasks.findByName(copyComposeResourcesTaskName)?.let { task ->
     // The task's class is `internal` in the Compose plugin, so use reflection
     // to grab its outputDirectory DirectoryProperty.
     val getter = task.javaClass.getMethod("getOutputDirectory")
@@ -128,10 +133,13 @@ afterEvaluate {
   }
 }
 
-kotlin {
-  sourceSets {
-    val androidMain by getting {
-      resources.srcDir(androidComposeResourcesDir)
-    }
+val composeAndroidAssets by configurations.creating {
+  isCanBeConsumed = true
+  isCanBeResolved = false
+}
+
+artifacts {
+  add(composeAndroidAssets.name, androidComposeResourcesDir) {
+    builtBy(copyComposeResourcesTaskName)
   }
 }
