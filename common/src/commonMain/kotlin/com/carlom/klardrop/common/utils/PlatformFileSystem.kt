@@ -68,9 +68,17 @@ internal class PlatformFileSystemImpl(
     val deviceType = CommonPlatformDependencies.deviceType()
 
     return if (deviceType != DeviceType.DESKTOP && (FileTypeUtils.isImageMimeType(mimeType) || FileTypeUtils.isVideoMimeType(mimeType))) {
-      FileKit.saveImageToGallery(platformFile)
-      // For gallery saves, we return null since the exact path is managed by the system
-      null
+      // Prefer a platform impl that returns a usable path/URI (Android MediaStore). When
+      // the platform exposes one, persist it so the chat bubble can render a preview and
+      // tap-to-open can target the media directly. When it doesn't (iOS today), fall back
+      // to FileKit's gallery save which discards the path — UI then has no target to open.
+      val galleryLocation = platformDependencies.saveMediaToGallery(path, mimeType, path.name)
+      if (galleryLocation != null) {
+        Path(galleryLocation)
+      } else {
+        FileKit.saveImageToGallery(platformFile)
+        null
+      }
     } else {
       withContext(coroutines.ioDispatcher) {
         val storagePath = platformDependencies.getDownloadStoragePath()

@@ -1,9 +1,8 @@
 package com.carlom.klardrop.common.communication.message
 
 import com.carlom.klardrop.common.FileManager
-import com.carlom.klardrop.common.communication.MessageSerializer
+import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
-import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
@@ -13,22 +12,40 @@ import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.github.vinceglb.filekit.PlatformFile
-import io.github.vinceglb.filekit.exists
 import io.github.vinceglb.filekit.path
-import io.github.vinceglb.filekit.readBytes
-import io.github.vinceglb.filekit.size
-import io.ktor.utils.io.*
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
-import kotlinx.coroutines.withTimeout
 import kotlinx.io.buffered
 import kotlinx.serialization.Serializable
 import kotlin.math.min
 import kotlin.random.Random
-import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Chunk size for file transfer over TCP. 256KB strikes a good balance:
+ * - large enough that per-chunk Kotlin/coroutine overhead (log, progress emit, StateFlow update)
+ *   is amortized across ~256x more bytes than the old 32KB
+ * - small enough that progress reporting still feels responsive at LAN speeds
+ * - within a typical TCP window so it doesn't get fragmented into multiple round-trips
+ */
+internal const val FILE_CHUNK_SIZE = 256 * 1024
+
+/** Min interval between progress emissions. Caps emission rate at ~10/sec. */
+private const val PROGRESS_EMIT_INTERVAL_MS = 100L
+
+/** Min percentage delta between progress emissions. */
+private const val PROGRESS_EMIT_PERCENT_DELTA = 5
+
+/**
+ * Header that announces an upcoming file transfer. The actual bytes flow as a sequence of
+ * [FileChunkMessage]s keyed by this header's [id]. The receiver opens its sink and registers
+ * a [FileReceivePipeline] when the header arrives, then chunks are streamed independently —
+ * unrelated framed messages (PING, ACK, TEXT, even other concurrent FILE_CHUNK transfers) may
+ * interleave between chunks since each chunk is its own framed message on the wire.
+ */
 @Serializable
 data class FileMessage(
   val fileName: String,
@@ -46,18 +63,141 @@ data class FileMessage(
   ) : SignedSendMessageRequest
 }
 
-// All file messages are persisted in chat
 fun FileMessage.toSendRequest(file: PlatformFile, messageSignature: MessageSignature? = null): FileMessage.FileSendRequest {
   return FileMessage.FileSendRequest(this, file, messageSignature)
 }
 
+/**
+ * One chunk of a chunked file transfer. Each chunk is an independent framed message on the wire,
+ * so the writer mutex is held only for the duration of writing this single chunk's bytes — not
+ * for the whole transfer. That lets pings, acks, and other messages naturally interleave.
+ *
+ * [fileMessageId] correlates back to the [FileMessage.id] of the header that opened the transfer.
+ * [seq] is purely diagnostic (TCP delivers in order); the receiver doesn't reorder by seq.
+ * [isLast] tells the receiver to close the sink and finalize the transfer.
+ */
+@Serializable
+data class FileChunkMessage(
+  val fileMessageId: Int,
+  val seq: Int,
+  val data: ByteArray,
+  val isLast: Boolean = false,
+  override val id: Int = Random.nextInt(),
+) : Message() {
+  override val type: MessageType = MessageType.FILE_CHUNK
+  override val hasPayload: Boolean = false
 
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is FileChunkMessage) return false
+    return fileMessageId == other.fileMessageId &&
+        seq == other.seq &&
+        isLast == other.isLast &&
+        id == other.id &&
+        data.contentEquals(other.data)
+  }
+
+  override fun hashCode(): Int {
+    var result = fileMessageId
+    result = 31 * result + seq
+    result = 31 * result + isLast.hashCode()
+    result = 31 * result + id
+    result = 31 * result + data.contentHashCode()
+    return result
+  }
+}
+
+/**
+ * Receive-side state for an in-flight chunked file transfer. The router creates one of these
+ * via [FileMessageHandler.beginReceive] when the header arrives, stores it keyed by the header's
+ * id, and feeds incoming [FileChunkMessage]s into [acceptChunk]. When [FileChunkMessage.isLast]
+ * arrives, the router calls [complete] (or [fail] on error) and removes the pipeline from the map.
+ *
+ * Not thread-safe: the router serializes all chunk callbacks for a given pipeline by virtue of
+ * processing incoming frames one at a time on the connection's read loop.
+ */
+class FileReceivePipeline internal constructor(
+  val header: FileMessage,
+  private val fileTransferId: Long,
+  private val fileTransfer: FileTransfer,
+  private val receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+  private val messageRepository: MessageRepository,
+  private val clock: Clock,
+) {
+  private val sink = fileTransfer.bufferedSink
+  private var totalReceived = 0L
+  private var lastEmitTime = 0L
+  private var lastEmitPercent = -1
+  private val recvStart = clock.currentTimeMillis()
+
+  /** Returns true after [complete] or [fail] has been called; further chunks must be dropped. */
+  var isFinished: Boolean = false
+    private set
+
+  fun acceptChunk(chunk: FileChunkMessage) {
+    if (isFinished) {
+      log("FileReceivePipeline", "Dropping chunk seq=${chunk.seq} for finished transfer ${header.id}")
+      return
+    }
+    sink.write(chunk.data, 0, chunk.data.size)
+    totalReceived += chunk.data.size
+
+    val progressValue = if (header.fileSize > 0) {
+      ((totalReceived * 100L) / header.fileSize).toInt().coerceIn(0, 100)
+    } else 100
+    val now = clock.currentTimeMillis()
+    if (progressValue >= lastEmitPercent + PROGRESS_EMIT_PERCENT_DELTA ||
+        now - lastEmitTime >= PROGRESS_EMIT_INTERVAL_MS) {
+      lastEmitTime = now
+      lastEmitPercent = progressValue
+      receiveFlow.update {
+        it.copy(status = ReceiveMessageStatus.Progress(listOf(header to progressValue)))
+      }
+    }
+  }
+
+  suspend fun complete() {
+    if (isFinished) return
+    isFinished = true
+    runCatching { sink.close() }
+    val finalPath = fileTransfer.onTransferCompleted()
+    if (finalPath != null) {
+      messageRepository.updateFileTransferFilePath(fileTransferId, finalPath.toString())
+    }
+    messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
+    receiveFlow.update { it.copy(status = ReceiveMessageStatus.Completed) }
+    val durationMs = clock.currentTimeMillis() - recvStart
+    val kbPerSec = if (durationMs > 0) (totalReceived * 1000 / durationMs / 1024) else 0
+    log("FileReceivePipeline", "Received ${header.fileName} ($totalReceived bytes) in ${durationMs}ms ($kbPerSec KB/s)")
+  }
+
+  suspend fun fail(error: Throwable) {
+    if (isFinished) return
+    isFinished = true
+    runCatching { sink.close() }
+    fileTransfer.onTransferFailed()
+    messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
+    receiveFlow.update {
+      it.copy(status = ReceiveMessageStatus.Failed(error.message ?: "Unknown error"))
+    }
+  }
+}
+
+/**
+ * File transfer handler. Note that, unlike other [MessageHandler]s, the standard
+ * [handleIncoming] / [handleOutgoing] / [handleOutgoingWithReadyAck] paths are NOT used for
+ * FILE messages — the router invokes [beginReceive] (incoming header) and [handleOutgoingChunked]
+ * (outgoing) directly because the chunked wire format requires per-chunk framing rather than
+ * one continuous payload write under a single mutex hold.
+ *
+ * Those overridden methods only exist to satisfy the [MessageHandler] interface; the router
+ * never reaches them for FILE messages.
+ */
 class FileMessageHandler(
-  private val serializer: MessageSerializer,
   private val fileManager: FileManager,
   private val clock: Clock,
   private val coroutines: Coroutines,
-  private val messageRepository: MessageRepository
+  private val messageRepository: MessageRepository,
 ) : MessageHandler<FileMessage, FileMessage.FileSendRequest> {
 
   override suspend fun handleIncoming(
@@ -65,112 +205,8 @@ class FileMessageHandler(
     readChannel: ByteReadChannel,
     receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
   ) {
-    log("FileMessageHandler", "Receiving file $message")
-
-    val fileTransferId = messageRepository.insertFileTransfer(
-        fileName = message.fileName,
-        filePath = "", // Actual path will be known after saving
-        totalSize = message.fileSize,
-        status = FileTransferStatus.IN_PROGRESS,
-        mimeType = message.mimeType
-    )
-    messageRepository.insertMessage(
-        remoteDeviceId = receiveFlow.value.device?.deviceId ?: "unknown", // Assumes deviceId is available in receiveFlow
-        content = message.fileName,
-        isSender = false,
-        messageType = PersistenceMessageType.FILE,
-        fileTransferId = fileTransferId,
-        isRead = false, // Incoming messages are unread initially
-        mimeType = message.mimeType
-    )
-
-    coroutines.ioDispatcher {
-      log("FileMessageHandler", "Ready to receive file $message")
-
-      receiveFlow.update {
-        it.copy(
-          messages = listOf(message),
-          status = ReceiveMessageStatus.Started
-        )
-      }
-
-      val fileTransfer = fileManager.prepareSaveFile(
-        fileName = message.fileName,
-        mimeType = message.mimeType
-      )
-
-      log("FileMessageHandler", "Prepared file transfer for $message")
-
-      var totalBytesReceived = 0
-
-      runCatching {
-        fileTransfer.bufferedSink.use {
-
-          receiveFlow.update {
-            it.copy(
-              status = ReceiveMessageStatus.Progress(listOf(message to 0))
-            )
-          }
-
-          while (totalBytesReceived < message.fileSize) {
-
-            log("FileMessageHandler", "Waiting to receive data for $message")
-            val chunkSize = min(32 * 1024, (message.fileSize - totalBytesReceived).toInt())
-            val data = ByteArray(chunkSize)
-
-            val bytesRead = withTimeout(5.seconds) {
-              readChannel.readFully(data, 0, chunkSize)
-              chunkSize
-            }
-
-            log("FileMessageHandler", "Received $bytesRead bytes")
-
-            if (bytesRead == 0) {
-              log("FileMessageHandler", "No more data. Finishing")
-              break
-            }
-
-            it.write(data, 0, bytesRead)
-
-            totalBytesReceived += bytesRead
-            val progressValue = ((totalBytesReceived * 100L) / message.fileSize).toInt()
-
-            log("FileMessageHandler", "Received total $totalBytesReceived / ${message.fileSize} :  Progress $progressValue %")
-            receiveFlow.update {
-              it.copy(
-                status = ReceiveMessageStatus.Progress(listOf(message to progressValue.coerceIn(0, 100)))
-              )
-            }
-          }
-        }
-      }.onSuccess {
-        log("FileMessageHandler", "Received file with size: $totalBytesReceived")
-        val finalFilePath = fileTransfer.onTransferCompleted()
-        
-        // Update file path if we have one (might be null for gallery saves)
-        if (finalFilePath != null) {
-          messageRepository.updateFileTransferFilePath(fileTransferId, finalFilePath.toString())
-        }
-        
-        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
-        receiveFlow.update {
-          it.copy(
-            status = ReceiveMessageStatus.Completed
-          )
-        }
-      }.onFailure { throwable ->
-        log("FileMessageHandler", "Error while receiving file", throwable)
-        fileTransfer.onTransferFailed()
-        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
-        receiveFlow.update {
-          it.copy(
-            status = ReceiveMessageStatus.Failed(throwable.message ?: "Unknown error")
-          )
-        }
-        throw throwable
-      }
-    }
-
+    error("FileMessageHandler.handleIncoming is bypassed by the router for FILE messages; " +
+        "use beginReceive() instead.")
   }
 
   override suspend fun handleOutgoing(
@@ -179,11 +215,8 @@ class FileMessageHandler(
     writeChannel: ByteWriteChannel,
     progressFlow: MutableSharedFlow<MessengerSendProgress>
   ) {
-    // Delegate to the ready-ack-aware variant with a no-op awaitReady so the
-    // single implementation handles both call sites. ConnectionMessenger always
-    // routes payload sends through handleOutgoingWithReadyAck, so this code
-    // path is only reached if a caller bypasses the router.
-    handleOutgoingWithReadyAck(toDeviceId, request, writeChannel, progressFlow, awaitReady = {})
+    error("FileMessageHandler.handleOutgoing is bypassed by the router for FILE messages; " +
+        "use handleOutgoingChunked() instead.")
   }
 
   override suspend fun handleOutgoingWithReadyAck(
@@ -193,15 +226,93 @@ class FileMessageHandler(
     progressFlow: MutableSharedFlow<MessengerSendProgress>,
     awaitReady: suspend () -> Unit,
   ) {
-    // Create database records for all outgoing file messages
+    error("FileMessageHandler.handleOutgoingWithReadyAck is bypassed by the router for FILE " +
+        "messages; use handleOutgoingChunked() instead.")
+  }
+
+  /**
+   * Called by the router when a [FileMessage] header arrives. Inserts persistence rows, opens
+   * the platform sink, updates the receive flow to Started/Progress(0), and returns a pipeline
+   * the router will feed chunks into. Throws on failure (e.g. permission denied opening the
+   * sink) — the router catches and aborts before sending ACK_READY, so the sender knows not
+   * to start streaming chunks.
+   */
+  suspend fun beginReceive(
+    header: FileMessage,
+    fromDeviceId: String,
+    receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+  ): FileReceivePipeline {
+    log("FileMessageHandler", "beginReceive ${header.fileName} (${header.fileSize} bytes) from $fromDeviceId")
+
+    val fileTransferId = messageRepository.insertFileTransfer(
+      fileName = header.fileName,
+      filePath = "",
+      totalSize = header.fileSize,
+      status = FileTransferStatus.IN_PROGRESS,
+      mimeType = header.mimeType,
+    )
+    messageRepository.insertMessage(
+      remoteDeviceId = fromDeviceId,
+      content = header.fileName,
+      isSender = false,
+      messageType = PersistenceMessageType.FILE,
+      fileTransferId = fileTransferId,
+      isRead = false,
+      mimeType = header.mimeType,
+    )
+
+    receiveFlow.update {
+      it.copy(messages = listOf(header), status = ReceiveMessageStatus.Started)
+    }
+
+    val fileTransfer = fileManager.prepareSaveFile(
+      fileName = header.fileName,
+      mimeType = header.mimeType,
+    )
+
+    receiveFlow.update {
+      it.copy(status = ReceiveMessageStatus.Progress(listOf(header to 0)))
+    }
+
+    return FileReceivePipeline(
+      header = header,
+      fileTransferId = fileTransferId,
+      fileTransfer = fileTransfer,
+      receiveFlow = receiveFlow,
+      messageRepository = messageRepository,
+      clock = clock,
+    )
+  }
+
+  /**
+   * Sends a chunked file transfer.
+   *
+   * Flow:
+   *   1. emit 0% progress
+   *   2. send the FILE header via [sendFramed] (one framed write, lock held only for that frame)
+   *   3. await ACK_READY from the receiver (sender doesn't blast bytes at a peer that can't accept)
+   *   4. read the source file in [FILE_CHUNK_SIZE] chunks; each chunk is framed and written via
+   *      [sendFramed] which takes the connection's write mutex per call. Between chunks the mutex
+   *      is released, so heartbeats / ACKs / unrelated sends can interleave.
+   *   5. mark the last chunk with isLast=true so the receiver finalizes its sink and the router
+   *      sends back ACK_RECEIVED for the header id.
+   *
+   * The whole loop runs on [Coroutines.ioDispatcher] so disk reads don't block the main dispatcher.
+   */
+  suspend fun handleOutgoingChunked(
+    toDeviceId: String,
+    request: FileMessage.FileSendRequest,
+    sendFramed: suspend (Message) -> Unit,
+    progressFlow: MutableSharedFlow<MessengerSendProgress>,
+    awaitReady: suspend () -> Unit,
+  ) {
     val fileTransferId = messageRepository.insertFileTransfer(
       fileName = request.message.fileName,
       filePath = request.file.path,
       totalSize = request.message.fileSize,
       status = FileTransferStatus.IN_PROGRESS,
-      mimeType = request.message.mimeType
+      mimeType = request.message.mimeType,
     )
-
     messageRepository.insertMessage(
       remoteDeviceId = toDeviceId,
       content = request.message.fileName,
@@ -209,70 +320,79 @@ class FileMessageHandler(
       messageType = PersistenceMessageType.FILE,
       fileTransferId = fileTransferId,
       isRead = true,
-      mimeType = request.message.mimeType
+      mimeType = request.message.mimeType,
     )
 
     coroutines.ioDispatcher.invoke {
-      updateSentProgress(progressFlow, 0, request.message.fileSize)
+      progressFlow.emit(MessengerSendProgress.InProgress(0))
 
-      // Send initial message with metadata (header)
-      writeChannel.sendMessage(request.message, serializer)
-
-      // Wait for the receiver to acknowledge it's ready to accept the payload
-      // before streaming bytes. Avoids dumping a large file onto a peer that
-      // can't accept it (e.g. permission denied, disk full).
+      sendFramed(request.message)
       awaitReady()
 
-      val sourceFile = request.file
+      log("FileMessageHandler", "Sending file ${request.message.fileName} (${request.message.fileSize} bytes)")
 
-      log("FileMessageHandler", "Sending file with path: $sourceFile")
-
-      // Constants for optimal performance  
-      val chunkSize = 32 * 1024 // 32KB chunks
-      val buffer = ByteArray(chunkSize)
+      val buffer = ByteArray(FILE_CHUNK_SIZE)
       var totalSent = 0L
+      var seq = 0
+      var lastEmitTime = 0L
+      var lastEmitPercent = -1
 
       val start = clock.currentTimeMillis()
       runCatching {
+        // Empty file: still send a single isLast=true chunk so the receiver finalizes.
+        if (request.message.fileSize == 0L) {
+          sendFramed(
+            FileChunkMessage(
+              fileMessageId = request.message.id,
+              seq = 0,
+              data = ByteArray(0),
+              isLast = true,
+            )
+          )
+        } else {
+          fileManager.getReadStreamFrom(request.file).buffered().use { readBuffer ->
+            while (totalSent < request.message.fileSize) {
+              val bytesToRead = min(FILE_CHUNK_SIZE.toLong(), request.message.fileSize - totalSent).toInt()
+              val bytesRead = readBuffer.readAtMostTo(buffer, 0, bytesToRead)
+              if (bytesRead <= 0) break
 
-        fileManager.getReadStreamFrom(sourceFile).buffered().use { readBuffer ->
-          while (!readBuffer.exhausted()) {
-            val bytesToRead = min(chunkSize.toLong(), request.message.fileSize - totalSent).toInt()
-            val bytesRead = readBuffer.readAtMostTo(buffer, 0, bytesToRead)
+              val isLast = totalSent + bytesRead >= request.message.fileSize
+              // Copy the slice we actually filled — the receiver gets the chunk via the
+              // serialized message, which already encodes a length-prefixed bytes field, but
+              // we must not over-send the buffer's tail garbage on the final partial chunk.
+              val chunkData = if (bytesRead == buffer.size) buffer.copyOf() else buffer.copyOf(bytesRead)
+              sendFramed(
+                FileChunkMessage(
+                  fileMessageId = request.message.id,
+                  seq = seq++,
+                  data = chunkData,
+                  isLast = isLast,
+                )
+              )
+              totalSent += bytesRead
 
-            if (bytesRead <= 0) break
-
-            writeChannel.writeFully(buffer, 0, bytesRead)
-
-            totalSent += bytesRead
-            updateSentProgress(progressFlow, totalSent, request.message.fileSize)
-
-            log("FileMessageHandler", "Sent $totalSent / ${request.message.fileSize} bytes")
+              val progressValue = (totalSent * 100 / request.message.fileSize).toInt().coerceIn(0, 100)
+              val now = clock.currentTimeMillis()
+              if (progressValue >= lastEmitPercent + PROGRESS_EMIT_PERCENT_DELTA ||
+                  now - lastEmitTime >= PROGRESS_EMIT_INTERVAL_MS) {
+                lastEmitTime = now
+                lastEmitPercent = progressValue
+                progressFlow.emit(MessengerSendProgress.InProgress(progressValue))
+              }
+            }
           }
         }
       }.onSuccess {
-        log("FileMessageHandler", "File ${request.file} sent successfully in ${clock.currentTimeMillis() - start} ms")
-        // Update file transfer status to completed
+        progressFlow.emit(MessengerSendProgress.InProgress(100))
+        val durationMs = clock.currentTimeMillis() - start
+        val kbPerSec = if (durationMs > 0) (totalSent * 1000 / durationMs / 1024) else 0
+        log("FileMessageHandler", "Sent ${request.message.fileName} ($totalSent bytes) in ${durationMs}ms ($kbPerSec KB/s)")
         messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
       }.onFailure {
         log("FileMessageHandler", "Error sending file", it)
-        // Update file transfer status to failed
         messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
-        log("FileMessageHandler", "After error exists? ${request.file.exists()} ${request.file.size()} ${request.file.readBytes().size}")
-
         throw it
       }
     }
   }
-
-  private suspend fun updateSentProgress(progress: MutableSharedFlow<MessengerSendProgress>, sent: Long, total: Long) {
-    val progressValue = (sent * 100) / total
-    progress.emit(MessengerSendProgress.InProgress(progressValue.toInt()))
-    log("FileMessageHandler", "Sending update progress: $progressValue% - $sent / $total")
-  }
-
-
 }
-
-
-

@@ -107,16 +107,23 @@ class MessengerImpl(
         messageRequest // fallback to original message
       }
 
-      // BLE is treated as a Klardrop-protocol peer (same message handlers, same wire format)
-      // and funnels through handleKlardropTransfer; Client picks TCP or BLE per discoveryDevice.
-      val transferCompleted = if (device.hasKlardropConnection() || device.hasBleConnection()) {
-        handleKlardropTransfer(deviceId, finalMessageRequest, flow)
-      } else if (device.hasNearbyConnection()) {
-        handleNearbyTransfer(deviceId, finalMessageRequest, flow)
-      } else {
-        log("Messenger", "Wanted to send a message to $deviceId but it has no connection")
-        flow.emit(Error("$deviceId but it has no connection"))
-        return@launch
+      // Transport preference per project policy:
+      //   - Payload-bearing messages (files):  TCP > Nearby > BLE
+      //     BLE is unsuitable for streaming because the macOS GATT path can't keep up
+      //     with sustained writes, and Nearby is fine once the (slower) handshake is done.
+      //   - Lightweight messages (text/control): TCP > BLE > Nearby
+      //     For tiny chunks BLE is faster end-to-end than spinning up a Nearby session.
+      val preference = transportPreferenceFor(finalMessageRequest)
+      val chosen = preference.firstOrNull { it.isAvailable(device) }
+      val transferCompleted = when (chosen) {
+        TransportChoice.KLARDROP_TCP, TransportChoice.KLARDROP_BLE ->
+          handleKlardropTransfer(deviceId, finalMessageRequest, flow, preferBle = chosen == TransportChoice.KLARDROP_BLE)
+        TransportChoice.NEARBY -> handleNearbyTransfer(deviceId, finalMessageRequest, flow)
+        null -> {
+          log("Messenger", "Wanted to send a message to $deviceId but it has no connection")
+          flow.emit(Error("$deviceId but it has no connection"))
+          return@launch
+        }
       }
 
       if (transferCompleted)
@@ -158,7 +165,8 @@ class MessengerImpl(
   private suspend fun handleKlardropTransfer(
     deviceId: String,
     messageRequest: SendMessageRequest,
-    flow: MutableSharedFlow<MessengerSendProgress>
+    flow: MutableSharedFlow<MessengerSendProgress>,
+    preferBle: Boolean = false,
   ): Boolean {
     val config = ackTimeoutConfig
     val maxRetries = config.maxRetries
@@ -175,8 +183,8 @@ class MessengerImpl(
 
       val result = runCatching {
         // Get or establish connection
-        log("Messenger", "[DEBUG] Getting or establishing connection to $deviceId (attempt $attempt)")
-        val connectionMessenger = getOrEstablishConnection(deviceId)
+        log("Messenger", "[DEBUG] Getting or establishing connection to $deviceId (attempt $attempt, preferBle=$preferBle)")
+        val connectionMessenger = getOrEstablishConnection(deviceId, preferBle = preferBle)
 
         if (connectionMessenger == null) {
           log("Messenger", "[DEBUG] Failed to establish connection to $deviceId (attempt $attempt)")
@@ -255,8 +263,11 @@ class MessengerImpl(
   }
 
 
-  private suspend fun getOrEstablishConnection(deviceId: String): ConnectionMessenger? {
-    log("Messenger", "[DEBUG] getOrEstablishConnection() called for $deviceId")
+  private suspend fun getOrEstablishConnection(
+    deviceId: String,
+    preferBle: Boolean = false,
+  ): ConnectionMessenger? {
+    log("Messenger", "[DEBUG] getOrEstablishConnection() called for $deviceId (preferBle=$preferBle)")
 
     // First, check if we have a valid existing connection
     val existingConnection = connectionsPool.getConnection(deviceId)
@@ -265,8 +276,24 @@ class MessengerImpl(
       log("Messenger", "[DEBUG] Found existing connection for $deviceId, isClosed=$isConnectionClosed")
 
       if (!isConnectionClosed) {
-        log("Messenger", "[DEBUG] Using existing active connection for $deviceId")
-        return existingConnection
+        // For files we want TCP. If the cached connection is BLE but the device is also
+        // reachable via TCP — usually because BleEagerConnector raced ahead before mDNS
+        // finished discovery — drop it and force a fresh TCP connect via Client.
+        // For light/text messages we tolerate the cached BLE connection (matches the
+        // policy: TCP > BLE > Nearby for small messages).
+        val device = visibleDevices.getDevice(deviceId)
+        val tcpAvailable = device?.hasKlardropConnection() == true
+        if (!preferBle && existingConnection.isBleTransport && tcpAvailable) {
+          log(
+            "Messenger",
+            "[DEBUG] Existing connection for $deviceId is BLE but a TCP path is now available; " +
+              "evicting and re-establishing over TCP"
+          )
+          connectionsPool.closeConnection(deviceId)
+        } else {
+          log("Messenger", "[DEBUG] Using existing active connection for $deviceId")
+          return existingConnection
+        }
       } else {
         log("Messenger", "[DEBUG] Existing connection is closed, removing and establishing new one for $deviceId")
         connectionsPool.closeConnection(deviceId)
@@ -302,6 +329,29 @@ class MessengerImpl(
     return newConnection
   }
 
+}
+
+private enum class TransportChoice {
+  KLARDROP_TCP,
+  KLARDROP_BLE,
+  NEARBY;
+
+  fun isAvailable(device: com.carlom.klardrop.common.discovery.DiscoveryDevice): Boolean = when (this) {
+    KLARDROP_TCP -> device.hasKlardropConnection()
+    KLARDROP_BLE -> device.hasBleConnection()
+    NEARBY -> device.hasNearbyConnection()
+  }
+}
+
+private fun transportPreferenceFor(request: SendMessageRequest): List<TransportChoice> {
+  // `hasPayload` distinguishes streaming/file messages from short control/text messages.
+  return if (request.message.hasPayload) {
+    // Files: TCP > Nearby > BLE. BLE can't keep up with sustained writes; Nearby is fine.
+    listOf(TransportChoice.KLARDROP_TCP, TransportChoice.NEARBY, TransportChoice.KLARDROP_BLE)
+  } else {
+    // Text/control: TCP > BLE > Nearby. For tiny chunks BLE beats Nearby's setup cost.
+    listOf(TransportChoice.KLARDROP_TCP, TransportChoice.KLARDROP_BLE, TransportChoice.NEARBY)
+  }
 }
 
 fun Flow<MessengerSendProgress>.untilCompleted(): Flow<MessengerSendProgress> {

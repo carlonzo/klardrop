@@ -65,4 +65,11 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
       false
     }
   }
+
+  // Desktop has no "media gallery" concept; rely on the regular Downloads-folder save.
+  actual suspend fun saveMediaToGallery(
+    tempPath: Path,
+    mimeType: String,
+    displayName: String,
+  ): String? = null
 }

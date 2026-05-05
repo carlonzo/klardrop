@@ -37,6 +37,9 @@ class ConnectionMessenger internal constructor(
   private val messageSerializer: MessageSerializer? = null,
 ) {
 
+  /** True when this messenger is bound to a BLE GATT session rather than a TCP socket. */
+  val isBleTransport: Boolean get() = connection is Connection.Ble
+
   // Test-only constructor that lets a test override every ACK timeout with a single value.
   internal constructor(
     coroutines: Coroutines,
@@ -68,6 +71,14 @@ class ConnectionMessenger internal constructor(
   private val heartbeatScope: CoroutineScope = CoroutineScope(SupervisorJob() + coroutines.ioDispatcher)
   private var heartbeatJob: Job? = null
 
+  // Serializes every write through [writeChannel]. Ktor's ByteChannel rejects concurrent
+  // writers with ConcurrentIOException, and three coroutines write here:
+  //   - heartbeat ping (this class), tryLock so an in-flight transfer doesn't get killed
+  //   - outgoing send (file/text payload, via MessagesRouter.onSendingMessage)
+  //   - incoming-message reply (PONG, ACK_READY, ACK_RECEIVED, via MessagesRouter.onMessageIncoming)
+  // All three honor this single mutex; the router takes it as a parameter.
+  private val writeLock = Mutex()
+
   init {
     if (connection.isClosed) {
       throw IllegalStateException("Connection with ${connection.deviceId} is closed.")
@@ -94,6 +105,7 @@ class ConnectionMessenger internal constructor(
             log("ConnectionMessenger: Received PONG callback for ping ${pong.pingId}")
             handlePongMessage(pong)
           },
+          writeLock = writeLock,
         )
       }.onFailure {
         log("ConnectionMessenger: Exception in acceptIncomingMessages loop for ${connection.deviceId}: ${it::class.simpleName}: ${it.message}")
@@ -132,14 +144,31 @@ class ConnectionMessenger internal constructor(
       delay(heartbeatConfig.interval)
       if (isClosed()) return
 
+      // If another writer (file send / ACK reply) is currently holding the write lock,
+      // skip this heartbeat tick — an in-flight write IS evidence the link is alive,
+      // and queuing a PING behind a multi-MB transfer would just stall the heartbeat
+      // until the transfer finishes (and might never get a PONG back, since the peer
+      // is busy reading our payload bytes — they'd treat any PING bytes mid-stream as
+      // payload, corrupting it).
+      if (!writeLock.tryLock()) {
+        log("ConnectionMessenger: Heartbeat skipped for ${connection.deviceId} (write in flight)")
+        continue
+      }
+
       val pingId = Random.nextInt()
       val pongChannel = Channel<Unit>(capacity = 1)
       pongMutex.withLock { pendingPongs[pingId] = pongChannel }
 
-      runCatching {
+      val writeOk = runCatching {
         writeChannel.sendMessage(PingMessage(id = pingId), serializer)
-      }.onFailure {
+        true
+      }.getOrElse {
         log("ConnectionMessenger: Heartbeat write failed for ${connection.deviceId}: ${it.message}")
+        false
+      }
+      writeLock.unlock()
+
+      if (!writeOk) {
         pongMutex.withLock { pendingPongs.remove(pingId) }
         close()
         return
@@ -267,10 +296,12 @@ class ConnectionMessenger internal constructor(
             awaitRegisteredAck(message.id, AckType.READY, readyChannel, hasPayload = true)
           }
           messagesRouter.onSendingMessage(
-            connection.deviceId, sendRequest, writeChannel, readChannel, flow, awaitReady,
+            connection.deviceId, sendRequest, writeChannel, readChannel, flow, awaitReady, writeLock,
           )
         } else {
-          messagesRouter.onSendingMessage(connection.deviceId, sendRequest, writeChannel, readChannel, flow)
+          messagesRouter.onSendingMessage(
+            connection.deviceId, sendRequest, writeChannel, readChannel, flow, writeLock = writeLock,
+          )
         }
 
         awaitRegisteredAck(message.id, AckType.RECEIVED, receivedChannel, hasPayload = message.hasPayload)

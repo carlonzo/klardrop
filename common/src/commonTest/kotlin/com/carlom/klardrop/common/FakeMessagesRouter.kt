@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.communication.router.MessagesRouter
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.sync.Mutex
 
 open class FakeMessagesRouter: MessagesRouter {
   override suspend fun onMessageIncoming(
@@ -16,6 +17,7 @@ open class FakeMessagesRouter: MessagesRouter {
     readChannel: ByteReadChannel,
     ackCallback: (suspend (MessageAcknowledgment) -> Unit),
     pongCallback: (suspend (PongMessage) -> Unit),
+    writeLock: Mutex,
   ) {
 
   }
@@ -27,6 +29,7 @@ open class FakeMessagesRouter: MessagesRouter {
     readChannel: ByteReadChannel,
     progress: MutableSharedFlow<MessengerSendProgress>,
     awaitReadyAck: suspend () -> Unit,
+    writeLock: Mutex,
   ) {
   }
 
