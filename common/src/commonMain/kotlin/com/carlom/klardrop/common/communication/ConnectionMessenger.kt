@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.PingMessage
 import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.TransferRejectedException
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -19,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -245,7 +247,11 @@ class ConnectionMessenger internal constructor(
   }
 
   /**
-   * Waits for a previously registered ACK to arrive.
+   * Waits for a previously registered ACK to arrive, or for a rejection ACK to arrive
+   * on [rejectedChannel]. If rejection wins, throws [TransferRejectedException]; the
+   * caller should treat it as a terminal (non-retryable) failure rather than a transport
+   * error. If neither arrives within the timeout, throws [IllegalStateException] (which
+   * Messenger interprets as a transport-level retryable failure).
    */
   @OptIn(ExperimentalTime::class)
   private suspend fun awaitRegisteredAck(
@@ -253,24 +259,45 @@ class ConnectionMessenger internal constructor(
     ackType: AckType,
     channel: Channel<Unit>,
     hasPayload: Boolean,
+    rejectedChannel: Channel<Unit>? = null,
   ) {
     val timeoutMs = ackTimeoutConfig.timeoutFor(ackType, hasPayload).inWholeMilliseconds
     log("ConnectionMessenger: [DEBUG] Awaiting ACK $ackType for message $messageId from ${connection.deviceId} (timeout: ${timeoutMs}ms)")
-    
+
     try {
       withContext(coroutines.mainDispatcher) {
         withTimeout(timeoutMs) {
-          channel.receive()
+          if (rejectedChannel != null) {
+            select<Unit> {
+              channel.onReceive { /* ack arrived */ }
+              rejectedChannel.onReceive {
+                throw TransferRejectedException(messageId)
+              }
+            }
+          } else {
+            channel.receive()
+          }
         }
       }
       log("ConnectionMessenger: [DEBUG] Successfully received ACK $ackType for message $messageId from ${connection.deviceId}")
+    } catch (e: TransferRejectedException) {
+      log("ConnectionMessenger: [DEBUG] Transfer rejected for message $messageId by ${connection.deviceId}")
+      ackMutex.withLock {
+        pendingAcks.remove(AckKey(messageId, ackType))
+        pendingAcks.remove(AckKey(messageId, AckType.REJECTED))
+      }
+      channel.close()
+      rejectedChannel?.close()
+      throw e
     } catch (e: Exception) {
       log("ConnectionMessenger: [DEBUG] ACK timeout for message $messageId, cleaning up pending request")
       // Cleanup pending ACK on timeout or error
       ackMutex.withLock {
         pendingAcks.remove(AckKey(messageId, ackType))
+        if (rejectedChannel != null) pendingAcks.remove(AckKey(messageId, AckType.REJECTED))
       }
       channel.close()
+      rejectedChannel?.close()
       throw IllegalStateException("ACK timeout: Expected $ackType for message $messageId from ${connection.deviceId}")
     }
   }
@@ -286,14 +313,23 @@ class ConnectionMessenger internal constructor(
       coroutines.ioDispatcher {
         // Register pending ACKs BEFORE sending message to prevent race conditions
         // (ACK could otherwise arrive before we register and be dropped as
-        // "unexpected").
+        // "unexpected"). REJECTED is registered alongside RECEIVED/READY so a peer
+        // that declined the transfer can short-circuit the wait without waiting for
+        // the timeout.
         val receivedChannel = registerPendingAck(message.id, AckType.RECEIVED)
+        val rejectedChannel = registerPendingAck(message.id, AckType.REJECTED)
 
         if (message.hasPayload) {
-          // Two-phase: header → wait ACK_READY → payload → wait ACK_RECEIVED.
+          // Two-phase: header → wait ACK_READY (or ACK_REJECTED) → payload → wait
+          // ACK_RECEIVED (or ACK_REJECTED). For files the rejection almost always
+          // arrives in place of READY (receiver decides before any bytes flow);
+          // racing rejection in the RECEIVED wait too is just a safety net.
           val readyChannel = registerPendingAck(message.id, AckType.READY)
           val awaitReady: suspend () -> Unit = {
-            awaitRegisteredAck(message.id, AckType.READY, readyChannel, hasPayload = true)
+            awaitRegisteredAck(
+              message.id, AckType.READY, readyChannel,
+              hasPayload = true, rejectedChannel = rejectedChannel,
+            )
           }
           messagesRouter.onSendingMessage(
             connection.deviceId, sendRequest, writeChannel, readChannel, flow, awaitReady, writeLock,
@@ -304,14 +340,22 @@ class ConnectionMessenger internal constructor(
           )
         }
 
-        awaitRegisteredAck(message.id, AckType.RECEIVED, receivedChannel, hasPayload = message.hasPayload)
+        awaitRegisteredAck(
+          message.id, AckType.RECEIVED, receivedChannel,
+          hasPayload = message.hasPayload, rejectedChannel = rejectedChannel,
+        )
       }
     } catch (exception: Throwable) {
       log("ConnectionMessenger: Exception while sending message ${message.id} to ${connection.deviceId}", exception)
       // Close the socket so the next send forces a fresh connection and so the
       // pool's isClosed() check evicts this entry. Do NOT emit a terminal flow
       // event here - retry/terminal is owned by Messenger.handleKlardropTransfer.
-      close()
+      // EXCEPTION: TransferRejectedException is a deliberate user decision, not a
+      // transport failure — the connection is still healthy and reusable for other
+      // sends. Don't close it just because this transfer was declined.
+      if (exception !is TransferRejectedException) {
+        close()
+      }
       throw exception
     }
   }

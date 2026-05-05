@@ -10,10 +10,14 @@ import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.communication.message.FileMessage
+import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
+import com.carlom.klardrop.common.communication.router.IncomingAuthorizer
+import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
@@ -439,6 +443,26 @@ internal class KlardropTestContext(
   val clientFileManager = InMemoryTestFileManager()
   val serverFileManager = InMemoryTestFileManager()
 
+  // Auto-accepting authorizer used on both sides — these integration tests assert on
+  // transport-level transfer behavior, so we bypass the per-message accept/reject prompt
+  // (covered by IncomingAuthorizerTest) rather than wiring up two trust stores with
+  // matching ECDSA key pairs.
+  private val autoAcceptAuthorizer = object : IncomingAuthorizer(
+    com.carlom.klardrop.common.trust.TrustManager(
+      crypto = com.carlom.klardrop.common.trust.TrustCrypto(),
+      storage = InMemoryTrustStorage(),
+      clock = clock,
+      currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(clientDeviceId)),
+    )
+  ) {
+    override suspend fun authorize(
+      fromDeviceId: String,
+      kind: TransferKind,
+      headers: List<Message>,
+      receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+    ): Boolean = true
+  }
+
   val clientCommunicationModule = CommunicationModule(
     coroutines = coroutines,
     visibleDevices = clientVisibleDevices,
@@ -448,7 +472,8 @@ internal class KlardropTestContext(
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(clientDeviceId)),
     messageRepository = FakeMessageRepository(),
     clipboardManager = FakeClipboardManager(),
-    trustStorage = InMemoryTrustStorage()
+    trustStorage = InMemoryTrustStorage(),
+    incomingAuthorizerOverride = autoAcceptAuthorizer,
   )
 
   val serverCommunicationModule = CommunicationModule(
@@ -460,7 +485,8 @@ internal class KlardropTestContext(
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(serverDeviceId)),
     messageRepository = FakeMessageRepository(),
     clipboardManager = FakeClipboardManager(),
-    trustStorage = InMemoryTrustStorage()
+    trustStorage = InMemoryTrustStorage(),
+    incomingAuthorizerOverride = autoAcceptAuthorizer,
   )
 
   data class ServerContext(

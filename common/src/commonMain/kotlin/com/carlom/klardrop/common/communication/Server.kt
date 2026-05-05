@@ -270,9 +270,16 @@ class Server(
     }
   }
 
+  /**
+   * Connection-level admission control. The TCP handshake itself is open to anyone on
+   * the local network — per-message authorization (trusted vs. prompt-the-user) lives
+   * in the router and IncomingAuthorizer, not here, so we always let the connection
+   * establish. This stays as a hook in case we ever want to block specific peers
+   * (e.g. user-blocklist) before the handshake even completes.
+   */
   @Suppress("UNUSED_PARAMETER")
   private fun isAcceptedSender(deviceId: String, receiverAddress: String): Boolean {
-    return true // always accept for now. should only accept if known? or just hold the connection if known?
+    return true
   }
 }
 

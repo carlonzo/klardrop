@@ -14,6 +14,7 @@ import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.PingMessage
 import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.readMessage
 import com.carlom.klardrop.common.communication.sendMessage
@@ -78,6 +79,7 @@ internal class MessagesRouterImpl(
   private val coroutines: Coroutines,
   private val messengeReceiver: MessageReceiver,
   private val trustManager: TrustManager,
+  private val incomingAuthorizer: IncomingAuthorizer,
 ) : MessagesRouter {
 
   /**
@@ -174,10 +176,32 @@ internal class MessagesRouterImpl(
 
     val isAckMessage = message.type == MessageType.ACK_READY ||
         message.type == MessageType.ACK_RECEIVED ||
+        message.type == MessageType.ACK_REJECTED ||
         message.type == MessageType.PING ||
         message.type == MessageType.PONG
 
     val receiveFlow = messengeReceiver.onReceiveMessage(fromDeviceId)
+
+    // Authorization gate for TEXT messages from untrusted senders. Files are gated
+    // separately in handleFileHeader (because rejection there must skip beginReceive
+    // entirely, before the receive pipeline opens a sink). Trust-based control messages
+    // (TRUST_PAIRING_*, CLIPBOARD_SYNC, CONNECTION_INFO) are not gated — pairing must
+    // succeed before trust exists, and the others are already trust-restricted upstream.
+    if (message is TextMessage) {
+      val authorized = incomingAuthorizer.authorize(
+        fromDeviceId = fromDeviceId,
+        kind = IncomingAuthorizer.TransferKind.TEXT,
+        headers = listOf(message),
+        receiveFlow = receiveFlow,
+      )
+      if (!authorized) {
+        val ackRejected = MessageAcknowledgment(AckType.REJECTED, message.id)
+        writeLock.withLock {
+          sendMessageToDevice(fromDeviceId, ackRejected, writeChannel)
+        }
+        return@ioDispatcher
+      }
+    }
 
     if (message.hasPayload) {
       if (!isAckMessage) {
@@ -227,6 +251,24 @@ internal class MessagesRouterImpl(
     writeLock: Mutex,
   ) {
     val receiveFlow = messengeReceiver.onReceiveMessage(fromDeviceId)
+
+    // Files always prompt for untrusted senders, even if they previously accepted text.
+    // The gate runs BEFORE beginReceive() so rejection skips DB row creation and sink
+    // allocation entirely; the sender sees ACK_REJECTED in place of ACK_READY and
+    // never streams chunks.
+    val authorized = incomingAuthorizer.authorize(
+      fromDeviceId = fromDeviceId,
+      kind = IncomingAuthorizer.TransferKind.FILE,
+      headers = listOf(header),
+      receiveFlow = receiveFlow,
+    )
+    if (!authorized) {
+      val ackRejected = MessageAcknowledgment(AckType.REJECTED, header.id)
+      writeLock.withLock {
+        writeChannel.sendMessage(ackRejected, messageSerializer)
+      }
+      return
+    }
 
     val pipeline = runCatching {
       fileMessageHandler.beginReceive(header, fromDeviceId, receiveFlow)

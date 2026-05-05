@@ -19,6 +19,7 @@ import com.carlom.klardrop.common.communication.message.FileMessageHandler
 import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.TextMessageHandler
+import com.carlom.klardrop.common.communication.router.IncomingAuthorizer
 import com.carlom.klardrop.common.communication.router.MessagesRouterImpl
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
@@ -55,6 +56,12 @@ class CommunicationModule(
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
   private val bleTransport: BleTransport? = null,
+  /**
+   * Optional override for the per-message authorization gate. Production wires the
+   * default trust-aware authorizer; integration tests can pass an auto-accept stub
+   * to keep their assertions focused on transport behavior rather than the prompt UX.
+   */
+  private val incomingAuthorizerOverride: IncomingAuthorizer? = null,
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -102,6 +109,17 @@ class CommunicationModule(
   }
 
   private val connectionsPool by lazy { ConnectionsPoolImpl() }
+
+  /**
+   * Single shared authorizer instance — process-scoped first-contact set must be the same
+   * one consulted by both the Klardrop router and the Nearby receiver, otherwise a user
+   * who accepts a text on Klardrop would still be re-prompted for the same device's text
+   * over Nearby (and vice versa).
+   */
+  private val incomingAuthorizer by lazy {
+    incomingAuthorizerOverride ?: IncomingAuthorizer(trustManager)
+  }
+
   private val messagesRouter by lazy {
     MessagesRouterImpl(
       messageHandlers,
@@ -109,7 +127,8 @@ class CommunicationModule(
       serializer,
       coroutines,
       messageReceiver,
-      trustManager
+      trustManager,
+      incomingAuthorizer,
     )
   }
 
@@ -167,7 +186,7 @@ class CommunicationModule(
       messagesRouter,
       serializer,
       currentDeviceProvider,
-      NearbyReceiverConnectionHandlerFactory(fileManager, coroutines),
+      NearbyReceiverConnectionHandlerFactory(fileManager, coroutines, incomingAuthorizer),
       visibleDevices,
       messageReceiver,
       protoBuf,

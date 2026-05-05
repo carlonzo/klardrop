@@ -15,6 +15,7 @@ enum class MessageType(val id: Byte) {
   FILE(2),
   ACK_READY(3),
   ACK_RECEIVED(4),
+  ACK_REJECTED(5),
 
   // Trust system messages
   TRUST_PAIRING_REQUEST(10),
@@ -132,7 +133,8 @@ class SimpleSendMessageRequest(
 
 enum class AckType {
   READY,
-  RECEIVED
+  RECEIVED,
+  REJECTED,
 }
 
 @Serializable
@@ -143,9 +145,18 @@ data class MessageAcknowledgment(
   override val type: MessageType = when (ackType) {
     AckType.READY -> MessageType.ACK_READY
     AckType.RECEIVED -> MessageType.ACK_RECEIVED
+    AckType.REJECTED -> MessageType.ACK_REJECTED
   }
   override val hasPayload: Boolean = false
 }
+
+/**
+ * Thrown when the receiver explicitly declined a transfer. Distinct from a generic ACK
+ * timeout because the rejection is a deliberate user action, so retrying doesn't help —
+ * Messenger surfaces this as a terminal error rather than triggering reconnect-and-retry.
+ */
+class TransferRejectedException(val messageId: Int) :
+  RuntimeException("Transfer rejected by recipient (messageId=$messageId)")
 
 interface MessageHandler<E : Message, R : SendMessageRequest> {
 

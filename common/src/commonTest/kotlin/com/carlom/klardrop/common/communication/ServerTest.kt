@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.communication.router.IncomingAuthorizer
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.mdns.FakeVisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
@@ -172,6 +173,35 @@ internal fun createTestServer(
 ): Server {
   val currentDeviceProvider = CurrentDeviceProvider(localPropertiesRepository)
 
+  // Always-accept authorizer — these tests exercise protocol detection only,
+  // they never reach the receive pipeline that invokes it.
+  val authorizer = object : IncomingAuthorizer(
+    com.carlom.klardrop.common.trust.TrustManager(
+      crypto = com.carlom.klardrop.common.trust.TrustCrypto(),
+      storage = object : com.carlom.klardrop.common.trust.TrustStorage {
+        override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {}
+        override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {}
+        override suspend fun getTrustedDeviceKey(deviceId: String): ByteArray? = null
+        override suspend fun getECDSAKey(deviceId: String): ByteArray? = null
+        override suspend fun getAllTrustedDevices(): Map<String, ByteArray> = emptyMap()
+        override suspend fun removeTrustedDevice(deviceId: String) {}
+        override suspend fun clearAllTrustedDevices() {}
+        override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {}
+        override suspend fun getDevicePrivateKey(): ByteArray? = null
+        override suspend fun deleteDevicePrivateKey() {}
+      },
+      clock = com.carlom.klardrop.common.utils.Clock(),
+      currentDeviceProvider = currentDeviceProvider,
+    )
+  ) {
+    override suspend fun authorize(
+      fromDeviceId: String,
+      kind: TransferKind,
+      headers: List<com.carlom.klardrop.common.communication.message.Message>,
+      receiveFlow: kotlinx.coroutines.flow.MutableStateFlow<com.carlom.klardrop.common.receiver.ReceiveMessageUpdate>,
+    ): Boolean = true
+  }
+
   return Server(
     connectionsPool = connectionsPool,
     coroutines = coroutines,
@@ -180,7 +210,8 @@ internal fun createTestServer(
     currentDeviceProvider = currentDeviceProvider,
     nearbyReceiverConnectionHandlerFactory = NearbyReceiverConnectionHandlerFactory(
       fileManager,
-      coroutines
+      coroutines,
+      authorizer,
     ),
     visibleDevices = visibleDevices,
     messageReceiver = messageReceiver,

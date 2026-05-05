@@ -200,16 +200,37 @@ private fun ReceiveBody(update: ReceiveMessageUpdate) {
 
     is ReceiveMessageStatus.PendingAuthorization -> {
       Text(
-        text = "Incoming transfer",
+        text = headerLine("Incoming", update),
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurface,
         fontWeight = FontWeight.Medium
       )
-      Text(
-        text = "Waiting for your approval",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
+      update.messages.take(3).forEach { msg ->
+        val preview = when (msg) {
+          is TextMessage -> msg.text
+          is FileMessage -> msg.fileName
+          is ConnectionInfoMessage -> "Wi-Fi: ${msg.ssid}"
+          else -> "Unknown"
+        }
+        Text(
+          text = preview,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+      }
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End
+      ) {
+        TextButton(onClick = { status.acceptTransfer(false) }) {
+          Text("Reject")
+        }
+        TextButton(onClick = { status.acceptTransfer(true) }) {
+          Text("Accept")
+        }
+      }
     }
 
     ReceiveMessageStatus.Started -> {
