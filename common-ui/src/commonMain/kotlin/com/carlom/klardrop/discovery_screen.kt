@@ -53,6 +53,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -157,6 +158,7 @@ private fun DiscoveryDashboard(
 ) {
   var showRenameSheet by remember { mutableStateOf(false) }
   var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
+  var showAddDevicePicker by remember { mutableStateOf(false) }
   val currentDeviceName = state.currentDeviceName ?: state.systemDeviceName ?: ""
   val devices = state.devices
 
@@ -190,6 +192,10 @@ private fun DiscoveryDashboard(
     val trusted = devices.filter { it.trustStatus == TrustStatus.Trusted }
     val others = devices.filter { it.trustStatus != TrustStatus.Trusted }
 
+    LaunchedEffect(trusted.isNotEmpty()) {
+      if (trusted.isNotEmpty()) showAddDevicePicker = false
+    }
+
     Column(
       modifier = Modifier
         .fillMaxSize()
@@ -197,12 +203,12 @@ private fun DiscoveryDashboard(
       verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
 
-      if (trusted.isNotEmpty()) {
-        DeviceSection(
-          title = "Your devices",
-          devices = trusted,
+      if (trusted.isNotEmpty() || others.isNotEmpty()) {
+        OwnDevicesSection(
+          trusted = trusted,
           isLargeScreen = isLargeScreen,
-          onDeviceActionListener = gridListener
+          onDeviceActionListener = gridListener,
+          onAddDeviceClick = { showAddDevicePicker = true }
         )
       }
 
@@ -233,6 +239,17 @@ private fun DiscoveryDashboard(
         pendingLink = null
       },
       onDismiss = { pendingLink = null }
+    )
+  }
+
+  if (showAddDevicePicker) {
+    AddDevicePickerSheet(
+      candidates = devices.filter { it.trustStatus != TrustStatus.Trusted },
+      onDismiss = { showAddDevicePicker = false },
+      onPick = { device ->
+        showAddDevicePicker = false
+        pendingLink = device
+      }
     )
   }
 }
@@ -302,19 +319,26 @@ private fun DiscoveryHeader(
 }
 
 @Composable
-private fun DeviceSection(
-  title: String,
-  devices: List<DeviceUi>,
+private fun OwnDevicesSection(
+  trusted: List<DeviceUi>,
   isLargeScreen: Boolean,
-  onDeviceActionListener: OnDeviceActionListener
+  onDeviceActionListener: OnDeviceActionListener,
+  onAddDeviceClick: () -> Unit
 ) {
   Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-    SectionLabel(title)
-    DeviceGrid(
-      devices = devices,
-      isLargeScreen = isLargeScreen,
-      onDeviceActionListener = onDeviceActionListener
-    )
+    SectionLabel("Your devices")
+    if (trusted.isNotEmpty()) {
+      DeviceGrid(
+        devices = trusted,
+        isLargeScreen = isLargeScreen,
+        onDeviceActionListener = onDeviceActionListener
+      )
+    } else {
+      AddDevicePlaceholderSurface(
+        isLargeScreen = isLargeScreen,
+        onClick = onAddDeviceClick
+      )
+    }
   }
 }
 
