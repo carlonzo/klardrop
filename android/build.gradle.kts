@@ -72,15 +72,37 @@ dependencies {
   )
 }
 
-androidComponents {
-  onVariants { variant ->
-    variant.sources.assets?.addStaticSourceDirectory(
-      composeAndroidAssetsFromCommonUi.singleFile.absolutePath
-    )
+abstract class SyncComposeAndroidAssets : org.gradle.api.DefaultTask() {
+  @get:org.gradle.api.tasks.InputFiles
+  @get:org.gradle.api.tasks.PathSensitive(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+  abstract val source: org.gradle.api.file.ConfigurableFileCollection
+
+  @get:org.gradle.api.tasks.OutputDirectory
+  abstract val destination: org.gradle.api.file.DirectoryProperty
+
+  @get:javax.inject.Inject
+  abstract val fs: org.gradle.api.file.FileSystemOperations
+
+  @org.gradle.api.tasks.TaskAction
+  fun run() {
+    fs.sync {
+      from(source)
+      into(destination)
+    }
   }
 }
 
-afterEvaluate {
-  tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
-    .configureEach { dependsOn(composeAndroidAssetsFromCommonUi) }
+val syncComposeAndroidAssets =
+  tasks.register("syncComposeAndroidAssets", SyncComposeAndroidAssets::class.java) {
+    source.from(composeAndroidAssetsFromCommonUi)
+    destination.set(layout.buildDirectory.dir("intermediates/composeAndroidAssets"))
+  }
+
+androidComponents {
+  onVariants { variant ->
+    variant.sources.assets?.addGeneratedSourceDirectory(
+      syncComposeAndroidAssets,
+      SyncComposeAndroidAssets::destination
+    )
+  }
 }

@@ -34,5 +34,19 @@
                 <data android:mimeType="*/*"/>
             </intent-filter>
         </activity>
+
+        <!-- FileProvider used by InternalPlatformDependencies.openFile to hand non-content
+             URIs (regular files saved to Downloads / cache / files) to viewer apps. Image
+             and video receives go through MediaStore and use content:// URIs directly,
+             bypassing this provider — but it's still needed for PDFs, docs, etc. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"/>
+        </provider>
     </application>
 </manifest>

@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Used when sharing OUTGOING files via FileKit's share intent. -->
     <cache-path name="shared_files" path="shared/" />
+
+    <!-- INCOMING non-media files land in DIRECTORY_DOWNLOADS via PlatformFileSystemImpl
+         (see getDownloadStoragePath) and are opened with FileProvider.getUriForFile.
+         Without this entry the FileProvider would refuse to wrap the file URI and
+         tap-to-open would fail for PDFs, docs, etc. -->
+    <external-path name="downloads" path="Download/" />
+
+    <!-- Mid-transfer temp files live in app cache; exposed so a partially saved/failed
+         file can still be opened from in-app for debugging. -->
+    <cache-path name="cache_root" path="." />
 </paths>

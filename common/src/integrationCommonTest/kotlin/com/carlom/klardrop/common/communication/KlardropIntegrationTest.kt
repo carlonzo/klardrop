@@ -126,9 +126,103 @@ class KlardropIntegrationTest {
 
     turbineScope(timeout = 60.seconds) {
       with(testContext) {
-        // 100KB file requires multiple 32KB chunks
-        val testData = ByteArray(100_000) { (it % 256).toByte() }
+        // 700KB ensures multiple FILE_CHUNK frames at the 256KB chunk size.
+        val testData = ByteArray(700_000) { (it % 256).toByte() }
         sendAndVerifyFile("large-file.bin", testData, "application/octet-stream")
+      }
+    }
+  }
+
+  /**
+   * Stress test for the chunked-framing change: send a 1 MB file (4 chunks at 256 KB) AND
+   * pump a TextMessage between chunks AND let heartbeats run. With the old unframed-payload
+   * model the writer mutex would have been held for the whole transfer and the text send
+   * would have been serialized behind it; with chunked framing the text frame interleaves
+   * between chunks and arrives quickly. This also exercises the writeLock contention path
+   * end-to-end (heartbeat + outgoing send + incoming-reply writes all on the same socket).
+   *
+   * 4 chunks is the smallest size that still validates the interleaving — anything fewer
+   * doesn't leave enough room between chunks for the text frame to slot in. We deliberately
+   * stay under 2 MB because slow CI runners have noticeably tighter socket throughput and
+   * larger transfers push real-time ACK round-trips past the virtual-time ACK timeouts.
+   */
+  @Test
+  fun testFileTransferAllowsConcurrentTextAndHeartbeat() = runTest(coroutines.dispatcher, timeout = 180.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
+
+    turbineScope(timeout = 120.seconds) {
+      with(testContext) {
+        val fileBytes = ByteArray(1 * 1024 * 1024) { (it % 256).toByte() }
+        val fileName = "stress.bin"
+        val platformFile = createTestPlatformFile(fileName, fileBytes)
+        clientFileManager.fileDataToServe[platformFile.path] = fileBytes
+        val fileMessage = FileMessage(fileName = fileName, fileSize = fileBytes.size.toLong(), mimeType = "application/octet-stream")
+
+        val messageReceiver = serverCommunicationModule.messageReceiver()
+        val clientMessenger = clientCommunicationModule.messenger()
+        val receiverChannel = messageReceiver.messageReceivedNotifier.testIn(this@turbineScope)
+
+        coroutines.dispatcher.scheduler.runCurrent()
+        coroutines.dispatcher.scheduler.advanceTimeBy(100)
+        coroutines.dispatcher.scheduler.runCurrent()
+
+        // Kick off the file send first.
+        val fileSendFlow = clientMessenger.send(serverDeviceId, fileMessage.toSendRequest(platformFile))
+        val fileSenderChannel = fileSendFlow.testIn(this@turbineScope)
+
+        // Give the header + first couple of chunks a chance to land before injecting the text.
+        pumpVirtualAndRealTime(iterations = 4, virtualStepMs = 100, realSleepMs = 50)
+
+        // Send a TextMessage on the same connection while the file transfer is in flight.
+        val textRequest = textSendRequest("interleaved-during-transfer")
+        val textSendFlow = clientMessenger.send(serverDeviceId, textRequest)
+        val textSenderChannel = textSendFlow.testIn(this@turbineScope)
+
+        // Both sends must complete; the text doesn't have to wait for the file. Use
+        // awaitForPumping (not awaitFor) — the file transfer is ~8 chunks of 256 KB and
+        // chunks/text/heartbeats all interleave on the same socket. Slow CI runners can't
+        // finish the transfer in any fixed-size pre-pump, and a plain awaitItem suspends
+        // the test dispatcher so virtual-time progress (heartbeats, ACK retries) stalls.
+        textSenderChannel.awaitForPumping { it is Completed }
+        fileSenderChannel.awaitForPumping { it is Completed }
+
+        // Receiver must have observed both the text and the file (at least one Completed each).
+        var sawText = false
+        var sawFile = false
+        while (!(sawText && sawFile)) {
+          val update = receiverChannel.awaitForPumping { it.status is ReceiveMessageStatus.Completed }
+          val msg = update.messages.firstOrNull()
+          if (msg is TextMessage && msg.text == "interleaved-during-transfer") sawText = true
+          if (msg is FileMessage && msg.fileName == fileName) sawFile = true
+        }
+
+        // File bytes arrived intact (chunk reassembly correct).
+        val received = serverFileManager.receivedFiles[fileName]
+        assertNotNull(received, "Server should have received file: $fileName")
+        assertTrue(fileBytes.contentEquals(received), "Reassembled file must match original")
+
+        textSenderChannel.cancelAndIgnoreRemainingEvents()
+        fileSenderChannel.cancelAndIgnoreRemainingEvents()
+        receiverChannel.cancelAndIgnoreRemainingEvents()
+      }
+    }
+  }
+
+  /**
+   * Reusing the same connection for many sequential sends after a file transfer. Validates
+   * the connection survives a multi-MB transfer (heartbeat doesn't kill it mid-transfer thanks
+   * to writeLock-release-per-chunk) and remains usable for further messages afterwards.
+   */
+  @Test
+  fun testTextSendsAfterFileTransferReuseSameConnection() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
+
+    turbineScope(timeout = 90.seconds) {
+      with(testContext) {
+        val fileBytes = ByteArray(1 * 1024 * 1024) { (it % 256).toByte() }
+        sendAndVerifyFile("post-transfer.bin", fileBytes, "application/octet-stream")
+        sendAndVerifyMessage("after-transfer-1")
+        sendAndVerifyMessage("after-transfer-2")
       }
     }
   }
@@ -450,6 +544,63 @@ internal class KlardropTestContext(
       item = awaitItem()
     } while (!block(item))
     return item
+  }
+
+  /**
+   * Polls for a matching item while interleaving small virtual-time and real-time pumps. Use
+   * this (instead of [awaitFor]) for end-to-end paths whose progress depends on real I/O AND
+   * virtual-time scheduling — `awaitItem` suspends the test dispatcher, so virtual time stops
+   * moving and any flow waiting on a virtual-time delay (heartbeats, ACK retries, progress
+   * emission throttles) stalls until the surrounding `turbineScope` timeout fires.
+   *
+   * Implementation notes:
+   * - Uses `runCurrent` (NOT `advanceUntilIdle`) to avoid chasing all scheduled delays in a
+   *   single jump and firing ACK/heartbeat timeouts long before real socket I/O can advance.
+   * - Default cadence is 1:1 virtual:real time. Going faster (e.g. 4× virtual) burns through
+   *   the 5–10 s virtual ACK timeouts before slow CI runners have a chance to deliver the
+   *   real ACK, causing spurious retries / stuck transfers.
+   * - The [maxRealTimeMs] cap is real wall-clock time; pick something well under the
+   *   surrounding `turbineScope`/`runTest` timeout so the failure surfaces here with a useful
+   *   message instead of as a generic Turbine timeout.
+   */
+  suspend fun <T> ReceiveTurbine<T>.awaitForPumping(
+    maxRealTimeMs: Long = 90_000,
+    pollVirtualStepMs: Long = 100,
+    pollRealSleepMs: Long = 100,
+    block: (T) -> Boolean,
+  ): T {
+    val channel = asChannel()
+    val deadline = System.currentTimeMillis() + maxRealTimeMs
+    var seenCount = 0
+    var lastSeen: Any? = null
+    while (System.currentTimeMillis() < deadline) {
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceTimeBy(pollVirtualStepMs)
+      coroutines.dispatcher.scheduler.runCurrent()
+      Thread.sleep(pollRealSleepMs)
+      coroutines.dispatcher.scheduler.runCurrent()
+
+      while (true) {
+        val result = channel.tryReceive()
+        if (result.isSuccess) {
+          val item = result.getOrThrow()
+          seenCount++
+          lastSeen = item
+          if (block(item)) return item
+        } else if (result.isClosed) {
+          error(
+            "Channel closed before predicate matched after $seenCount items (last=$lastSeen): " +
+              "${result.exceptionOrNull()}"
+          )
+        } else {
+          break
+        }
+      }
+    }
+    error(
+      "awaitForPumping timed out after ${maxRealTimeMs}ms; saw $seenCount items, " +
+        "last=$lastSeen, none matched predicate"
+    )
   }
 
 

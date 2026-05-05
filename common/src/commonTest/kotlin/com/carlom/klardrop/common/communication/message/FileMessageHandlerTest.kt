@@ -2,7 +2,6 @@ package com.carlom.klardrop.common.communication.message
 
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
-import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.persistence.FileTransferStatus
@@ -13,24 +12,30 @@ import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import io.github.vinceglb.filekit.PlatformFile
-import io.ktor.utils.io.ByteReadChannel
+import io.github.vinceglb.filekit.path
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.io.Buffer
+import kotlinx.io.RawSink
+import kotlinx.io.RawSource
 import kotlinx.io.Sink
+import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.test.fail
 import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
 
 
-@OptIn(ExperimentalCoroutinesApi::class, kotlin.experimental.ExperimentalNativeApi::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 class FileMessageHandlerTest {
 
   private lateinit var fileMessageHandler: FileMessageHandler
@@ -39,8 +44,6 @@ class FileMessageHandlerTest {
   private lateinit var realClock: Clock
   private lateinit var testDispatcher: TestDispatcher
   private lateinit var mockCoroutines: Coroutines
-
-  // Just use a real Clock instance - tests will work with actual timestamps
 
   @BeforeTest
   fun setup() {
@@ -58,139 +61,155 @@ class FileMessageHandlerTest {
     }
 
     fileMessageHandler = FileMessageHandler(
-      serializer = MessageSerializer(kotlinx.serialization.protobuf.ProtoBuf, mockCoroutines), // Dummy serializer
       fileManager = mockFileManager,
       clock = realClock,
       coroutines = mockCoroutines,
-      messageRepository = mockMessageRepository
+      messageRepository = mockMessageRepository,
     )
   }
 
   @Test
-  fun handleIncomingStartsTransferInsertsMessageAndCompletesWithoutIntermediateProgressUpdates() = runTest(testDispatcher) {
-    val remoteDeviceId = "sender-device"
-    val fileMessage = FileMessage("test.txt", 100, "text/plain")
-    val receiveFlow = MutableStateFlow(
-      ReceiveMessageUpdate(
-        device = DeviceInfo(remoteDeviceId, "Sender", DeviceType.DESKTOP),
-        status = ReceiveMessageStatus.Started
-      )
-    )
-    // Simulate reading 50 bytes, then another 50 bytes.
-    val data = ByteArray(100) { 0 }
-    val byteReadChannel = ByteReadChannel(data)
+  fun beginReceiveOpensSinkAndReturnsPipeline() = runTest(testDispatcher) {
+    val header = FileMessage("doc.bin", 100, "application/octet-stream")
+    val flow = newReceiveFlow("peer-1")
 
-    fileMessageHandler.handleIncoming(fileMessage, byteReadChannel, receiveFlow)
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
 
-    // Verify initial DB calls
-    assertEquals("insertFileTransfer(test.txt, , 100, IN_PROGRESS, text/plain)", mockMessageRepository.calls[0])
-    val expectedFileTransferId = mockMessageRepository.nextFileTransferId - 1
-    assertEquals("insertMessage($remoteDeviceId, test.txt, false, FILE, $expectedFileTransferId, false, text/plain)", mockMessageRepository.calls[1])
-
-    // Verify NO intermediate progress updates (only final state)
-    // Note: file path update is commented out due to interface limitations
-    assertEquals("updateFileTransferStatus($expectedFileTransferId, COMPLETED)", mockMessageRepository.calls[2])
-    assertEquals(3, mockMessageRepository.calls.size) // Only 3 calls: insert file transfer, insert message, final status
-    assertTrue(mockFileManager.preparedFile?.transferCompleted == true)
+    assertEquals("insertFileTransfer(doc.bin, , 100, IN_PROGRESS, application/octet-stream)", mockMessageRepository.calls[0])
+    assertEquals("insertMessage(peer-1, doc.bin, false, FILE, 1, false, application/octet-stream)", mockMessageRepository.calls[1])
+    assertEquals(2, mockMessageRepository.calls.size, "beginReceive must not finalize the transfer")
+    assertEquals(false, pipeline.isFinished)
   }
 
   @Test
-  fun handleIncomingHandlesReadFailureWithOnlyFinalStatusUpdate() = runTest(testDispatcher) {
-    val remoteDeviceId = "sender-device-fail"
-    val fileMessage = FileMessage("fail.txt", 100, "text/plain")
-    val receiveFlow = MutableStateFlow(
-      ReceiveMessageUpdate(
-        device = DeviceInfo(remoteDeviceId, "SenderFail", DeviceType.DESKTOP),
-        status = ReceiveMessageStatus.Started
-      )
-    )
-    // Simulate a channel that closes prematurely
-    val byteReadChannel = ByteReadChannel(ByteArray(0)) // Empty channel will cause readFully to fail or hang then timeout
+  fun acceptChunkWritesBytesAndCompleteFinalizesDb() = runTest(testDispatcher) {
+    val payload = ByteArray(300) { (it % 256).toByte() }
+    val header = FileMessage("doc.bin", payload.size.toLong(), "application/octet-stream")
+    val flow = newReceiveFlow("peer-1")
 
-    runCatching {
-      fileMessageHandler.handleIncoming(fileMessage, byteReadChannel, receiveFlow)
-    }.onSuccess {
-      fail("Expected an exception due to read failure, but none was thrown")
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
+
+    // Split into three chunks; only the last carries isLast.
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 0, data = payload.copyOfRange(0, 100), isLast = false))
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 1, data = payload.copyOfRange(100, 200), isLast = false))
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 2, data = payload.copyOfRange(200, 300), isLast = true))
+    pipeline.complete()
+
+    assertEquals(true, pipeline.isFinished)
+    assertContentEquals(payload, mockFileManager.preparedFile!!.bytes())
+    assertEquals("updateFileTransferStatus(1, COMPLETED)", mockMessageRepository.calls.last())
+    assertTrue(flow.value.status is ReceiveMessageStatus.Completed)
+  }
+
+  @Test
+  fun acceptChunkAfterCompleteIsDropped() = runTest(testDispatcher) {
+    val header = FileMessage("a.bin", 10, "application/octet-stream")
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 0, data = ByteArray(10), isLast = true))
+    pipeline.complete()
+
+    // Late chunk arriving after complete must not throw or write.
+    val before = mockFileManager.preparedFile!!.bytes().size
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 1, data = ByteArray(5), isLast = false))
+    assertEquals(before, mockFileManager.preparedFile!!.bytes().size)
+  }
+
+  @Test
+  fun pipelineFailUpdatesDbAndFlow() = runTest(testDispatcher) {
+    val header = FileMessage("a.bin", 10, "application/octet-stream")
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
+    pipeline.fail(RuntimeException("disk full"))
+
+    assertEquals(true, pipeline.isFinished)
+    assertEquals("updateFileTransferStatus(1, FAILED)", mockMessageRepository.calls.last())
+    val status = flow.value.status
+    assertTrue(status is ReceiveMessageStatus.Failed)
+    assertEquals("disk full", status.reason)
+  }
+
+  @Test
+  fun handleOutgoingChunkedSendsHeaderThenChunksWithLastFlag() = runTest(testDispatcher) {
+    val payload = ByteArray(700_000) { (it % 256).toByte() } // > 2 chunks at 256KB
+    val tempPath = Path("/tmp", "out.bin")
+    val platformFile = PlatformFile(tempPath)
+    mockFileManager.fileDataToServe[platformFile.path] = payload
+
+    val header = FileMessage("out.bin", payload.size.toLong(), "application/octet-stream")
+    val request = header.toSendRequest(platformFile)
+
+    val sentMessages = mutableListOf<Message>()
+    val progress = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 16)
+    val collectedProgress = mutableListOf<MessengerSendProgress>()
+    val collectJob = CoroutineScope(testDispatcher).launch {
+      progress.collect { collectedProgress.add(it) }
     }
 
-    // Verify initial DB calls
-    assertEquals("insertFileTransfer(fail.txt, , 100, IN_PROGRESS, text/plain)", mockMessageRepository.calls[0])
-    val expectedFileTransferId = mockMessageRepository.nextFileTransferId - 1
-    assertEquals("insertMessage($remoteDeviceId, fail.txt, false, FILE, $expectedFileTransferId, false, text/plain)", mockMessageRepository.calls[1])
+    fileMessageHandler.handleOutgoingChunked(
+      toDeviceId = "peer-out",
+      request = request,
+      sendFramed = { sentMessages.add(it) },
+      progressFlow = progress,
+      awaitReady = { /* no-op: simulate ACK_READY arriving instantly */ },
+    )
 
-    // Verify only final failure status (no intermediate progress updates)
-    assertEquals("updateFileTransferStatus($expectedFileTransferId, FAILED)", mockMessageRepository.calls.last())
-    assertEquals(3, mockMessageRepository.calls.size) // Only 3 calls: insert file transfer, insert message, final failure status
-    assertTrue(mockFileManager.preparedFile?.transferFailed == true)
-  }
+    collectJob.cancel()
 
-
-  @Test
-  @kotlin.test.Ignore // TODO: Fix PlatformFile mocking - ClassCastException with FileKit library
-  fun handleOutgoingStartsTransferInsertsMessageAndCompletesWithoutIntermediateProgressUpdates() = runTest(testDispatcher) {
-    val toDeviceId = "receiver-device"
-    val fileName = "outgoing.dat"
-    val fileSize = 200L
-    val fileMessage = FileMessage(fileName, fileSize, "application/octet-stream")
-    // Create a simple mock that satisfies the path property requirement
-    val mockPlatformFile = PlatformFile(Path("/fake/path", fileName))
-
-    val sendRequest = FileMessage.FileSendRequest(fileMessage, mockPlatformFile)
-    val progressFlow = MutableSharedFlow<MessengerSendProgress>()
-    val byteWriteChannel = io.ktor.utils.io.ByteChannel(true).apply { close() } // Auto-flush true
-
-    // Mock FileManager to return a valid RawSource
-    mockFileManager = object : MockFileManager() {
-      override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.RawSource {
-        return kotlinx.io.Buffer().apply { write(ByteArray(fileSize.toInt())) } // Provide a source with enough bytes
-      }
+    // First message is the header.
+    assertTrue(sentMessages.first() is FileMessage, "First sent message must be the FileMessage header")
+    val chunks = sentMessages.drop(1).filterIsInstance<FileChunkMessage>()
+    assertEquals(sentMessages.size - 1, chunks.size, "All non-header sends must be chunks")
+    assertTrue(chunks.size >= 3, "700KB at 256KB chunks should produce at least 3 chunks, got ${chunks.size}")
+    // Exactly one chunk has isLast=true and it's the final one.
+    assertEquals(1, chunks.count { it.isLast })
+    assertEquals(true, chunks.last().isLast)
+    // Reassembly equals original payload.
+    val reassembled = ByteArray(payload.size).also { dest ->
+      var off = 0
+      for (c in chunks) { c.data.copyInto(dest, off); off += c.data.size }
     }
-    fileMessageHandler = FileMessageHandler( // Re-init with new mockFileManager
-      serializer = MessageSerializer(kotlinx.serialization.protobuf.ProtoBuf, mockCoroutines),
-      fileManager = mockFileManager,
-      clock = realClock,
-      coroutines = mockCoroutines,
-      messageRepository = mockMessageRepository
-    )
-
-    fileMessageHandler.handleOutgoing(toDeviceId, sendRequest, byteWriteChannel, progressFlow)
-
-    // Verify initial DB calls
-    assertEquals("insertFileTransfer($fileName, /fake/path/outgoing.dat, $fileSize, IN_PROGRESS)", mockMessageRepository.calls[0])
-    val expectedFileTransferId = mockMessageRepository.nextFileTransferId - 1
-    assertEquals("insertMessage($toDeviceId, $fileName, true, FILE, $expectedFileTransferId, true, application/octet-stream)", mockMessageRepository.calls[1])
-
-    // Verify only final completion status (no intermediate progress updates to DB)
-    assertEquals("updateFileTransferStatus($expectedFileTransferId, COMPLETED)", mockMessageRepository.calls.last())
-    assertEquals(3, mockMessageRepository.calls.size) // Only 3 calls: insert file transfer, insert message, final status
+    assertContentEquals(payload, reassembled)
+    // All chunks reference the header id.
+    assertTrue(chunks.all { it.fileMessageId == header.id })
+    // Progress flow saw 0% start and 100% end.
+    assertTrue(collectedProgress.any { it is MessengerSendProgress.InProgress && it.percentage == 0 })
+    assertTrue(collectedProgress.any { it is MessengerSendProgress.InProgress && it.percentage == 100 })
   }
 
   @Test
-  fun progressUpdatesAreSentToUIButNotPersistedToDatabase() = runTest(testDispatcher) {
-    val remoteDeviceId = "sender-device"
-    val fileMessage = FileMessage("test.txt", 100, "text/plain")
-    val receiveFlow = MutableStateFlow(
-      ReceiveMessageUpdate(
-        device = DeviceInfo(remoteDeviceId, "Sender", DeviceType.DESKTOP),
-        status = ReceiveMessageStatus.Started
-      )
+  fun handleOutgoingChunkedEmptyFileSendsSingleEmptyLastChunk() = runTest(testDispatcher) {
+    val tempPath = Path("/tmp", "empty.bin")
+    val platformFile = PlatformFile(tempPath)
+    mockFileManager.fileDataToServe[platformFile.path] = ByteArray(0)
+
+    val header = FileMessage("empty.bin", 0L, "application/octet-stream")
+    val request = header.toSendRequest(platformFile)
+    val sentMessages = mutableListOf<Message>()
+    val progress = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 8)
+
+    fileMessageHandler.handleOutgoingChunked(
+      toDeviceId = "peer-out",
+      request = request,
+      sendFramed = { sentMessages.add(it) },
+      progressFlow = progress,
+      awaitReady = {},
     )
 
-    // Create a channel with data to simulate progress
-    val data = ByteArray(100) { 0 }
-    val byteReadChannel = ByteReadChannel(data)
-
-    fileMessageHandler.handleIncoming(fileMessage, byteReadChannel, receiveFlow)
-
-    // Verify that receiveFlow was updated with progress (in memory)
-    // The final state should be Completed
-    assertEquals(ReceiveMessageStatus.Completed::class, receiveFlow.value.status::class)
-
-    // Verify that only final states were persisted (no intermediate progress in DB)
-    val statusUpdateCalls = mockMessageRepository.calls.filter { it.contains("updateFileTransferStatus") }
-    assertEquals(1, statusUpdateCalls.size) // Only final COMPLETED status
-    assertEquals("updateFileTransferStatus(1, COMPLETED)", statusUpdateCalls[0])
+    val chunks = sentMessages.filterIsInstance<FileChunkMessage>()
+    assertEquals(1, chunks.size, "Empty file should send exactly one chunk to terminate the transfer")
+    assertEquals(0, chunks[0].data.size)
+    assertEquals(true, chunks[0].isLast)
   }
+
+  private fun newReceiveFlow(deviceId: String) = MutableStateFlow(
+    ReceiveMessageUpdate(
+      device = DeviceInfo(deviceId, "peer", DeviceType.DESKTOP),
+      status = ReceiveMessageStatus.Started,
+    )
+  )
 }
 
 // --- Mocks ---
@@ -224,51 +243,61 @@ private class MockMessageRepository : MessageRepository {
     calls.add("updateFileTransferFilePath($id, $filePath)")
   }
 
-  override suspend fun markMessagesAsRead(remoteDeviceId: String) {
-    calls.add("markMessagesAsRead($remoteDeviceId)")
-  }
-
-  override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long {
-    calls.add("getUnreadCountForDevice($remoteDeviceId)")
-    return 0L
-  }
-
-  override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> {
-    calls.add("getAllDevicesWithUnreadCounts()")
-    return kotlinx.coroutines.flow.flowOf(emptyMap())
-  }
-
-  override fun getMessagesForDevice(
-    remoteDeviceId: String,
-    limit: Long
-  ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> =
-    kotlinx.coroutines.flow.flowOf(emptyList())
-
-  override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> =
-    kotlinx.coroutines.flow.flowOf(null)
+  override suspend fun markMessagesAsRead(remoteDeviceId: String) {}
+  override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long = 0L
+  override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> =
+    kotlinx.coroutines.flow.flowOf(emptyMap())
+  override fun getMessagesForDevice(remoteDeviceId: String, limit: Long) =
+    kotlinx.coroutines.flow.flowOf(emptyList<com.carlom.klardrop.common.database.Messages>())
+  override fun getFileTransferById(id: Long) =
+    kotlinx.coroutines.flow.flowOf<com.carlom.klardrop.common.database.File_transfers?>(null)
 }
 
 private open class MockFileManager : FileManager {
   var preparedFile: MockFileTransfer? = null
+  val fileDataToServe = mutableMapOf<String, ByteArray>()
+
   override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer {
-    preparedFile = MockFileTransfer()
-    return preparedFile!!
+    return MockFileTransfer().also { preparedFile = it }
   }
 
-  override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.RawSource = TODO("Not yet implemented for tests")
+  override fun getReadStreamFrom(file: PlatformFile): RawSource {
+    val data = fileDataToServe[file.path] ?: ByteArray(0)
+    return Buffer().apply { write(data) }
+  }
+
   override suspend fun openFile(filePath: String): Boolean = true
 }
 
-private class MockFileTransfer() : FileTransfer {
-  override val bufferedSink: Sink = kotlinx.io.Buffer() // Use a Buffer as a dummy Sink
-  var transferCompleted = false
-  var transferFailed = false
-  override suspend fun onTransferCompleted(): kotlinx.io.files.Path? {
-    transferCompleted = true
-    return null
+private class MockFileTransfer : FileTransfer {
+  // Capture written bytes via a RawSink that survives close (Buffer.close discards).
+  private val chunks = mutableListOf<ByteArray>()
+
+  override val bufferedSink: Sink = object : RawSink {
+    override fun write(source: Buffer, byteCount: Long) {
+      var remaining = byteCount
+      while (remaining > 0) {
+        val toRead = minOf(remaining, 8192L).toInt()
+        val bytes = ByteArray(toRead)
+        val read = source.readAtMostTo(bytes, 0, toRead)
+        if (read <= 0) break
+        chunks.add(if (read < toRead) bytes.copyOf(read) else bytes)
+        remaining -= read
+      }
+    }
+    override fun flush() {}
+    override fun close() {}
+  }.buffered()
+
+  fun bytes(): ByteArray {
+    val total = chunks.sumOf { it.size }
+    val out = ByteArray(total)
+    var off = 0
+    for (c in chunks) { c.copyInto(out, off); off += c.size }
+    return out
   }
 
-  override suspend fun onTransferFailed() {
-    transferFailed = true
-  }
+  override suspend fun onTransferCompleted(): Path? = null
+  override suspend fun onTransferFailed() {}
 }
+
