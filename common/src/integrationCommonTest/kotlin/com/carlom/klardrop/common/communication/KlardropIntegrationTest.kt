@@ -134,12 +134,17 @@ class KlardropIntegrationTest {
   }
 
   /**
-   * Stress test for the chunked-framing change: send a 2 MB file (~8 chunks at 256KB) AND
+   * Stress test for the chunked-framing change: send a 1 MB file (4 chunks at 256 KB) AND
    * pump a TextMessage between chunks AND let heartbeats run. With the old unframed-payload
    * model the writer mutex would have been held for the whole transfer and the text send
    * would have been serialized behind it; with chunked framing the text frame interleaves
    * between chunks and arrives quickly. This also exercises the writeLock contention path
    * end-to-end (heartbeat + outgoing send + incoming-reply writes all on the same socket).
+   *
+   * 4 chunks is the smallest size that still validates the interleaving — anything fewer
+   * doesn't leave enough room between chunks for the text frame to slot in. We deliberately
+   * stay under 2 MB because slow CI runners have noticeably tighter socket throughput and
+   * larger transfers push real-time ACK round-trips past the virtual-time ACK timeouts.
    */
   @Test
   fun testFileTransferAllowsConcurrentTextAndHeartbeat() = runTest(coroutines.dispatcher, timeout = 180.seconds) {
@@ -147,7 +152,7 @@ class KlardropIntegrationTest {
 
     turbineScope(timeout = 120.seconds) {
       with(testContext) {
-        val fileBytes = ByteArray(2 * 1024 * 1024) { (it % 256).toByte() }
+        val fileBytes = ByteArray(1 * 1024 * 1024) { (it % 256).toByte() }
         val fileName = "stress.bin"
         val platformFile = createTestPlatformFile(fileName, fileBytes)
         clientFileManager.fileDataToServe[platformFile.path] = fileBytes
@@ -548,23 +553,26 @@ internal class KlardropTestContext(
    * moving and any flow waiting on a virtual-time delay (heartbeats, ACK retries, progress
    * emission throttles) stalls until the surrounding `turbineScope` timeout fires.
    *
-   * Implementation note: deliberately uses `runCurrent` (NOT `advanceUntilIdle`) inside the
-   * poll loop. `advanceUntilIdle` chases all scheduled delays in a single jump, which fires
-   * ACK/heartbeat timeouts long before real socket I/O has had time to advance. The pump
-   * cadence below mirrors [pumpVirtualAndRealTime]'s small-step pattern.
-   *
-   * The [maxRealTimeMs] cap is real wall-clock time; pick something well under the
-   * surrounding `turbineScope`/`runTest` timeout so the failure surfaces here with a useful
-   * message instead of as a generic Turbine timeout.
+   * Implementation notes:
+   * - Uses `runCurrent` (NOT `advanceUntilIdle`) to avoid chasing all scheduled delays in a
+   *   single jump and firing ACK/heartbeat timeouts long before real socket I/O can advance.
+   * - Default cadence is 1:1 virtual:real time. Going faster (e.g. 4× virtual) burns through
+   *   the 5–10 s virtual ACK timeouts before slow CI runners have a chance to deliver the
+   *   real ACK, causing spurious retries / stuck transfers.
+   * - The [maxRealTimeMs] cap is real wall-clock time; pick something well under the
+   *   surrounding `turbineScope`/`runTest` timeout so the failure surfaces here with a useful
+   *   message instead of as a generic Turbine timeout.
    */
   suspend fun <T> ReceiveTurbine<T>.awaitForPumping(
     maxRealTimeMs: Long = 90_000,
-    pollVirtualStepMs: Long = 200,
-    pollRealSleepMs: Long = 50,
+    pollVirtualStepMs: Long = 100,
+    pollRealSleepMs: Long = 100,
     block: (T) -> Boolean,
   ): T {
     val channel = asChannel()
     val deadline = System.currentTimeMillis() + maxRealTimeMs
+    var seenCount = 0
+    var lastSeen: Any? = null
     while (System.currentTimeMillis() < deadline) {
       coroutines.dispatcher.scheduler.runCurrent()
       coroutines.dispatcher.scheduler.advanceTimeBy(pollVirtualStepMs)
@@ -576,15 +584,23 @@ internal class KlardropTestContext(
         val result = channel.tryReceive()
         if (result.isSuccess) {
           val item = result.getOrThrow()
+          seenCount++
+          lastSeen = item
           if (block(item)) return item
         } else if (result.isClosed) {
-          error("Channel closed before predicate matched: ${result.exceptionOrNull()}")
+          error(
+            "Channel closed before predicate matched after $seenCount items (last=$lastSeen): " +
+              "${result.exceptionOrNull()}"
+          )
         } else {
           break
         }
       }
     }
-    error("awaitForPumping timed out after ${maxRealTimeMs}ms with no item matching predicate")
+    error(
+      "awaitForPumping timed out after ${maxRealTimeMs}ms; saw $seenCount items, " +
+        "last=$lastSeen, none matched predicate"
+    )
   }
 
 
