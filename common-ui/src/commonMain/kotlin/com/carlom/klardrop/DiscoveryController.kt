@@ -1,6 +1,7 @@
 package com.carlom.klardrop
 
 import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -26,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -45,6 +47,7 @@ class DiscoveryController(
   private val currentDeviceProvider: com.carlom.klardrop.common.discovery.CurrentDeviceProvider,
   private val localPropertiesRepository: com.carlom.klardrop.common.persistence.LocalPropertiesRepository,
   private val connectionInfoJoiner: ConnectionInfoJoiner,
+  reachability: StateFlow<Map<String, Reachability>>,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -60,10 +63,11 @@ class DiscoveryController(
     commonComponent.currentDeviceProvider(),
     commonComponent.localPropertiesRepository(),
     commonComponent.connectionInfoJoiner(),
+    commonComponent.reachability(),
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage)
+  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage, reachability)
 
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 
@@ -434,7 +438,8 @@ data class DeviceUi(
   val activityState: ActivityState = ActivityState.Idle,
   val connectionTypes: List<DeviceConnection.DeviceConnectionType>,
   val hasUnreadMessages: Boolean = false,
-  val trustStatus: TrustStatus = TrustStatus.Unknown
+  val trustStatus: TrustStatus = TrustStatus.Unknown,
+  val reachability: Reachability = Reachability.Unknown,
 )
 
 sealed interface TrustStatus {

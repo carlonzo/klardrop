@@ -204,6 +204,8 @@ fun DeviceChatScreen(
         )
       }
 
+      val isOffline = !isOwned && reachability == Reachability.Unreachable
+
       ChatInputBar(
         text = textToSend,
         onTextChange = { textToSend = it },
@@ -213,11 +215,12 @@ fun DeviceChatScreen(
             textToSend = ""
           }
         },
-        attachmentMenuOpen = attachmentMenuOpen,
+        attachmentMenuOpen = attachmentMenuOpen && !isOffline,
         onToggleAttachmentMenu = { attachmentMenuOpen = !attachmentMenuOpen },
         onPickFiles = { filePickerLauncher.launch() },
         onPickMedia = { imagePickerLauncher.launch() },
-        bottomPadding = paddingValues.calculateBottomPadding()
+        bottomPadding = paddingValues.calculateBottomPadding(),
+        isOffline = isOffline,
       )
     }
   }
@@ -769,7 +772,8 @@ private fun ChatInputBar(
   onToggleAttachmentMenu: () -> Unit,
   onPickFiles: () -> Unit,
   onPickMedia: () -> Unit,
-  bottomPadding: androidx.compose.ui.unit.Dp
+  bottomPadding: androidx.compose.ui.unit.Dp,
+  isOffline: Boolean,
 ) {
   Surface(
     color = MaterialTheme.colorScheme.surface,
@@ -783,6 +787,32 @@ private fun ChatInputBar(
         bottom = 8.dp + bottomPadding
       )
     ) {
+      AnimatedVisibility(
+        visible = isOffline,
+        enter = fadeIn(),
+        exit = fadeOut(),
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp, start = 4.dp, end = 4.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Default.ErrorOutline,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(16.dp)
+          )
+          Text(
+            text = "Offline — messages can't be sent right now.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.error
+          )
+        }
+      }
+
       AnimatedVisibility(
         visible = attachmentMenuOpen,
         enter = fadeIn() + expandHorizontally(),
@@ -808,7 +838,10 @@ private fun ChatInputBar(
       }
 
       Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onToggleAttachmentMenu) {
+        IconButton(
+          onClick = onToggleAttachmentMenu,
+          enabled = !isOffline,
+        ) {
           Icon(
             imageVector = Icons.Default.AttachFile,
             contentDescription = if (attachmentMenuOpen) "Hide attachments" else "Attach"
@@ -818,15 +851,16 @@ private fun ChatInputBar(
         OutlinedTextField(
           value = text,
           onValueChange = onTextChange,
-          placeholder = { Text("Message") },
+          placeholder = { Text(if (isOffline) "Offline" else "Message") },
           modifier = Modifier.weight(1f),
+          enabled = !isOffline,
           maxLines = 4,
           shape = RoundedCornerShape(20.dp)
         )
 
         Spacer(Modifier.width(8.dp))
 
-        val canSend = text.isNotBlank()
+        val canSend = text.isNotBlank() && !isOffline
         Surface(
           shape = CircleShape,
           color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,

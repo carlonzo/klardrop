@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.trust.DeviceTrustStatus
@@ -82,6 +83,11 @@ internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceAct
           modifier = Modifier.align(Alignment.TopStart)
         )
       }
+
+      ReachabilityDot(
+        reachability = deviceUi.reachability,
+        modifier = Modifier.align(Alignment.BottomEnd)
+      )
     }
 
     Text(
@@ -132,6 +138,11 @@ internal fun DeviceLarge(
             modifier = Modifier.align(Alignment.TopStart)
           )
         }
+
+        ReachabilityDot(
+          reachability = deviceUi.reachability,
+          modifier = Modifier.align(Alignment.BottomEnd)
+        )
       }
 
       Spacer(modifier = Modifier.size(16.dp))
@@ -162,6 +173,27 @@ private fun UnreadDot(modifier: Modifier = Modifier) {
       .background(MaterialTheme.colorScheme.surface, CircleShape)
       .padding(2.dp)
       .background(MaterialTheme.colorScheme.error, CircleShape)
+  )
+}
+
+@Composable
+private fun ReachabilityDot(reachability: Reachability, modifier: Modifier = Modifier) {
+  // Only render an explicit dot for the two terminal states. Unknown / Probing
+  // happen continuously as visibleDevices and the prober update each other and
+  // would flicker the indicator on every churn — silence is the right cue
+  // there ("we don't know yet, don't draw conclusions").
+  val color = when (reachability) {
+    Reachability.Reachable -> MaterialTheme.colorScheme.primary
+    Reachability.Unreachable -> MaterialTheme.colorScheme.error
+    Reachability.Probing,
+    Reachability.Unknown -> return
+  }
+  Box(
+    modifier = modifier
+      .size(12.dp)
+      .background(MaterialTheme.colorScheme.surface, CircleShape)
+      .padding(2.dp)
+      .background(color, CircleShape)
   )
 }
 

@@ -1,6 +1,7 @@
 package com.carlom.klardrop
 
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.trust.TrustStorage
@@ -9,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -20,7 +22,8 @@ class ShowDevicesControllerHelper(
   private val coroutineScope: CoroutineScope,
   private val visibleDevices: VisibleDevices,
   private val messageRepository: MessageRepository,
-  private val trustStorage: TrustStorage
+  private val trustStorage: TrustStorage,
+  private val reachabilitySource: StateFlow<Map<String, Reachability>>,
 ) {
 
   private val _devicesFlow = MutableStateFlow<Map<String, DeviceUi>>(mapOf())
@@ -30,23 +33,25 @@ class ShowDevicesControllerHelper(
     coroutineScope.launch {
       combine(
         visibleDevices.visibleDevices.onEach { log("VisibleDevices", "emitting: $it") },
-        messageRepository.getAllDevicesWithUnreadCounts()
-      ) { devices, unreadCounts ->
+        messageRepository.getAllDevicesWithUnreadCounts(),
+        reachabilitySource,
+      ) { devices, unreadCounts, reachabilityMap ->
         devices.values.map { device ->
           val deviceInfo = device.deviceInfo
           val unreadCount = unreadCounts[deviceInfo.deviceId] ?: 0L
-          
+
           // Check trust status
           val isTrusted = trustStorage.isTrusted(deviceInfo.deviceId)
           val trustStatus = if (isTrusted) TrustStatus.Trusted else TrustStatus.Untrusted
-          
+
           DeviceUi(
             deviceId = deviceInfo.deviceId,
             deviceName = deviceInfo.name,
             deviceType = deviceInfo.deviceType,
             connectionTypes = device.deviceConnections.map { it.deviceConnectionType }.distinct(),
             hasUnreadMessages = unreadCount > 0,
-            trustStatus = trustStatus
+            trustStatus = trustStatus,
+            reachability = reachabilityMap[deviceInfo.deviceId] ?: Reachability.Unknown,
           )
         }
       }.collect { deviceList ->
