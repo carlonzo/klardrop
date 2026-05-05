@@ -20,8 +20,9 @@ class UiDependencies(private val commonComponent: CommonComponent) {
             messageRepository = commonComponent.messageRepository(),
             messenger = commonComponent.messenger(),
             coroutines = commonComponent.coroutines(),
-            fileManager = commonComponent.fileManager(), // Added,
-          platformFileSystem = commonComponent.platformFileSystem()
+            fileManager = commonComponent.fileManager(),
+            platformFileSystem = commonComponent.platformFileSystem(),
+            reachabilitySource = commonComponent.reachability(),
         )
     }
 }

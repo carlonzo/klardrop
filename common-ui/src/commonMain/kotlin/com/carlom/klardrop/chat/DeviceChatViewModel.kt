@@ -3,6 +3,7 @@ package com.carlom.klardrop.chat
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -40,7 +41,8 @@ class DeviceChatViewModel(
   private val messenger: Messenger,
   private val coroutines: Coroutines,
   private val fileManager: FileManager,
-  private val platformFileSystem: PlatformFileSystem
+  private val platformFileSystem: PlatformFileSystem,
+  reachabilitySource: StateFlow<Map<String, Reachability>>,
 ) {
 
   // TODO we need to dispose this viewmodel
@@ -48,6 +50,11 @@ class DeviceChatViewModel(
 
   private val _uiState = MutableStateFlow(ChatUiState())
   internal val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+  val reachability: StateFlow<Reachability> =
+    reachabilitySource
+      .map { it[deviceId] ?: Reachability.Unknown }
+      .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Reachability.Unknown)
 
 
   val messages: StateFlow<List<Messages>> =

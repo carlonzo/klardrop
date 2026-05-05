@@ -7,12 +7,24 @@ import com.carlom.klardrop.common.utils.log
 import io.ktor.network.sockets.Socket
 import io.ktor.network.sockets.isClosed
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 interface ConnectionsPool {
+
+  /**
+   * Per-device reachability state derived from pool membership and probe
+   * outcomes. UI consumers (chat screen, device list) observe this to render
+   * Online/Offline/Connecting indicators without having to drive their own
+   * connection state machine.
+   */
+  val reachability: StateFlow<Map<String, Reachability>>
 
   suspend fun isAvailable(deviceId: String): Boolean
 
@@ -23,6 +35,26 @@ interface ConnectionsPool {
   suspend fun closeAllConnections()
 
   suspend fun closeConnection(deviceId: String)
+
+  /** Signal that a probe is in flight for [deviceId] — transitions to [Reachability.Probing]. */
+  fun markProbing(deviceId: String)
+
+  /** Signal that a probe / send attempt failed — transitions to [Reachability.Unreachable]. */
+  fun markUnreachable(deviceId: String)
+}
+
+sealed interface Reachability {
+  /** No probe attempted yet, or pool was just flushed. */
+  data object Unknown : Reachability
+
+  /** A probe is currently in flight. */
+  data object Probing : Reachability
+
+  /** A live connection exists in the pool, or the last probe succeeded. */
+  data object Reachable : Reachability
+
+  /** Last probe / send attempt failed. */
+  data object Unreachable : Reachability
 }
 
 internal class ConnectionsPoolImpl(
@@ -32,6 +64,9 @@ internal class ConnectionsPoolImpl(
 
   private val mutex = Mutex(locked = false)
   private val connections = mutableMapOf<String, ConnectionMessenger>()
+  private val reachabilityFlow = MutableStateFlow<Map<String, Reachability>>(emptyMap())
+
+  override val reachability: StateFlow<Map<String, Reachability>> = reachabilityFlow.asStateFlow()
 
   init {
     // Pool subscribes to coarse network events directly so a single source of
@@ -84,13 +119,13 @@ internal class ConnectionsPoolImpl(
       connections[deviceId]?.let { oldConnectionMessenger ->
         val isOldClosed = oldConnectionMessenger.isClosed()
         log("ConnectionPool", "[DEBUG] Found existing connection for $deviceId, isClosed = $isOldClosed")
-        
+
         if (isOldClosed) {
           log("ConnectionPool", "[DEBUG] Old connection is closed, safe to replace for $deviceId")
         } else {
           log("ConnectionPool", "[DEBUG] WARNING: Closing ACTIVE connection for $deviceId to replace it!")
         }
-        
+
         oldConnectionMessenger.close()
         connections.remove(deviceId)
         log("ConnectionPool", "Closing connection before updating with $deviceId")
@@ -100,6 +135,7 @@ internal class ConnectionsPoolImpl(
       log("ConnectionPool", "Updated connection with $deviceId")
       log("ConnectionPool", "[DEBUG] Total connections: ${connections.size}")
     }
+    setReachability(deviceId, Reachability.Reachable)
   }
 
   override suspend fun getConnection(deviceId: String): ConnectionMessenger? {
@@ -126,19 +162,48 @@ internal class ConnectionsPoolImpl(
   }
 
   override suspend fun closeAllConnections() {
+    val flushedDeviceIds: List<String>
     mutex.withLock {
-      connections.forEach { (deviceId, connectionMessenger) ->
-        connectionMessenger.close()
-        connections.remove(deviceId)
+      flushedDeviceIds = connections.keys.toList()
+      connections.values.forEach { it.close() }
+      connections.clear()
+    }
+    if (flushedDeviceIds.isNotEmpty()) {
+      reachabilityFlow.update { current ->
+        current.toMutableMap().apply {
+          // Reset everything we had connections for: we don't know the new
+          // state until the next probe lands. Don't jump straight to
+          // Unreachable here because that would briefly flash an Offline
+          // indicator on a peer that's about to be re-probed.
+          flushedDeviceIds.forEach { put(it, Reachability.Unknown) }
+        }
       }
     }
   }
 
   override suspend fun closeConnection(deviceId: String) {
-    return mutex.withLock {
-      val connectionMessenger = connections[deviceId] ?: return
-      connectionMessenger.close()
+    val hadConnection: Boolean
+    mutex.withLock {
+      val connectionMessenger = connections[deviceId]
+      hadConnection = connectionMessenger != null
+      connectionMessenger?.close()
       connections.remove(deviceId)
+    }
+    if (hadConnection) setReachability(deviceId, Reachability.Unreachable)
+  }
+
+  override fun markProbing(deviceId: String) {
+    setReachability(deviceId, Reachability.Probing)
+  }
+
+  override fun markUnreachable(deviceId: String) {
+    setReachability(deviceId, Reachability.Unreachable)
+  }
+
+  private fun setReachability(deviceId: String, state: Reachability) {
+    reachabilityFlow.update { current ->
+      if (current[deviceId] == state) current
+      else current.toMutableMap().apply { put(deviceId, state) }
     }
   }
 

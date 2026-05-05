@@ -91,17 +91,23 @@ class EagerReachabilityConnector(
   private fun probe(deviceId: String, device: DiscoveryDevice) {
     log(TAG, "Probing reachability for $deviceId (${device.deviceConnections.size} endpoint(s))")
     failureCooldownUntil[deviceId] = TimeSource.Monotonic.markNow()
+    connectionsPool.markProbing(deviceId)
     scope.launch {
       runCatching { client.connectTo(deviceId) }
         .onSuccess {
           if (connectionsPool.isAvailable(deviceId)) {
             failureCooldownUntil.remove(deviceId)
             log(TAG, "Probe succeeded for $deviceId")
+            // updateConnection() inside Client already marked Reachable.
           } else {
             log(TAG, "Probe completed without establishing connection for $deviceId")
+            connectionsPool.markUnreachable(deviceId)
           }
         }
-        .onFailure { log(TAG, "Probe failed for $deviceId: ${it.message}") }
+        .onFailure {
+          log(TAG, "Probe failed for $deviceId: ${it.message}")
+          connectionsPool.markUnreachable(deviceId)
+        }
     }
   }
 

@@ -65,6 +65,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.FileMessage as ProtoFileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage as ProtoTextMessage
 import com.carlom.klardrop.common.database.Messages
@@ -95,6 +96,7 @@ fun DeviceChatScreen(
   val messagesState by viewModel.messages.collectAsState()
   val uiState by viewModel.uiState.collectAsState()
   val pendingAuth by viewModel.pendingAuth.collectAsState()
+  val reachability by viewModel.reachability.collectAsState()
   var textToSend by remember { mutableStateOf("") }
   var attachmentMenuOpen by remember { mutableStateOf(false) }
 
@@ -154,6 +156,8 @@ fun DeviceChatScreen(
                   color = MaterialTheme.colorScheme.primary
                 )
               }
+            } else {
+              ReachabilityIndicator(reachability)
             }
           }
         },
@@ -273,6 +277,47 @@ private fun IncomingAuthBanner(update: ReceiveMessageUpdate) {
         }
       }
     }
+  }
+}
+
+@Composable
+private fun ReachabilityIndicator(reachability: Reachability) {
+  // Reachable from a confirmed pool entry / probe → green; explicit Unreachable
+  // → red; everything else (no probe yet, in flight) collapses to a neutral
+  // "Connecting…" so the dot doesn't flicker on the brief Unknown→Probing
+  // transitions that happen on every visibleDevices update.
+  val (label, dotColor, textColor) = when (reachability) {
+    Reachability.Reachable -> Triple(
+      "Online",
+      MaterialTheme.colorScheme.primary,
+      MaterialTheme.colorScheme.primary,
+    )
+    Reachability.Unreachable -> Triple(
+      "Offline",
+      MaterialTheme.colorScheme.error,
+      MaterialTheme.colorScheme.error,
+    )
+    Reachability.Probing,
+    Reachability.Unknown -> Triple(
+      "Connecting…",
+      MaterialTheme.colorScheme.onSurfaceVariant,
+      MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+  }
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(6.dp)
+  ) {
+    Box(
+      modifier = Modifier
+        .size(8.dp)
+        .background(dotColor, CircleShape)
+    )
+    Text(
+      text = label,
+      style = MaterialTheme.typography.labelSmall,
+      color = textColor
+    )
   }
 }
 

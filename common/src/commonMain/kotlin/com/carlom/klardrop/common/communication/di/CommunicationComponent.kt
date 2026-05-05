@@ -256,4 +256,6 @@ class CommunicationModule(
 
   @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
   internal fun connectionsPool() = connectionsPool
+
+  fun reachability() = connectionsPool.reachability
 }
