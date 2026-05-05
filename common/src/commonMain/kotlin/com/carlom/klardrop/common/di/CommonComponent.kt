@@ -121,4 +121,6 @@ class CommonComponent(
 
   fun connectionInfoJoiner() = internalPlatformDependency.connectionInfoJoiner()
 
+  fun permissionsMonitor() = internalPlatformDependency.permissionsMonitor()
+
 }

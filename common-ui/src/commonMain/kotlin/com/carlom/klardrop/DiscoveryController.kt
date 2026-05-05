@@ -3,6 +3,8 @@ package com.carlom.klardrop
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
+import com.carlom.klardrop.common.permissions.PermissionsMonitor
+import com.carlom.klardrop.common.permissions.PermissionsState
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
@@ -27,7 +29,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -48,6 +52,7 @@ class DiscoveryController(
   private val localPropertiesRepository: com.carlom.klardrop.common.persistence.LocalPropertiesRepository,
   private val connectionInfoJoiner: ConnectionInfoJoiner,
   reachability: StateFlow<Map<String, Reachability>>,
+  permissionsMonitor: PermissionsMonitor,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -64,10 +69,14 @@ class DiscoveryController(
     commonComponent.localPropertiesRepository(),
     commonComponent.connectionInfoJoiner(),
     commonComponent.reachability(),
+    commonComponent.permissionsMonitor(),
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
   private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage, reachability)
+
+  val permissionsState: StateFlow<PermissionsState> = permissionsMonitor.observe()
+    .stateIn(controllerScope, SharingStarted.Eagerly, PermissionsState.EMPTY)
 
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 

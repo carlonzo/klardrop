@@ -1,5 +1,8 @@
 package com.carlom.klardrop.navigation
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -7,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -62,12 +66,24 @@ actual fun KlardropNavigator(
     onBack = { backStack.removeLastOrNull() },
     entryProvider = entryProvider {
       entry<DiscoveryRoute> {
+        val context = LocalContext.current
         DiscoveryScreen(
           modifier = Modifier,
           isLargeScreen = false,
           discoveryController = discoveryController,
           uiDependencies = uiDependencies,
           onNavigateToChat = { id, name -> backStack.add(ChatRoute(id, name)) },
+          onRequestCapability = {
+            // v1: open the app's system Settings page. Runtime permission
+            // requests via ActivityResultContracts give a nicer first-time
+            // flow but require Activity wiring; deep-linking to Settings
+            // works for both never-asked and previously-denied states.
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+              data = Uri.fromParts("package", context.packageName, null)
+              addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            runCatching { context.startActivity(intent) }
+          },
         )
       }
       entry<ChatRoute> { key ->

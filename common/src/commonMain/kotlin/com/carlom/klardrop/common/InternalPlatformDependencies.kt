@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
+import com.carlom.klardrop.common.permissions.PermissionsMonitor
 import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
@@ -15,6 +16,7 @@ expect class InternalPlatformDependencies {
   fun getDownloadStoragePath(): Path
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun networkLifecycleMonitor(): NetworkLifecycleMonitor
+  fun permissionsMonitor(): PermissionsMonitor
   fun bleTransport(): BleTransport
   fun clipboardReaderWriter(): ClipboardReaderWriter
   fun connectionInfoJoiner(): ConnectionInfoJoiner

@@ -7,6 +7,7 @@ import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.features.FallbackClipboardConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
+import com.carlom.klardrop.common.permissions.PermissionsMonitor
 import com.carlom.klardrop.common.trust.IosTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
@@ -52,6 +53,10 @@ actual class InternalPlatformDependencies {
   private val networkLifecycleMonitor by lazy { NetworkLifecycleMonitor() }
 
   actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
+
+  private val permissionsMonitor by lazy { PermissionsMonitor() }
+
+  actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
 
   private val bleTransport by lazy { BleTransport() }
 
