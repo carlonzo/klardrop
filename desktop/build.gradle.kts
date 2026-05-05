@@ -70,3 +70,18 @@ compose.desktop {
     }
   }
 }
+
+// Compose Desktop distributions are host-locked (DMG only builds on macOS, MSI on
+// Windows, DEB on Linux). On macOS the runtime uses native Bonjour via libdns_sd,
+// so jmDNS would be dead weight in the bundle — drop it from the runtime classpath
+// when the build host is macOS so it never lands in the .app/.dmg/.pkg.
+val isMacHost: Boolean = run {
+  val osName = System.getProperty("os.name").orEmpty().lowercase()
+  osName.contains("mac") || osName.contains("darwin")
+}
+
+if (isMacHost) {
+  configurations.matching { it.name == "jvmRuntimeClasspath" }.configureEach {
+    exclude(group = "org.jmdns", module = "jmdns")
+  }
+}
