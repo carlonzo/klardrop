@@ -6,6 +6,8 @@ import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
+import com.carlom.klardrop.common.notifications.ForegroundState
+import com.carlom.klardrop.common.notifications.Notifier
 import com.carlom.klardrop.common.permissions.PermissionsMonitor
 import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.DeviceType
@@ -17,6 +19,8 @@ expect class InternalPlatformDependencies {
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun networkLifecycleMonitor(): NetworkLifecycleMonitor
   fun permissionsMonitor(): PermissionsMonitor
+  fun notifier(): Notifier
+  fun foregroundState(): ForegroundState
   fun bleTransport(): BleTransport
   fun clipboardReaderWriter(): ClipboardReaderWriter
   fun connectionInfoJoiner(): ConnectionInfoJoiner

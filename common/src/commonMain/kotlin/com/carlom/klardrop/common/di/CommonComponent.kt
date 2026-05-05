@@ -123,4 +123,8 @@ class CommonComponent(
 
   fun permissionsMonitor() = internalPlatformDependency.permissionsMonitor()
 
+  fun notifier() = internalPlatformDependency.notifier()
+
+  fun foregroundState() = internalPlatformDependency.foregroundState()
+
 }

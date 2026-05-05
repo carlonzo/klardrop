@@ -15,6 +15,8 @@ import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
+import com.carlom.klardrop.common.notifications.ForegroundState
+import com.carlom.klardrop.common.notifications.Notifier
 import com.carlom.klardrop.common.permissions.PermissionsMonitor
 import com.carlom.klardrop.common.trust.AndroidTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
@@ -45,6 +47,14 @@ actual class InternalPlatformDependencies(private val context: Context, private 
   private val permissionsMonitor by lazy { PermissionsMonitor(context) }
 
   actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
+
+  private val notifier by lazy { Notifier(context) }
+
+  actual fun notifier(): Notifier = notifier
+
+  private val foregroundState by lazy { ForegroundState(context) }
+
+  actual fun foregroundState(): ForegroundState = foregroundState
 
   actual fun bleTransport(): BleTransport = bleTransport
 
