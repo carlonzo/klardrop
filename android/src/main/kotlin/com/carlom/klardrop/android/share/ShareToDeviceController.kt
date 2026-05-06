@@ -7,6 +7,7 @@ import com.carlom.klardrop.OnDataToSend.Text
 import com.carlom.klardrop.OnDataToSend.WifiCredentials
 import com.carlom.klardrop.ShowDevicesControllerHelper
 import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -22,6 +23,7 @@ import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class ShareToDeviceController(
@@ -30,7 +32,8 @@ class ShareToDeviceController(
   private val messenger: Messenger,
   private val platformFileSystem: PlatformFileSystem,
   private val messageRepository: MessageRepository,
-  private val trustStorage: com.carlom.klardrop.common.trust.TrustStorage
+  private val trustStorage: com.carlom.klardrop.common.trust.TrustStorage,
+  private val reachabilitySource: StateFlow<Map<String, Reachability>>,
 ) {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -39,11 +42,12 @@ class ShareToDeviceController(
     messenger = commonComponent.messenger(),
     platformFileSystem = commonComponent.platformFileSystem(),
     messageRepository = commonComponent.messageRepository(),
-    trustStorage = commonComponent.trustStorage()
+    trustStorage = commonComponent.trustStorage(),
+    reachabilitySource = commonComponent.reachability(),
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher)
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage)
+  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage, reachabilitySource)
 
   private var onDataToSend: OnDataToSend? = null
 
