@@ -7,13 +7,13 @@ import androidx.core.content.edit
 /**
  * Android implementation of TrustStorage using SharedPreferences.
  * Keys are stored as Base64-encoded strings in encrypted SharedPreferences.
- * 
+ *
  * Stores both ECDH keys (for key exchange) and ECDSA keys (for message signing).
  */
 class AndroidTrustStorage(
     context: Context
 ) : TrustStorage {
-    
+
     companion object {
         private const val TRUST_PREFS = "trust_keys"
         private const val KEY_PREFIX = "trusted_device_"
@@ -22,20 +22,20 @@ class AndroidTrustStorage(
         private const val DEVICE_PUBLIC_KEY = "device_public_key"
         private const val SHARED_SECRET_PREFIX = "shared_secret_"
     }
-    
+
     private val sharedPrefs = context.getSharedPreferences(TRUST_PREFS, Context.MODE_PRIVATE)
-    
+
     override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {
         val encodedKey = Base64.encodeToString(publicKey, Base64.NO_WRAP)
         sharedPrefs.edit {
           putString(KEY_PREFIX + deviceId, encodedKey)
         }
     }
-    
+
     override suspend fun getTrustedDeviceKey(deviceId: String): ByteArray? {
         val encodedKey = sharedPrefs.getString(KEY_PREFIX + deviceId, null)
             ?: return null
-        
+
         return try {
             Base64.decode(encodedKey, Base64.NO_WRAP)
         } catch (e: IllegalArgumentException) {
@@ -44,11 +44,11 @@ class AndroidTrustStorage(
             null
         }
     }
-    
+
     override suspend fun getAllTrustedDevices(): Map<String, ByteArray> {
         val result = mutableMapOf<String, ByteArray>()
         val allEntries = sharedPrefs.all
-        
+
         for ((key, value) in allEntries) {
             if (key.startsWith(KEY_PREFIX) && value is String) {
                 val deviceId = key.removePrefix(KEY_PREFIX)
@@ -61,10 +61,10 @@ class AndroidTrustStorage(
                 }
             }
         }
-        
+
         return result
     }
-    
+
     override suspend fun removeTrustedDevice(deviceId: String) {
         sharedPrefs.edit {
             remove(KEY_PREFIX + deviceId)
@@ -88,18 +88,18 @@ class AndroidTrustStorage(
             }
         }
     }
-    
+
     override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {
         val encodedKey = Base64.encodeToString(ecdsaPublicKey, Base64.NO_WRAP)
         sharedPrefs.edit {
           putString(ECDSA_KEY_PREFIX + deviceId, encodedKey)
         }
     }
-    
+
     override suspend fun getECDSAKey(deviceId: String): ByteArray? {
         val encodedKey = sharedPrefs.getString(ECDSA_KEY_PREFIX + deviceId, null)
             ?: return null
-        
+
         return try {
             Base64.decode(encodedKey, Base64.NO_WRAP)
         } catch (e: IllegalArgumentException) {
@@ -108,33 +108,26 @@ class AndroidTrustStorage(
             null
         }
     }
-    
+
     // Device Identity Persistence Methods
-    
+
     override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {
         val encodedKey = Base64.encodeToString(privateKey, Base64.NO_WRAP)
         sharedPrefs.edit {
             putString(DEVICE_PRIVATE_KEY, encodedKey)
         }
     }
-    
+
     override suspend fun getDevicePrivateKey(): ByteArray? {
         val encodedKey = sharedPrefs.getString(DEVICE_PRIVATE_KEY, null)
             ?: return null
-        
+
         return try {
             Base64.decode(encodedKey, Base64.NO_WRAP)
         } catch (e: IllegalArgumentException) {
             // Invalid Base64 encoding - remove corrupted entry
             sharedPrefs.edit { remove(DEVICE_PRIVATE_KEY) }
             null
-        }
-    }
-    
-    override suspend fun deleteDevicePrivateKey() {
-        sharedPrefs.edit {
-            remove(DEVICE_PRIVATE_KEY)
-            remove(DEVICE_PUBLIC_KEY)
         }
     }
 
@@ -152,6 +145,13 @@ class AndroidTrustStorage(
         } catch (e: IllegalArgumentException) {
             sharedPrefs.edit { remove(DEVICE_PUBLIC_KEY) }
             null
+        }
+    }
+
+    override suspend fun deleteDevicePrivateKey() {
+        sharedPrefs.edit {
+            remove(DEVICE_PRIVATE_KEY)
+            remove(DEVICE_PUBLIC_KEY)
         }
     }
 

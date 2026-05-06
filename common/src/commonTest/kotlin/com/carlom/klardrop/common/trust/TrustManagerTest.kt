@@ -33,6 +33,13 @@ class TrustManagerTest {
 
   private fun TestScope.newManager(deviceId: String): Pair<TrustManager, InMemoryTrustStorage> {
     val storage = InMemoryTrustStorage()
+    return newManager(deviceId, storage)
+  }
+
+  private fun TestScope.newManager(
+    deviceId: String,
+    storage: InMemoryTrustStorage
+  ): Pair<TrustManager, InMemoryTrustStorage> {
     val provider = CurrentDeviceProvider(FakeLocalPropertiesRepository(deviceId))
     val manager = TrustManager(
       crypto = TrustCrypto(),
@@ -47,12 +54,69 @@ class TrustManagerTest {
   fun initializeGeneratesAndPersistsPrivateKey() = runTest {
     val (manager, storage) = newManager(aliceId)
     assertNull(storage.getDevicePrivateKey())
+    assertNull(storage.getDevicePublicKey())
 
     manager.initialize()
 
-    val stored = storage.getDevicePrivateKey()
-    assertNotNull(stored, "Device private key must be persisted after initialize()")
-    assertTrue(stored.isNotEmpty(), "Private key bytes should not be empty")
+    val storedPrivate = storage.getDevicePrivateKey()
+    assertNotNull(storedPrivate, "Device private key must be persisted after initialize()")
+    assertTrue(storedPrivate.isNotEmpty(), "Private key bytes should not be empty")
+
+    val storedPublic = storage.getDevicePublicKey()
+    assertNotNull(storedPublic, "Device public key must be persisted after initialize()")
+    assertTrue(storedPublic.isNotEmpty(), "Public key bytes should not be empty")
+  }
+
+  @Test
+  fun deviceIdentityPersistsAcrossRestartSoSignedMessagesStillVerify() = runTest {
+    // Shared backing store represents Alice's on-disk identity surviving the restart.
+    val aliceStorage = InMemoryTrustStorage()
+    val (alice1, _) = newManager(aliceId, aliceStorage)
+    val (bob, _) = newManager(bobId)
+
+    // First run: pair so Bob caches Alice's public key.
+    bob.createPairingAcceptance(alice1.createPairingRequest(bobId).getOrThrow()).getOrThrow()
+
+    val privateBefore = aliceStorage.getDevicePrivateKey()!!.copyOf()
+    val publicBefore = aliceStorage.getDevicePublicKey()!!.copyOf()
+
+    // Simulate app restart: brand-new TrustManager pointed at the same storage.
+    val (alice2, _) = newManager(aliceId, aliceStorage)
+    alice2.initialize()
+
+    val privateAfter = aliceStorage.getDevicePrivateKey()!!
+    val publicAfter = aliceStorage.getDevicePublicKey()!!
+    assertTrue(privateBefore.contentEquals(privateAfter), "Private key must NOT rotate on restart")
+    assertTrue(publicBefore.contentEquals(publicAfter), "Public key must NOT rotate on restart")
+
+    // Bob's cached public key for Alice must still verify Alice's new signatures.
+    val signed = alice2.signMessage("post-restart payload".encodeToByteArray())
+    assertNotNull(signed, "Signing must succeed after restart")
+    assertTrue(bob.verifyMessage(signed), "Bob must still trust Alice's signature after Alice restarts")
+  }
+
+  @Test
+  fun signWithDeviceKeyRoundtripsAgainstStoredPublicKey() = runTest {
+    val (manager, storage) = newManager(aliceId)
+    val crypto = TrustCrypto()
+    manager.initialize()
+
+    val data = "round-trip data".encodeToByteArray()
+    val signature = storage.signWithDeviceKey(data, crypto)
+    assertNotNull(signature, "signWithDeviceKey must return bytes when an identity exists")
+
+    val publicKey = storage.getDevicePublicKey()!!
+    assertTrue(crypto.verifyECDSA(publicKey, data, signature), "Signature must verify against the stored public key")
+  }
+
+  @Test
+  fun signMessageWorksWithoutExplicitInitialize() = runTest {
+    val (alice, aliceStorage) = newManager(aliceId)
+    // Skip explicit initialize() — signMessage must lazily set up the identity.
+    val signed = alice.signMessage("hello".encodeToByteArray())
+    assertNotNull(signed, "signMessage must lazily initialize and produce a TrustedMessage")
+    assertNotNull(aliceStorage.getDevicePrivateKey(), "Lazy initialize must persist the private key")
+    assertNotNull(aliceStorage.getDevicePublicKey(), "Lazy initialize must persist the public key")
   }
 
   @Test

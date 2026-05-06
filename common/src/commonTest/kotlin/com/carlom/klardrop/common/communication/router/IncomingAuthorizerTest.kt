@@ -42,6 +42,8 @@ class IncomingAuthorizerTest {
       override suspend fun clearAllTrustedDevices() {}
       override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {}
       override suspend fun getDevicePrivateKey(): ByteArray? = null
+      override suspend fun storeDevicePublicKey(publicKey: ByteArray) {}
+      override suspend fun getDevicePublicKey(): ByteArray? = null
       override suspend fun deleteDevicePrivateKey() {}
     }
     val localPropsRepo = object : com.carlom.klardrop.common.persistence.LocalPropertiesRepository {
