@@ -216,12 +216,15 @@ class KlardropIntegrationTest {
    * Reusing the same connection for many sequential sends after a file transfer. Validates
    * the connection survives a multi-MB transfer (heartbeat doesn't kill it mid-transfer thanks
    * to writeLock-release-per-chunk) and remains usable for further messages afterwards.
+   *
+   * Generous timeouts (vs. 60–90s elsewhere) — on slow CI runners the 1MB transfer plus two
+   * follow-up text round-trips hovers near the previous 120s/90s limits.
    */
   @Test
-  fun testTextSendsAfterFileTransferReuseSameConnection() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+  fun testTextSendsAfterFileTransferReuseSameConnection() = runTest(coroutines.dispatcher, timeout = 240.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
-    turbineScope(timeout = 90.seconds) {
+    turbineScope(timeout = 180.seconds) {
       with(testContext) {
         val fileBytes = ByteArray(1 * 1024 * 1024) { (it % 256).toByte() }
         sendAndVerifyFile("post-transfer.bin", fileBytes, "application/octet-stream")
