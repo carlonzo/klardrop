@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,10 +60,16 @@ fun WideLayout(
   val state by discoveryController.screenStateFlow.collectAsState()
   var activeDeviceId by remember { mutableStateOf<String?>(null) }
   var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
+  var showAddDevicePicker by remember { mutableStateOf(false) }
+
+  val hasTrustedDevice = state.devices.any { it.trustStatus == TrustStatus.Trusted }
+  LaunchedEffect(hasTrustedDevice) {
+    if (hasTrustedDevice) showAddDevicePicker = false
+  }
 
   // Keep the controller aware of which chat is currently open so unread-badge
   // bookkeeping suppresses badges for that device.
-  androidx.compose.runtime.LaunchedEffect(activeDeviceId) {
+  LaunchedEffect(activeDeviceId) {
     discoveryController.setActiveChatDeviceId(activeDeviceId)
   }
 
@@ -80,7 +87,8 @@ fun WideLayout(
         activeDeviceId = it.deviceId
       },
       onRequestTrust = { pendingLink = it },
-      onRemoveTrust = { discoveryController.onRemoveTrust(it) }
+      onRemoveTrust = { discoveryController.onRemoveTrust(it) },
+      onAddDeviceClick = { showAddDevicePicker = true }
     )
 
     Column(
@@ -127,6 +135,17 @@ fun WideLayout(
     )
   }
 
+  if (showAddDevicePicker) {
+    AddDevicePickerSheet(
+      candidates = state.devices.filter { it.trustStatus != TrustStatus.Trusted },
+      onDismiss = { showAddDevicePicker = false },
+      onPick = { device ->
+        showAddDevicePicker = false
+        pendingLink = device
+      }
+    )
+  }
+
   state.pairingDialogState?.let { pairingState ->
     PairingApprovalDialog(
       state = pairingState,
@@ -143,7 +162,8 @@ private fun WideSidebar(
   activeDeviceId: String?,
   onDeviceSelected: (DeviceUi) -> Unit,
   onRequestTrust: (DeviceUi) -> Unit,
-  onRemoveTrust: (DeviceUi) -> Unit
+  onRemoveTrust: (DeviceUi) -> Unit,
+  onAddDeviceClick: () -> Unit
 ) {
   val trusted = devices.filter { it.trustStatus == TrustStatus.Trusted }
   val others = devices.filter { it.trustStatus != TrustStatus.Trusted }
@@ -182,16 +202,20 @@ private fun WideSidebar(
           .fillMaxSize()
           .verticalScroll(rememberScrollState())
       ) {
-        if (trusted.isNotEmpty()) {
+        if (trusted.isNotEmpty() || others.isNotEmpty()) {
           SidebarSectionLabel("Your devices")
-          trusted.forEach { device ->
-            SidebarDeviceRow(
-              device = device,
-              isActive = device.deviceId == activeDeviceId,
-              onClick = { onDeviceSelected(device) },
-              onRequestTrust = { onRequestTrust(device) },
-              onRemoveTrust = { onRemoveTrust(device) }
-            )
+          if (trusted.isNotEmpty()) {
+            trusted.forEach { device ->
+              SidebarDeviceRow(
+                device = device,
+                isActive = device.deviceId == activeDeviceId,
+                onClick = { onDeviceSelected(device) },
+                onRequestTrust = { onRequestTrust(device) },
+                onRemoveTrust = { onRemoveTrust(device) }
+              )
+            }
+          } else {
+            SidebarAddDeviceRow(onClick = onAddDeviceClick)
           }
         }
 
@@ -345,7 +369,7 @@ private fun SidebarDeviceRow(
   }
 }
 
-private fun deviceIcon(type: DeviceType): ImageVector = when (type) {
+internal fun deviceIcon(type: DeviceType): ImageVector = when (type) {
   DeviceType.MOBILE -> Icons.Filled.Smartphone
   DeviceType.DESKTOP -> Icons.Filled.LaptopMac
   else -> Icons.Filled.Devices
