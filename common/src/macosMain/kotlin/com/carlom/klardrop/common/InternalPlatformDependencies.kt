@@ -10,7 +10,7 @@ import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.notifications.ForegroundState
 import com.carlom.klardrop.common.notifications.Notifier
 import com.carlom.klardrop.common.permissions.PermissionsMonitor
-import com.carlom.klardrop.common.trust.IosTrustStorage
+import com.carlom.klardrop.common.trust.AppleTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
@@ -86,9 +86,9 @@ actual class InternalPlatformDependencies {
   }
 
   actual fun trustStorage(): TrustStorage {
-    // Use IosTrustStorage for macOS since both are Apple platforms
-    // They both can use UserDefaults for storage
-    return IosTrustStorage()
+    // iOS and macOS share the AppleTrustStorage impl from appleMain — peer keys
+    // in NSUserDefaults, the device's own private key in the Keychain.
+    return AppleTrustStorage()
   }
 
   actual suspend fun openFile(filePath: String): Boolean {
