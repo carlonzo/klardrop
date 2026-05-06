@@ -160,4 +160,25 @@ interface TrustStorage {
      * pairings that pre-date this field — callers fall back to per-frame ECDSA signing.
      */
     suspend fun getSharedSecret(deviceId: String): ByteArray? = null
+
+    /**
+     * Ensure this device has an identity keypair, generating one if none exists,
+     * and return the public key.
+     *
+     * Default implementation generates a fresh keypair through [crypto] and
+     * persists both halves via [storeDevicePrivateKey] / [storeDevicePublicKey].
+     * Platforms backed by a secure store that generates keys in-place (Android
+     * Keystore, Apple Keychain) override this to skip the byte-array round trip
+     * and read the public key out of the secure store instead.
+     */
+    suspend fun ensureDeviceKey(crypto: TrustCrypto): TrustCrypto.ECDSAPublicKey {
+        val storedPublic = getDevicePublicKey()
+        if (hasDeviceKey() && storedPublic != null) {
+            return TrustCrypto.ECDSAPublicKey(storedPublic)
+        }
+        val fresh = crypto.generateECDSAKeyPair()
+        storeDevicePrivateKey(fresh.privateKey.data)
+        storeDevicePublicKey(fresh.publicKey.data)
+        return fresh.publicKey
+    }
 }

@@ -69,19 +69,8 @@ class TrustManager(
    */
   suspend fun initialize() {
     if (deviceECDSAPublicKey != null) return
-
-    val storedPublic = storage.getDevicePublicKey()
-    if (storage.hasDeviceKey() && storedPublic != null) {
-      deviceECDSAPublicKey = TrustCrypto.ECDSAPublicKey(storedPublic)
-      log("🔐 TrustManager", "Loaded persisted device identity")
-      return
-    }
-
-    val fresh = crypto.generateECDSAKeyPair()
-    storage.storeDevicePrivateKey(fresh.privateKey.data)
-    storage.storeDevicePublicKey(fresh.publicKey.data)
-    deviceECDSAPublicKey = fresh.publicKey
-    log("🔐 TrustManager", "Generated and stored new device identity")
+    deviceECDSAPublicKey = storage.ensureDeviceKey(crypto)
+    log("🔐 TrustManager", "Device identity ready")
   }
 
   /**
