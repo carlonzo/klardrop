@@ -16,6 +16,7 @@ import com.carlom.klardrop.WideLayout
 import com.carlom.klardrop.chat.DeviceChatScreen
 import platform.Foundation.NSURL
 import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationOpenSettingsURLString
 
 @Composable
 actual fun KlardropNavigator(
@@ -52,7 +53,7 @@ actual fun KlardropNavigator(
         // Bluetooth — Apple wants the system to prompt at the moment of first
         // use. Best we can do for "the user came back to grant after denying"
         // is deep-link to the app's Settings page.
-        val url = NSURL.URLWithString(UIApplication.openSettingsURLString)
+        val url = NSURL.URLWithString(UIApplicationOpenSettingsURLString)
         if (url != null) {
           UIApplication.sharedApplication.openURL(url)
         }
