@@ -46,6 +46,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,10 +65,14 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.carlom.klardrop.common.communication.message.FileMessage as ProtoFileMessage
+import com.carlom.klardrop.common.communication.message.TextMessage as ProtoTextMessage
 import com.carlom.klardrop.common.database.Messages
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageType
+import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
+import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.FileTypeUtils
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
@@ -89,6 +94,7 @@ fun DeviceChatScreen(
 ) {
   val messagesState by viewModel.messages.collectAsState()
   val uiState by viewModel.uiState.collectAsState()
+  val pendingAuth by viewModel.pendingAuth.collectAsState()
   var textToSend by remember { mutableStateOf("") }
   var attachmentMenuOpen by remember { mutableStateOf(false) }
 
@@ -175,6 +181,10 @@ fun DeviceChatScreen(
           end = paddingValues.calculateEndPadding(layoutDirection)
         )
     ) {
+      pendingAuth?.let { update ->
+        IncomingAuthBanner(update = update)
+      }
+
       if (sortedMessages.isEmpty()) {
         ChatEmptyState(
           deviceName = deviceName,
@@ -205,6 +215,63 @@ fun DeviceChatScreen(
         onPickMedia = { imagePickerLauncher.launch() },
         bottomPadding = paddingValues.calculateBottomPadding()
       )
+    }
+  }
+}
+
+/**
+ * Inline banner shown above the message list when an untrusted device is trying to send
+ * something to us and we're awaiting the user's accept/reject decision. The accept callback
+ * is embedded in [ReceiveMessageStatus.PendingAuthorization] itself, so this composable
+ * doesn't need any extra wiring back to the ViewModel — clicking the button calls into
+ * the suspended [com.carlom.klardrop.common.communication.router.IncomingAuthorizer] directly.
+ */
+@Composable
+private fun IncomingAuthBanner(update: ReceiveMessageUpdate) {
+  val status = update.status as? ReceiveMessageStatus.PendingAuthorization ?: return
+  val sender = update.device?.name ?: "this device"
+  val preview = update.messages.firstOrNull()?.let { msg ->
+    when (msg) {
+      is ProtoTextMessage -> "“${msg.text.take(80)}”"
+      is ProtoFileMessage -> msg.fileName
+      else -> null
+    }
+  }
+
+  Surface(
+    color = MaterialTheme.colorScheme.tertiaryContainer,
+    tonalElevation = 2.dp,
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(horizontal = 12.dp, vertical = 8.dp),
+    shape = RoundedCornerShape(12.dp)
+  ) {
+    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+      Text(
+        text = "$sender wants to send you ${if (update.messages.size == 1) "an item" else "${update.messages.size} items"}",
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onTertiaryContainer
+      )
+      if (preview != null) {
+        Spacer(Modifier.height(2.dp))
+        Text(
+          text = preview,
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onTertiaryContainer,
+          maxLines = 1
+        )
+      }
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End
+      ) {
+        TextButton(onClick = { status.acceptTransfer(false) }) {
+          Text("Reject")
+        }
+        TextButton(onClick = { status.acceptTransfer(true) }) {
+          Text("Accept")
+        }
+      }
     }
   }
 }
@@ -588,6 +655,29 @@ private fun FileMessageBubble(
             text = "Transfer failed",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.error
+          )
+        }
+
+        FileTransferStatus.REJECTED.name -> {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Default.ErrorOutline,
+              contentDescription = null,
+              tint = onContainer.copy(alpha = 0.7f),
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+              text = fileName,
+              style = MaterialTheme.typography.titleSmall.copy(textDecoration = TextDecoration.LineThrough),
+              color = onContainer
+            )
+          }
+          Spacer(Modifier.height(4.dp))
+          Text(
+            text = if (isSender) "Declined by recipient" else "Declined",
+            style = MaterialTheme.typography.labelSmall,
+            color = onContainer.copy(alpha = 0.7f)
           )
         }
 

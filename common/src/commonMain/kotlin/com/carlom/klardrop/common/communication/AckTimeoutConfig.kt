@@ -37,6 +37,9 @@ data class AckTimeoutConfig(
   fun timeoutFor(ackType: AckType, hasPayload: Boolean): Duration = when (ackType) {
     AckType.READY -> readyAckTimeout
     AckType.RECEIVED -> if (hasPayload) receivedAckTimeout else noPayloadAckTimeout
+    // REJECTED is registered alongside RECEIVED/READY and races them in the same
+    // withTimeout block — its independent timeout is never directly waited on.
+    AckType.REJECTED -> if (hasPayload) receivedAckTimeout else noPayloadAckTimeout
   }
 
   companion object {

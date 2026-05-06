@@ -193,6 +193,17 @@ class MessagesRouterImplTest {
     mockMessageSerializer = MessageSerializer(ProtoBuf, mockCoroutines)
     mockMessageReceiver = MockMessageReceiver()
 
+    val mockTrustManager = createMockTrustManager()
+    // Auto-accepting authorizer keeps these routing tests focused on dispatch logic,
+    // not the trust/authorization gate (covered by IncomingAuthorizerTest).
+    val autoAcceptAuthorizer = object : IncomingAuthorizer(mockTrustManager) {
+      override suspend fun authorize(
+        fromDeviceId: String,
+        kind: TransferKind,
+        headers: List<Message>,
+        receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+      ): Boolean = true
+    }
     messagesRouter = MessagesRouterImpl(
       handlers = mockMessageHandlers,
       fileMessageHandler = com.carlom.klardrop.common.communication.message.FileMessageHandler(
@@ -210,7 +221,8 @@ class MessagesRouterImplTest {
       messageSerializer = mockMessageSerializer,
       coroutines = mockCoroutines,
       messengeReceiver = mockMessageReceiver,
-      trustManager = createMockTrustManager()
+      trustManager = mockTrustManager,
+      incomingAuthorizer = autoAcceptAuthorizer,
     )
   }
 

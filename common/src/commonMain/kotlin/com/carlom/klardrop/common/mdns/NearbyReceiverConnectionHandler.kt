@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.router.IncomingAuthorizer
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.toDeviceType
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
@@ -20,7 +21,6 @@ import com.google.location.nearby.connections.proto.PayloadTransferFrame.Payload
 import com.google.security.cryptauth.lib.securegcm.DeviceType
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -39,6 +39,7 @@ import kotlin.random.Random
 class NearbyReceiverConnectionHandler(
   private val fileManager: FileManager,
   coroutines: Coroutines,
+  private val incomingAuthorizer: IncomingAuthorizer,
 ) {
 
   private val messagesToReceive = mutableMapOf<Long, Message>()
@@ -97,13 +98,27 @@ class NearbyReceiverConnectionHandler(
 
       }
 
-      // simulate user to accept the transfer
-      delay(500)
+      // Ask the user to authorize the transfer. Trusted senders auto-accept; everyone
+      // else gets a banner/chat prompt and we suspend here until they pick. Treat the
+      // whole bundle as a FILE-kind transfer so files always prompt regardless of the
+      // text-flows-after-first-contact rule (Nearby bundles can mix files and text).
+      val deviceId = receiveFlow.value.device?.deviceId.orEmpty()
+      val authorized = incomingAuthorizer.authorize(
+        fromDeviceId = deviceId,
+        kind = IncomingAuthorizer.TransferKind.FILE,
+        headers = messagesToReceive.values.toList(),
+        receiveFlow = receiveFlow,
+      )
 
-      // just accept directly
       keepAliveWhileWaitingJob.cancel()
       // await the keepalive job is completed
       mutexKeepAlive.withLock { }
+
+      if (!authorized) {
+        log("NearbyReceiverConnectionHandler", "User rejected Nearby transfer from $deviceId")
+        rejectTransfer(nearbyConnection, writeChannel)
+        return
+      }
 
       acceptTransfer(nearbyConnection, writeChannel)
 
@@ -241,6 +256,21 @@ class NearbyReceiverConnectionHandler(
         type = sharing.nearby.V1Frame.FrameType.RESPONSE,
         connection_response = sharing.nearby.ConnectionResponseFrame(
           status = sharing.nearby.ConnectionResponseFrame.Status.ACCEPT
+        )
+      )
+    )
+
+    sendEncryptedWrappedPayload(frame, writeChannel, nearbyConnection)
+  }
+
+  private suspend fun rejectTransfer(nearbyConnection: D2DConnectionContext, writeChannel: ByteWriteChannel) {
+    log("NearbyReceiverConnectionHandler", "rejectTransfer")
+    val frame = Frame(
+      version = Frame.Version.V1,
+      v1 = sharing.nearby.V1Frame(
+        type = sharing.nearby.V1Frame.FrameType.RESPONSE,
+        connection_response = sharing.nearby.ConnectionResponseFrame(
+          status = sharing.nearby.ConnectionResponseFrame.Status.REJECT
         )
       )
     )

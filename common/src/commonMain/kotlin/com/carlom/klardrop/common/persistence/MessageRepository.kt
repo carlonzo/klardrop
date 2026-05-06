@@ -52,7 +52,7 @@ interface MessageRepository {
 }
 
 enum class MessageType { TEXT, FILE }
-enum class FileTransferStatus { IN_PROGRESS, COMPLETED, FAILED }
+enum class FileTransferStatus { IN_PROGRESS, COMPLETED, FAILED, REJECTED }
 
 class MessageRepositoryImpl(
   private val database: AppDatabase,

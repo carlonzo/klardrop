@@ -326,11 +326,6 @@ class FileMessageHandler(
     coroutines.ioDispatcher.invoke {
       progressFlow.emit(MessengerSendProgress.InProgress(0))
 
-      sendFramed(request.message)
-      awaitReady()
-
-      log("FileMessageHandler", "Sending file ${request.message.fileName} (${request.message.fileSize} bytes)")
-
       val buffer = ByteArray(FILE_CHUNK_SIZE)
       var totalSent = 0L
       var seq = 0
@@ -338,7 +333,15 @@ class FileMessageHandler(
       var lastEmitPercent = -1
 
       val start = clock.currentTimeMillis()
-      runCatching {
+      try {
+        sendFramed(request.message)
+        // awaitReady() can now throw TransferRejectedException if the receiver declined
+        // the transfer before any bytes were streamed — handled distinctly below so the
+        // file_transfers row is marked REJECTED instead of FAILED.
+        awaitReady()
+
+        log("FileMessageHandler", "Sending file ${request.message.fileName} (${request.message.fileSize} bytes)")
+
         // Empty file: still send a single isLast=true chunk so the receiver finalizes.
         if (request.message.fileSize == 0L) {
           sendFramed(
@@ -382,16 +385,20 @@ class FileMessageHandler(
             }
           }
         }
-      }.onSuccess {
+
         progressFlow.emit(MessengerSendProgress.InProgress(100))
         val durationMs = clock.currentTimeMillis() - start
         val kbPerSec = if (durationMs > 0) (totalSent * 1000 / durationMs / 1024) else 0
         log("FileMessageHandler", "Sent ${request.message.fileName} ($totalSent bytes) in ${durationMs}ms ($kbPerSec KB/s)")
         messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
-      }.onFailure {
-        log("FileMessageHandler", "Error sending file", it)
+      } catch (e: TransferRejectedException) {
+        log("FileMessageHandler", "File rejected by recipient: ${request.message.fileName}")
+        messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.REJECTED)
+        throw e
+      } catch (e: Throwable) {
+        log("FileMessageHandler", "Error sending file", e)
         messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
-        throw it
+        throw e
       }
     }
   }
