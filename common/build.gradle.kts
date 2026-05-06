@@ -95,6 +95,7 @@ kotlin {
     val desktopJvmMain by getting {
       dependencies {
         implementation(deps.jmdns)
+        implementation(deps.jna)
         implementation(deps.bugsnag.jvm)
         implementation(deps.sqldelight.sqlite.driver)
         implementation(deps.kotlinx.serialization.json)
