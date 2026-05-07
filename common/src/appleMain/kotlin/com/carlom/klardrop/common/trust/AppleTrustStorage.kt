@@ -1,32 +1,33 @@
 package com.carlom.klardrop.common.trust
 
 import kotlinx.cinterop.BetaInteropApi
-import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.UByteVar
+import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArrayOf
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.reinterpret
+import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import platform.CoreFoundation.CFBridgingRelease
+import platform.CoreFoundation.CFDataCreate
+import platform.CoreFoundation.CFDataGetBytePtr
+import platform.CoreFoundation.CFDataGetLength
 import platform.CoreFoundation.CFDataRef
+import platform.CoreFoundation.CFDictionaryCreateMutable
 import platform.CoreFoundation.CFDictionaryRef
+import platform.CoreFoundation.CFDictionarySetValue
 import platform.CoreFoundation.CFErrorRefVar
 import platform.CoreFoundation.CFRelease
 import platform.CoreFoundation.CFTypeRefVar
-import platform.Foundation.CFBridgingRetain
-import platform.Foundation.NSData
-import platform.Foundation.NSDictionary
-import platform.Foundation.NSMutableDictionary
-import platform.Foundation.NSNumber
+import platform.CoreFoundation.kCFBooleanTrue
+import platform.CoreFoundation.kCFTypeDictionaryKeyCallBacks
+import platform.CoreFoundation.kCFTypeDictionaryValueCallBacks
 import platform.Foundation.NSUserDefaults
-import platform.Foundation.create
-import platform.Foundation.dataWithBytes
-import platform.Foundation.numberWithBool
-import platform.Foundation.numberWithInt
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
 import platform.Security.SecKeyCopyExternalRepresentation
@@ -34,7 +35,6 @@ import platform.Security.SecKeyCopyPublicKey
 import platform.Security.SecKeyCreateRandomKey
 import platform.Security.SecKeyCreateSignature
 import platform.Security.SecKeyRef
-import platform.Security.errSecItemNotFound
 import platform.Security.errSecSuccess
 import platform.Security.kSecAttrAccessible
 import platform.Security.kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
@@ -60,12 +60,12 @@ import platform.darwin.OSStatus
  *
  * Peer ECDH/ECDSA public keys are stored in NSUserDefaults (not secret).
  * The device's own ECDSA P-256 private key lives in the Keychain as a
- * permanent, non-exportable item identified by [DEVICE_KEY_TAG]. Signing
+ * permanent, non-exportable item identified by `DEVICE_KEY_TAG`. Signing
  * happens inside the Keychain via [signWithDeviceKey] and the private bytes
  * never leave the secure store.
  *
- * The Keychain item uses `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`,
- * so the key is unavailable before the first unlock after a reboot, never
+ * The Keychain item uses `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`
+ * so the key is unavailable before first unlock after a reboot, never
  * leaves the device, and is not synchronized via iCloud Keychain.
  */
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
@@ -83,7 +83,6 @@ class AppleTrustStorage : TrustStorage {
 
     private val mutex = Mutex()
     private val userDefaults = NSUserDefaults.standardUserDefaults
-    private val tagData: NSData by lazy { DEVICE_KEY_TAG.encodeToByteArray().toNSData() }
 
     // ---- Peer trust map (NSUserDefaults — not secret) ----
 
@@ -217,30 +216,33 @@ class AppleTrustStorage : TrustStorage {
     override suspend fun signWithDeviceKey(data: ByteArray, crypto: TrustCrypto): ByteArray? = mutex.withLock {
         val privateRef = findDeviceKey() ?: return@withLock null
         try {
-            memScoped {
-                val errVar = alloc<CFErrorRefVar>()
-                val payload = data.toNSData()
-                val cfPayload = CFBridgingRetain(payload) as CFDataRef
-                val derSignature = try {
-                    SecKeyCreateSignature(
+            val cfPayload = data.toCFData()
+            try {
+                memScoped {
+                    val errVar = alloc<CFErrorRefVar>()
+                    val derRef = SecKeyCreateSignature(
                         privateRef,
                         kSecKeyAlgorithmECDSASignatureMessageX962SHA256,
                         cfPayload,
                         errVar.ptr
                     )
-                } finally {
-                    CFRelease(cfPayload)
+                    if (derRef == null) {
+                        errVar.value?.let { CFRelease(it) }
+                        return@memScoped null
+                    }
+                    try {
+                        val derBytes = derRef.toByteArray()
+                        try {
+                            EcdsaSignatureFormat.derToRaw(derBytes)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    } finally {
+                        CFRelease(derRef)
+                    }
                 }
-                if (derSignature == null) {
-                    errVar.value?.let { CFRelease(it) }
-                    return@memScoped null
-                }
-                val derBytes = (CFBridgingRelease(derSignature) as NSData).toByteArray()
-                try {
-                    EcdsaSignatureFormat.derToRaw(derBytes)
-                } catch (_: Exception) {
-                    null
-                }
+            } finally {
+                CFRelease(cfPayload)
             }
         } finally {
             CFRelease(privateRef)
@@ -265,68 +267,81 @@ class AppleTrustStorage : TrustStorage {
     // ---- Keychain helpers ----
 
     private fun findDeviceKey(): SecKeyRef? = memScoped {
-        val query = NSMutableDictionary().apply {
-            setObject(kSecClassKey, kSecClass!!)
-            setObject(tagData, kSecAttrApplicationTag!!)
-            setObject(kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeyType!!)
-            setObject(kSecAttrKeyClassPrivate, kSecAttrKeyClass!!)
-            setObject(kSecMatchLimitOne, kSecMatchLimit!!)
-            setObject(NSNumber.numberWithBool(true), kSecReturnRef!!)
+        val query = newCfDict {
+            set(kSecClass, kSecClassKey)
+            set(kSecAttrApplicationTag, deviceKeyTag())
+            set(kSecAttrKeyType, kSecAttrKeyTypeECSECPrimeRandom)
+            set(kSecAttrKeyClass, kSecAttrKeyClassPrivate)
+            set(kSecMatchLimit, kSecMatchLimitOne)
+            set(kSecReturnRef, kCFBooleanTrue)
         }
-        val out = alloc<CFTypeRefVar>()
-        val status: OSStatus = SecItemCopyMatching(query.bridgeAsCFDictionary(), out.ptr)
-        when (status) {
-            errSecSuccess -> out.value?.reinterpret()
-            errSecItemNotFound -> null
-            else -> null
+        try {
+            val out = alloc<CFTypeRefVar>()
+            val status: OSStatus = SecItemCopyMatching(query, out.ptr)
+            if (status == errSecSuccess) out.value?.reinterpret() else null
+        } finally {
+            CFRelease(query)
+            // The CFData passed via kSecAttrApplicationTag was owned by us; CFRelease
+            // is handled by the dict's value release callback (kCFTypeDictionaryValueCallBacks).
         }
     }
 
     private fun generateDeviceKey(): SecKeyRef? = memScoped {
-        val privateAttrs = NSMutableDictionary().apply {
-            setObject(NSNumber.numberWithBool(true), kSecAttrIsPermanent!!)
-            setObject(tagData, kSecAttrApplicationTag!!)
-            setObject(kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, kSecAttrAccessible!!)
+        val privateAttrs = newCfDict {
+            set(kSecAttrIsPermanent, kCFBooleanTrue)
+            set(kSecAttrApplicationTag, deviceKeyTag())
+            set(kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
         }
-        val parameters = NSMutableDictionary().apply {
-            setObject(kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeyType!!)
-            setObject(NSNumber.numberWithInt(P256_KEY_SIZE_BITS), kSecAttrKeySizeInBits!!)
-            setObject(DEVICE_KEY_LABEL, kSecAttrLabel!!)
-            setObject(privateAttrs, kSecPrivateKeyAttrs!!)
+        val parameters = newCfDict {
+            set(kSecAttrKeyType, kSecAttrKeyTypeECSECPrimeRandom)
+            set(kSecAttrKeySizeInBits, P256_KEY_SIZE_BITS.toCFNumber())
+            set(kSecAttrLabel, DEVICE_KEY_LABEL.toCFString())
+            set(kSecPrivateKeyAttrs, privateAttrs)
         }
-        val errVar = alloc<CFErrorRefVar>()
-        val key = SecKeyCreateRandomKey(parameters.bridgeAsCFDictionary(), errVar.ptr)
-        if (key == null) errVar.value?.let { CFRelease(it) }
-        key
+        try {
+            val errVar = alloc<CFErrorRefVar>()
+            val key = SecKeyCreateRandomKey(parameters, errVar.ptr)
+            if (key == null) errVar.value?.let { CFRelease(it) }
+            key
+        } finally {
+            CFRelease(parameters)
+            CFRelease(privateAttrs)
+        }
     }
 
     private fun deleteDeviceKey() {
-        memScoped {
-            val query = NSMutableDictionary().apply {
-                setObject(kSecClassKey, kSecClass!!)
-                setObject(tagData, kSecAttrApplicationTag!!)
-                setObject(kSecAttrKeyTypeECSECPrimeRandom, kSecAttrKeyType!!)
-            }
-            SecItemDelete(query.bridgeAsCFDictionary())
+        val query = newCfDict {
+            set(kSecClass, kSecClassKey)
+            set(kSecAttrApplicationTag, deviceKeyTag())
+            set(kSecAttrKeyType, kSecAttrKeyTypeECSECPrimeRandom)
+        }
+        try {
+            SecItemDelete(query)
+        } finally {
+            CFRelease(query)
         }
     }
 
-    private fun exportPublicKey(privateRef: SecKeyRef): ByteArray? {
-        val publicRef = SecKeyCopyPublicKey(privateRef) ?: return null
+    private fun exportPublicKey(privateRef: SecKeyRef): ByteArray? = memScoped {
+        val publicRef = SecKeyCopyPublicKey(privateRef) ?: return@memScoped null
         try {
-            memScoped {
-                val errVar = alloc<CFErrorRefVar>()
-                val data = SecKeyCopyExternalRepresentation(publicRef, errVar.ptr)
-                if (data == null) {
-                    errVar.value?.let { CFRelease(it) }
-                    return null
-                }
-                return (CFBridgingRelease(data) as NSData).toByteArray()
+            val errVar = alloc<CFErrorRefVar>()
+            val data = SecKeyCopyExternalRepresentation(publicRef, errVar.ptr)
+            if (data == null) {
+                errVar.value?.let { CFRelease(it) }
+                return@memScoped null
+            }
+            try {
+                data.toByteArray()
+            } finally {
+                CFRelease(data)
             }
         } finally {
             CFRelease(publicRef)
         }
     }
+
+    private fun deviceKeyTag(): CFDataRef = DEVICE_KEY_TAG.encodeToByteArray().toCFData()
 
     private fun readBase64(key: String): ByteArray? {
         val encoded = userDefaults.stringForKey(key) ?: return null
@@ -337,32 +352,69 @@ class AppleTrustStorage : TrustStorage {
             }
         }
     }
+
 }
 
-// ---- NSData / CFDictionary helpers ----
+// ---- CoreFoundation helpers ----
 
-@OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-private fun ByteArray.toNSData(): NSData {
-    if (isEmpty()) return NSData.dataWithBytes(null, 0u)
+@OptIn(ExperimentalForeignApi::class)
+private fun ByteArray.toCFData(): CFDataRef {
+    if (isEmpty()) {
+        return CFDataCreate(null, null, 0)!!
+    }
     return memScoped {
-        val pinned = allocArrayOf(this@toNSData)
-        NSData.create(bytes = pinned, length = this@toNSData.size.toULong())
+        val pinned = allocArrayOf(this@toCFData)
+        CFDataCreate(null, pinned.reinterpret(), size.toLong())!!
     }
 }
 
 @OptIn(ExperimentalForeignApi::class)
-private fun NSData.toByteArray(): ByteArray {
-    val len = length.toInt()
-    if (len == 0) return ByteArray(0)
-    val out = ByteArray(len)
-    val src = bytes ?: return out
-    val srcBytes = src.reinterpret<ByteVar>()
-    for (i in 0 until len) {
-        out[i] = srcBytes[i]
+private fun CFDataRef.toByteArray(): ByteArray {
+    val length = CFDataGetLength(this).toInt()
+    if (length == 0) return ByteArray(0)
+    val src: CPointer<UByteVar> = CFDataGetBytePtr(this) ?: return ByteArray(0)
+    val out = ByteArray(length)
+    val byteSrc: CPointer<kotlinx.cinterop.ByteVar> = src.reinterpret()
+    out.usePinned { pinned ->
+        platform.posix.memcpy(pinned.addressOf(0), byteSrc, length.toULong())
     }
     return out
 }
 
+@OptIn(ExperimentalForeignApi::class)
+private fun Int.toCFNumber(): platform.CoreFoundation.CFNumberRef = memScoped {
+    val intVar = alloc<kotlinx.cinterop.IntVar>()
+    intVar.value = this@toCFNumber
+    platform.CoreFoundation.CFNumberCreate(
+        null,
+        platform.CoreFoundation.kCFNumberIntType,
+        intVar.ptr
+    )!!
+}
+
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-private fun NSDictionary.bridgeAsCFDictionary(): CFDictionaryRef =
-    CFBridgingRetain(this)?.reinterpret() ?: error("Failed to bridge NSDictionary to CFDictionaryRef")
+private fun String.toCFString(): platform.CoreFoundation.CFStringRef =
+    platform.CoreFoundation.CFStringCreateWithCString(
+        null,
+        this,
+        platform.CoreFoundation.kCFStringEncodingUTF8
+    )!!
+
+@OptIn(ExperimentalForeignApi::class)
+private inline fun newCfDict(builder: CfDictBuilder.() -> Unit): platform.CoreFoundation.CFMutableDictionaryRef {
+    val dict = CFDictionaryCreateMutable(
+        null,
+        0,
+        kCFTypeDictionaryKeyCallBacks.ptr,
+        kCFTypeDictionaryValueCallBacks.ptr
+    )!!
+    CfDictBuilder(dict).builder()
+    return dict
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private class CfDictBuilder(private val dict: platform.CoreFoundation.CFMutableDictionaryRef) {
+    fun set(key: kotlinx.cinterop.COpaquePointer?, value: kotlinx.cinterop.COpaquePointer?) {
+        CFDictionarySetValue(dict, key, value)
+    }
+}

@@ -75,7 +75,7 @@ interface TrustStorage {
     // devices are trivially exfiltrated. The private key never has to leave the secure
     // store — implementations should override [signWithDeviceKey] to sign in-place. The
     // [getDevicePrivateKey] / [storeDevicePrivateKey] byte-array path exists only for
-    // tests, fallback paths, and one-shot legacy migration.
+    // tests and the desktop fallback path.
     //
     // The matching public key is NOT a secret and may live in any persistent storage.
 

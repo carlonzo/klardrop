@@ -110,6 +110,23 @@ class TrustManagerTest {
   }
 
   @Test
+  fun secondInitializeReusesExistingKeypair() = runTest {
+    val storage = InMemoryTrustStorage()
+    val (manager1, _) = newManager(aliceId, storage)
+    manager1.initialize()
+    val publicAfterFirst = storage.getDevicePublicKey()!!.copyOf()
+
+    val (manager2, _) = newManager(aliceId, storage)
+    manager2.initialize()
+    val publicAfterSecond = storage.getDevicePublicKey()!!
+
+    assertTrue(
+      publicAfterFirst.contentEquals(publicAfterSecond),
+      "Second initialize() must not regenerate the keypair"
+    )
+  }
+
+  @Test
   fun signMessageWorksWithoutExplicitInitialize() = runTest {
     val (alice, aliceStorage) = newManager(aliceId)
     // Skip explicit initialize() — signMessage must lazily set up the identity.
