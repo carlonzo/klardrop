@@ -10,6 +10,7 @@ import com.carlom.klardrop.common.discovery.NearbyShareDiscoveryUtils.Companion.
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryEvent
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.mdns.ServiceInfo
+import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
@@ -33,6 +34,7 @@ class DiscoveryNetwork internal constructor(
   private val klardropDiscoveryUtils: KlardropDiscoveryUtils,
   private val currentDeviceProvider: CurrentDeviceProvider,
   private val bleTransport: BleTransport,
+  private val networkLifecycleMonitor: NetworkLifecycleMonitor,
 ) {
 
   private val discoveryScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -46,6 +48,46 @@ class DiscoveryNetwork internal constructor(
 
   private var bleAdvertiseJob: Job? = null
   private var bleScanJob: Job? = null
+
+  private var klardropDiscoveryJob: Job? = null
+  private var nearbyDiscoveryJob: Job? = null
+  private var lifecycleSubscription: Job? = null
+
+  init {
+    startNetworkLifecycleSubscription()
+  }
+
+  /**
+   * On a [com.carlom.klardrop.common.network.NetworkChangeEvent] (NIC up/down,
+   * sleep/wake, address change) we tear down the mDNS internals and re-issue
+   * every active discovery + publish. Without this, after sleep on JVM the
+   * jmDNS instances stay bound to stale sockets and silently stop receiving
+   * announcements. Restarting + re-launching the discovery jobs is the
+   * blunt-but-reliable recovery.
+   */
+  private fun startNetworkLifecycleSubscription() {
+    if (lifecycleSubscription != null) return
+    lifecycleSubscription = networkLifecycleMonitor.observe()
+      .onEach {
+        log("DiscoveryNetwork", "Network change detected; rebuilding mDNS state")
+        rebuildMdnsState()
+      }
+      .launchIn(discoveryScope)
+  }
+
+  private suspend fun rebuildMdnsState() {
+    runCatching { serviceDiscoveryMdns.restart() }
+      .onFailure { log("DiscoveryNetwork", "mDNS restart failed: ${it.message}") }
+
+    // Re-launch any active discovery flows so they bind to the freshly
+    // rebuilt mDNS instances.
+    if (klardropDiscoveryJob != null) discoveryKlardropDevices()
+    if (nearbyDiscoveryJob != null) discoveryNearbyShareDevices()
+
+    // Re-publish active services on the same ports.
+    klardropPort?.let { republishKlardrop(it) }
+    nearbySharePort?.let { republishNearbyShare(it) }
+  }
 
 
   fun startPublishNearbyShare(port: Int) {
@@ -97,7 +139,8 @@ class DiscoveryNetwork internal constructor(
 
   fun discoveryNearbyShareDevices() {
 
-    serviceDiscoveryMdns.discoverServices(NEARBY_SERVICE_TYPE)
+    nearbyDiscoveryJob?.cancel()
+    nearbyDiscoveryJob = serviceDiscoveryMdns.discoverServices(NEARBY_SERVICE_TYPE)
       .onCompletion { log("DiscoveryNetwork", "Discovery completed for Nearby discovery") }
       .onEach {
 
@@ -129,7 +172,8 @@ class DiscoveryNetwork internal constructor(
 
   fun discoveryKlardropDevices() {
 
-    serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE)
+    klardropDiscoveryJob?.cancel()
+    klardropDiscoveryJob = serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE)
       .onCompletion { log("DiscoveryNetwork", "Discovery completed for Klardrop discovery") }
       .onEach {
         log("DiscoveryNetwork", "New discovery event for Klardrop: $it")

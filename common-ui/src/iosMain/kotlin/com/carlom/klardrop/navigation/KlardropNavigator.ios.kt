@@ -14,6 +14,9 @@ import com.carlom.klardrop.TrustStatus
 import com.carlom.klardrop.UiDependencies
 import com.carlom.klardrop.WideLayout
 import com.carlom.klardrop.chat.DeviceChatScreen
+import platform.Foundation.NSURL
+import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationOpenSettingsURLString
 
 @Composable
 actual fun KlardropNavigator(
@@ -45,6 +48,16 @@ actual fun KlardropNavigator(
       discoveryController = discoveryController,
       uiDependencies = uiDependencies,
       onNavigateToChat = { id, name -> chatTarget = id to name },
+      onRequestCapability = {
+        // iOS doesn't expose runtime permission requests for Local Network /
+        // Bluetooth — Apple wants the system to prompt at the moment of first
+        // use. Best we can do for "the user came back to grant after denying"
+        // is deep-link to the app's Settings page.
+        val url = NSURL.URLWithString(UIApplicationOpenSettingsURLString)
+        if (url != null) {
+          UIApplication.sharedApplication.openURL(url)
+        }
+      },
     )
   } else {
     val (deviceId, deviceName) = currentTarget

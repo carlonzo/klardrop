@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.CommonPlatformDependencies
+import com.carlom.klardrop.common.permissions.Capability
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.trust.TrustActionButton
 import io.github.vinceglb.filekit.dialogs.FileKitMode
@@ -79,10 +80,12 @@ fun DiscoveryScreen(
   isLargeScreen: Boolean = false,
   discoveryController: DiscoveryController,
   uiDependencies: UiDependencies,
-  onNavigateToChat: (deviceId: String, deviceName: String) -> Unit
+  onNavigateToChat: (deviceId: String, deviceName: String) -> Unit,
+  onRequestCapability: (Capability) -> Unit = {},
 ) {
 
   val discoveryState by discoveryController.screenStateFlow.collectAsState()
+  val permissionsState by discoveryController.permissionsState.collectAsState()
   val deviceUiClicked = remember<DeviceUi?> { null }
 
   val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
@@ -129,9 +132,11 @@ fun DiscoveryScreen(
         modifier = modifier,
         isLargeScreen = isLargeScreen,
         state = discoveryState,
+        permissionsState = permissionsState,
         onDeviceActionListener = dashboardListener,
         receiveCallbacks = discoveryController,
-        onDeviceRename = { newName -> discoveryController.saveCustomDeviceName(newName) }
+        onDeviceRename = { newName -> discoveryController.saveCustomDeviceName(newName) },
+        onRequestCapability = onRequestCapability,
       )
 
     }
@@ -152,9 +157,11 @@ private fun DiscoveryDashboard(
   modifier: Modifier = Modifier,
   isLargeScreen: Boolean = false,
   state: DiscoveryScreenState,
+  permissionsState: com.carlom.klardrop.common.permissions.PermissionsState,
   onDeviceActionListener: OnDeviceActionListener,
   receiveCallbacks: ReceiveNotificationsCallbacks,
-  onDeviceRename: (String) -> Unit
+  onDeviceRename: (String) -> Unit,
+  onRequestCapability: (Capability) -> Unit,
 ) {
   var showRenameSheet by remember { mutableStateOf(false) }
   var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
@@ -185,6 +192,11 @@ private fun DiscoveryDashboard(
     IncomingBannerStack(
       state = state,
       callbacks = receiveCallbacks
+    )
+
+    PermissionsPanel(
+      state = permissionsState,
+      onRequestCapability = onRequestCapability,
     )
 
     Spacer(Modifier.height(24.dp))

@@ -305,6 +305,14 @@ internal class BonjourServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
       }
     }
   }
+
+  override suspend fun restart() {
+    // libdns_sd talks to the OS-resident mDNSResponder, which already reacts to
+    // network transitions (sleep/wake, NIC up/down) on its own. Active browses /
+    // registrations stay valid across those transitions, so there's no per-process
+    // state to tear down here.
+    log("BonjourMdns", "restart: no-op (mDNSResponder handles transitions natively)")
+  }
 }
 
 internal class BonjourPollLoop(

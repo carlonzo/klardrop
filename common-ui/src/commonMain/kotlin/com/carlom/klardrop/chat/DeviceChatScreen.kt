@@ -65,6 +65,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.FileMessage as ProtoFileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage as ProtoTextMessage
 import com.carlom.klardrop.common.database.Messages
@@ -95,6 +96,7 @@ fun DeviceChatScreen(
   val messagesState by viewModel.messages.collectAsState()
   val uiState by viewModel.uiState.collectAsState()
   val pendingAuth by viewModel.pendingAuth.collectAsState()
+  val reachability by viewModel.reachability.collectAsState()
   var textToSend by remember { mutableStateOf("") }
   var attachmentMenuOpen by remember { mutableStateOf(false) }
 
@@ -154,6 +156,8 @@ fun DeviceChatScreen(
                   color = MaterialTheme.colorScheme.primary
                 )
               }
+            } else {
+              ReachabilityIndicator(reachability)
             }
           }
         },
@@ -200,6 +204,8 @@ fun DeviceChatScreen(
         )
       }
 
+      val isOffline = !isOwned && reachability == Reachability.Unreachable
+
       ChatInputBar(
         text = textToSend,
         onTextChange = { textToSend = it },
@@ -209,11 +215,12 @@ fun DeviceChatScreen(
             textToSend = ""
           }
         },
-        attachmentMenuOpen = attachmentMenuOpen,
+        attachmentMenuOpen = attachmentMenuOpen && !isOffline,
         onToggleAttachmentMenu = { attachmentMenuOpen = !attachmentMenuOpen },
         onPickFiles = { filePickerLauncher.launch() },
         onPickMedia = { imagePickerLauncher.launch() },
-        bottomPadding = paddingValues.calculateBottomPadding()
+        bottomPadding = paddingValues.calculateBottomPadding(),
+        isOffline = isOffline,
       )
     }
   }
@@ -273,6 +280,47 @@ private fun IncomingAuthBanner(update: ReceiveMessageUpdate) {
         }
       }
     }
+  }
+}
+
+@Composable
+private fun ReachabilityIndicator(reachability: Reachability) {
+  // Reachable from a confirmed pool entry / probe → green; explicit Unreachable
+  // → red; everything else (no probe yet, in flight) collapses to a neutral
+  // "Connecting…" so the dot doesn't flicker on the brief Unknown→Probing
+  // transitions that happen on every visibleDevices update.
+  val (label, dotColor, textColor) = when (reachability) {
+    Reachability.Reachable -> Triple(
+      "Online",
+      MaterialTheme.colorScheme.primary,
+      MaterialTheme.colorScheme.primary,
+    )
+    Reachability.Unreachable -> Triple(
+      "Offline",
+      MaterialTheme.colorScheme.error,
+      MaterialTheme.colorScheme.error,
+    )
+    Reachability.Probing,
+    Reachability.Unknown -> Triple(
+      "Connecting…",
+      MaterialTheme.colorScheme.onSurfaceVariant,
+      MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+  }
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(6.dp)
+  ) {
+    Box(
+      modifier = Modifier
+        .size(8.dp)
+        .background(dotColor, CircleShape)
+    )
+    Text(
+      text = label,
+      style = MaterialTheme.typography.labelSmall,
+      color = textColor
+    )
   }
 }
 
@@ -724,7 +772,8 @@ private fun ChatInputBar(
   onToggleAttachmentMenu: () -> Unit,
   onPickFiles: () -> Unit,
   onPickMedia: () -> Unit,
-  bottomPadding: androidx.compose.ui.unit.Dp
+  bottomPadding: androidx.compose.ui.unit.Dp,
+  isOffline: Boolean,
 ) {
   Surface(
     color = MaterialTheme.colorScheme.surface,
@@ -738,6 +787,32 @@ private fun ChatInputBar(
         bottom = 8.dp + bottomPadding
       )
     ) {
+      AnimatedVisibility(
+        visible = isOffline,
+        enter = fadeIn(),
+        exit = fadeOut(),
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp, start = 4.dp, end = 4.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Default.ErrorOutline,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(16.dp)
+          )
+          Text(
+            text = "Offline — messages can't be sent right now.",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.error
+          )
+        }
+      }
+
       AnimatedVisibility(
         visible = attachmentMenuOpen,
         enter = fadeIn() + expandHorizontally(),
@@ -763,7 +838,10 @@ private fun ChatInputBar(
       }
 
       Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onToggleAttachmentMenu) {
+        IconButton(
+          onClick = onToggleAttachmentMenu,
+          enabled = !isOffline,
+        ) {
           Icon(
             imageVector = Icons.Default.AttachFile,
             contentDescription = if (attachmentMenuOpen) "Hide attachments" else "Attach"
@@ -773,15 +851,16 @@ private fun ChatInputBar(
         OutlinedTextField(
           value = text,
           onValueChange = onTextChange,
-          placeholder = { Text("Message") },
+          placeholder = { Text(if (isOffline) "Offline" else "Message") },
           modifier = Modifier.weight(1f),
+          enabled = !isOffline,
           maxLines = 4,
           shape = RoundedCornerShape(20.dp)
         )
 
         Spacer(Modifier.width(8.dp))
 
-        val canSend = text.isNotBlank()
+        val canSend = text.isNotBlank() && !isOffline
         Surface(
           shape = CircleShape,
           color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,

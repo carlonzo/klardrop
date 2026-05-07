@@ -22,6 +22,7 @@ internal class DiscoveryModule(
       KlardropDiscoveryUtils(),
       currentDeviceProvider,
       internalPlatformDependency.bleTransport(),
+      internalPlatformDependency.networkLifecycleMonitor(),
     )
   }
 

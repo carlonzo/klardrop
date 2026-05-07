@@ -64,6 +64,17 @@ actual class ServiceDiscoveryMdns {
 
   }
 
+  /**
+   * On Apple, Bonjour (mDNSResponder) handles network transitions transparently
+   * and the per-flow [awaitClose] hooks tear down the browser/service when
+   * DiscoveryNetwork cancels its discovery jobs. There is nothing additional to
+   * tear down here — restarting amounts to re-launching the discovery flows,
+   * which the caller does.
+   */
+  actual suspend fun restart() {
+    log("ServiceDiscoveryMdns", "restart: no-op on Apple (Bonjour handles transitions)")
+  }
+
   actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
 
     suspendCancellableCoroutine<Unit> {

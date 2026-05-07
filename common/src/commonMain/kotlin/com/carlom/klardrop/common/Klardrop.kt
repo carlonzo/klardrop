@@ -65,6 +65,11 @@ class Klardrop(
     // Client picks the best available transport and falls back to BLE only
     // when no Wi-Fi reachability exists.
     commonComponent.bleEagerConnector()?.start()
+
+    // Probe TCP-discovered peers as soon as they're announced so "visible"
+    // implies "reachable" — without this the user only finds out at send time
+    // that the cached mDNS address is dead.
+    commonComponent.eagerReachabilityConnector()?.start()
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()

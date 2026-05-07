@@ -66,6 +66,7 @@ class CommonComponent(
       clipboardManager = clipboardManager,
       trustStorage = internalPlatformDependency.trustStorage(),
       bleTransport = internalPlatformDependency.bleTransport(),
+      networkLifecycleMonitor = internalPlatformDependency.networkLifecycleMonitor(),
     )
   }
 
@@ -90,9 +91,11 @@ class CommonComponent(
   fun server() = communicationModule.server()
   fun bleServerListener() = communicationModule.bleServerListener()
   fun bleEagerConnector() = communicationModule.bleEagerConnector()
+  fun eagerReachabilityConnector() = communicationModule.eagerReachabilityConnector()
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()
+  fun reachability() = communicationModule.reachability()
 
   fun platformFileSystem() = platformFileSystem
 
@@ -117,5 +120,11 @@ class CommonComponent(
   fun localPropertiesRepository() = localProperties
 
   fun connectionInfoJoiner() = internalPlatformDependency.connectionInfoJoiner()
+
+  fun permissionsMonitor() = internalPlatformDependency.permissionsMonitor()
+
+  fun notifier() = internalPlatformDependency.notifier()
+
+  fun foregroundState() = internalPlatformDependency.foregroundState()
 
 }

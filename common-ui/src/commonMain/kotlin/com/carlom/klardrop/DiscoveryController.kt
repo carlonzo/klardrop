@@ -1,7 +1,14 @@
 package com.carlom.klardrop
 
 import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
+import com.carlom.klardrop.common.notifications.AppNotification
+import com.carlom.klardrop.common.notifications.ForegroundState
+import com.carlom.klardrop.common.notifications.NotificationAction
+import com.carlom.klardrop.common.notifications.Notifier
+import com.carlom.klardrop.common.permissions.PermissionsMonitor
+import com.carlom.klardrop.common.permissions.PermissionsState
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
@@ -26,6 +33,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -45,6 +55,10 @@ class DiscoveryController(
   private val currentDeviceProvider: com.carlom.klardrop.common.discovery.CurrentDeviceProvider,
   private val localPropertiesRepository: com.carlom.klardrop.common.persistence.LocalPropertiesRepository,
   private val connectionInfoJoiner: ConnectionInfoJoiner,
+  reachability: StateFlow<Map<String, Reachability>>,
+  permissionsMonitor: PermissionsMonitor,
+  private val notifier: Notifier,
+  private val foregroundState: ForegroundState,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
 
   constructor(commonComponent: CommonComponent) : this(
@@ -60,10 +74,27 @@ class DiscoveryController(
     commonComponent.currentDeviceProvider(),
     commonComponent.localPropertiesRepository(),
     commonComponent.connectionInfoJoiner(),
+    commonComponent.reachability(),
+    commonComponent.permissionsMonitor(),
+    commonComponent.notifier(),
+    commonComponent.foregroundState(),
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage)
+  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage, reachability)
+
+  val permissionsState: StateFlow<PermissionsState> = permissionsMonitor.observe()
+    .stateIn(controllerScope, SharingStarted.Eagerly, PermissionsState.EMPTY)
+
+  // Live pairing requests keyed by deviceId so a notification action delivered
+  // out-of-band (the user tapping Accept on a backgrounded notification) can
+  // resolve the same callbacks the in-app dialog would have invoked.
+  private data class PendingPairing(
+    val deviceName: String,
+    val onAccept: suspend () -> Unit,
+    val onReject: suspend () -> Unit,
+  )
+  private val pendingPairings = mutableMapOf<String, PendingPairing>()
 
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 
@@ -101,6 +132,22 @@ class DiscoveryController(
       } else {
         log("DiscoveryController", "Updating UI to show device $deviceName as Untrusted (pairing failed)")
         updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+      }
+    }
+
+    // Route system-notification action taps back into the same accept/reject
+    // path the in-app dialog uses, so the user can resolve a pairing without
+    // having to bring the app forward.
+    controllerScope.launch {
+      notifier.actions.collect { action ->
+        when (action) {
+          is NotificationAction.PairingAccepted -> acceptPairing(action.deviceId)
+          is NotificationAction.PairingRejected -> rejectPairing(action.deviceId)
+          is NotificationAction.Opened -> {
+            // Tapping the body brings the app forward; the persisted
+            // pairingDialogState will render automatically. Nothing extra to do.
+          }
+        }
       }
     }
 
@@ -314,7 +361,8 @@ class DiscoveryController(
     onReject: suspend () -> Unit
   ) {
     log("DiscoveryController", "onPairingRequested for device: $deviceName ($deviceId)")
-    log("DiscoveryController", "About to update pairingDialogState in screenStateFlow")
+    pendingPairings[deviceId] = PendingPairing(deviceName, onAccept, onReject)
+
     controllerScope.launch {
       screenStateFlow.update { currentState ->
         // Check if a pairing dialog is already active
@@ -324,63 +372,94 @@ class DiscoveryController(
         }
 
         log("DiscoveryController", "Creating PairingDialogState for $deviceName")
-        val newState = currentState.copy(
+        currentState.copy(
           pairingDialogState = PairingDialogState(
             deviceId = deviceId,
             deviceName = deviceName,
             deviceType = deviceType,
-            onAccept = {
-              controllerScope.launch {
-                try {
-                  onAccept()
-                  screenStateFlow.update { it.copy(pairingDialogState = null) }
-                  updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
-                  log("DiscoveryController", "Pairing accepted for $deviceName")
-                } catch (e: Exception) {
-                  log("DiscoveryController", "Failed to accept pairing: ${e.message}")
-                  screenStateFlow.update { state ->
-                    state.copy(
-                      pairingDialogState = state.pairingDialogState?.copy(
-                        isError = true,
-                        errorMessage = "Failed to accept pairing: ${e.message}"
-                      )
-                    )
-                  }
-                  updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
-                }
-              }
-            },
-            onReject = {
-              controllerScope.launch {
-                try {
-                  onReject()
-                  screenStateFlow.update { it.copy(pairingDialogState = null) }
-                  updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
-                  log("DiscoveryController", "Pairing rejected for $deviceName")
-                } catch (e: Exception) {
-                  log("DiscoveryController", "Failed to reject pairing: ${e.message}")
-                  screenStateFlow.update { state ->
-                    state.copy(
-                      pairingDialogState = state.pairingDialogState?.copy(
-                        isError = true,
-                        errorMessage = "Failed to reject pairing: ${e.message}"
-                      )
-                    )
-                  }
-                  updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
-                }
-              }
-            }
+            onAccept = { controllerScope.launch { acceptPairing(deviceId) } },
+            onReject = { controllerScope.launch { rejectPairing(deviceId) } }
           )
         )
-        log("DiscoveryController", "Successfully updated screenStateFlow with pairingDialogState for $deviceName")
-        log("DiscoveryController", "New state pairingDialogState: ${newState.pairingDialogState != null}")
-        newState
       }
-      log("DiscoveryController", "Current screenStateFlow pairingDialogState after update: ${screenStateFlow.value.pairingDialogState != null}")
-      screenStateFlow.value.pairingDialogState?.let { state ->
-        log("DiscoveryController", "PairingDialogState details: deviceId=${state.deviceId}, deviceName=${state.deviceName}")
+
+      // System notification only fires when the user can't see the in-app
+      // dialog. Foreground state is observed reactively but the request
+      // arrives once, so we sample the current value here.
+      if (!foregroundState.isForeground.value) {
+        log("DiscoveryController", "App backgrounded; posting pairing notification for $deviceName")
+        notifier.show(
+          AppNotification.IncomingPairing(
+            id = deviceId,
+            deviceId = deviceId,
+            deviceName = deviceName,
+          )
+        )
       }
+    }
+  }
+
+  private suspend fun acceptPairing(deviceId: String) {
+    val pending = pendingPairings[deviceId] ?: run {
+      log("DiscoveryController", "acceptPairing: no pending request for $deviceId (already resolved?)")
+      return
+    }
+    try {
+      pending.onAccept()
+      pendingPairings.remove(deviceId)
+      notifier.cancel(deviceId)
+      // Only clear the dialog if it still belongs to *this* request — a later
+      // pairing might already have replaced it.
+      screenStateFlow.update { state ->
+        if (state.pairingDialogState?.deviceId == deviceId) state.copy(pairingDialogState = null)
+        else state
+      }
+      updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
+      log("DiscoveryController", "Pairing accepted for ${pending.deviceName}")
+    } catch (e: Exception) {
+      log("DiscoveryController", "Failed to accept pairing: ${e.message}")
+      screenStateFlow.update { state ->
+        val current = state.pairingDialogState ?: return@update state
+        if (current.deviceId != deviceId) return@update state
+        state.copy(
+          pairingDialogState = current.copy(
+            isError = true,
+            errorMessage = "Failed to accept pairing: ${e.message}"
+          )
+        )
+      }
+      updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+    }
+  }
+
+  private suspend fun rejectPairing(deviceId: String) {
+    val pending = pendingPairings[deviceId] ?: run {
+      log("DiscoveryController", "rejectPairing: no pending request for $deviceId (already resolved?)")
+      return
+    }
+    try {
+      pending.onReject()
+      pendingPairings.remove(deviceId)
+      notifier.cancel(deviceId)
+      screenStateFlow.update { state ->
+        if (state.pairingDialogState?.deviceId == deviceId) state.copy(pairingDialogState = null)
+        else state
+      }
+      updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+      log("DiscoveryController", "Pairing rejected for ${pending.deviceName}")
+    } catch (e: Exception) {
+      log("DiscoveryController", "Failed to reject pairing: ${e.message}")
+      screenStateFlow.update { state ->
+        val current = state.pairingDialogState ?: return@update state
+        if (current.deviceId != deviceId) return@update state
+        state.copy(
+          pairingDialogState = current.copy(
+            isError = true,
+            errorMessage = "Failed to reject pairing: ${e.message}"
+          )
+        )
+      }
+      updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
     }
   }
 
@@ -434,7 +513,8 @@ data class DeviceUi(
   val activityState: ActivityState = ActivityState.Idle,
   val connectionTypes: List<DeviceConnection.DeviceConnectionType>,
   val hasUnreadMessages: Boolean = false,
-  val trustStatus: TrustStatus = TrustStatus.Unknown
+  val trustStatus: TrustStatus = TrustStatus.Unknown,
+  val reachability: Reachability = Reachability.Unknown,
 )
 
 sealed interface TrustStatus {
