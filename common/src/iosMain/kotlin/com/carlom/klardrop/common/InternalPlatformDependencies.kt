@@ -16,7 +16,9 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
+import platform.Foundation.NSURL
 import platform.Foundation.NSUserDomainMask
+import platform.UIKit.UIApplication
 
 actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
@@ -90,6 +92,14 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     // This is a simplified implementation that always returns false
     // A proper implementation would need platform-specific UI integration
     return false
+  }
+
+  actual suspend fun openUrl(url: String): Boolean {
+    val nsUrl = NSURL.URLWithString(url) ?: return false
+    val app = UIApplication.sharedApplication
+    if (!app.canOpenURL(nsUrl)) return false
+    app.openURL(nsUrl, options = emptyMap<Any?, Any?>(), completionHandler = null)
+    return true
   }
 
   // iOS keeps using FileKit.saveImageToGallery (no tracked path); the caller falls back.

@@ -88,4 +88,40 @@ interface TrustStorage {
      * After calling this, the device will generate a new identity on next startup.
      */
     suspend fun deleteDevicePrivateKey()
+
+    /**
+     * Store this device's own identity ECDSA public key alongside the private key.
+     *
+     * The cryptography library used here only persists private keys in RAW format (the
+     * scalar), which is not enough to reconstruct the public key on app restart. We
+     * therefore persist both halves explicitly so signature verification against the
+     * key the peer cached at pairing time keeps working across restarts. Default impl
+     * is a no-op so test fakes that pre-date this method don't break compile; real
+     * platform stores override it.
+     */
+    suspend fun storeDevicePublicKey(publicKey: ByteArray) {}
+
+    /**
+     * Retrieve this device's own identity ECDSA public key, if it has been persisted
+     * alongside the private key. Returns null on legacy installs that only stored the
+     * private key — TrustManager treats null as "no usable persisted identity" and
+     * generates a fresh one.
+     */
+    suspend fun getDevicePublicKey(): ByteArray? = null
+
+    /**
+     * Persist the ECDH shared secret derived during pairing with [deviceId]. Both peers
+     * arrive at the same 32-byte secret without it ever appearing on the wire (only the
+     * ECDH public keys are exchanged). The receive-path uses this secret as the input to
+     * an HKDF that produces an HMAC key for fast per-chunk integrity checks on file
+     * transfers — much cheaper than per-chunk ECDSA, since both halves of the pair share
+     * the symmetric key. Default is no-op for forward compat with older test fakes.
+     */
+    suspend fun storeSharedSecret(deviceId: String, sharedSecret: ByteArray) {}
+
+    /**
+     * Retrieve the ECDH shared secret previously stored for [deviceId]. Null on legacy
+     * pairings that pre-date this field — callers fall back to per-frame ECDSA signing.
+     */
+    suspend fun getSharedSecret(deviceId: String): ByteArray? = null
 }

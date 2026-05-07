@@ -59,6 +59,7 @@ class MessageSerializer(
       MessageType.ACK_READY -> MessageAcknowledgment.serializer() as KSerializer<E>
       MessageType.ACK_RECEIVED -> MessageAcknowledgment.serializer() as KSerializer<E>
       MessageType.ACK_REJECTED -> MessageAcknowledgment.serializer() as KSerializer<E>
+      MessageType.ACK_AWAITING_USER -> MessageAcknowledgment.serializer() as KSerializer<E>
       MessageType.TRUST_PAIRING_REQUEST -> TrustPairingRequest.serializer() as KSerializer<E>
       MessageType.TRUST_PAIRING_RESPONSE -> TrustPairingResponse.serializer() as KSerializer<E>
       MessageType.TRUSTED_MESSAGE -> TrustedMessage.serializer() as KSerializer<E>

@@ -16,6 +16,10 @@ enum class MessageType(val id: Byte) {
   ACK_READY(3),
   ACK_RECEIVED(4),
   ACK_REJECTED(5),
+  // Sent by the receiver as soon as it starts blocking on a user accept/reject decision.
+  // The sender treats it as "stop counting against the ACK_READY/RECEIVED timeout — the
+  // peer is alive but waiting on a human" and switches to a much longer wait window.
+  ACK_AWAITING_USER(6),
 
   // Trust system messages
   TRUST_PAIRING_REQUEST(10),
@@ -135,6 +139,7 @@ enum class AckType {
   READY,
   RECEIVED,
   REJECTED,
+  AWAITING_USER,
 }
 
 @Serializable
@@ -146,6 +151,7 @@ data class MessageAcknowledgment(
     AckType.READY -> MessageType.ACK_READY
     AckType.RECEIVED -> MessageType.ACK_RECEIVED
     AckType.REJECTED -> MessageType.ACK_REJECTED
+    AckType.AWAITING_USER -> MessageType.ACK_AWAITING_USER
   }
   override val hasPayload: Boolean = false
 }

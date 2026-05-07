@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTD/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.carlom.klardrop.ble-helper</string>
+  <key>CFBundleName</key>
+  <string>Klardrop BLE Helper</string>
+  <key>CFBundleDisplayName</key>
+  <string>Klardrop</string>
+  <key>CFBundleExecutable</key>
+  <string>klardrop-ble-helper</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSBluetoothAlwaysUsageDescription</key>
+  <string>Klardrop uses Bluetooth to discover and connect to nearby devices for sharing files.</string>
+  <key>NSBluetoothPeripheralUsageDescription</key>
+  <string>Klardrop uses Bluetooth to advertise this device so nearby devices can find it for sharing files.</string>
+</dict>
+</plist>

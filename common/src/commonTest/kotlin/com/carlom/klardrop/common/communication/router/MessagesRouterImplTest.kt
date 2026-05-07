@@ -2,15 +2,21 @@ package com.carlom.klardrop.common.communication.router
 
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.message.AckType
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.Message
+import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.MessageHandler
 import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.MessageType
+import com.carlom.klardrop.common.communication.message.PingMessage
+import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
+import com.carlom.klardrop.common.communication.readMessage
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.MessageReceiver
@@ -34,6 +40,9 @@ import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -81,6 +90,10 @@ class MessagesRouterImplTest {
 
     override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {
       calls.add("updateFileTransferFilePath($id, $filePath)")
+    }
+
+    override suspend fun markStaleInProgressAsFailed() {
+      calls.add("markStaleInProgressAsFailed()")
     }
 
     override suspend fun markMessagesAsRead(remoteDeviceId: String) {
@@ -202,6 +215,7 @@ class MessagesRouterImplTest {
         kind: TransferKind,
         headers: List<Message>,
         receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+        notifyAwaitingUser: suspend () -> Unit,
       ): Boolean = true
     }
     messagesRouter = MessagesRouterImpl(
@@ -213,6 +227,7 @@ class MessagesRouterImplTest {
           override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.RawSource =
             error("not used in router tests")
           override suspend fun openFile(filePath: String): Boolean = false
+          override suspend fun openUrl(url: String): Boolean = false
         },
         clock = com.carlom.klardrop.common.utils.Clock(),
         coroutines = mockCoroutines,
@@ -285,4 +300,269 @@ class MessagesRouterImplTest {
   // and handleOutgoingChunked directly. Behavior is covered by FileMessageHandlerTest (handler
   // unit tests) and KlardropIntegrationTest (end-to-end loopback). The previous tests in this
   // class asserted on a code path that no longer exists.
+
+  /**
+   * Trust storage helper where [trustedIds] are considered trusted (returns a non-null fake
+   * key for them, which is all `isTrusted` actually consults).
+   */
+  private fun trustStorageWith(trustedIds: Set<String>): com.carlom.klardrop.common.trust.TrustStorage =
+    object : com.carlom.klardrop.common.trust.TrustStorage {
+      override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {}
+      override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {}
+      override suspend fun getTrustedDeviceKey(deviceId: String): ByteArray? =
+        if (deviceId in trustedIds) byteArrayOf(0x1) else null
+      override suspend fun getECDSAKey(deviceId: String): ByteArray? = null
+      override suspend fun getAllTrustedDevices(): Map<String, ByteArray> = emptyMap()
+      override suspend fun removeTrustedDevice(deviceId: String) {}
+      override suspend fun clearAllTrustedDevices() {}
+      override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {}
+      override suspend fun getDevicePrivateKey(): ByteArray? = null
+      override suspend fun deleteDevicePrivateKey() {}
+    }
+
+  /**
+   * Build a router whose TrustManager treats [trustedDeviceId] as paired/trusted. The router
+   * receives messages from that device through the standard onMessageIncoming entry point.
+   */
+  private fun routerWithTrustedDevice(trustedDeviceId: String): MessagesRouterImpl {
+    val crypto = com.carlom.klardrop.common.trust.TrustCrypto()
+    val storage = trustStorageWith(setOf(trustedDeviceId))
+    val clock = com.carlom.klardrop.common.utils.Clock()
+    val localPropsRepo = object : com.carlom.klardrop.common.persistence.LocalPropertiesRepository {
+      override val properties = kotlinx.coroutines.flow.flowOf(
+        com.carlom.klardrop.common.persistence.KlardropProperties("self-id", "Self")
+      )
+      override suspend fun getProperty() =
+        com.carlom.klardrop.common.persistence.KlardropProperties("self-id", "Self")
+      override suspend fun save(properties: com.carlom.klardrop.common.persistence.KlardropProperties) {}
+      override suspend fun saveCustomDeviceName(customDeviceName: String?) {}
+    }
+    val trustManager = com.carlom.klardrop.common.trust.TrustManager(
+      crypto = crypto,
+      storage = storage,
+      clock = clock,
+      currentDeviceProvider = com.carlom.klardrop.common.discovery.CurrentDeviceProvider(localPropsRepo),
+    )
+    val authorizer = object : IncomingAuthorizer(trustManager) {
+      override suspend fun authorize(
+        fromDeviceId: String,
+        kind: TransferKind,
+        headers: List<Message>,
+        receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+        notifyAwaitingUser: suspend () -> Unit,
+      ): Boolean = true
+    }
+    return MessagesRouterImpl(
+      handlers = mockMessageHandlers,
+      fileMessageHandler = com.carlom.klardrop.common.communication.message.FileMessageHandler(
+        fileManager = object : com.carlom.klardrop.common.FileManager {
+          override fun prepareSaveFile(fileName: String, mimeType: String): com.carlom.klardrop.common.FileTransfer =
+            error("not used in router tests")
+          override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.RawSource =
+            error("not used in router tests")
+          override suspend fun openFile(filePath: String): Boolean = false
+          override suspend fun openUrl(url: String): Boolean = false
+        },
+        clock = clock,
+        coroutines = mockCoroutines,
+        messageRepository = mockMessageRepository,
+      ),
+      messageSerializer = mockMessageSerializer,
+      coroutines = mockCoroutines,
+      messengeReceiver = mockMessageReceiver,
+      trustManager = trustManager,
+      incomingAuthorizer = authorizer,
+    )
+  }
+
+  /**
+   * Regression test for the trusted-device control-plane bug: an unsigned PING coming from a
+   * trusted peer must NOT be rejected by the security gate, otherwise the heartbeat (sent
+   * unsigned by ConnectionMessenger which has no TrustManager handle) tears the connection
+   * down. With the bug, this test would observe no PONG written — the router would drop the
+   * frame silently with `SECURITY: unsigned message from trusted device ... - rejecting`.
+   */
+  @Test
+  fun unsignedPingFromTrustedDeviceIsAcceptedAndPongedBack() = runTest(testDispatcher) {
+    val trustedDevice = "trusted-peer"
+    val router = routerWithTrustedDevice(trustedDevice)
+
+    val ping = PingMessage(id = 4242)
+    val readChannel = ByteReadChannel(createMessageBytes(ping))
+    val writeChannel = ByteChannel(true)
+
+    router.onMessageIncoming(trustedDevice, writeChannel, readChannel, ackCallback = { })
+
+    // Reading from the write channel should yield a PONG framed by the wire format. The
+    // router signs replies to trusted peers via sendMessageToDevice, so the outermost
+    // frame may be a TrustedMessage wrapping the PONG. Either way, the inner message must
+    // be a PONG with the matching ping id — that's the contract this test enforces (the
+    // router did NOT silently drop the unsigned PING with `SECURITY: ... rejecting`).
+    val raw = writeChannel.readMessage(mockMessageSerializer)
+    val pong = if (raw is TrustedMessage) {
+      mockMessageSerializer.deserialize(raw.payload)
+    } else {
+      raw
+    }
+    assertTrue(pong is PongMessage, "Expected PONG, got ${pong::class.simpleName}")
+    assertEquals(ping.id, pong.pingId)
+  }
+
+  /**
+   * Regression test for the bug Carlo hit on Android↔Desktop: a trusted-device receiver was
+   * sending ACK_READY *unsigned*, and the trusted-device sender's security gate rejected it
+   * outright, causing every file transfer between paired devices to time out and retry until
+   * eventual failure. Two sides of the same coin:
+   *  1. The receiver-side router must SIGN its ACK reply when the peer is trusted.
+   *  2. The sender-side router must also ACCEPT control-plane acks even if unsigned (defense
+   *     in depth, since a peer running an older build won't sign).
+   *
+   * This test exercises (2): an unsigned ACK_RECEIVED from a trusted peer should still invoke
+   * ackCallback, not be silently dropped.
+   */
+  @Test
+  fun unsignedAckFromTrustedDeviceInvokesAckCallback() = runTest(testDispatcher) {
+    val trustedDevice = "trusted-peer"
+    val router = routerWithTrustedDevice(trustedDevice)
+
+    val ack = MessageAcknowledgment(AckType.RECEIVED, id = 7777)
+    val readChannel = ByteReadChannel(createMessageBytes(ack))
+    val writeChannel = ByteChannel(true)
+
+    var observedAck: MessageAcknowledgment? = null
+    router.onMessageIncoming(
+      fromDeviceId = trustedDevice,
+      writeChannel = writeChannel,
+      readChannel = readChannel,
+      ackCallback = { observedAck = it },
+    )
+
+    val captured = assertNotNull(observedAck, "ackCallback must fire for unsigned ACK from trusted device")
+    assertEquals(ack.id, captured.id)
+    assertEquals(AckType.RECEIVED, captured.ackType)
+  }
+
+  /**
+   * Regression test for the trusted-device ACK id mismatch.
+   *
+   * When a peer is trusted, [com.carlom.klardrop.common.communication.Messenger.send] wraps
+   * the application-level message (TextMessage / FileMessage / ...) in a [TrustedMessage]
+   * envelope before handing it to [com.carlom.klardrop.common.communication.ConnectionMessenger]
+   * — which then registers the pending ACK_RECEIVED under the **outer** TrustedMessage id.
+   *
+   * Pre-fix, the receiver's router unwrapped the envelope and sent its ACK using the
+   * **inner** deserialized message's id. The sender saw "Unexpected ACK ... no matching
+   * pending request" and timed out, even though the round-trip had functionally succeeded.
+   *
+   * Contract this test enforces: the wire-level ACK id must equal the outer TrustedMessage
+   * id (whatever id the sender originally framed on the wire), so the sender's ack-tracking
+   * matches.
+   */
+  @Test
+  fun ackForTrustedMessageReferencesOuterEnvelopeIdNotInner() = runTest(testDispatcher) {
+    val senderId = "sender01"
+    val receiverId = "receiver01"
+    val clock = com.carlom.klardrop.common.utils.Clock()
+    val crypto = com.carlom.klardrop.common.trust.TrustCrypto()
+
+    fun localPropsRepo(deviceId: String) = object : com.carlom.klardrop.common.persistence.LocalPropertiesRepository {
+      override val properties = kotlinx.coroutines.flow.flowOf(
+        com.carlom.klardrop.common.persistence.KlardropProperties(deviceId, deviceId)
+      )
+      override suspend fun getProperty() =
+        com.carlom.klardrop.common.persistence.KlardropProperties(deviceId, deviceId)
+      override suspend fun save(properties: com.carlom.klardrop.common.persistence.KlardropProperties) {}
+      override suspend fun saveCustomDeviceName(customDeviceName: String?) {}
+    }
+
+    val senderStorage = com.carlom.klardrop.common.trust.InMemoryTrustStorage()
+    val senderTrust = com.carlom.klardrop.common.trust.TrustManager(
+      crypto = crypto,
+      storage = senderStorage,
+      clock = clock,
+      currentDeviceProvider = com.carlom.klardrop.common.discovery.CurrentDeviceProvider(localPropsRepo(senderId)),
+    )
+    val receiverStorage = com.carlom.klardrop.common.trust.InMemoryTrustStorage()
+    val receiverTrust = com.carlom.klardrop.common.trust.TrustManager(
+      crypto = crypto,
+      storage = receiverStorage,
+      clock = clock,
+      currentDeviceProvider = com.carlom.klardrop.common.discovery.CurrentDeviceProvider(localPropsRepo(receiverId)),
+    )
+
+    // Mutual pair so receiver has sender's ECDSA public key (required to verify) and
+    // sender's storage has receiver's identity (consistency, not strictly used here).
+    val pairingRequest = senderTrust.createPairingRequest(receiverId).getOrThrow()
+    val pairingResponse = receiverTrust.createPairingAcceptance(pairingRequest).getOrThrow()
+    senderTrust.finalizePairing(pairingResponse)
+
+    // A handler is required for TEXT or onMessageIncoming would error out before the ACK
+    // reply (the ack is sent AFTER the handler runs in the no-payload path).
+    val mockHandler = MockMessageHandler<TextMessage, SimpleSendMessageRequest>()
+    @Suppress("UNCHECKED_CAST")
+    mockMessageHandlers.handlerToReturn = mockHandler as MessageHandler<Message, SendMessageRequest>
+
+    val authorizer = object : IncomingAuthorizer(receiverTrust) {
+      override suspend fun authorize(
+        fromDeviceId: String,
+        kind: TransferKind,
+        headers: List<Message>,
+        receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+        notifyAwaitingUser: suspend () -> Unit,
+      ): Boolean = true
+    }
+    val router = MessagesRouterImpl(
+      handlers = mockMessageHandlers,
+      fileMessageHandler = com.carlom.klardrop.common.communication.message.FileMessageHandler(
+        fileManager = object : com.carlom.klardrop.common.FileManager {
+          override fun prepareSaveFile(fileName: String, mimeType: String) = error("unused")
+          override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.RawSource = error("unused")
+          override suspend fun openFile(filePath: String) = false
+          override suspend fun openUrl(url: String) = false
+        },
+        clock = clock,
+        coroutines = mockCoroutines,
+        messageRepository = mockMessageRepository,
+      ),
+      messageSerializer = mockMessageSerializer,
+      coroutines = mockCoroutines,
+      messengeReceiver = mockMessageReceiver,
+      trustManager = receiverTrust,
+      incomingAuthorizer = authorizer,
+    )
+
+    // Build the wire frame: TextMessage (inner id 999) signed into a TrustedMessage with
+    // its own random outer id.
+    val innerText = TextMessage(text = "hi from sender")
+    val innerId = innerText.id
+    val payload = mockMessageSerializer.serialize(innerText)
+    val trustedMessage = senderTrust.signMessage(payload)
+      ?: error("signMessage returned null — sender trust setup broken")
+    val outerId = trustedMessage.id
+
+    val readChannel = ByteReadChannel(createMessageBytes(trustedMessage))
+    val writeChannel = ByteChannel(true)
+
+    router.onMessageIncoming(senderId, writeChannel, readChannel, ackCallback = { })
+
+    // Pull whatever the router wrote back. The router signs replies to trusted peers, so
+    // the outermost frame is itself a TrustedMessage wrapping an ACK_RECEIVED. Unwrap.
+    val replyFrame = writeChannel.readMessage(mockMessageSerializer)
+    val ackMessage = if (replyFrame is TrustedMessage) {
+      mockMessageSerializer.deserialize(replyFrame.payload)
+    } else {
+      replyFrame
+    }
+    assertTrue(ackMessage is MessageAcknowledgment, "Expected ACK, got ${ackMessage::class.simpleName}")
+    assertEquals(AckType.RECEIVED, ackMessage.ackType)
+    assertEquals(
+      outerId, ackMessage.id,
+      "ACK must reference the OUTER TrustedMessage id ($outerId) — that's what the sender " +
+        "registered its pending-ACK channel under. Got ${ackMessage.id} (which equals inner=$innerId? ${ackMessage.id == innerId}).",
+    )
+    assertNotEquals(
+      innerId, ackMessage.id,
+      "ACK must NOT use the inner application message id; the sender doesn't track that one.",
+    )
+  }
 }

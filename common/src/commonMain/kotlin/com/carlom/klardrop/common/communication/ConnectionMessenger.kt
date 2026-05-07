@@ -250,8 +250,12 @@ class ConnectionMessenger internal constructor(
    * Waits for a previously registered ACK to arrive, or for a rejection ACK to arrive
    * on [rejectedChannel]. If rejection wins, throws [TransferRejectedException]; the
    * caller should treat it as a terminal (non-retryable) failure rather than a transport
-   * error. If neither arrives within the timeout, throws [IllegalStateException] (which
-   * Messenger interprets as a transport-level retryable failure).
+   * error. If [awaitingUserChannel] is supplied and ACK_AWAITING_USER arrives first, the
+   * wait restarts with [AckTimeoutConfig.userResponseTimeout] — the peer told us a human
+   * is being prompted, so the short wire-level timeout would otherwise spuriously fire and
+   * trigger a retry that produces a duplicate prompt on the receiver. If nothing arrives
+   * within the timeout, throws [IllegalStateException] (which Messenger interprets as a
+   * transport-level retryable failure).
    */
   @OptIn(ExperimentalTime::class)
   private suspend fun awaitRegisteredAck(
@@ -260,22 +264,38 @@ class ConnectionMessenger internal constructor(
     channel: Channel<Unit>,
     hasPayload: Boolean,
     rejectedChannel: Channel<Unit>? = null,
+    awaitingUserChannel: Channel<Unit>? = null,
   ) {
-    val timeoutMs = ackTimeoutConfig.timeoutFor(ackType, hasPayload).inWholeMilliseconds
-    log("ConnectionMessenger: [DEBUG] Awaiting ACK $ackType for message $messageId from ${connection.deviceId} (timeout: ${timeoutMs}ms)")
+    val initialTimeoutMs = ackTimeoutConfig.timeoutFor(ackType, hasPayload).inWholeMilliseconds
+    val userTimeoutMs = ackTimeoutConfig.userResponseTimeout.inWholeMilliseconds
+    log("ConnectionMessenger: [DEBUG] Awaiting ACK $ackType for message $messageId from ${connection.deviceId} (timeout: ${initialTimeoutMs}ms)")
 
     try {
       withContext(coroutines.mainDispatcher) {
-        withTimeout(timeoutMs) {
-          if (rejectedChannel != null) {
-            select<Unit> {
-              channel.onReceive { /* ack arrived */ }
-              rejectedChannel.onReceive {
-                throw TransferRejectedException(messageId)
+        var timeoutMs = initialTimeoutMs
+        var awaitingUserActive = awaitingUserChannel
+        while (true) {
+          val outcome = withTimeout(timeoutMs) {
+            select<AckOutcome> {
+              channel.onReceive { AckOutcome.Acked }
+              if (rejectedChannel != null) {
+                rejectedChannel.onReceive { AckOutcome.Rejected }
+              }
+              if (awaitingUserActive != null) {
+                awaitingUserActive.onReceive { AckOutcome.AwaitingUser }
               }
             }
-          } else {
-            channel.receive()
+          }
+          when (outcome) {
+            AckOutcome.Acked -> return@withContext
+            AckOutcome.Rejected -> throw TransferRejectedException(messageId)
+            AckOutcome.AwaitingUser -> {
+              log("ConnectionMessenger: [DEBUG] Peer signalled awaiting-user for message $messageId; extending timeout to ${userTimeoutMs}ms")
+              timeoutMs = userTimeoutMs
+              // Only honor the AWAITING_USER signal once per wait so a misbehaving peer
+              // can't pin the sender open indefinitely by re-sending it.
+              awaitingUserActive = null
+            }
           }
         }
       }
@@ -285,9 +305,11 @@ class ConnectionMessenger internal constructor(
       ackMutex.withLock {
         pendingAcks.remove(AckKey(messageId, ackType))
         pendingAcks.remove(AckKey(messageId, AckType.REJECTED))
+        pendingAcks.remove(AckKey(messageId, AckType.AWAITING_USER))
       }
       channel.close()
       rejectedChannel?.close()
+      awaitingUserChannel?.close()
       throw e
     } catch (e: Exception) {
       log("ConnectionMessenger: [DEBUG] ACK timeout for message $messageId, cleaning up pending request")
@@ -295,12 +317,16 @@ class ConnectionMessenger internal constructor(
       ackMutex.withLock {
         pendingAcks.remove(AckKey(messageId, ackType))
         if (rejectedChannel != null) pendingAcks.remove(AckKey(messageId, AckType.REJECTED))
+        if (awaitingUserChannel != null) pendingAcks.remove(AckKey(messageId, AckType.AWAITING_USER))
       }
       channel.close()
       rejectedChannel?.close()
+      awaitingUserChannel?.close()
       throw IllegalStateException("ACK timeout: Expected $ackType for message $messageId from ${connection.deviceId}")
     }
   }
+
+  private enum class AckOutcome { Acked, Rejected, AwaitingUser }
 
   suspend fun <S : SendMessageRequest> send(sendRequest: S, flow: MutableSharedFlow<MessengerSendProgress>) {
     val message = sendRequest.message
@@ -313,11 +339,13 @@ class ConnectionMessenger internal constructor(
       coroutines.ioDispatcher {
         // Register pending ACKs BEFORE sending message to prevent race conditions
         // (ACK could otherwise arrive before we register and be dropped as
-        // "unexpected"). REJECTED is registered alongside RECEIVED/READY so a peer
-        // that declined the transfer can short-circuit the wait without waiting for
-        // the timeout.
+        // "unexpected"). REJECTED and AWAITING_USER are registered alongside
+        // RECEIVED/READY so a peer that declined the transfer (or is blocking on a
+        // human accept/reject prompt) can short-circuit the wait — REJECTED ends it
+        // terminally, AWAITING_USER extends the timeout window.
         val receivedChannel = registerPendingAck(message.id, AckType.RECEIVED)
         val rejectedChannel = registerPendingAck(message.id, AckType.REJECTED)
+        val awaitingUserChannel = registerPendingAck(message.id, AckType.AWAITING_USER)
 
         if (message.hasPayload) {
           // Two-phase: header → wait ACK_READY (or ACK_REJECTED) → payload → wait
@@ -328,7 +356,9 @@ class ConnectionMessenger internal constructor(
           val awaitReady: suspend () -> Unit = {
             awaitRegisteredAck(
               message.id, AckType.READY, readyChannel,
-              hasPayload = true, rejectedChannel = rejectedChannel,
+              hasPayload = true,
+              rejectedChannel = rejectedChannel,
+              awaitingUserChannel = awaitingUserChannel,
             )
           }
           messagesRouter.onSendingMessage(
@@ -342,7 +372,13 @@ class ConnectionMessenger internal constructor(
 
         awaitRegisteredAck(
           message.id, AckType.RECEIVED, receivedChannel,
-          hasPayload = message.hasPayload, rejectedChannel = rejectedChannel,
+          hasPayload = message.hasPayload,
+          rejectedChannel = rejectedChannel,
+          // For payload-bearing messages the AWAITING_USER signal already fired during the
+          // ACK_READY wait, so no need to re-arm it here. For no-payload (TEXT) messages
+          // the receiver sends AWAITING_USER before the (single) ACK_RECEIVED, so we need
+          // to honor it on this wait.
+          awaitingUserChannel = if (message.hasPayload) null else awaitingUserChannel,
         )
       }
     } catch (exception: Throwable) {

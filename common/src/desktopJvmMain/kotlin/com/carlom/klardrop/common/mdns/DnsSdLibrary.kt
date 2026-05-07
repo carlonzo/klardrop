@@ -116,7 +116,11 @@ internal interface DnsSdLibrary : Library {
 
   companion object {
     val INSTANCE: DnsSdLibrary by lazy {
-      Native.load("dns_sd", DnsSdLibrary::class.java)
+      // On modern macOS libdns_sd.dylib is not in the dyld shared cache, but
+      // libsystem_dnssd.dylib is and it is re-exported by libSystem.dylib, so
+      // loading "System" resolves the DNSService* symbols.
+      val name = if (com.sun.jna.Platform.isMac()) "System" else "dns_sd"
+      Native.load(name, DnsSdLibrary::class.java)
     }
 
     const val FLAG_ADD: Int = 0x2

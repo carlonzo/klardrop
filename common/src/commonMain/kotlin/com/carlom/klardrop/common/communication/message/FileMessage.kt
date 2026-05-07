@@ -51,6 +51,14 @@ data class FileMessage(
   val fileName: String,
   val fileSize: Long,
   val mimeType: String,
+  /**
+   * SHA-256 of the file's bytes, computed by the sender before the header goes on the wire.
+   * Binds the (signed) header to the content that follows so chunks can flow unsigned without
+   * losing end-to-end integrity — the receiver hashes as it accumulates and verifies before
+   * marking the transfer COMPLETED. Null on legacy headers from peers that pre-date this
+   * field; receivers fall back to "no integrity check" with a warn log in that case.
+   */
+  val contentHash: ByteArray? = null,
   override val id: Int = Random.nextInt(),
 ) : Message() {
   override val type: MessageType = MessageType.FILE
@@ -61,6 +69,32 @@ data class FileMessage(
     val file: PlatformFile,
     override val messageSignature: MessageSignature? = null
   ) : SignedSendMessageRequest
+
+  override fun equals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is FileMessage) return false
+    if (fileName != other.fileName) return false
+    if (fileSize != other.fileSize) return false
+    if (mimeType != other.mimeType) return false
+    if (id != other.id) return false
+    if (!contentHash.contentEqualsNullable(other.contentHash)) return false
+    return true
+  }
+
+  override fun hashCode(): Int {
+    var result = fileName.hashCode()
+    result = 31 * result + fileSize.hashCode()
+    result = 31 * result + mimeType.hashCode()
+    result = 31 * result + id
+    result = 31 * result + (contentHash?.contentHashCode() ?: 0)
+    return result
+  }
+
+  private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean {
+    if (this == null && other == null) return true
+    if (this == null || other == null) return false
+    return this.contentEquals(other)
+  }
 }
 
 fun FileMessage.toSendRequest(file: PlatformFile, messageSignature: MessageSignature? = null): FileMessage.FileSendRequest {
@@ -82,6 +116,19 @@ data class FileChunkMessage(
   val seq: Int,
   val data: ByteArray,
   val isLast: Boolean = false,
+  /**
+   * HMAC-SHA256 tag over `fileMessageId || seq || isLast || data`, keyed by the per-pair
+   * key derived from the ECDH shared secret (see [com.carlom.klardrop.common.trust.TrustManager.computeChunkMac]).
+   * Present when the sender is paired with the destination — the receiver verifies it
+   * synchronously per chunk and fails the transfer on mismatch, which gives us per-chunk
+   * authenticity & integrity at HMAC speed (~µs) rather than per-chunk ECDSA speed (~ms).
+   *
+   * Null when the sender has no shared secret with the peer (legacy pairing pre-dating
+   * the persisted secret, or peer not trusted): the chunked-send path falls back to
+   * "no per-chunk auth" and the file body is unauthenticated — which is fine for
+   * untrusted-peer transfers (those go through manual user accept anyway).
+   */
+  val mac: ByteArray? = null,
   override val id: Int = Random.nextInt(),
 ) : Message() {
   override val type: MessageType = MessageType.FILE_CHUNK
@@ -90,11 +137,15 @@ data class FileChunkMessage(
   override fun equals(other: Any?): Boolean {
     if (this === other) return true
     if (other !is FileChunkMessage) return false
-    return fileMessageId == other.fileMessageId &&
-        seq == other.seq &&
-        isLast == other.isLast &&
-        id == other.id &&
-        data.contentEquals(other.data)
+    if (fileMessageId != other.fileMessageId) return false
+    if (seq != other.seq) return false
+    if (isLast != other.isLast) return false
+    if (id != other.id) return false
+    if (!data.contentEquals(other.data)) return false
+    if (mac == null && other.mac != null) return false
+    if (mac != null && other.mac == null) return false
+    if (mac != null && other.mac != null && !mac.contentEquals(other.mac)) return false
+    return true
   }
 
   override fun hashCode(): Int {
@@ -103,6 +154,7 @@ data class FileChunkMessage(
     result = 31 * result + isLast.hashCode()
     result = 31 * result + id
     result = 31 * result + data.contentHashCode()
+    result = 31 * result + (mac?.contentHashCode() ?: 0)
     return result
   }
 }
@@ -118,26 +170,66 @@ data class FileChunkMessage(
  */
 class FileReceivePipeline internal constructor(
   val header: FileMessage,
+  private val fromDeviceId: String,
   private val fileTransferId: Long,
   private val fileTransfer: FileTransfer,
   private val receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
   private val messageRepository: MessageRepository,
   private val clock: Clock,
+  private val crypto: com.carlom.klardrop.common.trust.TrustCrypto = com.carlom.klardrop.common.trust.TrustCrypto(),
+  /**
+   * Verifier for per-chunk MACs. The router supplies a closure backed by
+   * [com.carlom.klardrop.common.trust.TrustManager.verifyChunkMac]; null when this peer
+   * has no shared secret with us (legacy pairing or untrusted), in which case the
+   * pipeline falls back to verifying [FileMessage.contentHash] over the assembled bytes
+   * at completion time.
+   */
+  private val verifyChunkMac: (suspend (chunk: FileChunkMessage) -> Boolean)? = null,
 ) {
   private val sink = fileTransfer.bufferedSink
   private var totalReceived = 0L
   private var lastEmitTime = 0L
   private var lastEmitPercent = -1
   private val recvStart = clock.currentTimeMillis()
+  // Accumulator for SHA-256 of the bytes received. Used only when the sender went via
+  // the option-2 path (MAC unavailable) and the header carries a content-hash — we feed
+  // every chunk into it as it arrives so we have the digest at completion time without
+  // re-reading the file. With MAC-mode this is unused and we save the work.
+  private val hashAccumulator = crypto.sha256Accumulator()
+  // Set when a chunk fails MAC verification so complete() takes the failure branch.
+  private var macFailureSeq: Int = -1
 
   /** Returns true after [complete] or [fail] has been called; further chunks must be dropped. */
   var isFinished: Boolean = false
     private set
 
-  fun acceptChunk(chunk: FileChunkMessage) {
+  suspend fun acceptChunk(chunk: FileChunkMessage) {
     if (isFinished) {
       log("FileReceivePipeline", "Dropping chunk seq=${chunk.seq} for finished transfer ${header.id}")
       return
+    }
+    if (macFailureSeq >= 0) {
+      // A previous chunk already failed verification; ignore the rest. complete() will
+      // mark the transfer FAILED. Cheaper than re-verifying the tail and consistent with
+      // "first failure wins" diagnostics.
+      return
+    }
+    if (verifyChunkMac != null) {
+      // MAC-mode: peer is trusted (shared secret on file). Every chunk must arrive with a
+      // valid HMAC tag — anti-downgrade decision is local-only, an attacker can't suppress
+      // verification by stripping the field. mac=null counts as failure here.
+      val tagOk = chunk.mac != null && verifyChunkMac.invoke(chunk)
+      if (!tagOk) {
+        macFailureSeq = chunk.seq
+        log(
+          "FileReceivePipeline",
+          "INTEGRITY: chunk seq=${chunk.seq} for ${header.fileName} from $fromDeviceId failed MAC verification (mac=${if (chunk.mac == null) "missing" else "mismatch"})",
+        )
+        return
+      }
+    } else {
+      // No-MAC mode: fall back to accumulating SHA-256 for the content-hash check at end.
+      hashAccumulator.update(chunk.data, 0, chunk.data.size)
     }
     sink.write(chunk.data, 0, chunk.data.size)
     totalReceived += chunk.data.size
@@ -160,6 +252,48 @@ class FileReceivePipeline internal constructor(
     if (isFinished) return
     isFinished = true
     runCatching { sink.close() }
+
+    // Integrity verdict:
+    //   1. If any chunk failed MAC verification → fail the transfer.
+    //   2. If we're in MAC mode (verifyChunkMac != null) and got here → all chunks
+    //      passed individually, transfer is authentic + intact.
+    //   3. Else (no shared secret with peer): fall back to the option-2 SHA-256 over
+    //      the assembled file, compared against the (signed) header's contentHash. Catch
+    //      the legacy / untrusted-peer case.
+    if (macFailureSeq >= 0) {
+      runCatching { fileTransfer.onTransferFailed() }
+      messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
+      receiveFlow.update {
+        it.copy(status = ReceiveMessageStatus.Failed("File integrity check failed (chunk $macFailureSeq)"))
+      }
+      return
+    }
+
+    if (verifyChunkMac == null) {
+      val expectedHash = header.contentHash
+      if (expectedHash != null) {
+        val actualHash = hashAccumulator.digest()
+        if (!expectedHash.contentEquals(actualHash)) {
+          log(
+            "FileReceivePipeline",
+            "INTEGRITY: content hash mismatch for ${header.fileName} from ${header.id}; rolling back. " +
+              "expected=${expectedHash.take(8).toByteArray().toHexShort()} actual=${actualHash.take(8).toByteArray().toHexShort()}",
+          )
+          runCatching { fileTransfer.onTransferFailed() }
+          messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
+          receiveFlow.update {
+            it.copy(status = ReceiveMessageStatus.Failed("File integrity check failed"))
+          }
+          return
+        }
+      } else {
+        log(
+          "FileReceivePipeline",
+          "WARN: no MAC and no contentHash for ${header.fileName} from $fromDeviceId — accepting without integrity check (legacy or untrusted)",
+        )
+      }
+    }
+
     val finalPath = fileTransfer.onTransferCompleted()
     if (finalPath != null) {
       messageRepository.updateFileTransferFilePath(fileTransferId, finalPath.toString())
@@ -170,6 +304,9 @@ class FileReceivePipeline internal constructor(
     val kbPerSec = if (durationMs > 0) (totalReceived * 1000 / durationMs / 1024) else 0
     log("FileReceivePipeline", "Received ${header.fileName} ($totalReceived bytes) in ${durationMs}ms ($kbPerSec KB/s)")
   }
+
+  private fun ByteArray.toHexShort(): String =
+    joinToString("") { (it.toInt() and 0xFF).toString(16).padStart(2, '0') }
 
   suspend fun fail(error: Throwable) {
     if (isFinished) return
@@ -198,6 +335,7 @@ class FileMessageHandler(
   private val clock: Clock,
   private val coroutines: Coroutines,
   private val messageRepository: MessageRepository,
+  private val crypto: com.carlom.klardrop.common.trust.TrustCrypto = com.carlom.klardrop.common.trust.TrustCrypto(),
 ) : MessageHandler<FileMessage, FileMessage.FileSendRequest> {
 
   override suspend fun handleIncoming(
@@ -241,6 +379,7 @@ class FileMessageHandler(
     header: FileMessage,
     fromDeviceId: String,
     receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+    verifyChunkMac: (suspend (chunk: FileChunkMessage) -> Boolean)? = null,
   ): FileReceivePipeline {
     log("FileMessageHandler", "beginReceive ${header.fileName} (${header.fileSize} bytes) from $fromDeviceId")
 
@@ -276,12 +415,41 @@ class FileMessageHandler(
 
     return FileReceivePipeline(
       header = header,
+      fromDeviceId = fromDeviceId,
       fileTransferId = fileTransferId,
       fileTransfer = fileTransfer,
       receiveFlow = receiveFlow,
       messageRepository = messageRepository,
       clock = clock,
+      crypto = crypto,
+      verifyChunkMac = verifyChunkMac,
     )
+  }
+
+  /**
+   * Read the entire file into memory so we can compute SHA-256 of the content. We rely on
+   * [FileMessage.fileSize] for the allocation; if the actual stream returns more bytes the
+   * extra are appended (paranoid guard against fileSize being stale). For LAN-share file
+   * sizes this is fine; if Klardrop ever wants to support multi-GB transfers we'd switch to
+   * an incremental hasher and stream-once instead.
+   */
+  private suspend fun readFileBytes(request: FileMessage.FileSendRequest): ByteArray = coroutines.ioDispatcher.invoke {
+    val size = request.message.fileSize
+    if (size == 0L) return@invoke ByteArray(0)
+
+    fileManager.getReadStreamFrom(request.file).buffered().use { source ->
+      val buffer = ByteArray(size.toInt().coerceAtLeast(0))
+      var read = 0
+      while (read < buffer.size) {
+        // kotlinx.io's RawSource.readAtMostTo takes (sink, startIndex, endIndex), NOT
+        // (sink, offset, length) — passing a length here would compute a startIndex past
+        // endIndex once `read > 0` and explode with IllegalArgumentException.
+        val n = source.readAtMostTo(buffer, read, buffer.size)
+        if (n <= 0) break
+        read += n
+      }
+      if (read == buffer.size) buffer else buffer.copyOf(read)
+    }
   }
 
   /**
@@ -305,6 +473,14 @@ class FileMessageHandler(
     sendFramed: suspend (Message) -> Unit,
     progressFlow: MutableSharedFlow<MessengerSendProgress>,
     awaitReady: suspend () -> Unit,
+    /**
+     * Per-chunk HMAC computer. Router supplies a closure that calls
+     * [com.carlom.klardrop.common.trust.TrustManager.computeChunkMac]; returns null when
+     * there's no shared secret with the peer (legacy pairing or untrusted), in which case
+     * the chunked path falls back to the per-file SHA-256 content-hash binding in the
+     * header. Default is "no MAC" so direct unit-test invocations don't have to plumb it.
+     */
+    chunkMacFn: suspend (chunk: FileChunkMessage) -> ByteArray? = { null },
   ) {
     val fileTransferId = messageRepository.insertFileTransfer(
       fileName = request.message.fileName,
@@ -332,26 +508,58 @@ class FileMessageHandler(
       var lastEmitTime = 0L
       var lastEmitPercent = -1
 
+      // Probe whether the peer has a shared secret with us by asking for a MAC over the
+      // empty input. If it comes back non-null, we have an HMAC key for this peer and can
+      // authenticate every chunk individually (~µs each — basically free). Otherwise we
+      // fall back to the per-file SHA-256 content hash on the (signed) header — the
+      // option-2 path that pre-dated the persisted ECDH secret. Both are end-to-end
+      // integrity, MAC just gives faster failure detection mid-stream.
+      val canMacChunks = chunkMacFn(
+        FileChunkMessage(fileMessageId = request.message.id, seq = -1, data = ByteArray(0), isLast = false),
+      ) != null
+
+      val outgoingHeader = if (canMacChunks) {
+        request.message
+      } else {
+        val fileBytes = readFileBytes(request)
+        val contentHash = crypto.sha256(fileBytes)
+        request.message.copy(contentHash = contentHash)
+      }
+
       val start = clock.currentTimeMillis()
       try {
-        sendFramed(request.message)
+        sendFramed(outgoingHeader)
         // awaitReady() can now throw TransferRejectedException if the receiver declined
         // the transfer before any bytes were streamed — handled distinctly below so the
         // file_transfers row is marked REJECTED instead of FAILED.
         awaitReady()
 
-        log("FileMessageHandler", "Sending file ${request.message.fileName} (${request.message.fileSize} bytes)")
+        log(
+          "FileMessageHandler",
+          "Sending file ${request.message.fileName} (${request.message.fileSize} bytes), per-chunk MAC: $canMacChunks",
+        )
+
+        suspend fun frameChunk(chunkSeq: Int, data: ByteArray, isLast: Boolean) {
+          val chunk = FileChunkMessage(
+            fileMessageId = request.message.id,
+            seq = chunkSeq,
+            data = data,
+            isLast = isLast,
+            mac = if (canMacChunks) chunkMacFn(
+              FileChunkMessage(
+                fileMessageId = request.message.id,
+                seq = chunkSeq,
+                data = data,
+                isLast = isLast,
+              ),
+            ) else null,
+          )
+          sendFramed(chunk)
+        }
 
         // Empty file: still send a single isLast=true chunk so the receiver finalizes.
         if (request.message.fileSize == 0L) {
-          sendFramed(
-            FileChunkMessage(
-              fileMessageId = request.message.id,
-              seq = 0,
-              data = ByteArray(0),
-              isLast = true,
-            )
-          )
+          frameChunk(0, ByteArray(0), isLast = true)
         } else {
           fileManager.getReadStreamFrom(request.file).buffered().use { readBuffer ->
             while (totalSent < request.message.fileSize) {
@@ -364,14 +572,7 @@ class FileMessageHandler(
               // serialized message, which already encodes a length-prefixed bytes field, but
               // we must not over-send the buffer's tail garbage on the final partial chunk.
               val chunkData = if (bytesRead == buffer.size) buffer.copyOf() else buffer.copyOf(bytesRead)
-              sendFramed(
-                FileChunkMessage(
-                  fileMessageId = request.message.id,
-                  seq = seq++,
-                  data = chunkData,
-                  isLast = isLast,
-                )
-              )
+              frameChunk(seq++, chunkData, isLast = isLast)
               totalSent += bytesRead
 
               val progressValue = (totalSent * 100 / request.message.fileSize).toInt().coerceIn(0, 100)

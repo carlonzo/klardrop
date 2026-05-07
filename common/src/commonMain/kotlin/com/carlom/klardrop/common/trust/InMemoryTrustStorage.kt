@@ -13,7 +13,9 @@ class InMemoryTrustStorage : TrustStorage {
     
     private val trustedDevices = mutableMapOf<String, ByteArray>()  // ECDH keys
     private val ecdsaKeys = mutableMapOf<String, ByteArray>()  // ECDSA keys for signing
+    private val sharedSecrets = mutableMapOf<String, ByteArray>()  // ECDH-derived shared secrets
     private var devicePrivateKey: ByteArray? = null  // Device's own private key
+    private var devicePublicKey: ByteArray? = null  // Device's own public key (matching)
     private val mutex = Mutex()
     
     override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {
@@ -38,13 +40,15 @@ class InMemoryTrustStorage : TrustStorage {
         mutex.withLock {
             trustedDevices.remove(deviceId)
             ecdsaKeys.remove(deviceId)
+            sharedSecrets.remove(deviceId)
         }
     }
-    
+
     override suspend fun clearAllTrustedDevices() {
         mutex.withLock {
             trustedDevices.clear()
             ecdsaKeys.clear()
+            sharedSecrets.clear()
         }
     }
     
@@ -77,6 +81,31 @@ class InMemoryTrustStorage : TrustStorage {
     override suspend fun deleteDevicePrivateKey() {
         mutex.withLock {
             devicePrivateKey = null
+            devicePublicKey = null
+        }
+    }
+
+    override suspend fun storeDevicePublicKey(publicKey: ByteArray) {
+        mutex.withLock {
+            devicePublicKey = publicKey.copyOf()
+        }
+    }
+
+    override suspend fun getDevicePublicKey(): ByteArray? {
+        return mutex.withLock {
+            devicePublicKey?.copyOf()
+        }
+    }
+
+    override suspend fun storeSharedSecret(deviceId: String, sharedSecret: ByteArray) {
+        mutex.withLock {
+            sharedSecrets[deviceId] = sharedSecret.copyOf()
+        }
+    }
+
+    override suspend fun getSharedSecret(deviceId: String): ByteArray? {
+        return mutex.withLock {
+            sharedSecrets[deviceId]?.copyOf()
         }
     }
 }

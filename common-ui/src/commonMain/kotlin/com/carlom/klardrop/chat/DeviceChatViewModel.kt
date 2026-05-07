@@ -131,6 +131,24 @@ class DeviceChatViewModel(
     }
   }
 
+  fun openUrlClicked(url: String) {
+    viewModelScope.launch {
+      try {
+        val success = fileManager.openUrl(url)
+        if (!success) {
+          _uiState.update {
+            it.copy(error = "Unable to open link. No handler found.")
+          }
+        }
+      } catch (e: Exception) {
+        log("DeviceChatViewModel", "Failed to open url $url", e)
+        _uiState.update {
+          it.copy(error = "Failed to open link: ${e.message}")
+        }
+      }
+    }
+  }
+
   fun sendFiles(files: List<PlatformFile>) {
     if (files.isEmpty()) return
 

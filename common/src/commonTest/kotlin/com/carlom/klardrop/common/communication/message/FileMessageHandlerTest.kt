@@ -204,6 +204,280 @@ class FileMessageHandlerTest {
     assertEquals(true, chunks[0].isLast)
   }
 
+  /**
+   * Regression test: chunks must hash to the value the (signed) header committed to.
+   * If the bytes don't match, the receive pipeline marks the transfer FAILED and rolls
+   * back the sink — even though every chunk arrived without I/O error. This is the
+   * mechanism that lets us skip per-chunk ECDSA without losing integrity.
+   */
+  @Test
+  fun completeFailsTransferWhenChunkBytesDontMatchHeaderContentHash() = runTest(testDispatcher) {
+    val realCrypto = com.carlom.klardrop.common.trust.TrustCrypto()
+    val originalBytes = ByteArray(300) { (it % 256).toByte() }
+    val tamperedBytes = originalBytes.copyOf().also { it[100] = (it[100] + 1).toByte() }
+
+    val header = FileMessage(
+      fileName = "tampered.bin",
+      fileSize = originalBytes.size.toLong(),
+      mimeType = "application/octet-stream",
+      contentHash = realCrypto.sha256(originalBytes),
+    )
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
+    // Feed the TAMPERED bytes — simulates an attacker (or transit corruption) modifying
+    // chunk content while leaving the (signed) header alone.
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 0, data = tamperedBytes.copyOfRange(0, 100), isLast = false))
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 1, data = tamperedBytes.copyOfRange(100, 200), isLast = false))
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 2, data = tamperedBytes.copyOfRange(200, 300), isLast = true))
+    pipeline.complete()
+
+    assertEquals(true, pipeline.isFinished, "complete() must mark pipeline finished even on hash failure")
+    assertEquals(
+      "updateFileTransferStatus(1, FAILED)", mockMessageRepository.calls.last(),
+      "Hash mismatch must record the transfer as FAILED, not COMPLETED",
+    )
+    val status = flow.value.status
+    assertTrue(status is ReceiveMessageStatus.Failed, "expected Failed, got $status")
+    assertTrue(
+      status.reason.contains("integrity", ignoreCase = true),
+      "Failure reason should mention the integrity check, got '${status.reason}'",
+    )
+  }
+
+  /**
+   * Happy path: header carries SHA-256(file), chunks deliver matching bytes, complete()
+   * passes the hash check and finalizes COMPLETED.
+   */
+  @Test
+  fun completeMatchesContentHashOnHappyPath() = runTest(testDispatcher) {
+    val realCrypto = com.carlom.klardrop.common.trust.TrustCrypto()
+    val payload = ByteArray(300) { (it % 256).toByte() }
+    val header = FileMessage(
+      fileName = "ok.bin",
+      fileSize = payload.size.toLong(),
+      mimeType = "application/octet-stream",
+      contentHash = realCrypto.sha256(payload),
+    )
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 0, data = payload.copyOfRange(0, 150), isLast = false))
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 1, data = payload.copyOfRange(150, 300), isLast = true))
+    pipeline.complete()
+
+    assertEquals("updateFileTransferStatus(1, COMPLETED)", mockMessageRepository.calls.last())
+    assertTrue(flow.value.status is ReceiveMessageStatus.Completed)
+  }
+
+  /**
+   * Backward-compat: a header without contentHash (legacy peer pre-dating the field) still
+   * completes — receiver logs a WARN but doesn't fail. This is the only safe behavior since
+   * we can't retroactively gain integrity over bytes we have no commitment to.
+   */
+  @Test
+  fun completeAcceptsHeaderWithoutContentHashForBackwardCompat() = runTest(testDispatcher) {
+    val payload = ByteArray(300) { (it % 256).toByte() }
+    val header = FileMessage(
+      fileName = "legacy.bin",
+      fileSize = payload.size.toLong(),
+      mimeType = "application/octet-stream",
+      contentHash = null,
+    )
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 0, data = payload, isLast = true))
+    pipeline.complete()
+
+    assertEquals("updateFileTransferStatus(1, COMPLETED)", mockMessageRepository.calls.last())
+    assertTrue(flow.value.status is ReceiveMessageStatus.Completed)
+  }
+
+  /**
+   * Per-chunk MAC happy path: when both peers share a secret (post-pairing-with-secret
+   * persistence), the sender's chunkMacFn returns a tag for each chunk and the receiver's
+   * verifier accepts them all. The pipeline must finalize COMPLETED with no fallback to
+   * content-hash.
+   */
+  @Test
+  fun chunkMacHappyPathFinalizesCompleted() = runTest(testDispatcher) {
+    val sharedSecret = ByteArray(32) { it.toByte() } // deterministic stand-in
+    val realCrypto = com.carlom.klardrop.common.trust.TrustCrypto()
+    val info = "klardrop-chunk-mac-v1".encodeToByteArray()
+    val macKey = realCrypto.hkdfSha256(sharedSecret, info)
+
+    val payload = ByteArray(300) { (it * 7 % 256).toByte() }
+    val header = FileMessage(
+      fileName = "macd.bin",
+      fileSize = payload.size.toLong(),
+      mimeType = "application/octet-stream",
+      // Note: contentHash NOT set — MAC mode supersedes it.
+    )
+    val flow = newReceiveFlow("peer-1")
+
+    val verifyMac: suspend (FileChunkMessage) -> Boolean = { chunk ->
+      val tag = chunk.mac
+      tag != null && realCrypto.verifyHmacSha256(
+        key = macKey,
+        data = chunkMacInput(chunk.fileMessageId, chunk.seq, chunk.isLast, chunk.data),
+        tag = tag,
+      )
+    }
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow, verifyChunkMac = verifyMac)
+
+    suspend fun macFor(chunk: FileChunkMessage): ByteArray = realCrypto.hmacSha256(
+      key = macKey,
+      data = chunkMacInput(chunk.fileMessageId, chunk.seq, chunk.isLast, chunk.data),
+    )
+
+    val c0 = FileChunkMessage(header.id, seq = 0, data = payload.copyOfRange(0, 150), isLast = false)
+    pipeline.acceptChunk(c0.copy(mac = macFor(c0)))
+    val c1 = FileChunkMessage(header.id, seq = 1, data = payload.copyOfRange(150, 300), isLast = true)
+    pipeline.acceptChunk(c1.copy(mac = macFor(c1)))
+    pipeline.complete()
+
+    assertEquals("updateFileTransferStatus(1, COMPLETED)", mockMessageRepository.calls.last())
+    assertTrue(flow.value.status is ReceiveMessageStatus.Completed)
+    assertContentEquals(payload, mockFileManager.preparedFile!!.bytes())
+  }
+
+  /**
+   * Tampered chunk: byte flip mid-stream. The chunk's MAC won't match → pipeline marks
+   * macFailureSeq and complete() rolls back to FAILED. The tampered bytes must NOT be
+   * written to the sink.
+   */
+  @Test
+  fun chunkMacFailsTransferOnTamperedChunk() = runTest(testDispatcher) {
+    val sharedSecret = ByteArray(32) { it.toByte() }
+    val realCrypto = com.carlom.klardrop.common.trust.TrustCrypto()
+    val macKey = realCrypto.hkdfSha256(sharedSecret, "klardrop-chunk-mac-v1".encodeToByteArray())
+
+    val payload = ByteArray(300) { (it * 7 % 256).toByte() }
+    val header = FileMessage("tampered.bin", payload.size.toLong(), "application/octet-stream")
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(
+      header, "peer-1", flow,
+      verifyChunkMac = { chunk ->
+        val tag = chunk.mac
+        tag != null && realCrypto.verifyHmacSha256(
+          key = macKey,
+          data = chunkMacInput(chunk.fileMessageId, chunk.seq, chunk.isLast, chunk.data),
+          tag = tag,
+        )
+      },
+    )
+
+    suspend fun macFor(chunk: FileChunkMessage): ByteArray = realCrypto.hmacSha256(
+      key = macKey,
+      data = chunkMacInput(chunk.fileMessageId, chunk.seq, chunk.isLast, chunk.data),
+    )
+
+    // Chunk 0: clean, MAC computed over the original bytes.
+    val original0 = FileChunkMessage(header.id, seq = 0, data = payload.copyOfRange(0, 150), isLast = false)
+    val tag0 = macFor(original0)
+    // Then we ship the chunk with TAMPERED data but the original MAC — simulating an
+    // attacker who can flip bytes in transit but doesn't hold the HMAC key.
+    val tampered0 = original0.copy(
+      data = original0.data.copyOf().also { it[42] = (it[42] + 1).toByte() },
+      mac = tag0,
+    )
+    pipeline.acceptChunk(tampered0)
+    // Chunk 1: clean (we're testing that one bad chunk is enough to fail).
+    val c1 = FileChunkMessage(header.id, seq = 1, data = payload.copyOfRange(150, 300), isLast = true)
+    pipeline.acceptChunk(c1.copy(mac = macFor(c1)))
+
+    pipeline.complete()
+
+    assertEquals("updateFileTransferStatus(1, FAILED)", mockMessageRepository.calls.last())
+    assertTrue(flow.value.status is ReceiveMessageStatus.Failed)
+    // Tampered bytes should NOT be in the sink — pipeline aborted writes after the MAC
+    // failure on chunk 0, and chunk 1 was rejected because macFailureSeq was already set.
+    assertEquals(0, mockFileManager.preparedFile!!.bytes().size)
+  }
+
+  /**
+   * Anti-downgrade: when the receiver has a shared secret with the peer (verifyChunkMac
+   * non-null), a chunk arriving WITHOUT a mac field counts as failure. An attacker can't
+   * strip the MAC to bypass verification — the receiver decides verification mode based
+   * on its own trust state, not on what the sender chose to include.
+   */
+  @Test
+  fun chunkMacRejectsMissingMacWhenPeerHasSharedSecret() = runTest(testDispatcher) {
+    val payload = ByteArray(150) { it.toByte() }
+    val header = FileMessage("downgrade.bin", payload.size.toLong(), "application/octet-stream")
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(
+      header, "peer-1", flow,
+      verifyChunkMac = { chunk -> chunk.mac != null }, // rejects null-mac
+    )
+
+    val chunkWithoutMac = FileChunkMessage(header.id, seq = 0, data = payload, isLast = true, mac = null)
+    pipeline.acceptChunk(chunkWithoutMac)
+    pipeline.complete()
+
+    assertEquals("updateFileTransferStatus(1, FAILED)", mockMessageRepository.calls.last())
+    assertTrue(flow.value.status is ReceiveMessageStatus.Failed)
+  }
+
+  /** Shared chunk-MAC input layout that mirrors TrustManager.chunkMacInput. */
+  private fun chunkMacInput(fileMessageId: Int, seq: Int, isLast: Boolean, data: ByteArray): ByteArray {
+    val out = ByteArray(4 + 4 + 1 + data.size)
+    out[0] = (fileMessageId ushr 24).toByte()
+    out[1] = (fileMessageId ushr 16).toByte()
+    out[2] = (fileMessageId ushr 8).toByte()
+    out[3] = fileMessageId.toByte()
+    out[4] = (seq ushr 24).toByte()
+    out[5] = (seq ushr 16).toByte()
+    out[6] = (seq ushr 8).toByte()
+    out[7] = seq.toByte()
+    out[8] = if (isLast) 1 else 0
+    data.copyInto(out, 9)
+    return out
+  }
+
+  /**
+   * Sender side: handleOutgoingChunked must compute SHA-256 of the file and emit it on
+   * the header, so the receiver has something to verify against. The header field starts
+   * out null on the request and must be populated by the time it's framed on the wire.
+   */
+  @Test
+  fun handleOutgoingChunkedComputesAndEmitsContentHashOnHeader() = runTest(testDispatcher) {
+    val realCrypto = com.carlom.klardrop.common.trust.TrustCrypto()
+    val payload = ByteArray(1024) { (it % 256).toByte() }
+    val expectedHash = realCrypto.sha256(payload)
+
+    val tempPath = Path("/tmp", "hashed.bin")
+    val platformFile = PlatformFile(tempPath)
+    mockFileManager.fileDataToServe[platformFile.path] = payload
+
+    // Caller's request still has contentHash = null — it's the handler's job to compute it.
+    val header = FileMessage("hashed.bin", payload.size.toLong(), "application/octet-stream", contentHash = null)
+    val request = header.toSendRequest(platformFile)
+
+    val sentMessages = mutableListOf<Message>()
+    val progress = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 16)
+
+    fileMessageHandler.handleOutgoingChunked(
+      toDeviceId = "peer-out",
+      request = request,
+      sendFramed = { sentMessages.add(it) },
+      progressFlow = progress,
+      awaitReady = {},
+    )
+
+    val sentHeader = sentMessages.first() as FileMessage
+    assertContentEquals(
+      expectedHash, sentHeader.contentHash,
+      "handleOutgoingChunked must populate the header's contentHash with SHA-256 of the file content",
+    )
+    // The id must be preserved so the receiver's chunk-pipeline lookup (keyed by header id)
+    // and the chunks (which carry fileMessageId == header.id) line up.
+    assertEquals(header.id, sentHeader.id)
+  }
+
   private fun newReceiveFlow(deviceId: String) = MutableStateFlow(
     ReceiveMessageUpdate(
       device = DeviceInfo(deviceId, "peer", DeviceType.DESKTOP),
@@ -243,6 +517,10 @@ private class MockMessageRepository : MessageRepository {
     calls.add("updateFileTransferFilePath($id, $filePath)")
   }
 
+  override suspend fun markStaleInProgressAsFailed() {
+    calls.add("markStaleInProgressAsFailed()")
+  }
+
   override suspend fun markMessagesAsRead(remoteDeviceId: String) {}
   override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long = 0L
   override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> =
@@ -267,6 +545,7 @@ private open class MockFileManager : FileManager {
   }
 
   override suspend fun openFile(filePath: String): Boolean = true
+  override suspend fun openUrl(url: String): Boolean = true
 }
 
 private class MockFileTransfer : FileTransfer {

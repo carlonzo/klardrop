@@ -394,6 +394,7 @@ internal class InMemoryTestFileManager : FileManager {
   }
 
   override suspend fun openFile(filePath: String): Boolean = false
+  override suspend fun openUrl(url: String): Boolean = false
 
   inner class InMemoryFileTransfer(
     private val fileName: String
@@ -463,6 +464,7 @@ internal class KlardropTestContext(
       kind: TransferKind,
       headers: List<Message>,
       receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+      notifyAwaitingUser: suspend () -> Unit,
     ): Boolean = true
   }
 
@@ -742,6 +744,7 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
 
   override suspend fun updateFileTransferStatus(id: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus) {}
   override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {}
+  override suspend fun markStaleInProgressAsFailed() {}
   override suspend fun markMessagesAsRead(remoteDeviceId: String) {}
   override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long = 0L
   override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> = kotlinx.coroutines.flow.flowOf(emptyMap())

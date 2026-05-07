@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.communication
 import com.carlom.klardrop.common.communication.message.AckType
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -25,6 +26,14 @@ data class AckTimeoutConfig(
   val receivedAckTimeout: Duration = 10.seconds,
 
   /**
+   * Time to wait for ACK_READY / ACK_RECEIVED / ACK_REJECTED after the receiver has
+   * signalled ACK_AWAITING_USER (i.e. is blocking on a human accept/reject prompt).
+   * Long enough to give the user time to glance at their phone; short enough that a
+   * dropped peer eventually surfaces as a transfer failure instead of hanging forever.
+   */
+  val userResponseTimeout: Duration = 5.minutes,
+
+  /**
    * Maximum number of retry attempts for no-payload messages and payload headers
    */
   val maxRetries: Int = 2,
@@ -37,9 +46,11 @@ data class AckTimeoutConfig(
   fun timeoutFor(ackType: AckType, hasPayload: Boolean): Duration = when (ackType) {
     AckType.READY -> readyAckTimeout
     AckType.RECEIVED -> if (hasPayload) receivedAckTimeout else noPayloadAckTimeout
-    // REJECTED is registered alongside RECEIVED/READY and races them in the same
-    // withTimeout block — its independent timeout is never directly waited on.
+    // REJECTED and AWAITING_USER are registered alongside RECEIVED/READY and race them
+    // in the same withTimeout block — their independent timeouts are never directly
+    // waited on.
     AckType.REJECTED -> if (hasPayload) receivedAckTimeout else noPayloadAckTimeout
+    AckType.AWAITING_USER -> if (hasPayload) receivedAckTimeout else noPayloadAckTimeout
   }
 
   companion object {
@@ -52,6 +63,7 @@ data class AckTimeoutConfig(
       noPayloadAckTimeout = timeoutMs.milliseconds,
       readyAckTimeout = timeoutMs.milliseconds,
       receivedAckTimeout = timeoutMs.milliseconds,
+      userResponseTimeout = timeoutMs.milliseconds,
     )
   }
 }

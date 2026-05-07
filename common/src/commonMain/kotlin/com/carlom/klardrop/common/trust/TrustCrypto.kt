@@ -1,9 +1,12 @@
 package com.carlom.klardrop.common.trust
 
+import dev.whyoleg.cryptography.BinarySize.Companion.bytes
 import dev.whyoleg.cryptography.CryptographyProvider
 import dev.whyoleg.cryptography.algorithms.ECDSA
 import dev.whyoleg.cryptography.algorithms.ECDH
 import dev.whyoleg.cryptography.algorithms.EC
+import dev.whyoleg.cryptography.algorithms.HKDF
+import dev.whyoleg.cryptography.algorithms.HMAC
 import dev.whyoleg.cryptography.algorithms.SHA256
 import dev.whyoleg.cryptography.random.CryptographyRandom
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +35,9 @@ class TrustCrypto {
   private val provider = CryptographyProvider.Default
   private val ecdsa = provider.get(ECDSA)
   private val ecdh = provider.get(ECDH)
+  private val sha256 = provider.get(SHA256)
+  private val hmac = provider.get(HMAC)
+  private val hkdf = provider.get(HKDF)
 
   // Key pair wrapper classes
   data class ECDHKeyPair(
@@ -270,6 +276,93 @@ class TrustCrypto {
   fun combineForSigning(payload: ByteArray, timestamp: Long, nonce: ByteArray): ByteArray {
     val timestampBytes = timestamp.toByteArray()
     return payload + timestampBytes + nonce
+  }
+
+  /**
+   * SHA-256 of [data]. Used by the file-transfer path to bind a signed header to the content
+   * bytes that follow without paying ECDSA cost on every chunk: the header carries
+   * `SHA256(file)` and is signed once; chunks flow unsigned; the receiver hashes as it
+   * accumulates and rejects on mismatch at completion time.
+   */
+  suspend fun sha256(data: ByteArray): ByteArray {
+    // No explicit Dispatchers.Default switch here: callers in the file path are already
+    // running on coroutines.ioDispatcher, and offloading via withContext breaks runTest
+    // ordering for tests that observe interleaved progress emissions across the call.
+    // SHA-256 over our typical file sizes (<100MB) is fast enough that this isn't a
+    // throughput concern.
+    val hasher = sha256.hasher()
+    return hasher.hash(data)
+  }
+
+  /**
+   * Stateful SHA-256 accumulator. Caller feeds chunks via [Sha256Accumulator.update] and reads
+   * the final digest via [Sha256Accumulator.digest]. Used by the receive pipeline so we don't
+   * have to re-read the file from disk after assembling it.
+   */
+  fun sha256Accumulator(): Sha256Accumulator = Sha256AccumulatorImpl()
+
+  interface Sha256Accumulator {
+    fun update(data: ByteArray, offset: Int = 0, length: Int = data.size)
+    suspend fun digest(): ByteArray
+  }
+
+  /**
+   * Derive a 32-byte key from [sharedSecret] (typically the ECDH-derived secret) using
+   * HKDF-SHA256 with [salt] and [info]. The same (sharedSecret, salt, info) tuple always
+   * produces the same key, so both peers can independently derive the same MAC key.
+   *
+   * Use a [info] string that's specific to the purpose (e.g. "klardrop-chunk-mac-v1") so
+   * keys derived for different uses are mutually orthogonal — that way compromising one
+   * doesn't leak the others, and you can rotate per use case.
+   */
+  suspend fun hkdfSha256(
+    sharedSecret: ByteArray,
+    info: ByteArray,
+    salt: ByteArray = ByteArray(0),
+    outputSize: Int = 32,
+  ): ByteArray {
+    val derivation = hkdf.secretDerivation(SHA256, outputSize.bytes, salt, info)
+    return derivation.deriveSecretToByteArray(sharedSecret)
+  }
+
+  /**
+   * Compute HMAC-SHA256 of [data] under [key]. Constant time for the inputs we use.
+   * Pair with [verifyHmacSha256] for symmetric-key authenticity.
+   */
+  suspend fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
+    val hmacKey = hmac.keyDecoder(SHA256).decodeFromByteArray(HMAC.Key.Format.RAW, key)
+    return hmacKey.signatureGenerator().generateSignature(data)
+  }
+
+  /** Verify an HMAC-SHA256 [tag] over [data] under [key]. */
+  suspend fun verifyHmacSha256(key: ByteArray, data: ByteArray, tag: ByteArray): Boolean {
+    val hmacKey = hmac.keyDecoder(SHA256).decodeFromByteArray(HMAC.Key.Format.RAW, key)
+    return hmacKey.signatureVerifier().tryVerifySignature(data, tag)
+  }
+
+  private inner class Sha256AccumulatorImpl : Sha256Accumulator {
+    // The cryptography-kotlin Hasher API is one-shot per `hash()` call. We hold the buffered
+    // bytes ourselves and finalize on digest(). For the file-transfer use case this means
+    // O(file size) memory in the receive pipeline — acceptable for the file sizes Klardrop
+    // targets (LAN sharing of media files, typically <100MB). If we ever need to support
+    // streaming GB-scale transfers we can swap to an incremental hasher; for now keep it simple.
+    private val buffer = ArrayList<ByteArray>()
+
+    override fun update(data: ByteArray, offset: Int, length: Int) {
+      buffer.add(if (offset == 0 && length == data.size) data.copyOf() else data.copyOfRange(offset, offset + length))
+    }
+
+    override suspend fun digest(): ByteArray {
+      val total = buffer.sumOf { it.size }
+      val combined = ByteArray(total)
+      var pos = 0
+      for (chunk in buffer) {
+        chunk.copyInto(combined, pos)
+        pos += chunk.size
+      }
+      val hasher = sha256.hasher()
+      return hasher.hash(combined)
+    }
   }
 
 

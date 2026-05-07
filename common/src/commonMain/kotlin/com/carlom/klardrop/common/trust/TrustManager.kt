@@ -33,6 +33,12 @@ class TrustManager(
   companion object {
     private const val PAIRING_TIMEOUT_SECONDS = 30
     private const val MAX_TIME_DIFF_SECONDS = 300 // 5 minutes
+
+    /**
+     * HKDF info string for deriving the per-pair file-chunk HMAC key. Versioned so we
+     * can rotate the derivation later without colliding with existing deployed keys.
+     */
+    private val CHUNK_MAC_INFO = "klardrop-chunk-mac-v1".encodeToByteArray()
   }
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -52,41 +58,53 @@ class TrustManager(
 
   /**
    * Initialize the trust manager and load or generate device signing keys.
-   * Device identity persists across app restarts to maintain trust relationships.
+   * Device identity persists across app restarts so peers we've paired with can keep
+   * verifying our signatures using the public key we published to them at pairing time.
+   *
+   * Pre-fix this method silently regenerated a brand-new keypair every restart (with a
+   * comment claiming public-key derivation wasn't supported), which rotated the device
+   * identity behind the user's back and broke every existing pairing. The actual fix is
+   * to persist BOTH halves of the keypair (private + public) and reconstruct from those
+   * bytes on subsequent runs — not generate.
    */
   suspend fun initialize() {
-    if (deviceECDSAKeys == null) {
-      // Try to load existing device private key
-      val existingPrivateKey = storage.getDevicePrivateKey()
+    if (deviceECDSAKeys != null) return
 
-      if (existingPrivateKey != null) {
-        // Reconstruct keypair from stored private key
-        try {
-          // CRITICAL BUG FIX: The cryptography library doesn't support public key derivation
-          // from private key. Since we've been using random public keys, we need to regenerate
-          // the device identity to ensure proper key matching for signature verification.
+    val existingPrivate = storage.getDevicePrivateKey()
+    val existingPublic = storage.getDevicePublicKey()
 
-          // Generate new device identity with matching public/private keys
-          deviceECDSAKeys = crypto.generateECDSAKeyPair()
+    if (existingPrivate != null && existingPublic != null) {
+      deviceECDSAKeys = TrustCrypto.ECDSAKeyPair(
+        publicKey = TrustCrypto.ECDSAPublicKey(existingPublic),
+        privateKey = TrustCrypto.ECDSAPrivateKey(existingPrivate),
+      )
+      log("🔐 TrustManager", "Loaded persisted device identity")
+      return
+    }
 
-          // Store the new private key, overwriting the old mismatched one
-          storage.storeDevicePrivateKey(deviceECDSAKeys!!.privateKey.data)
+    // Either a fresh install, or a legacy install that only persisted the private key
+    // (no way to recover the matching public key from the RAW scalar in this lib). Either
+    // way we have to generate; persist BOTH halves so the next restart can reconstruct
+    // without rotating identity again.
+    val isLegacyMigration = existingPrivate != null
+    val fresh = crypto.generateECDSAKeyPair()
+    deviceECDSAKeys = fresh
+    storage.storeDevicePrivateKey(fresh.privateKey.data)
+    storage.storeDevicePublicKey(fresh.publicKey.data)
 
-          log("🔐 TrustManager", " DIAGNOSTIC: Generated new device identity with matching keys")
-        } catch (e: Exception) {
-          log("🔐 TrustManager", " Failed to load existing device key, generating new one: ${e.message}")
-          // Fall back to generating new keypair
-          deviceECDSAKeys = crypto.generateECDSAKeyPair()
-          storage.storeDevicePrivateKey(deviceECDSAKeys!!.privateKey.data)
-        }
-      } else {
-        // Generate new device identity
-        deviceECDSAKeys = crypto.generateECDSAKeyPair()
-
-        // Persist the private key for future app restarts
-        storage.storeDevicePrivateKey(deviceECDSAKeys!!.privateKey.data)
-        log("🔐 TrustManager", " Generated and stored new device identity")
-      }
+    if (isLegacyMigration) {
+      // Pre-fix builds rotated the keypair on every restart. Any peer paired with us
+      // therefore cached an obsolete public key — every signature we now produce will
+      // fail their verification. Wipe local trust so the user re-pairs cleanly; the
+      // peer's trust DB also gets reset on their first launch with the fix, so this
+      // recovery is symmetric.
+      storage.clearAllTrustedDevices()
+      log(
+        "🔐 TrustManager",
+        "Generated new device identity and reset local trust (legacy storage missing public key — peers must re-pair)",
+      )
+    } else {
+      log("🔐 TrustManager", "Generated and stored new device identity (no persisted identity)")
     }
   }
 
@@ -266,15 +284,19 @@ class TrustManager(
       val ourEcdhPublicKeyBytes = crypto.encodePublicKey(ourEcdhKeyPair.publicKey)
       val ourEcdsaPublicKeyBytes = crypto.encodeECDSAPublicKey(ecdsaKeys.publicKey)
 
-      // Compute shared secret (though we won't use it for now, just store public keys)
-      crypto.computeECDHSecret(
+      // Compute the ECDH shared secret from our private key + peer's public key. Both
+      // sides arrive at the same 32 bytes. Persist it: the file-transfer path derives an
+      // HMAC key from this secret to authenticate individual chunks ~1000× faster than
+      // per-chunk ECDSA would.
+      val sharedSecret = crypto.computeECDHSecret(
         privateKey = ourEcdhKeyPair.privateKey,
-        peerPublicKeyBytes = request.ecdhPublicKey
+        peerPublicKeyBytes = request.ecdhPublicKey,
       )
 
       // Store peer's keys for future use
       storage.storeTrustedDevice(request.deviceId, request.ecdhPublicKey)  // ECDH key
       storage.storeECDSAKey(request.deviceId, request.ecdsaPublicKey)  // ECDSA key for verification
+      storage.storeSharedSecret(request.deviceId, sharedSecret)
 
       // Create response
       val response = TrustPairingResponse(
@@ -342,9 +364,18 @@ class TrustManager(
 
       log("🔐 TrustManager", " Computed shared secret, storing trusted device keys...")
 
+      // Compute the ECDH shared secret on this side too. The acceptor computed the same
+      // value during createPairingAcceptance — both sides now hold matching 32 bytes that
+      // never appeared on the wire. Persist it for fast HMAC over file chunks later.
+      val sharedSecret = crypto.computeECDHSecret(
+        privateKey = session.ecdhKeyPair.privateKey,
+        peerPublicKeyBytes = response.ecdhPublicKey,
+      )
+
       // Store peer's keys
       storage.storeTrustedDevice(response.deviceId, response.ecdhPublicKey)  // ECDH key
       storage.storeECDSAKey(response.deviceId, response.ecdsaPublicKey)  // ECDSA key for verification
+      storage.storeSharedSecret(response.deviceId, sharedSecret)
 
       // DIAGNOSTIC: Log what public key we're storing for the peer
       log("🔐 TrustManager", " Device ${response.deviceId} is now trusted")
@@ -394,10 +425,23 @@ class TrustManager(
 
   /**
    * Sign a message with this device's ECDSA private key.
+   *
    * @param message Message bytes to sign
-   * @return Signed TrustedMessage
+   * @param id Optional id to assign to the resulting [TrustedMessage]. When the wrap is
+   * being applied at the wire level around an existing application message, callers should
+   * pass the inner message's id so the wire-frame id (which the sender's ConnectionMessenger
+   * tracks pending-ACKs under, and which the receiver's MessagesRouter echoes back in
+   * acks) matches what the application layer expects. Defaults to a fresh random id for
+   * standalone signed payloads.
    */
-  suspend fun signMessage(message: ByteArray): TrustedMessage? {
+  suspend fun signMessage(message: ByteArray, id: Int = kotlin.random.Random.nextInt()): TrustedMessage? {
+    // Lazily ensure device identity is loaded. Pre-fix, only the pairing-creation paths
+    // called initialize(), so on a fresh app start the very first signMessage (typically
+    // a clipboard sync or a file send to an already-paired device) would see
+    // deviceECDSAKeys == null, return null, and the caller would fall back to sending the
+    // message UNSIGNED — which the trusted peer's security gate then rejected. Calling
+    // initialize() here makes signing a self-contained operation that just works.
+    initialize()
     val signingKeys = deviceECDSAKeys ?: return null
 
     return try {
@@ -419,7 +463,8 @@ class TrustManager(
         timestamp = timestamp,
         nonce = nonce,
         signature = signature,
-        senderId = currentDevice.shortDeviceId
+        senderId = currentDevice.shortDeviceId,
+        id = id,
       )
     } catch (e: Exception) {
       log("🔐 TrustManager", "Failed to sign message ", e)
@@ -478,6 +523,78 @@ class TrustManager(
   fun setPairingApprovalCallback(callback: PairingApprovalCallback) {
     this.pairingApprovalCallback = callback
   }
+
+  /**
+   * Per-peer MAC key derived from the ECDH shared secret stored at pairing time.
+   * Returns null when no shared secret is on file — typically legacy pairings from before
+   * we persisted it; callers fall back to per-frame ECDSA signing in that case.
+   *
+   * Both peers derive the same 32-byte key because they hold the same shared secret and
+   * use the same HKDF salt + info string.
+   */
+  suspend fun macKeyFor(deviceId: String): ByteArray? {
+    val sharedSecret = storage.getSharedSecret(deviceId) ?: return null
+    return crypto.hkdfSha256(
+      sharedSecret = sharedSecret,
+      info = CHUNK_MAC_INFO,
+    )
+  }
+
+  /**
+   * Compute an HMAC-SHA256 tag for one outgoing file chunk. The MAC input binds the chunk
+   * payload to its position in the transfer (fileMessageId, seq, isLast) so an attacker
+   * can't replay a chunk into another transfer or reorder chunks within one.
+   *
+   * Returns null when there's no shared secret with [deviceId] — the chunked-send path
+   * then writes the chunk unwrapped, falling back to whatever the receiver's contentHash
+   * check will catch at completion time.
+   */
+  suspend fun computeChunkMac(
+    deviceId: String,
+    fileMessageId: Int,
+    seq: Int,
+    isLast: Boolean,
+    data: ByteArray,
+  ): ByteArray? {
+    val key = macKeyFor(deviceId) ?: return null
+    return crypto.hmacSha256(key, chunkMacInput(fileMessageId, seq, isLast, data))
+  }
+
+  /** Verify [tag] over the same framed input that the sender produced. */
+  suspend fun verifyChunkMac(
+    deviceId: String,
+    fileMessageId: Int,
+    seq: Int,
+    isLast: Boolean,
+    data: ByteArray,
+    tag: ByteArray,
+  ): Boolean {
+    val key = macKeyFor(deviceId) ?: return false
+    return crypto.verifyHmacSha256(key, chunkMacInput(fileMessageId, seq, isLast, data), tag)
+  }
+
+  private fun chunkMacInput(
+    fileMessageId: Int,
+    seq: Int,
+    isLast: Boolean,
+    data: ByteArray,
+  ): ByteArray {
+    // Layout: 4-byte fileMessageId BE || 4-byte seq BE || 1-byte isLast || data.
+    // Fixed-width framing fields make the MAC input unambiguous across implementations.
+    val out = ByteArray(4 + 4 + 1 + data.size)
+    out[0] = (fileMessageId ushr 24).toByte()
+    out[1] = (fileMessageId ushr 16).toByte()
+    out[2] = (fileMessageId ushr 8).toByte()
+    out[3] = fileMessageId.toByte()
+    out[4] = (seq ushr 24).toByte()
+    out[5] = (seq ushr 16).toByte()
+    out[6] = (seq ushr 8).toByte()
+    out[7] = seq.toByte()
+    out[8] = if (isLast) 1 else 0
+    data.copyInto(out, 9)
+    return out
+  }
+
 }
 
 /**

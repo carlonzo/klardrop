@@ -35,6 +35,8 @@ interface PlatformFileSystem {
   fun getInternalStoragePath(): Path
 
   suspend fun openFile(filePath: String): Boolean
+
+  suspend fun openUrl(url: String): Boolean
 }
 
 internal class PlatformFileSystemImpl(
@@ -100,6 +102,10 @@ internal class PlatformFileSystemImpl(
 
   override suspend fun openFile(filePath: String): Boolean {
     return platformDependencies.openFile(filePath)
+  }
+
+  override suspend fun openUrl(url: String): Boolean {
+    return platformDependencies.openUrl(url)
   }
 
 }

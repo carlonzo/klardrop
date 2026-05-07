@@ -61,6 +61,9 @@ fun WideLayout(
   var activeDeviceId by remember { mutableStateOf<String?>(null) }
   var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
   var showAddDevicePicker by remember { mutableStateOf(false) }
+  val onSendData: (DeviceUi, OnDataToSend) -> Unit = { device, data ->
+    discoveryController.onSendData(device, data)
+  }
 
   val hasTrustedDevice = state.devices.any { it.trustStatus == TrustStatus.Trusted }
   LaunchedEffect(hasTrustedDevice) {
@@ -88,7 +91,8 @@ fun WideLayout(
       },
       onRequestTrust = { pendingLink = it },
       onRemoveTrust = { discoveryController.onRemoveTrust(it) },
-      onAddDeviceClick = { showAddDevicePicker = true }
+      onAddDeviceClick = { showAddDevicePicker = true },
+      onSendData = onSendData,
     )
 
     Column(
@@ -115,6 +119,7 @@ fun WideLayout(
             viewModel = chatViewModel,
             onBackClicked = { activeDeviceId = null },
             onOpenFileRequest = { path -> chatViewModel.openFileClicked(path) },
+            onOpenUrlRequest = { url -> chatViewModel.openUrlClicked(url) },
             mode = DeviceChatMode.Pane
           )
         } else {
@@ -163,7 +168,8 @@ private fun WideSidebar(
   onDeviceSelected: (DeviceUi) -> Unit,
   onRequestTrust: (DeviceUi) -> Unit,
   onRemoveTrust: (DeviceUi) -> Unit,
-  onAddDeviceClick: () -> Unit
+  onAddDeviceClick: () -> Unit,
+  onSendData: (DeviceUi, OnDataToSend) -> Unit,
 ) {
   val trusted = devices.filter { it.trustStatus == TrustStatus.Trusted }
   val others = devices.filter { it.trustStatus != TrustStatus.Trusted }
@@ -211,7 +217,8 @@ private fun WideSidebar(
                 isActive = device.deviceId == activeDeviceId,
                 onClick = { onDeviceSelected(device) },
                 onRequestTrust = { onRequestTrust(device) },
-                onRemoveTrust = { onRemoveTrust(device) }
+                onRemoveTrust = { onRemoveTrust(device) },
+                onDropData = { data -> onSendData(device, data) },
               )
             }
           } else {
@@ -229,7 +236,8 @@ private fun WideSidebar(
               isActive = device.deviceId == activeDeviceId,
               onClick = { onDeviceSelected(device) },
               onRequestTrust = { onRequestTrust(device) },
-              onRemoveTrust = { onRemoveTrust(device) }
+              onRemoveTrust = { onRemoveTrust(device) },
+              onDropData = { data -> onSendData(device, data) },
             )
           }
         }
@@ -256,19 +264,22 @@ private fun SidebarDeviceRow(
   isActive: Boolean,
   onClick: () -> Unit,
   onRequestTrust: () -> Unit,
-  onRemoveTrust: () -> Unit
+  onRemoveTrust: () -> Unit,
+  onDropData: (OnDataToSend) -> Unit,
 ) {
-  val rowColor = if (isActive) {
-    MaterialTheme.colorScheme.primary
-  } else {
-    androidx.compose.ui.graphics.Color.Transparent
+  var hovered by remember { mutableStateOf(false) }
+
+  val rowColor = when {
+    hovered -> MaterialTheme.colorScheme.tertiaryContainer
+    isActive -> MaterialTheme.colorScheme.primary
+    else -> androidx.compose.ui.graphics.Color.Transparent
   }
-  val textColor = if (isActive) {
+  val textColor = if (isActive && !hovered) {
     MaterialTheme.colorScheme.onPrimary
   } else {
     MaterialTheme.colorScheme.onSurface
   }
-  val secondaryColor = if (isActive) {
+  val secondaryColor = if (isActive && !hovered) {
     MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.75f)
   } else {
     MaterialTheme.colorScheme.onSurfaceVariant
@@ -280,6 +291,10 @@ private fun SidebarDeviceRow(
     modifier = Modifier
       .fillMaxWidth()
       .padding(horizontal = 10.dp, vertical = 1.dp)
+      .dropTargetForSending(
+        onDataDropped = onDropData,
+        onDragStateChange = { hovered = it },
+      )
       .clickable(onClick = onClick)
   ) {
     Row(

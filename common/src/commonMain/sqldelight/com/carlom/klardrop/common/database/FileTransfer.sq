@@ -34,3 +34,11 @@ updateFilePath:
 UPDATE file_transfers
 SET file_path = ?
 WHERE id = ?;
+
+-- Recover from a previous process death/crash mid-transfer: anything still flagged
+-- IN_PROGRESS at app start can't actually be transferring anymore, so flip it to
+-- FAILED. Bulk single-statement update so we don't pay one round-trip per row.
+markStaleInProgressAsFailed:
+UPDATE file_transfers
+SET status = 'FAILED'
+WHERE status = 'IN_PROGRESS';

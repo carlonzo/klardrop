@@ -19,6 +19,8 @@ class AndroidTrustStorage(
         private const val KEY_PREFIX = "trusted_device_"
         private const val ECDSA_KEY_PREFIX = "ecdsa_key_"
         private const val DEVICE_PRIVATE_KEY = "device_private_key"
+        private const val DEVICE_PUBLIC_KEY = "device_public_key"
+        private const val SHARED_SECRET_PREFIX = "shared_secret_"
     }
     
     private val sharedPrefs = context.getSharedPreferences(TRUST_PREFS, Context.MODE_PRIVATE)
@@ -65,23 +67,26 @@ class AndroidTrustStorage(
     
     override suspend fun removeTrustedDevice(deviceId: String) {
         sharedPrefs.edit {
-          remove(KEY_PREFIX + deviceId)
-            .remove(ECDSA_KEY_PREFIX + deviceId)
+            remove(KEY_PREFIX + deviceId)
+                .remove(ECDSA_KEY_PREFIX + deviceId)
+                .remove(SHARED_SECRET_PREFIX + deviceId)
         }
     }
-    
+
     override suspend fun clearAllTrustedDevices() {
-      sharedPrefs.edit {
-        val allKeys = sharedPrefs.all.keys
+        sharedPrefs.edit {
+            val allKeys = sharedPrefs.all.keys
 
-        // Remove all entries that start with our prefixes
-        for (key in allKeys) {
-          if (key.startsWith(KEY_PREFIX) || key.startsWith(ECDSA_KEY_PREFIX)) {
-            remove(key)
-          }
+            // Remove all entries that start with our prefixes
+            for (key in allKeys) {
+                if (key.startsWith(KEY_PREFIX) ||
+                    key.startsWith(ECDSA_KEY_PREFIX) ||
+                    key.startsWith(SHARED_SECRET_PREFIX)
+                ) {
+                    remove(key)
+                }
+            }
         }
-
-      }
     }
     
     override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {
@@ -129,6 +134,41 @@ class AndroidTrustStorage(
     override suspend fun deleteDevicePrivateKey() {
         sharedPrefs.edit {
             remove(DEVICE_PRIVATE_KEY)
+            remove(DEVICE_PUBLIC_KEY)
+        }
+    }
+
+    override suspend fun storeDevicePublicKey(publicKey: ByteArray) {
+        val encodedKey = Base64.encodeToString(publicKey, Base64.NO_WRAP)
+        sharedPrefs.edit {
+            putString(DEVICE_PUBLIC_KEY, encodedKey)
+        }
+    }
+
+    override suspend fun getDevicePublicKey(): ByteArray? {
+        val encodedKey = sharedPrefs.getString(DEVICE_PUBLIC_KEY, null) ?: return null
+        return try {
+            Base64.decode(encodedKey, Base64.NO_WRAP)
+        } catch (e: IllegalArgumentException) {
+            sharedPrefs.edit { remove(DEVICE_PUBLIC_KEY) }
+            null
+        }
+    }
+
+    override suspend fun storeSharedSecret(deviceId: String, sharedSecret: ByteArray) {
+        val encoded = Base64.encodeToString(sharedSecret, Base64.NO_WRAP)
+        sharedPrefs.edit {
+            putString(SHARED_SECRET_PREFIX + deviceId, encoded)
+        }
+    }
+
+    override suspend fun getSharedSecret(deviceId: String): ByteArray? {
+        val encoded = sharedPrefs.getString(SHARED_SECRET_PREFIX + deviceId, null) ?: return null
+        return try {
+            Base64.decode(encoded, Base64.NO_WRAP)
+        } catch (e: IllegalArgumentException) {
+            sharedPrefs.edit { remove(SHARED_SECRET_PREFIX + deviceId) }
+            null
         }
     }
 }

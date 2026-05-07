@@ -29,6 +29,13 @@ expect class InternalPlatformDependencies {
   suspend fun openFile(filePath: String): Boolean
 
   /**
+   * Hand [url] to the system's URL handler — browser for http(s), mail client for
+   * mailto:, etc. Returns false when the platform can't dispatch the URL (no handler
+   * registered, runtime restriction, etc.) so callers can surface an error.
+   */
+  suspend fun openUrl(url: String): Boolean
+
+  /**
    * Save the file at [tempPath] into the platform's media gallery and return a string the
    * caller can persist as the file's location (a `content://` URI on Android, a file path
    * elsewhere). When the platform doesn't expose a usable identifier — e.g. older

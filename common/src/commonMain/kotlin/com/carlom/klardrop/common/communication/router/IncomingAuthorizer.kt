@@ -60,6 +60,7 @@ open class IncomingAuthorizer(
     kind: TransferKind,
     headers: List<Message>,
     receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+    notifyAwaitingUser: suspend () -> Unit = {},
   ): Boolean {
     if (trustManager.isTrusted(fromDeviceId)) {
       log("IncomingAuthorizer", "Auto-accepting transfer from trusted device $fromDeviceId")
@@ -83,6 +84,12 @@ open class IncomingAuthorizer(
           deferred.complete(accept)
         },
       )
+    }
+    // Tell the sender to stop ticking down its short ACK_READY/RECEIVED timeout — without
+    // this, the sender retries every ~5s and the receiver sees a fresh prompt for each
+    // retry. Best-effort: failures here just mean the sender will time out and retry.
+    runCatching { notifyAwaitingUser() }.onFailure {
+      log("IncomingAuthorizer", "notifyAwaitingUser failed: ${it.message}")
     }
     val accepted = deferred.await()
 

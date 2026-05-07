@@ -22,6 +22,14 @@ class Klardrop(
 
     commonComponent = CommonComponent(applicationInfo, utilsModule, internalPlatformDependency)
 
+    // Recover from a prior crash/kill: nothing is actually transferring at boot, so any
+    // file_transfers row left as IN_PROGRESS is stale. Without this, those rows render
+    // forever as a "0 B of N MB" pending bubble in chat with no terminal state.
+    appScope.launch(commonComponent.coroutines().ioDispatcher) {
+      runCatching { commonComponent.messageRepository().markStaleInProgressAsFailed() }
+        .onFailure { log("Klardrop", "Failed to sweep stale IN_PROGRESS transfers", it) }
+    }
+
     val discoveryNetwork = commonComponent.discoveryNetwork()
 
     // start unified server for both protocols

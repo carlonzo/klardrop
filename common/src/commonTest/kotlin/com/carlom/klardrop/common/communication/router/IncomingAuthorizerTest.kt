@@ -188,6 +188,49 @@ class IncomingAuthorizerTest {
   }
 
   @Test
+  fun untrustedTransferInvokesNotifyAwaitingUserBeforeBlockingOnDecision() = runTest(UnconfinedTestDispatcher()) {
+    val authorizer = IncomingAuthorizer(trustManagerWith(emptySet()))
+    val flow = makeFlow()
+    var notified = false
+
+    val deferred = async {
+      authorizer.authorize(
+        fromDeviceId = "untrusted-id",
+        kind = IncomingAuthorizer.TransferKind.FILE,
+        headers = listOf(TextMessage(text = "preview")),
+        receiveFlow = flow,
+        notifyAwaitingUser = { notified = true },
+      )
+    }
+
+    // notifyAwaitingUser must fire by the time we're parked on the decision — that's the
+    // signal the sender uses to extend its short ACK timeout, so it has to happen before
+    // we wait for the user.
+    assertTrue(notified, "notifyAwaitingUser should be called once the prompt is shown")
+
+    val pending = flow.value.status as ReceiveMessageStatus.PendingAuthorization
+    pending.acceptTransfer(true)
+    assertTrue(deferred.await())
+  }
+
+  @Test
+  fun trustedDeviceDoesNotInvokeNotifyAwaitingUser() = runTest(UnconfinedTestDispatcher()) {
+    val authorizer = IncomingAuthorizer(trustManagerWith(setOf("trusted-id")))
+    var notified = false
+
+    val accepted = authorizer.authorize(
+      fromDeviceId = "trusted-id",
+      kind = IncomingAuthorizer.TransferKind.FILE,
+      headers = listOf(TextMessage(text = "x")),
+      receiveFlow = makeFlow(),
+      notifyAwaitingUser = { notified = true },
+    )
+
+    assertTrue(accepted)
+    assertFalse(notified, "trusted devices auto-accept; no awaiting-user signal needed")
+  }
+
+  @Test
   fun rejectedTextDoesNotMarkFirstContactAccepted() = runTest(UnconfinedTestDispatcher()) {
     val authorizer = IncomingAuthorizer(trustManagerWith(emptySet()))
 

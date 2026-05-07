@@ -59,6 +59,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.carlom.klardrop.OnDataToSend
+import com.carlom.klardrop.dropTargetForSending
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -91,6 +93,7 @@ fun DeviceChatScreen(
   viewModel: DeviceChatViewModel,
   onBackClicked: () -> Unit,
   onOpenFileRequest: (filePath: String) -> Unit,
+  onOpenUrlRequest: (url: String) -> Unit,
   mode: DeviceChatMode = DeviceChatMode.Screen
 ) {
   val messagesState by viewModel.messages.collectAsState()
@@ -99,6 +102,7 @@ fun DeviceChatScreen(
   val reachability by viewModel.reachability.collectAsState()
   var textToSend by remember { mutableStateOf("") }
   var attachmentMenuOpen by remember { mutableStateOf(false) }
+  var dropHovered by remember { mutableStateOf(false) }
 
   val snackbarHostState = remember { SnackbarHostState() }
 
@@ -130,7 +134,20 @@ fun DeviceChatScreen(
     derivedStateOf { messagesState.sortedByDescending { it.timestamp } }
   }
 
+  val dropModifier = Modifier.dropTargetForSending(
+    onDataDropped = { data ->
+      when (data) {
+        is OnDataToSend.FilesList -> if (data.files.isNotEmpty()) viewModel.sendFiles(data.files)
+        is OnDataToSend.Text -> if (data.text.isNotBlank()) viewModel.sendTextMessage(data.text)
+        // Dropping Wi-Fi credentials onto a chat doesn't have a UI surface yet.
+        is OnDataToSend.WifiCredentials -> Unit
+      }
+    },
+    onDragStateChange = { dropHovered = it },
+  )
+
   Scaffold(
+    modifier = dropModifier,
     topBar = {
       CenterAlignedTopAppBar(
         title = {
@@ -176,15 +193,19 @@ fun DeviceChatScreen(
     snackbarHost = { SnackbarHost(snackbarHostState) }
   ) { paddingValues ->
     val layoutDirection = LocalLayoutDirection.current
-    Column(
-      modifier = Modifier
-        .fillMaxSize()
-        .padding(
-          top = paddingValues.calculateTopPadding(),
-          start = paddingValues.calculateStartPadding(layoutDirection),
-          end = paddingValues.calculateEndPadding(layoutDirection)
-        )
-    ) {
+    val baseColumnModifier = Modifier
+      .fillMaxSize()
+      .padding(
+        top = paddingValues.calculateTopPadding(),
+        start = paddingValues.calculateStartPadding(layoutDirection),
+        end = paddingValues.calculateEndPadding(layoutDirection)
+      )
+    val columnModifier = if (dropHovered) {
+      baseColumnModifier.background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f))
+    } else {
+      baseColumnModifier
+    }
+    Column(modifier = columnModifier) {
       pendingAuth?.let { update ->
         IncomingAuthBanner(update = update)
       }
@@ -200,6 +221,7 @@ fun DeviceChatScreen(
           messages = sortedMessages,
           messageRepository = viewModel.messageRepository,
           onOpenFileRequest = onOpenFileRequest,
+          onOpenUrlRequest = onOpenUrlRequest,
           modifier = Modifier.weight(1f)
         )
       }
@@ -374,6 +396,7 @@ private fun MessagesList(
   messages: List<Messages>,
   messageRepository: MessageRepository,
   onOpenFileRequest: (filePath: String) -> Unit,
+  onOpenUrlRequest: (url: String) -> Unit,
   modifier: Modifier = Modifier
 ) {
   val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -421,6 +444,7 @@ private fun MessagesList(
         message = message,
         messageRepository = messageRepository,
         onOpenFileRequest = onOpenFileRequest,
+        onOpenUrlRequest = onOpenUrlRequest,
         isFirstOfGroup = isFirstOfGroup,
         isLastOfGroup = isLastOfGroup,
         showTimestamp = isLastOfGroup
@@ -460,6 +484,7 @@ private fun MessageRow(
   message: Messages,
   messageRepository: MessageRepository,
   onOpenFileRequest: (filePath: String) -> Unit,
+  onOpenUrlRequest: (url: String) -> Unit,
   isFirstOfGroup: Boolean,
   isLastOfGroup: Boolean,
   showTimestamp: Boolean
@@ -485,7 +510,8 @@ private fun MessageRow(
       } else if (message.message_type == MessageType.TEXT.name) {
         TextMessageBubble(
           message = message,
-          shape = bubbleShape(isSender, isFirstOfGroup, isLastOfGroup)
+          shape = bubbleShape(isSender, isFirstOfGroup, isLastOfGroup),
+          onOpenUrlRequest = onOpenUrlRequest,
         )
       } else {
         UnknownMessageBubble(message)
@@ -533,7 +559,8 @@ private fun bubbleShape(isSender: Boolean, isFirstOfGroup: Boolean, isLastOfGrou
 @Composable
 private fun TextMessageBubble(
   message: Messages,
-  shape: Shape
+  shape: Shape,
+  onOpenUrlRequest: (url: String) -> Unit,
 ) {
   val isSender = message.is_sender != 0L
   val container = if (isSender) {
@@ -547,18 +574,37 @@ private fun TextMessageBubble(
     MaterialTheme.colorScheme.onSurface
   }
 
+  val openableUrl = remember(message.content) { openableUrlOrNull(message.content) }
+
+  val surfaceModifier = Modifier.widthIn(max = 320.dp).let { base ->
+    if (openableUrl != null) base.clickable { onOpenUrlRequest(openableUrl) } else base
+  }
+
   Surface(
     shape = shape,
     color = container,
-    modifier = Modifier.widthIn(max = 320.dp)
+    modifier = surfaceModifier,
   ) {
-    SelectionContainer {
+    if (openableUrl != null) {
+      // No SelectionContainer: it intercepts taps so the click handler never fires.
+      // The whole bubble is the affordance — tap to hand the URL to the OS.
       Text(
         text = message.content,
-        style = MaterialTheme.typography.bodyLarge,
-        color = onContainer,
-        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+        style = MaterialTheme.typography.bodyLarge.copy(
+          color = MaterialTheme.colorScheme.primary,
+          textDecoration = TextDecoration.Underline,
+        ),
+        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
       )
+    } else {
+      SelectionContainer {
+        Text(
+          text = message.content,
+          style = MaterialTheme.typography.bodyLarge,
+          color = onContainer,
+          modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+        )
+      }
     }
   }
 }

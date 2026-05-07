@@ -72,6 +72,7 @@ actual fun KlardropNavigator(
       viewModel = vm,
       onBackClicked = { chatTarget = null },
       onOpenFileRequest = { path -> vm.openFileClicked(path) },
+      onOpenUrlRequest = { url -> vm.openUrlClicked(url) },
     )
   }
 }
