@@ -1,7 +1,7 @@
 [versions]
 agp = "9.2.1"
 kotlin = "2.3.21"
-coroutines = "1.10.2"
+coroutines = "1.11.0"
 serialization = "1.11.0"
 jetbrains-compose = "1.10.3"
 okio = "3.17.0"
