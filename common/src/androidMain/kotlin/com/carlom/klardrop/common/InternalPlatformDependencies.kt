@@ -44,17 +44,17 @@ actual class InternalPlatformDependencies(private val context: Context, private 
 
   actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
-  private val permissionsMonitor by lazy { PermissionsMonitor(context) }
+  private val foregroundState by lazy { ForegroundState(context) }
+
+  actual fun foregroundState(): ForegroundState = foregroundState
+
+  private val permissionsMonitor by lazy { PermissionsMonitor(context, foregroundState) }
 
   actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
 
   private val notifier by lazy { Notifier(context) }
 
   actual fun notifier(): Notifier = notifier
-
-  private val foregroundState by lazy { ForegroundState(context) }
-
-  actual fun foregroundState(): ForegroundState = foregroundState
 
   actual fun bleTransport(): BleTransport = bleTransport
 
