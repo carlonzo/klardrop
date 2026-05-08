@@ -7,31 +7,29 @@ import android.os.Bundle
 import android.os.Parcelable
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.carlom.klardrop.ActivityState
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.OnDataToSend
+import com.carlom.klardrop.TrustStatus
 import com.carlom.klardrop.android.applicationComponent
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
-import com.carlom.klardrop.components.DeviceRow
-import com.carlom.klardrop.components.KdAvatarStyle
 import com.carlom.klardrop.components.KdDeviceKind
-import com.carlom.klardrop.components.KdRowState
+import com.carlom.klardrop.components.KdShareDevice
 import com.carlom.klardrop.components.KdStatus
-import com.carlom.klardrop.TrustStatus
+import com.carlom.klardrop.components.ShareSheet
 import com.carlom.klardrop.theme.AppTheme
 import com.carlom.klardrop.theme.KdTheme
 import io.github.vinceglb.filekit.PlatformFile
@@ -49,6 +47,7 @@ class ShareToDeviceActivity : AppCompatActivity() {
 
   private lateinit var shareToDeviceController: ShareToDeviceController
 
+  @OptIn(ExperimentalMaterial3Api::class)
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     applicationComponent().inject(this)
@@ -56,41 +55,44 @@ class ShareToDeviceActivity : AppCompatActivity() {
     shareToDeviceController = ShareToDeviceController(klardrop.commonComponent)
 
     setContent {
-      val devices by shareToDeviceController.devicesFlow.collectAsState(emptyList<DeviceUi>())
-
       AppTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
-          Column(
-            modifier = Modifier
-              .fillMaxSize()
-              .padding(KdTheme.spacing.s4),
-            verticalArrangement = Arrangement.spacedBy(KdTheme.spacing.s3),
-          ) {
-            Text(
-              text = "Share with",
-              style = KdTheme.typography.headline.copy(color = KdTheme.colors.text),
-            )
+        val devices by shareToDeviceController.devicesFlow.collectAsState(emptyList<DeviceUi>())
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+        var selectedId by remember { mutableStateOf<String?>(null) }
+        var dismissed by remember { mutableStateOf(false) }
 
-            val deviceList = devices.toList()
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(KdTheme.spacing.s2)) {
-              items(
-                count = deviceList.size,
-                key = { index -> deviceList[index].deviceId },
-              ) { index ->
-                val device = deviceList[index]
-                val isTrusted = device.trustStatus == TrustStatus.Trusted
-                DeviceRow(
-                  name = device.deviceName,
-                  subText = device.activityState.label(),
-                  kind = device.deviceType.toShareKind(),
-                  avatarStyle = if (isTrusted) KdAvatarStyle.Tinted else KdAvatarStyle.Neutral,
-                  status = device.reachability.toKdStatus(),
-                  rowState = if (device.activityState is ActivityState.Sending) KdRowState.Pairing else KdRowState.Idle,
-                  onClick = { shareDevice(device) },
-                )
-              }
-            }
+        LaunchedEffect(dismissed) {
+          if (dismissed) {
+            sheetState.hide()
+            finish()
           }
+        }
+
+        val deviceList = devices.toList()
+        val byId = deviceList.associateBy { it.deviceId }
+        val (trustedShare, nearbyShare) = deviceList.partition {
+          it.trustStatus == TrustStatus.Trusted
+        }.let { (trusted, nearby) ->
+          trusted.map { it.toKdShareDevice() } to nearby.map { it.toKdShareDevice() }
+        }
+
+        ModalBottomSheet(
+          onDismissRequest = { dismissed = true },
+          sheetState = sheetState,
+          shape = KdTheme.radii.shapeSheet,
+          containerColor = KdTheme.colors.bg1,
+        ) {
+          ShareSheet(
+            trustedDevices = trustedShare,
+            nearbyDevices = nearbyShare,
+            selectedId = selectedId,
+            onSelectDevice = { selectedId = it.id },
+            onSend = { share ->
+              val target = share?.id?.let(byId::get) ?: return@ShareSheet
+              shareDevice(target)
+              dismissed = true
+            },
+          )
         }
       }
     }
@@ -171,6 +173,14 @@ class ShareToDeviceActivity : AppCompatActivity() {
   }
 }
 
+private fun DeviceUi.toKdShareDevice(): KdShareDevice = KdShareDevice(
+  id = deviceId,
+  name = deviceName,
+  kind = deviceType.toShareKind(),
+  isTrusted = trustStatus == TrustStatus.Trusted,
+  status = reachability.toKdStatus(),
+)
+
 private fun DeviceType.toShareKind(): KdDeviceKind = when (this) {
   DeviceType.MOBILE -> KdDeviceKind.Android
   DeviceType.DESKTOP -> KdDeviceKind.Pc
@@ -182,10 +192,4 @@ private fun Reachability.toKdStatus(): KdStatus? = when (this) {
   Reachability.Unreachable -> KdStatus.Err
   Reachability.Probing,
   Reachability.Unknown -> null
-}
-
-private fun ActivityState.label(): String = when (this) {
-  ActivityState.Idle -> ""
-  is ActivityState.Sending -> "Sending… ${progressPercentage}%"
-  is ActivityState.SentCompleted -> if (error) "Failed" else "Sent"
 }
