@@ -7,10 +7,11 @@ import android.os.Bundle
 import android.os.Parcelable
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
@@ -18,14 +19,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.carlom.klardrop.ActivityState
-import com.carlom.klardrop.DeviceDiscovery
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.OnDataToSend
-import com.carlom.klardrop.OnDeviceActionListener
 import com.carlom.klardrop.android.applicationComponent
 import com.carlom.klardrop.common.Klardrop
+import com.carlom.klardrop.common.communication.Reachability
+import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.components.DeviceRow
+import com.carlom.klardrop.components.KdAvatarStyle
+import com.carlom.klardrop.components.KdDeviceKind
+import com.carlom.klardrop.components.KdRowState
+import com.carlom.klardrop.components.KdStatus
+import com.carlom.klardrop.TrustStatus
 import com.carlom.klardrop.theme.AppTheme
+import com.carlom.klardrop.theme.KdTheme
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.firstOrNull
@@ -41,7 +49,6 @@ class ShareToDeviceActivity : AppCompatActivity() {
 
   private lateinit var shareToDeviceController: ShareToDeviceController
 
-  @OptIn(ExperimentalLayoutApi::class)
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     applicationComponent().inject(this)
@@ -49,38 +56,53 @@ class ShareToDeviceActivity : AppCompatActivity() {
     shareToDeviceController = ShareToDeviceController(klardrop.commonComponent)
 
     setContent {
-
-      val devices by shareToDeviceController.devicesFlow.collectAsState(emptyList())
+      val devices by shareToDeviceController.devicesFlow.collectAsState(emptyList<DeviceUi>())
 
       AppTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
+          Column(
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(KdTheme.spacing.s4),
+            verticalArrangement = Arrangement.spacedBy(KdTheme.spacing.s3),
+          ) {
+            Text(
+              text = "Share with",
+              style = KdTheme.typography.headline.copy(color = KdTheme.colors.text),
+            )
 
-          Column {
-            Text("Share with:")
-
-            FlowRow {
-              devices.forEach {
-
-                DeviceDiscovery(it, isLargeScreen = false, onDeviceActionListener)
-
+            val deviceList = devices.toList()
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(KdTheme.spacing.s2)) {
+              items(
+                count = deviceList.size,
+                key = { index -> deviceList[index].deviceId },
+              ) { index ->
+                val device = deviceList[index]
+                val isTrusted = device.trustStatus == TrustStatus.Trusted
+                DeviceRow(
+                  name = device.deviceName,
+                  subText = device.activityState.label(),
+                  kind = device.deviceType.toShareKind(),
+                  avatarStyle = if (isTrusted) KdAvatarStyle.Tinted else KdAvatarStyle.Neutral,
+                  status = device.reachability.toKdStatus(),
+                  rowState = if (device.activityState is ActivityState.Sending) KdRowState.Pairing else KdRowState.Idle,
+                  onClick = { shareDevice(device) },
+                )
               }
             }
           }
-
-
         }
       }
-
     }
 
     when (intent?.action) {
       Intent.ACTION_SEND -> {
         if ("text/plain" == intent.type) {
           log("ShareToDeviceActivity", "Handling text $intent")
-          handleSendText(intent) // Handle text being sent
+          handleSendText(intent)
         } else {
           log("ShareToDeviceActivity", "Handling file $intent")
-          handleSendFile(intent) // Handle single image being sent
+          handleSendFile(intent)
         }
       }
 
@@ -90,30 +112,25 @@ class ShareToDeviceActivity : AppCompatActivity() {
       }
 
       else -> {
-        // Handle other intents, such as being started from the home screen
         log("ShareToDeviceActivity", "Unhandled intent: $intent")
       }
     }
   }
 
-  private val onDeviceActionListener = object : OnDeviceActionListener {
-    override fun onDeviceClick(deviceUi: DeviceUi) {
-      shareToDeviceController.onDeviceClick(deviceUi)
+  private fun shareDevice(deviceUi: DeviceUi) {
+    shareToDeviceController.onDeviceClick(deviceUi)
 
-      // wait until sent is completed and then finish the activity
-      lifecycleScope.launch {
+    lifecycleScope.launch {
+      shareToDeviceController.devicesFlow
+        .mapNotNull {
+          it.firstOrNull { candidate -> candidate.deviceId == deviceUi.deviceId }
+        }
+        .filter { it.activityState is ActivityState.SentCompleted }
+        .onEach { log("ShareToDeviceActivity", "filtered $it") }
+        .firstOrNull()
 
-        shareToDeviceController.devicesFlow
-          .mapNotNull {
-            it.firstOrNull { it.deviceId == deviceUi.deviceId }
-          }
-          .filter { it.activityState is ActivityState.SentCompleted }
-          .onEach { log("ShareToDeviceActivity", "filtered $it") }
-          .firstOrNull()
-
-        log("ShareToDeviceActivity", "Received sent completed, finishing activity")
-        finish()
-      }
+      log("ShareToDeviceActivity", "Received sent completed, finishing activity")
+      finish()
     }
   }
 
@@ -152,5 +169,23 @@ class ShareToDeviceActivity : AppCompatActivity() {
     shareToDeviceController.dispose()
     super.onDestroy()
   }
+}
 
+private fun DeviceType.toShareKind(): KdDeviceKind = when (this) {
+  DeviceType.MOBILE -> KdDeviceKind.Android
+  DeviceType.DESKTOP -> KdDeviceKind.Pc
+  DeviceType.UNKNOWN -> KdDeviceKind.Unknown
+}
+
+private fun Reachability.toKdStatus(): KdStatus? = when (this) {
+  Reachability.Reachable -> KdStatus.Ok
+  Reachability.Unreachable -> KdStatus.Err
+  Reachability.Probing,
+  Reachability.Unknown -> null
+}
+
+private fun ActivityState.label(): String = when (this) {
+  ActivityState.Idle -> ""
+  is ActivityState.Sending -> "Sending… ${progressPercentage}%"
+  is ActivityState.SentCompleted -> if (error) "Failed" else "Sent"
 }
