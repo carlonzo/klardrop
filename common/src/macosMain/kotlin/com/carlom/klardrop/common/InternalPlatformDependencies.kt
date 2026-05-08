@@ -14,6 +14,7 @@ import com.carlom.klardrop.common.trust.IosTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
+import platform.AppKit.NSWorkspace
 import platform.Foundation.*
 
 actual class InternalPlatformDependencies {
@@ -95,6 +96,11 @@ actual class InternalPlatformDependencies {
     // This is a simplified implementation that always returns false
     // A proper implementation would need platform-specific integration
     return false
+  }
+
+  actual suspend fun openUrl(url: String): Boolean {
+    val nsUrl = NSURL.URLWithString(url) ?: return false
+    return NSWorkspace.sharedWorkspace.openURL(nsUrl)
   }
 
   // Native macOS has no "media gallery" concept distinct from Downloads; rely on the

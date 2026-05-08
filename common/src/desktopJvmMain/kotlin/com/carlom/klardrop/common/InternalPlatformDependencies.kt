@@ -86,6 +86,21 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     }
   }
 
+  actual suspend fun openUrl(url: String): Boolean {
+    return try {
+      if (!java.awt.Desktop.isDesktopSupported()) return false
+      val desktop = java.awt.Desktop.getDesktop()
+      if (desktop.isSupported(java.awt.Desktop.Action.BROWSE)) {
+        desktop.browse(java.net.URI(url))
+        true
+      } else {
+        false
+      }
+    } catch (e: Exception) {
+      false
+    }
+  }
+
   // Desktop has no "media gallery" concept; rely on the regular Downloads-folder save.
   actual suspend fun saveMediaToGallery(
     tempPath: Path,

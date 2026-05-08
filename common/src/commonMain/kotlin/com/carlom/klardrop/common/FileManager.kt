@@ -11,6 +11,7 @@ interface FileManager {
   fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer
   fun getReadStreamFrom(file: PlatformFile): RawSource
   suspend fun openFile(filePath: String): Boolean // New method
+  suspend fun openUrl(url: String): Boolean
 }
 
 interface FileTransfer {

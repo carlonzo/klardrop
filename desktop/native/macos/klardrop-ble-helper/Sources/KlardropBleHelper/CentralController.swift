@@ -123,7 +123,12 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
   func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
     let peerId = peripheral.identifier.uuidString
     discovered[peerId] = peripheral
-    let shortId = decodeShortDeviceId(advertisementData: advertisementData) ?? peripheral.name ?? "unknown"
+    // Skip packets that don't carry a Klardrop-shaped short device id. CoreBluetooth
+    // delivers many didDiscover callbacks per peer with varying advertisementData;
+    // if we accept the BT peripheral name as a fallback we end up emitting two
+    // distinct "peers" (e.g. "unknown" then "Pixel 9 Pro XL") for the same device,
+    // which the discovery layer keys separately and surfaces as duplicate rows.
+    guard let shortId = decodeShortDeviceId(advertisementData: advertisementData) else { return }
     var fields: [String: Any] = [
       "peerId": peerId,
       "shortDeviceId": shortId,
@@ -241,13 +246,24 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
     let serviceUUID = CBUUID(string: BleConstants.serviceUUID)
     if let data = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data],
        let bytes = data[serviceUUID],
-       let s = String(data: bytes, encoding: .utf8) {
+       let s = String(data: bytes, encoding: .utf8),
+       isKlardropShortDeviceId(s) {
       return s
     }
-    if let local = advertisementData[CBAdvertisementDataLocalNameKey] as? String, !local.isEmpty {
+    // macOS peripherals advertise the short id as the local name (Apple's CB
+    // does not expose the service-data slot to apps). Only accept it when it
+    // matches the Klardrop short-id shape, otherwise BT names from non-Klardrop
+    // peers leak in as fake peer identities.
+    if let local = advertisementData[CBAdvertisementDataLocalNameKey] as? String,
+       isKlardropShortDeviceId(local) {
       return local
     }
     return nil
+  }
+
+  private func isKlardropShortDeviceId(_ s: String) -> Bool {
+    guard s.count == 8 else { return false }
+    return s.allSatisfy { $0.isHexDigit }
   }
 }
 

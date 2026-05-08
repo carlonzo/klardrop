@@ -124,6 +124,7 @@ actual fun KlardropNavigator(
           viewModel = vm,
           onBackClicked = { backStack.removeLastOrNull() },
           onOpenFileRequest = { path -> vm.openFileClicked(path) },
+          onOpenUrlRequest = { url -> vm.openUrlClicked(url) },
         )
       }
     }

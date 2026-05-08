@@ -32,6 +32,10 @@ class FileManagerImpl(
     return platformFileSystem.openFile(filePath)
   }
 
+  override suspend fun openUrl(url: String): Boolean {
+    return platformFileSystem.openUrl(url)
+  }
+
   inner class FileTransferImpl(
     private val destinationPath: Path,
     private val mimeType: String

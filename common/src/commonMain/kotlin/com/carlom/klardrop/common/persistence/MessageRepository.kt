@@ -38,6 +38,14 @@ interface MessageRepository {
 
   suspend fun updateFileTransferStatus(id: Long, status: FileTransferStatus)
 
+  /**
+   * Mark every transfer still flagged IN_PROGRESS as FAILED. Intended to run once at
+   * app start: the process just came up, so nothing can actually still be in flight,
+   * and a row left in IN_PROGRESS from a prior crash/kill would otherwise sit on the
+   * chat screen forever as a stuck "0 B of N MB" entry with no terminal status.
+   */
+  suspend fun markStaleInProgressAsFailed()
+
   fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<Messages>>
 
   fun getFileTransferById(id: Long): Flow<File_transfers?>
@@ -117,6 +125,12 @@ class MessageRepositoryImpl(
       ).await().also {
         log("MessageRepositoryImpl", "Updated file transfer status for ID $id to $status")
       }
+    }
+  }
+
+  override suspend fun markStaleInProgressAsFailed() {
+    withContext(ioDispatcher) {
+      database.fileTransferQueries.markStaleInProgressAsFailed().await()
     }
   }
 

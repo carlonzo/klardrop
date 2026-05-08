@@ -110,16 +110,6 @@ Each platform provides implementations for:
 - **kotlinx.serialization** - Data serialization with Protocol Buffers
 - **jmDNS** - Service discovery
 
-## Common Development Commands
-Always append a `-q` to the gradle commands to reduce output verbosity.
-
-**Important for Terragon Environment:**
-If running on Terragon cloud provider, execute `./terragon-async-setup.sh` before running any Gradle commands to setup the environment including Java 17 and Android SDK.
-
-- Compile sources for common and jvm platform: run the `:desktop:compileKotlinJvm` gradle task.
-- Run unit tests for common and jvm platform: run the `:jvmTest` gradle task.
-- To Run the desktop application: run the `:desktop:run` gradle task.
-
 ## Development Best Practices
 
 - After you completed your work, ensure that the project compiles and tests are passing

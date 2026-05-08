@@ -16,6 +16,8 @@ class IosTrustStorage : TrustStorage {
         private const val TRUST_KEY_PREFIX = "klardrop_trust_"
         private const val ECDSA_KEY_PREFIX = "klardrop_ecdsa_"
         private const val DEVICE_PRIVATE_KEY = "klardrop_device_private_key"
+        private const val DEVICE_PUBLIC_KEY = "klardrop_device_public_key"
+        private const val SHARED_SECRET_PREFIX = "klardrop_shared_secret_"
     }
     
     private val mutex = Mutex()
@@ -71,29 +73,27 @@ class IosTrustStorage : TrustStorage {
     
     override suspend fun removeTrustedDevice(deviceId: String) {
         mutex.withLock {
-            // Remove ECDH key
-            val ecdhKey = TRUST_KEY_PREFIX + deviceId
-            userDefaults.removeObjectForKey(ecdhKey)
-            
-            // Remove ECDSA key
-            val ecdsaKey = ECDSA_KEY_PREFIX + deviceId
-            userDefaults.removeObjectForKey(ecdsaKey)
-            
+            userDefaults.removeObjectForKey(TRUST_KEY_PREFIX + deviceId)
+            userDefaults.removeObjectForKey(ECDSA_KEY_PREFIX + deviceId)
+            userDefaults.removeObjectForKey(SHARED_SECRET_PREFIX + deviceId)
             userDefaults.synchronize()
         }
     }
-    
+
     override suspend fun clearAllTrustedDevices() {
         mutex.withLock {
             val allKeys = userDefaults.dictionaryRepresentation().keys
-            
+
             allKeys.forEach { keyObj ->
                 val key = keyObj.toString()
-                if (key.startsWith(TRUST_KEY_PREFIX) || key.startsWith(ECDSA_KEY_PREFIX)) {
+                if (key.startsWith(TRUST_KEY_PREFIX) ||
+                    key.startsWith(ECDSA_KEY_PREFIX) ||
+                    key.startsWith(SHARED_SECRET_PREFIX)
+                ) {
                     userDefaults.removeObjectForKey(key)
                 }
             }
-            
+
             userDefaults.synchronize()
         }
     }
@@ -149,7 +149,48 @@ class IosTrustStorage : TrustStorage {
     override suspend fun deleteDevicePrivateKey() {
         mutex.withLock {
             userDefaults.removeObjectForKey(DEVICE_PRIVATE_KEY)
+            userDefaults.removeObjectForKey(DEVICE_PUBLIC_KEY)
             userDefaults.synchronize()
+        }
+    }
+
+    override suspend fun storeDevicePublicKey(publicKey: ByteArray) {
+        mutex.withLock {
+            val encodedKey = publicKey.toBase64String()
+            userDefaults.setObject(encodedKey, DEVICE_PUBLIC_KEY)
+            userDefaults.synchronize()
+        }
+    }
+
+    override suspend fun getDevicePublicKey(): ByteArray? {
+        return mutex.withLock {
+            val encodedKey = userDefaults.stringForKey(DEVICE_PUBLIC_KEY) ?: return@withLock null
+            return@withLock encodedKey.fromBase64OrNull().also { decoded ->
+                if (decoded == null) {
+                    userDefaults.removeObjectForKey(DEVICE_PUBLIC_KEY)
+                    userDefaults.synchronize()
+                }
+            }
+        }
+    }
+
+    override suspend fun storeSharedSecret(deviceId: String, sharedSecret: ByteArray) {
+        mutex.withLock {
+            userDefaults.setObject(sharedSecret.toBase64String(), SHARED_SECRET_PREFIX + deviceId)
+            userDefaults.synchronize()
+        }
+    }
+
+    override suspend fun getSharedSecret(deviceId: String): ByteArray? {
+        return mutex.withLock {
+            val key = SHARED_SECRET_PREFIX + deviceId
+            val encoded = userDefaults.stringForKey(key) ?: return@withLock null
+            return@withLock encoded.fromBase64OrNull().also { decoded ->
+                if (decoded == null) {
+                    userDefaults.removeObjectForKey(key)
+                    userDefaults.synchronize()
+                }
+            }
         }
     }
 }

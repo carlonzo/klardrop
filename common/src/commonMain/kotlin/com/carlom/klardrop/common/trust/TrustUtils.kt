@@ -131,6 +131,7 @@ object TrustPolicy {
             com.carlom.klardrop.common.communication.message.MessageType.ACK_READY,
             com.carlom.klardrop.common.communication.message.MessageType.ACK_RECEIVED,
             com.carlom.klardrop.common.communication.message.MessageType.ACK_REJECTED,
+            com.carlom.klardrop.common.communication.message.MessageType.ACK_AWAITING_USER,
             com.carlom.klardrop.common.communication.message.MessageType.PING,
             com.carlom.klardrop.common.communication.message.MessageType.PONG -> false
         }

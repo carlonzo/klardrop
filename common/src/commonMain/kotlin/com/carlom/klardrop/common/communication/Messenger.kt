@@ -72,19 +72,32 @@ class MessengerImpl(
 
       log("Messenger", "✅ Device $deviceId found in visible devices")
 
-      // Check if device is trusted and wrap message in TrustedMessage if needed
+      // Check if device is trusted and wrap message in TrustedMessage if needed.
+      //
+      // Skipped for FileMessage: those need to flow through the chunked-streaming path in
+      // ConnectionMessenger / FileMessageHandler, which inspects the message's hasPayload
+      // and special-cases FileMessage. Wrapping at this layer would replace the request
+      // with a TrustedMessage envelope (hasPayload = false), short-circuiting the streaming
+      // path entirely — the header would go on the wire but the payload bytes never would.
+      // For FileMessage, signing happens per-frame at the wire layer in MessagesRouter via
+      // sendMessageToDevice (header + each chunk independently). Result: every frame on
+      // the wire is still signed for trusted peers, but ConnectionMessenger sees the real
+      // FileMessage and runs the streaming dance.
       val finalMessageRequest = try {
         val message = messageRequest.message
         val isPairingMessage = message is TrustPairingRequest || message is TrustPairingResponse
+        val isFileMessage = message is com.carlom.klardrop.common.communication.message.FileMessage
 
-        if (!isPairingMessage && trustChecker.value.isTrusted(deviceId)) {
+        if (!isPairingMessage && !isFileMessage && trustChecker.value.isTrusted(deviceId)) {
           log("Messenger", "Device $deviceId is trusted, creating TrustedMessage")
 
           // Serialize the original message
           val messageBytes = messageSerializer.serialize(message)
 
-          // Sign the message using TrustManager
-          val trustedMessage = trustManager.signMessage(messageBytes)
+          // Sign the message using TrustManager. Preserve the inner message's id on the
+          // outer envelope — the receiver acks under the wire-frame id, the sender tracks
+          // pending-acks under message.id, and we want those to match.
+          val trustedMessage = trustManager.signMessage(messageBytes, id = message.id)
 
           if (trustedMessage != null) {
             log("Messenger", "Successfully created TrustedMessage for device $deviceId")
@@ -97,6 +110,8 @@ class MessengerImpl(
         } else {
           if (isPairingMessage) {
             log("Messenger", "Device $deviceId: Pairing message detected, sending unsigned for protocol handshake")
+          } else if (isFileMessage) {
+            log("Messenger", "Device $deviceId: FileMessage flows through unwrapped; per-frame wrap happens at the wire layer for the chunked path")
           } else {
             log("Messenger", "Device $deviceId is not trusted, sending unsigned request")
           }

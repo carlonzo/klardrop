@@ -359,6 +359,26 @@ internal class MacBleHelperProcess(
 
     if (permanentlyDisabled) return
 
+    // Exit 134 = SIGABRT. The dominant cause is macOS TCC killing the helper
+    // because the responsible app (often the launcher of the JVM, e.g. a
+    // terminal or IDE) lacks NSBluetoothAlwaysUsageDescription. The packaged
+    // .app bundle declares it; running outside that bundle (gradle :desktop:run)
+    // can't be fixed from here — Apple removed the disclaim SPI escape hatch.
+    // Treat it as a permanent denial so we don't burn 5 retries logging the
+    // same crash.
+    if (exit == TCC_ABORT_EXIT_CODE) {
+      permanentlyDisabled = true
+      log(
+        TAG,
+        "BLE helper killed by macOS (exit=134, SIGABRT). This usually means the " +
+          "process that launched this app lacks Bluetooth permission. BLE will be " +
+          "disabled for this session. To enable BLE, run the packaged .app from " +
+          "the DMG (which declares NSBluetoothAlwaysUsageDescription) and grant " +
+          "Bluetooth in System Settings → Privacy & Security → Bluetooth."
+      )
+      return
+    }
+
     val now = TimeSource.Monotonic.markNow()
     crashStamps.addLast(now)
     while (crashStamps.isNotEmpty() && crashStamps.first().elapsedNow() > crashWindow) {
@@ -507,6 +527,7 @@ internal class MacBleHelperProcess(
 
   internal companion object {
     const val TAG = "MacBleHelper"
+    private const val TCC_ABORT_EXIT_CODE = 134
 
     /** State reported by `CBManager.state` on the helper side. */
     enum class HelperState {

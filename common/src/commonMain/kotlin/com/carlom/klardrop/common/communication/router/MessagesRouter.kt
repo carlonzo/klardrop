@@ -98,7 +98,11 @@ internal class MessagesRouterImpl(
     writeChannel: ByteWriteChannel,
   ) {
     if (trustManager.isTrusted(deviceId)) {
-      val trustedMessage = trustManager.signMessage(messageSerializer.serialize(message))
+      // Preserve the inner message id on the wire frame so the sender (which registers
+      // pending-ACKs under message.id) can match the receiver's ack reply (which echoes
+      // rawMessage.id from the wire). Without this, the wire-frame id is random and
+      // every ack falls into the "Unexpected ACK ... no matching pending request" bucket.
+      val trustedMessage = trustManager.signMessage(messageSerializer.serialize(message), id = message.id)
       if (trustedMessage != null) {
         writeChannel.sendMessage(trustedMessage, messageSerializer)
       } else {
@@ -124,6 +128,12 @@ internal class MessagesRouterImpl(
       "MessagesRouter",
       "[DEBUG] Raw message received from $fromDeviceId: type=${rawMessage.type}, id=${rawMessage.id}, hasPayload=${rawMessage.hasPayload}"
     )
+    // The id the sender's ConnectionMessenger.send registered its pending-ACK channel
+    // under is the wire-frame id, i.e. the OUTER TrustedMessage id when the message is
+    // signed. The inner deserialized application message has its own (different) id that
+    // the sender never tracks. Always reply to ACKs using rawMessage.id so the sender's
+    // pendingAcks lookup matches.
+    val ackId = rawMessage.id
 
     val message = when {
       rawMessage is TrustedMessage -> {
@@ -139,7 +149,24 @@ internal class MessagesRouterImpl(
         val isTrustedDevice = trustManager.isTrusted(fromDeviceId)
         val isPairingMessage = rawMessage is com.carlom.klardrop.common.communication.message.TrustPairingRequest ||
             rawMessage is com.carlom.klardrop.common.communication.message.TrustPairingResponse
-        if (isTrustedDevice && !isPairingMessage) {
+        // Control-plane frames (heartbeat ping/pong, ACKs) carry no application data and
+        // are exempt from the signed-from-trusted requirement. Heartbeat in particular
+        // is sent from ConnectionMessenger which has no TrustManager handle, so we can't
+        // sign it there — and rejecting an unsigned PING would tear the connection down.
+        //
+        // FileChunkMessage is also exempt: file transfers sign only the header (which
+        // includes a SHA-256 of the file bytes). Chunks flow unsigned for performance —
+        // ECDSA-per-chunk would add seconds to a typical multi-MB transfer. Tampering is
+        // caught at the receive pipeline's complete() step by hash verification against
+        // the signed header.
+        //
+        // Application messages (TEXT, FILE, CLIPBOARD_SYNC, CONNECTION_INFO) still must be
+        // signed when coming from a trusted peer.
+        val isControlPlane = rawMessage is PingMessage ||
+            rawMessage is PongMessage ||
+            rawMessage is MessageAcknowledgment ||
+            rawMessage is FileChunkMessage
+        if (isTrustedDevice && !isPairingMessage && !isControlPlane) {
           log("MessagesRouter", "SECURITY: unsigned message from trusted device $fromDeviceId - rejecting")
           return@ioDispatcher
         }
@@ -154,7 +181,7 @@ internal class MessagesRouterImpl(
 
     if (message is PingMessage) {
       writeLock.withLock {
-        writeChannel.sendMessage(PongMessage(pingId = message.id), messageSerializer)
+        sendMessageToDevice(fromDeviceId, PongMessage(pingId = message.id), writeChannel)
       }
       return@ioDispatcher
     }
@@ -165,7 +192,7 @@ internal class MessagesRouterImpl(
 
     // ===== FILE chunked transfer special-case =====
     if (message is FileMessage) {
-      handleFileHeader(message, fromDeviceId, writeChannel, writeLock)
+      handleFileHeader(message, ackId, fromDeviceId, writeChannel, writeLock)
       return@ioDispatcher
     }
     if (message is FileChunkMessage) {
@@ -193,9 +220,15 @@ internal class MessagesRouterImpl(
         kind = IncomingAuthorizer.TransferKind.TEXT,
         headers = listOf(message),
         receiveFlow = receiveFlow,
+        notifyAwaitingUser = {
+          val ackAwaiting = MessageAcknowledgment(AckType.AWAITING_USER, ackId)
+          writeLock.withLock {
+            sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel)
+          }
+        },
       )
       if (!authorized) {
-        val ackRejected = MessageAcknowledgment(AckType.REJECTED, message.id)
+        val ackRejected = MessageAcknowledgment(AckType.REJECTED, ackId)
         writeLock.withLock {
           sendMessageToDevice(fromDeviceId, ackRejected, writeChannel)
         }
@@ -205,9 +238,9 @@ internal class MessagesRouterImpl(
 
     if (message.hasPayload) {
       if (!isAckMessage) {
-        val ackReady = MessageAcknowledgment(AckType.READY, message.id)
+        val ackReady = MessageAcknowledgment(AckType.READY, ackId)
         writeLock.withLock {
-          writeChannel.sendMessage(ackReady, messageSerializer)
+          sendMessageToDevice(fromDeviceId, ackReady, writeChannel)
         }
       }
 
@@ -226,7 +259,7 @@ internal class MessagesRouterImpl(
     }
 
     if (!isAckMessage) {
-      val ackReceived = MessageAcknowledgment(AckType.RECEIVED, message.id)
+      val ackReceived = MessageAcknowledgment(AckType.RECEIVED, ackId)
       writeLock.withLock {
         sendMessageToDevice(fromDeviceId, ackReceived, writeChannel)
       }
@@ -246,6 +279,7 @@ internal class MessagesRouterImpl(
    */
   private suspend fun handleFileHeader(
     header: FileMessage,
+    ackId: Int,
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
     writeLock: Mutex,
@@ -261,17 +295,45 @@ internal class MessagesRouterImpl(
       kind = IncomingAuthorizer.TransferKind.FILE,
       headers = listOf(header),
       receiveFlow = receiveFlow,
+      notifyAwaitingUser = {
+        val ackAwaiting = MessageAcknowledgment(AckType.AWAITING_USER, ackId)
+        writeLock.withLock {
+          sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel)
+        }
+      },
     )
     if (!authorized) {
-      val ackRejected = MessageAcknowledgment(AckType.REJECTED, header.id)
+      val ackRejected = MessageAcknowledgment(AckType.REJECTED, ackId)
       writeLock.withLock {
-        writeChannel.sendMessage(ackRejected, messageSerializer)
+        sendMessageToDevice(fromDeviceId, ackRejected, writeChannel)
       }
       return
     }
 
+    // If we have a shared secret with this peer (paired post-secret-persistence), we
+    // expect every chunk to carry an HMAC tag — anti-downgrade is enforced locally:
+    // the receiver checks based on its own knowledge of the trust state, so an attacker
+    // can't strip the field to bypass verification.
+    val verifyChunkMac: (suspend (chunk: FileChunkMessage) -> Boolean)? =
+      if (trustManager.macKeyFor(fromDeviceId) != null) {
+        { chunk ->
+          val tag = chunk.mac
+          if (tag == null) false
+          else trustManager.verifyChunkMac(
+            deviceId = fromDeviceId,
+            fileMessageId = chunk.fileMessageId,
+            seq = chunk.seq,
+            isLast = chunk.isLast,
+            data = chunk.data,
+            tag = tag,
+          )
+        }
+      } else {
+        null
+      }
+
     val pipeline = runCatching {
-      fileMessageHandler.beginReceive(header, fromDeviceId, receiveFlow)
+      fileMessageHandler.beginReceive(header, fromDeviceId, receiveFlow, verifyChunkMac)
     }.getOrElse { error ->
       log("MessagesRouter", "beginReceive failed for ${header.fileName}: ${error.message}", error)
       return
@@ -285,9 +347,9 @@ internal class MessagesRouterImpl(
       receivePipelines[header.id] = pipeline
     }
 
-    val ackReady = MessageAcknowledgment(AckType.READY, header.id)
+    val ackReady = MessageAcknowledgment(AckType.READY, ackId)
     writeLock.withLock {
-      writeChannel.sendMessage(ackReady, messageSerializer)
+      sendMessageToDevice(fromDeviceId, ackReady, writeChannel)
     }
   }
 
@@ -353,13 +415,40 @@ internal class MessagesRouterImpl(
       // writes can interleave between chunks. For multi-GB transfers this is the difference
       // between "heartbeat starves and connection gets killed mid-transfer" and "everything
       // works as expected."
+      //
+      // Trust signing strategy for files: SIGN the header, leave chunks unsigned. The
+      // header carries SHA-256 of the file content and is signed (one ECDSA op for the
+      // whole transfer). The receiver hashes chunks as they arrive and verifies the
+      // assembled hash against the signed header before marking the transfer complete —
+      // any chunk tampering fails the integrity check. This trades per-chunk authenticity
+      // (which we don't need given the signed binding) for a ~24× speedup on a 6 MB file.
       if (message is FileMessage) {
         @Suppress("UNCHECKED_CAST")
         val fileRequest = sendMessageRequest as FileMessage.FileSendRequest
         val sendFramed: suspend (Message) -> Unit = { framedMessage ->
           writeLock.withLock {
-            writeChannel.sendMessage(framedMessage, messageSerializer)
+            // Sign the FILE header (binds the transfer to this device's identity + the
+            // contentHash inside the header); send chunks as raw frames. The receiver
+            // accepts unsigned FileChunkMessage from trusted peers because the security
+            // gate exempts them — see onMessageIncoming's `isControlPlane`-style check.
+            if (framedMessage is FileMessage) {
+              sendMessageToDevice(toDeviceId, framedMessage, writeChannel)
+            } else {
+              writeChannel.sendMessage(framedMessage, messageSerializer)
+            }
           }
+        }
+        // Compute per-chunk HMAC tags via the per-pair key derived from the ECDH shared
+        // secret. Returns null if no shared secret on file — handler then falls back to
+        // the option-2 SHA-256 binding inside the (signed) header.
+        val chunkMacFn: suspend (FileChunkMessage) -> ByteArray? = { chunk ->
+          trustManager.computeChunkMac(
+            deviceId = toDeviceId,
+            fileMessageId = chunk.fileMessageId,
+            seq = chunk.seq,
+            isLast = chunk.isLast,
+            data = chunk.data,
+          )
         }
         fileMessageHandler.handleOutgoingChunked(
           toDeviceId = toDeviceId,
@@ -367,6 +456,7 @@ internal class MessagesRouterImpl(
           sendFramed = sendFramed,
           progressFlow = progress,
           awaitReady = awaitReadyAck,
+          chunkMacFn = chunkMacFn,
         )
         return@ioDispatcher
       }

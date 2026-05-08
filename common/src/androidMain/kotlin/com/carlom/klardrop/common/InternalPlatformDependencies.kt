@@ -106,6 +106,23 @@ actual class InternalPlatformDependencies(private val context: Context, private 
     }
   }
 
+  actual suspend fun openUrl(url: String): Boolean {
+    return try {
+      val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      if (intent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(intent)
+        true
+      } else {
+        false
+      }
+    } catch (e: Exception) {
+      log("InternalPlatformDependencies", "openUrl($url) failed: ${e.message}", e)
+      false
+    }
+  }
+
   actual suspend fun saveMediaToGallery(
     tempPath: Path,
     mimeType: String,
