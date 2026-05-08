@@ -9,8 +9,6 @@ import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationDidBecomeActiveNotification
-import platform.UIKit.UIApplicationState
-import platform.UIKit.UIApplicationStateActive
 import platform.UIKit.UIApplicationWillResignActiveNotification
 import platform.darwin.NSObject
 
@@ -20,7 +18,7 @@ actual class ForegroundState {
   actual val isForeground: StateFlow<Boolean> = flow.asStateFlow()
 
   init {
-    flow.value = UIApplication.sharedApplication.applicationState == UIApplicationStateActive
+    flow.value = UIApplication.sharedApplication.applicationState.value == 0L
 
     val center = NSNotificationCenter.defaultCenter
     val queue = NSOperationQueue.mainQueue
