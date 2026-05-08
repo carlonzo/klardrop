@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.theme.KdTheme
 
@@ -52,6 +53,7 @@ fun ChatHeader(
     status: KdStatus? = null,
     isReachable: Boolean = true,
     toolbarVariant: Boolean = false,
+    avatarSize: Dp = 32.dp,
     onBack: () -> Unit = {},
     onOverflow: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -86,12 +88,11 @@ fun ChatHeader(
                 }
             }
 
-            // 32 dp avatar
             DeviceAvatar(
                 kind = kind,
                 style = avatarStyle,
                 status = status,
-                size = 32.dp,
+                size = avatarSize,
             )
 
             Spacer(Modifier.width(spacing.s2))

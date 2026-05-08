@@ -67,9 +67,6 @@ import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 
 private const val GROUP_GAP_MILLIS: Long = 5 * 60 * 1000L
 
-private val AVATAR_EMPTY_SIZE = 84.dp
-private val EMPTY_STATE_GAP = 14.dp
-
 enum class DeviceChatMode { Screen, Pane }
 
 @Composable
@@ -216,7 +213,7 @@ fun DeviceChatScreen(
                 },
                 onAttach = { filePickerLauncher.launch() },
                 enabled = !isOffline,
-                desktopVariant = false,
+                desktopVariant = mode == DeviceChatMode.Pane,
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(colors.bg0)
@@ -283,17 +280,17 @@ private fun ChatEmptyState(
             DeviceAvatar(
                 kind = KdDeviceKind.Unknown,
                 style = if (isOwned) KdAvatarStyle.Tinted else KdAvatarStyle.Neutral,
-                size = AVATAR_EMPTY_SIZE,
+                size = spacing.heroAvatar,
             )
 
-            Spacer(Modifier.height(EMPTY_STATE_GAP))
+            Spacer(Modifier.height(spacing.gap))
 
             Text(
                 text = if (isOwned) "Connected to $deviceName" else "Send something to $deviceName",
                 style = typography.headline.copy(color = colors.text),
             )
 
-            Spacer(Modifier.height(EMPTY_STATE_GAP))
+            Spacer(Modifier.height(spacing.gap))
 
             Text(
                 text = if (isOwned) {
@@ -304,7 +301,7 @@ private fun ChatEmptyState(
                 style = typography.body.copy(color = colors.text2),
             )
 
-            Spacer(Modifier.height(EMPTY_STATE_GAP))
+            Spacer(Modifier.height(spacing.gap))
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(spacing.s2),

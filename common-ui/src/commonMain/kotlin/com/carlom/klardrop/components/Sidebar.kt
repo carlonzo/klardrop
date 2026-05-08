@@ -30,11 +30,15 @@ import com.carlom.klardrop.theme.KdTheme
 /**
  * Left sidebar pane for desktop/tablet split view.
  *
+ * Layout: pinned `header` (optional) → pinned VisibilityPill → scrollable
+ * `yoursSection` + `nearbySection` → divider → pinned `footer`.
+ *
  * @param width             sidebar width; use 300 dp (macOS) or 320 dp (iPad)
  * @param visibilityState   wired to VisibilityPill
  * @param onVisibilityTap   called when pill is tapped
- * @param yoursSection      composable content for the "Your devices" section
- * @param nearbySection     composable content for the "Nearby" section
+ * @param header            optional non-scrollable content above the VisibilityPill
+ * @param yoursSection      composable content for the "Your devices" section (scrollable)
+ * @param nearbySection     composable content for the "Nearby" section (scrollable)
  * @param footer            composable content pinned at the bottom (local device + settings)
  * @param modifier          applied to the root Box
  */
@@ -43,6 +47,7 @@ fun Sidebar(
     width: Dp = 300.dp,
     visibilityState: KdVisibilityState = KdVisibilityState.Hidden,
     onVisibilityTap: () -> Unit = {},
+    header: (@Composable ColumnScope.() -> Unit)? = null,
     yoursSection: @Composable ColumnScope.() -> Unit = {},
     nearbySection: @Composable ColumnScope.() -> Unit = {},
     footer: @Composable ColumnScope.() -> Unit = {},
@@ -63,33 +68,29 @@ fun Sidebar(
                     .fillMaxWidth()
                     .fillMaxHeight(),
             ) {
-                // Scrollable content
+                if (header != null) {
+                    header()
+                }
+
+                VisibilityPill(
+                    state = visibilityState,
+                    onTap = onVisibilityTap,
+                    modifier = Modifier.padding(
+                        horizontal = spacing.s5,
+                        vertical = spacing.s3,
+                    ),
+                )
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    // Visibility pill
-                    VisibilityPill(
-                        state = visibilityState,
-                        onTap = onVisibilityTap,
-                        modifier = Modifier
-                            .padding(
-                                horizontal = spacing.s5,
-                                vertical = spacing.s3,
-                            ),
-                    )
-
-                    // Yours section
                     yoursSection()
-
                     Spacer(Modifier.height(spacing.s4))
-
-                    // Nearby section
                     nearbySection()
                 }
 
-                // Footer — not scrollable
                 HorizontalDivider(thickness = 1.dp, color = colors.divider)
                 Column(
                     modifier = Modifier
@@ -102,7 +103,6 @@ fun Sidebar(
             }
         }
 
-        // 1 px right border
         Box(
             modifier = Modifier
                 .width(1.dp)

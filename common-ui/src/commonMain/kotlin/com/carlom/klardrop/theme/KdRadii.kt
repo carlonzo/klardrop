@@ -17,8 +17,10 @@ data class KdRadii(
     val md: Dp = 14.dp,
     /** 18 dp — device row, chat bubble, file card */
     val lg: Dp = 18.dp,
-    /** 24 dp — bottom sheet, dialog, hero card */
+    /** 24 dp — dialog, hero card */
     val xl: Dp = 24.dp,
+    /** 28 dp — bottom sheet top corner */
+    val sheet: Dp = 28.dp,
 
     /** Fully-rounded: visibility pill, message input, send button */
     val shapeXs: RoundedCornerShape = RoundedCornerShape(6.dp),
@@ -26,6 +28,7 @@ data class KdRadii(
     val shapeMd: RoundedCornerShape = RoundedCornerShape(14.dp),
     val shapeLg: RoundedCornerShape = RoundedCornerShape(18.dp),
     val shapeXl: RoundedCornerShape = RoundedCornerShape(24.dp),
+    val shapeSheet: RoundedCornerShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     val shapePill: RoundedCornerShape = RoundedCornerShape(50),
 )
 

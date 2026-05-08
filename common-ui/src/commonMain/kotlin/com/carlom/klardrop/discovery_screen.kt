@@ -145,10 +145,7 @@ fun DiscoveryScreen(
         ModalBottomSheet(
             onDismissRequest = { showShareSheet = false },
             sheetState = shareSheetState,
-            shape = radii.shapeXl.copy(
-                bottomStart = androidx.compose.foundation.shape.ZeroCornerSize,
-                bottomEnd = androidx.compose.foundation.shape.ZeroCornerSize,
-            ),
+            shape = radii.shapeSheet,
             containerColor = colors.bg1,
         ) {
             var selectedId by remember { mutableStateOf<String?>(deviceUiForShare?.deviceId) }
@@ -565,10 +562,7 @@ private fun RenameSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = radii.shapeXl.copy(
-            bottomStart = androidx.compose.foundation.shape.ZeroCornerSize,
-            bottomEnd = androidx.compose.foundation.shape.ZeroCornerSize,
-        ),
+        shape = radii.shapeSheet,
         containerColor = colors.bg1,
     ) {
         Column(
