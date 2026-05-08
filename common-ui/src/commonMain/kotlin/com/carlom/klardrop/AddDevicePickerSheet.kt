@@ -1,7 +1,6 @@
 package com.carlom.klardrop
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,327 +8,207 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ModalBottomSheetLayout
-import androidx.compose.material.ModalBottomSheetValue
-import androidx.compose.material.TextButton
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.contentColorFor
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.components.DeviceAvatar
+import com.carlom.klardrop.components.DeviceRow
+import com.carlom.klardrop.components.KdAvatarStyle
+import com.carlom.klardrop.components.KdDeviceKind
+import com.carlom.klardrop.components.KdRowState
+import com.carlom.klardrop.components.SectionHead
+import com.carlom.klardrop.theme.KdTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AddDevicePickerSheet(
-  candidates: List<DeviceUi>,
-  onDismiss: () -> Unit,
-  onPick: (DeviceUi) -> Unit
+    candidates: List<DeviceUi>,
+    onDismiss: () -> Unit,
+    onPick: (DeviceUi) -> Unit,
 ) {
-  ModalBottomSheetLayout(
-    sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-    sheetBackgroundColor = MaterialTheme.colorScheme.surface,
-    sheetContentColor = MaterialTheme.colorScheme.contentColorFor(MaterialTheme.colorScheme.surface),
-    sheetContent = {
-      Column(
-        modifier = Modifier.padding(top = 12.dp, start = 24.dp, end = 24.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-      ) {
-        AddPickerSheetHandle()
-        Text(
-          "Add a device",
-          style = MaterialTheme.typography.titleLarge
-        )
-        Text(
-          "Pick a nearby device to pair with. Trusted devices auto-share clipboard, Wi-Fi logins and notifications.",
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+    val radii = KdTheme.radii
 
-        if (candidates.isEmpty()) {
-          Text(
-            "No nearby devices right now. Make sure Klardrop is open on the device you want to pair, and that both are on the same Wi-Fi.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        } else {
-          LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier
-              .fillMaxWidth()
-              .heightIn(max = 360.dp)
-          ) {
-            items(items = candidates, key = { it.deviceId }) { device ->
-              PickerRow(device = device, onClick = { onPick(device) })
-            }
-          }
-        }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-        Row(
-          horizontalArrangement = Arrangement.End,
-          modifier = Modifier.fillMaxWidth()
-        ) {
-          TextButton(onClick = onDismiss) { Text("Close") }
-        }
-      }
-    },
-    sheetState = rememberModalBottomSheetState(ModalBottomSheetValue.Expanded)
-  ) { }
-}
-
-@Composable
-private fun PickerRow(device: DeviceUi, onClick: () -> Unit) {
-  val pairing = device.trustStatus == TrustStatus.Pairing
-  Surface(
-    shape = RoundedCornerShape(12.dp),
-    color = MaterialTheme.colorScheme.surfaceVariant,
-    modifier = Modifier
-      .fillMaxWidth()
-      .clickable(enabled = !pairing, onClick = onClick)
-  ) {
-    Row(
-      modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = radii.shapeXl.copy(
+            bottomStart = androidx.compose.foundation.shape.ZeroCornerSize,
+            bottomEnd = androidx.compose.foundation.shape.ZeroCornerSize,
+        ),
+        containerColor = colors.bg1,
     ) {
-      Box(
-        modifier = Modifier
-          .size(36.dp)
-          .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(
-          imageVector = deviceIcon(device.deviceType),
-          contentDescription = null,
-          tint = MaterialTheme.colorScheme.onPrimaryContainer,
-          modifier = Modifier.size(18.dp)
-        )
-      }
-      Column(modifier = Modifier.weight(1f)) {
-        Text(
-          text = device.deviceName,
-          style = MaterialTheme.typography.titleSmall,
-          color = MaterialTheme.colorScheme.onSurface,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
-        Text(
-          text = if (pairing) "Pairing…" else "Tap to pair",
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-      }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = spacing.s6),
+        ) {
+            SectionHead(
+                label = "Add a device",
+                modifier = Modifier.padding(horizontal = spacing.s1),
+            )
+
+            Text(
+                text = "Pick a nearby device to pair with. Trusted devices auto-share clipboard, Wi-Fi logins and notifications.",
+                style = typography.caption.copy(color = colors.text2),
+                modifier = Modifier.padding(start = spacing.s5, end = spacing.s5, bottom = spacing.s3),
+            )
+
+            if (candidates.isEmpty()) {
+                Text(
+                    text = "No nearby devices right now. Make sure Klardrop is open on the device you want to pair, and that both are on the same Wi-Fi.",
+                    style = typography.body.copy(color = colors.text2),
+                    modifier = Modifier.padding(horizontal = spacing.s5),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = spacing.s7 * 11),
+                ) {
+                    items(items = candidates, key = { it.deviceId }) { device ->
+                        DeviceRow(
+                            name = device.deviceName,
+                            subText = if (device.trustStatus == TrustStatus.Pairing) "Pairing…" else "Tap to pair",
+                            kind = device.deviceType.toKdDeviceKind(),
+                            avatarStyle = KdAvatarStyle.Neutral,
+                            rowState = if (device.trustStatus == TrustStatus.Pairing) KdRowState.Pairing else KdRowState.Idle,
+                            onClick = {
+                                if (device.trustStatus != TrustStatus.Pairing) {
+                                    onPick(device)
+                                }
+                            },
+                            modifier = Modifier.padding(horizontal = spacing.s3),
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(spacing.s2))
+
+            Row(
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = spacing.s4),
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text("Close", style = typography.body.copy(color = colors.accent))
+                }
+            }
+        }
     }
-  }
 }
 
 @Composable
 internal fun AddDevicePlaceholderSurface(
-  isLargeScreen: Boolean,
-  onClick: () -> Unit
+    isLargeScreen: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-  Surface(
-    shape = RoundedCornerShape(24.dp),
-    color = MaterialTheme.colorScheme.surfaceVariant,
-    modifier = Modifier.fillMaxWidth()
-  ) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+    val radii = KdTheme.radii
+
     Box(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 8.dp, vertical = 12.dp),
-      contentAlignment = if (isLargeScreen) Alignment.CenterStart else Alignment.Center
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(radii.shapeLg)
+            .background(colors.bg1)
+            .clickable(onClick = onClick)
+            .padding(horizontal = spacing.s3, vertical = spacing.s3),
+        contentAlignment = if (isLargeScreen) Alignment.CenterStart else Alignment.Center,
     ) {
-      AddDevicePlaceholderCard(isLargeScreen = isLargeScreen, onClick = onClick)
+        if (isLargeScreen) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing.s3),
+            ) {
+                DeviceAvatar(
+                    kind = KdDeviceKind.Unknown,
+                    style = KdAvatarStyle.Neutral,
+                    size = spacing.s7,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(spacing.s1)) {
+                    Text(
+                        text = "Add a device",
+                        style = typography.body.copy(color = colors.text),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "Pair from nearby devices",
+                        style = typography.caption.copy(color = colors.text2),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(spacing.s2),
+                modifier = Modifier.padding(vertical = spacing.s3),
+            ) {
+                DeviceAvatar(
+                    kind = KdDeviceKind.Unknown,
+                    style = KdAvatarStyle.Neutral,
+                    size = spacing.s7,
+                )
+                Text(
+                    text = "Add a device",
+                    style = typography.body.copy(color = colors.text),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "Pair from nearby",
+                    style = typography.caption.copy(color = colors.text2),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
-  }
-}
-
-@Composable
-private fun AddDevicePlaceholderCard(isLargeScreen: Boolean, onClick: () -> Unit) {
-  if (isLargeScreen) {
-    AddDevicePlaceholderLarge(onClick)
-  } else {
-    AddDevicePlaceholderSmall(onClick)
-  }
-}
-
-@Composable
-private fun AddDevicePlaceholderSmall(onClick: () -> Unit) {
-  Column(
-    modifier = Modifier
-      .clip(RoundedCornerShape(20.dp))
-      .clickable(onClick = onClick)
-      .padding(vertical = 14.dp, horizontal = 8.dp)
-      .width(96.dp),
-    horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.spacedBy(8.dp)
-  ) {
-    Box(
-      modifier = Modifier
-        .size(56.dp)
-        .border(
-          width = 1.5.dp,
-          color = MaterialTheme.colorScheme.outline,
-          shape = CircleShape
-        ),
-      contentAlignment = Alignment.Center
-    ) {
-      Icon(
-        imageVector = Icons.Filled.Add,
-        contentDescription = null,
-        tint = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.size(24.dp)
-      )
-    }
-    Text(
-      text = "Add a device",
-      style = MaterialTheme.typography.labelLarge,
-      color = MaterialTheme.colorScheme.onSurface,
-      maxLines = 2,
-      overflow = TextOverflow.Ellipsis,
-      textAlign = TextAlign.Center
-    )
-    Text(
-      text = "Pair from nearby",
-      style = MaterialTheme.typography.labelSmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-      maxLines = 1,
-      textAlign = TextAlign.Center
-    )
-  }
-}
-
-@Composable
-private fun AddDevicePlaceholderLarge(onClick: () -> Unit) {
-  Box(
-    modifier = Modifier
-      .fillMaxWidth()
-      .clip(RoundedCornerShape(20.dp))
-      .clickable(onClick = onClick)
-      .padding(horizontal = 16.dp, vertical = 12.dp)
-  ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      Box(
-        modifier = Modifier
-          .size(56.dp)
-          .border(
-            width = 1.5.dp,
-            color = MaterialTheme.colorScheme.outline,
-            shape = CircleShape
-          ),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(
-          imageVector = Icons.Filled.Add,
-          contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(24.dp)
-        )
-      }
-
-      Spacer(modifier = Modifier.size(16.dp))
-
-      Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-          text = "Add a device",
-          style = MaterialTheme.typography.titleMedium,
-          color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-          text = "Pair from nearby devices",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-      }
-    }
-  }
 }
 
 @Composable
 internal fun SidebarAddDeviceRow(onClick: () -> Unit) {
-  Surface(
-    color = androidx.compose.ui.graphics.Color.Transparent,
-    shape = RoundedCornerShape(12.dp),
-    modifier = Modifier
-      .fillMaxWidth()
-      .padding(horizontal = 10.dp, vertical = 1.dp)
-      .clickable(onClick = onClick)
-  ) {
-    Row(
-      modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-      verticalAlignment = Alignment.CenterVertically,
-      horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-      Box(
-        modifier = Modifier
-          .size(36.dp)
-          .border(
-            width = 1.5.dp,
-            color = MaterialTheme.colorScheme.outline,
-            shape = CircleShape
-          ),
-        contentAlignment = Alignment.Center
-      ) {
-        Icon(
-          imageVector = Icons.Filled.Add,
-          contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface,
-          modifier = Modifier.size(18.dp)
-        )
-      }
-      Column(modifier = Modifier.weight(1f)) {
-        Text(
-          text = "Add a device",
-          style = MaterialTheme.typography.titleSmall,
-          color = MaterialTheme.colorScheme.onSurface,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
-        Text(
-          text = "Pair from nearby",
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
-      }
-    }
-  }
+    val colors = KdTheme.colors
+    val spacing = KdTheme.spacing
+
+    DeviceRow(
+        name = "Add a device",
+        subText = "Pair from nearby",
+        kind = KdDeviceKind.Unknown,
+        avatarStyle = KdAvatarStyle.Neutral,
+        rowState = KdRowState.Idle,
+        onClick = onClick,
+        modifier = Modifier.padding(horizontal = spacing.s2),
+    )
 }
 
-@Composable
-private fun AddPickerSheetHandle() {
-  Box(
-    modifier = Modifier
-      .fillMaxWidth()
-      .padding(bottom = 4.dp),
-    contentAlignment = Alignment.Center
-  ) {
-    Box(
-      modifier = Modifier
-        .size(width = 36.dp, height = 4.dp)
-        .background(
-          color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-          shape = RoundedCornerShape(2.dp)
-        )
-    )
-  }
+internal fun DeviceType.toKdDeviceKind(): KdDeviceKind = when (this) {
+    DeviceType.MOBILE -> KdDeviceKind.Android
+    DeviceType.DESKTOP -> KdDeviceKind.Pc
+    DeviceType.UNKNOWN -> KdDeviceKind.Unknown
 }
