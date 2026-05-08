@@ -30,6 +30,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -74,7 +82,36 @@ fun WideLayout(
         discoveryController.setActiveChatDeviceId(activeDeviceId)
     }
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    val keyboardFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        runCatching { keyboardFocus.requestFocus() }
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .focusRequester(keyboardFocus)
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val visible = state.devices
+                if (visible.isEmpty()) return@onPreviewKeyEvent false
+                val direction = when (event.key) {
+                    Key.DirectionDown -> 1
+                    Key.DirectionUp -> -1
+                    else -> return@onPreviewKeyEvent false
+                }
+                val currentIndex = visible.indexOfFirst { it.deviceId == activeDeviceId }
+                val nextIndex = when {
+                    currentIndex < 0 -> if (direction > 0) 0 else visible.lastIndex
+                    else -> ((currentIndex + direction) % visible.size + visible.size) % visible.size
+                }
+                val next = visible[nextIndex]
+                discoveryController.onDeviceClick(next)
+                activeDeviceId = next.deviceId
+                true
+            }
+    ) {
         val resolvedSidebarWidth = when {
             maxWidth <= WideBreakpoint -> 0.dp
             sidebarWidth == DesktopSidebarWidth -> DesktopSidebarWidth

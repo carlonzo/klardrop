@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
@@ -34,6 +35,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.io.files.Path
 
 class DeviceChatViewModel(
   private val deviceId: String,
@@ -186,6 +188,26 @@ class DeviceChatViewModel(
 
   fun clearError() {
     _uiState.value = _uiState.value.copy(error = null)
+  }
+
+  fun retryFileTransfer(failedFileTransferId: Long) {
+    viewModelScope.launch {
+      val row = messageRepository.getFileTransferById(failedFileTransferId).first() ?: run {
+        _uiState.update { it.copy(error = "Could not find the original file to retry.") }
+        return@launch
+      }
+      val sourcePath = row.file_path
+      if (sourcePath.isBlank()) {
+        _uiState.update { it.copy(error = "The original file path is no longer available.") }
+        return@launch
+      }
+      val file = runCatching { PlatformFile(Path(sourcePath)) }.getOrNull()
+      if (file == null) {
+        _uiState.update { it.copy(error = "Could not reopen the original file.") }
+        return@launch
+      }
+      sendFiles(listOf(file))
+    }
   }
 
 

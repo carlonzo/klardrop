@@ -197,6 +197,7 @@ fun DeviceChatScreen(
                     messageRepository = viewModel.messageRepository,
                     onOpenFileRequest = onOpenFileRequest,
                     onOpenUrlRequest = onOpenUrlRequest,
+                    onRetryFile = viewModel::retryFileTransfer,
                     isOffline = isOffline,
                     modifier = Modifier.weight(1f),
                 )
@@ -343,6 +344,7 @@ private fun MessagesList(
     messageRepository: MessageRepository,
     onOpenFileRequest: (filePath: String) -> Unit,
     onOpenUrlRequest: (url: String) -> Unit,
+    onRetryFile: (fileTransferId: Long) -> Unit,
     isOffline: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -385,6 +387,7 @@ private fun MessagesList(
                 messageRepository = messageRepository,
                 onOpenFileRequest = onOpenFileRequest,
                 onOpenUrlRequest = onOpenUrlRequest,
+                onRetryFile = onRetryFile,
                 isFirstOfGroup = isFirstOfGroup,
             )
 
@@ -405,6 +408,7 @@ private fun MessageRow(
     messageRepository: MessageRepository,
     onOpenFileRequest: (filePath: String) -> Unit,
     onOpenUrlRequest: (url: String) -> Unit,
+    onRetryFile: (fileTransferId: Long) -> Unit,
     isFirstOfGroup: Boolean,
 ) {
     val isSender = message.is_sender != 0L
@@ -421,6 +425,7 @@ private fun MessageRow(
                     direction = direction,
                     timestamp = timestamp,
                     onOpenFileRequest = onOpenFileRequest,
+                    onRetryFile = onRetryFile,
                 )
             }
             message.message_type == MessageType.TEXT.name -> {
@@ -495,6 +500,7 @@ private fun FileMessageBubble(
     direction: KdBubbleDirection,
     timestamp: String,
     onOpenFileRequest: (filePath: String) -> Unit,
+    onRetryFile: (fileTransferId: Long) -> Unit,
 ) {
     val fileTransferState by messageRepository.getFileTransferById(
         message.file_transfer_id ?: return
@@ -529,7 +535,11 @@ private fun FileMessageBubble(
                 fileName = fileName,
                 fileSize = if (totalSize > 0) formatBytes(totalSize) else null,
                 state = fileState,
-                onRetry = {},
+                onRetry = {
+                    if (isSender) {
+                        message.file_transfer_id?.let(onRetryFile)
+                    }
+                },
                 modifier = if (openablePath != null) {
                     Modifier.combinedClickable(onClick = { onOpenFileRequest(openablePath) })
                 } else {
