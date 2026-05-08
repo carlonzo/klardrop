@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.theme.KdTheme
 import com.carlom.klardrop.trust.DeviceTrustStatus
 import com.carlom.klardrop.trust.TrustBadge
 import com.klardrop.resources.Res
@@ -92,8 +92,8 @@ internal fun DeviceSmall(deviceUi: DeviceUi, onDeviceActionListener: OnDeviceAct
 
     Text(
       text = deviceUi.deviceName,
-      style = MaterialTheme.typography.labelLarge,
-      color = MaterialTheme.colorScheme.onSurface,
+      style = KdTheme.typography.body,
+      color = KdTheme.colors.text,
       maxLines = 2,
       overflow = TextOverflow.Ellipsis,
       textAlign = TextAlign.Center
@@ -150,8 +150,8 @@ internal fun DeviceLarge(
       Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
           text = deviceUi.deviceName,
-          style = MaterialTheme.typography.titleMedium,
-          color = MaterialTheme.colorScheme.onSurface,
+          style = KdTheme.typography.headline,
+          color = KdTheme.colors.text,
           maxLines = 2,
           overflow = TextOverflow.Ellipsis
         )
@@ -170,9 +170,9 @@ private fun UnreadDot(modifier: Modifier = Modifier) {
   Box(
     modifier = modifier
       .size(12.dp)
-      .background(MaterialTheme.colorScheme.surface, CircleShape)
+      .background(KdTheme.colors.bg1, CircleShape)
       .padding(2.dp)
-      .background(MaterialTheme.colorScheme.error, CircleShape)
+      .background(KdTheme.colors.err, CircleShape)
   )
 }
 
@@ -183,15 +183,15 @@ private fun ReachabilityDot(reachability: Reachability, modifier: Modifier = Mod
   // would flicker the indicator on every churn — silence is the right cue
   // there ("we don't know yet, don't draw conclusions").
   val color = when (reachability) {
-    Reachability.Reachable -> MaterialTheme.colorScheme.primary
-    Reachability.Unreachable -> MaterialTheme.colorScheme.error
+    Reachability.Reachable -> KdTheme.colors.ok
+    Reachability.Unreachable -> KdTheme.colors.err
     Reachability.Probing,
     Reachability.Unknown -> return
   }
   Box(
     modifier = modifier
       .size(12.dp)
-      .background(MaterialTheme.colorScheme.surface, CircleShape)
+      .background(KdTheme.colors.bg1, CircleShape)
       .padding(2.dp)
       .background(color, CircleShape)
   )
@@ -216,7 +216,7 @@ private fun CircleDevice(deviceUi: DeviceUi) {
       CircularProgressIndicator(
         progress = { progress },
         modifier = Modifier.size(56.dp),
-        color = MaterialTheme.colorScheme.primary,
+        color = KdTheme.colors.accent,
         strokeWidth = 2.dp
       )
     }
@@ -225,7 +225,7 @@ private fun CircleDevice(deviceUi: DeviceUi) {
       modifier = Modifier
         .size(circleSize)
         .background(
-          color = MaterialTheme.colorScheme.primaryContainer,
+          color = KdTheme.colors.bg2,
           shape = CircleShape
         ),
       contentAlignment = Alignment.Center
@@ -235,7 +235,7 @@ private fun CircleDevice(deviceUi: DeviceUi) {
           painter = it,
           contentDescription = null,
           modifier = Modifier.size(24.dp),
-          tint = MaterialTheme.colorScheme.onPrimaryContainer
+          tint = KdTheme.colors.text2
         )
       }
     }

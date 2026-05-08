@@ -7,13 +7,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.theme.KdTheme
 
 /**
  * Small inline indicator for an owned device.
@@ -27,7 +31,7 @@ fun TrustStatusIndicator(
     Row(
       modifier = modifier
         .background(
-          color = MaterialTheme.colorScheme.primaryContainer,
+          color = KdTheme.colors.trustBg,
           shape = RoundedCornerShape(12.dp)
         )
         .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -38,12 +42,12 @@ fun TrustStatusIndicator(
         imageVector = Icons.Default.Person,
         contentDescription = "Your device",
         modifier = Modifier.size(14.dp),
-        tint = MaterialTheme.colorScheme.onPrimaryContainer
+        tint = KdTheme.colors.trust
       )
       Text(
         text = "Your device",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onPrimaryContainer,
+        style = KdTheme.typography.overline,
+        color = KdTheme.colors.trust,
         fontWeight = FontWeight.Medium
       )
     }
@@ -71,7 +75,7 @@ fun TrustActionButton(
         Icon(
           imageVector = Icons.Default.Person,
           contentDescription = "Remove from your devices",
-          tint = MaterialTheme.colorScheme.primary
+          tint = KdTheme.colors.trust
         )
       }
     }
@@ -87,7 +91,7 @@ fun TrustActionButton(
           Icon(
             imageVector = Icons.Default.PersonAdd,
             contentDescription = "Add to your devices",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = KdTheme.colors.text2
           )
         }
       }
@@ -106,14 +110,14 @@ fun TrustBadge(
     modifier = modifier
       .size(18.dp)
       .clip(CircleShape)
-      .background(MaterialTheme.colorScheme.primary),
+      .background(KdTheme.colors.trust),
     contentAlignment = Alignment.Center
   ) {
     Icon(
       imageVector = Icons.Default.Person,
       contentDescription = "Your device",
       modifier = Modifier.size(11.dp),
-      tint = MaterialTheme.colorScheme.onPrimary
+      tint = KdTheme.colors.trustFg
     )
   }
 }
@@ -140,8 +144,8 @@ fun DeviceTrustStatus(
         )
         Text(
           text = "Linking…",
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
+          style = KdTheme.typography.caption,
+          color = KdTheme.colors.text2
         )
       }
     }
