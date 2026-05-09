@@ -21,24 +21,24 @@ kotlin {
       jvmTarget = JvmTarget.JVM_21
     }
   }
-  listOf(
-    iosArm64(),
-    iosSimulatorArm64()
-  )
-//    .forEach {
-//    it.binaries.framework {
-//      baseName = "common_ui"
-//      isStatic = true
-//      export(project(":klardrop-common"))
-//    }
-//  }
-
 //  macosArm64()
+
+  // The :klardrop-common module declares pod("Bugsnag") and its synthetic
+  // build produces Bugsnag.framework. :common-ui's pod-framework link task
+  // inherits the `-framework Bugsnag` linker option from the cinterop klib
+  // but not the framework-search-path the cocoapods plugin scoped to
+  // :klardrop-common. Forward both Debug and Release search paths for
+  // device + simulator so the iOS link step can resolve Bugsnag.
+  val bugsnagSyntheticBuild =
+    rootProject.file("common/build/cocoapods/synthetic/ios/build")
+  val deviceBugsnagPaths = listOf("Debug-iphoneos", "Release-iphoneos")
+    .map { File(bugsnagSyntheticBuild, "$it/Bugsnag").absolutePath }
+  val simBugsnagPaths = listOf("Debug-iphonesimulator", "Release-iphonesimulator")
+    .map { File(bugsnagSyntheticBuild, "$it/Bugsnag").absolutePath }
 
   cocoapods {
     version = rootProject.version.toString()
 
-    // rest of configuration
     homepage = "https://github.com/carlonzo/klardrop"
     summary = "Shared Module for Klardrop"
     ios.deploymentTarget = "14.1"
@@ -47,6 +47,29 @@ kotlin {
     framework {
       baseName = "common_ui"
     }
+  }
+
+  // Xcode 16+'s iOS SDK auto-links UIUtilities (a SubFramework) from headers
+  // that some pods compile against. The SubFrameworks directory isn't on the
+  // default kotlinc-native framework search path, so add it explicitly per
+  // target so `-framework UIUtilities` resolves.
+  val xcodeDeveloper = providers.exec {
+    commandLine("xcode-select", "-p")
+  }.standardOutput.asText.get().trim()
+  val deviceSdkSubFrameworks =
+    "$xcodeDeveloper/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/System/Library/SubFrameworks"
+  val simSdkSubFrameworks =
+    "$xcodeDeveloper/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/SubFrameworks"
+
+  iosArm64().binaries.all {
+    deviceBugsnagPaths.forEach { linkerOpts("-F", it) }
+    linkerOpts("-F", deviceSdkSubFrameworks)
+    linkerOpts("-lsqlite3")
+  }
+  iosSimulatorArm64().binaries.all {
+    simBugsnagPaths.forEach { linkerOpts("-F", it) }
+    linkerOpts("-F", simSdkSubFrameworks)
+    linkerOpts("-lsqlite3")
   }
 
   sourceSets {
