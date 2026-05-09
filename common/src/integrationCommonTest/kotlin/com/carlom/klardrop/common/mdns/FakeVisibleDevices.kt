@@ -51,6 +51,11 @@ class FakeVisibleDevices : VisibleDevices {
     return devices.firstOrNull { it.deviceInfo.deviceId == deviceId }
   }
 
+  override fun cachedNameFor(deviceId: String): String? {
+    val info = devices.firstOrNull { it.deviceInfo.deviceId == deviceId }?.deviceInfo
+    return info?.name?.takeIf { it.isNotBlank() && it != info.deviceId }
+  }
+
   override fun onDeviceLost(deviceId: String) {
     devices.removeAll { it.deviceInfo.deviceId == deviceId }
   }

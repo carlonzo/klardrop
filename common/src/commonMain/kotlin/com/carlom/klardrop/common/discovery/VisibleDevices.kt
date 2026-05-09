@@ -27,6 +27,15 @@ interface VisibleDevices {
 
   fun getDevice(deviceId: String): DiscoveryDevice?
 
+  /**
+   * Best-effort lookup of a previously-seen friendly name for [deviceId], even if the
+   * device is no longer in the visible map. Backed by the in-memory identity cache that
+   * the BLE/mDNS discovery enriches; survives staleness eviction. Returns `null` when we
+   * have never learned a real name (e.g. only a placeholder shortId snapshot, or the cache
+   * is cold). Caller is expected to fall back to the deviceId or a generic label.
+   */
+  fun cachedNameFor(deviceId: String): String?
+
   fun onDeviceLost(deviceId: String)
   fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection)
 
@@ -102,6 +111,15 @@ internal class VisibleDevicesImpl(
 
   override fun getDevice(deviceId: String): DiscoveryDevice? {
     return visibleDevicesFlow.value[deviceId]
+  }
+
+  override fun cachedNameFor(deviceId: String): String? {
+    val live = visibleDevicesFlow.value[deviceId]?.deviceInfo
+    val cached = identityCache[deviceId]
+    val candidates = listOfNotNull(live, cached)
+    return candidates
+      .firstOrNull { it.name.isNotBlank() && it.name != it.deviceId }
+      ?.name
   }
 
   override fun onDeviceLost(deviceId: String) {

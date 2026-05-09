@@ -94,10 +94,17 @@ actual class InternalPlatformDependencies(private val context: Context, private 
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
 
-      if (intent.resolveActivity(context.packageManager) != null) {
+      // Don't pre-check with resolveActivity(): on Android 11+ package-visibility rules
+      // make it return null even when capable apps exist, unless we declare every viewer
+      // intent in <queries>. startActivity() itself isn't gated by package visibility,
+      // so just dispatch and catch ActivityNotFoundException for the genuinely-no-handler
+      // case. This means "Cant open this file type" only fires when the dispatch actually
+      // fails, not when our visibility allowlist is incomplete.
+      try {
         context.startActivity(intent)
         true
-      } else {
+      } catch (notFound: android.content.ActivityNotFoundException) {
+        log("InternalPlatformDependencies", "openFile($filePath): no handler for mime=$mime")
         false
       }
     } catch (e: Exception) {
@@ -111,12 +118,11 @@ actual class InternalPlatformDependencies(private val context: Context, private 
       val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       }
-      if (intent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(intent)
-        true
-      } else {
-        false
-      }
+      context.startActivity(intent)
+      true
+    } catch (notFound: android.content.ActivityNotFoundException) {
+      log("InternalPlatformDependencies", "openUrl($url): no browser/handler available")
+      false
     } catch (e: Exception) {
       log("InternalPlatformDependencies", "openUrl($url) failed: ${e.message}", e)
       false

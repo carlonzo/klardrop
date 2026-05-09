@@ -16,6 +16,7 @@ import io.github.vinceglb.filekit.toKotlinxIoPath
 import kotlinx.coroutines.withContext
 import kotlinx.io.RawSink
 import kotlinx.io.RawSource
+import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 
@@ -86,7 +87,22 @@ internal class PlatformFileSystemImpl(
         val storagePath = platformDependencies.getDownloadStoragePath()
         val destinationPath = Path(storagePath, path.name)
 
-        SystemFileSystem.atomicMove(path, destinationPath)
+        // Try atomicMove first — same-filesystem (rename) is fastest. On Android the temp
+        // file lives in app cache (`/data/data/...`) and the destination is the user's
+        // Downloads (`/storage/emulated/0/Download`), which sit on different mount points;
+        // ATOMIC_MOVE refuses cross-device renames with AtomicMoveNotSupportedException.
+        // Fall back to a copy-and-delete so the file still lands in Downloads.
+        runCatching { SystemFileSystem.atomicMove(path, destinationPath) }
+          .recoverCatching {
+            log("PlatformFileSystem", "atomicMove failed (${it::class.simpleName}: ${it.message}); copying then deleting")
+            SystemFileSystem.source(path).buffered().use { src ->
+              SystemFileSystem.sink(destinationPath).buffered().use { dst ->
+                src.transferTo(dst)
+              }
+            }
+            SystemFileSystem.delete(path)
+          }
+          .getOrThrow()
         destinationPath
       }
     }
