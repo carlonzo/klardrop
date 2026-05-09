@@ -34,7 +34,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -68,8 +67,6 @@ import com.carlom.klardrop.components.KdShareDevice
 import com.carlom.klardrop.components.KdStatus
 import com.carlom.klardrop.components.SectionHead
 import com.carlom.klardrop.components.ShareSheet
-import com.carlom.klardrop.components.VisibilityPill
-import com.carlom.klardrop.components.KdVisibilityState
 import com.carlom.klardrop.components.Banner
 import com.carlom.klardrop.theme.KdEaseOut
 import com.carlom.klardrop.theme.KdTheme
@@ -172,6 +169,7 @@ fun DiscoveryScreen(
     discoveryState.pairingDialogState?.let { pairingState ->
         PairingApprovalDialog(
             state = pairingState,
+            isLargeScreen = isLargeScreen,
             onDismiss = { discoveryController.dismissPairingDialog() }
         )
     }
@@ -227,16 +225,6 @@ private fun DiscoveryDashboard(
             ) {
                 val spacing = KdTheme.spacing
 
-                VisibilityPill(
-                    state = KdVisibilityState.Visible(ssid = "Wi-Fi"),
-                    modifier = Modifier.padding(
-                        start = spacing.s5,
-                        end = spacing.s5,
-                        top = spacing.s2,
-                        bottom = spacing.s2,
-                    ),
-                )
-
                 val motion = KdTheme.motion
                 AnimatedVisibility(
                     visible = permissionsState.capabilities.any { (_, status) ->
@@ -289,6 +277,7 @@ private fun DiscoveryDashboard(
     pendingLink?.let { device ->
         LinkDeviceConfirmDialog(
             device = device,
+            isLargeScreen = isLargeScreen,
             onConfirm = {
                 onDeviceActionListener.onAddToTrusted(device)
                 pendingLink = null
@@ -300,6 +289,7 @@ private fun DiscoveryDashboard(
     if (showAddDevicePicker) {
         AddDevicePickerSheet(
             candidates = devices.filter { it.trustStatus != TrustStatus.Trusted },
+            isLargeScreen = isLargeScreen,
             onDismiss = { showAddDevicePicker = false },
             onPick = { device ->
                 showAddDevicePicker = false
@@ -324,27 +314,36 @@ private fun DiscoveryHeader(
             .padding(horizontal = spacing.s4, vertical = spacing.s3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .weight(1f)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(spacing.s8))
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(spacing.s3))
                 .clickable(onClick = onEditIdentity)
-                .padding(vertical = spacing.s2, horizontal = spacing.s2),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(spacing.s2),
+                .padding(vertical = spacing.s1, horizontal = spacing.s2),
         ) {
-            Icon(
-                imageVector = Icons.Filled.Edit,
-                contentDescription = "Edit device name",
-                tint = colors.text2,
-                modifier = Modifier.size(spacing.s4),
-            )
             Text(
-                text = currentDeviceName.ifEmpty { "This device" },
+                text = "Klardrop",
                 style = typography.title.copy(color = colors.text),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing.s2),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(spacing.s2)
+                        .clip(CircleShape)
+                        .background(colors.trust),
+                )
+                Text(
+                    text = currentDeviceName.ifEmpty { "This device" },
+                    style = typography.caption.copy(color = colors.text2),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
 
         Spacer(Modifier.width(spacing.s2))
@@ -380,7 +379,6 @@ private fun YourDevicesSection(
 
     SectionHead(
         label = "Your devices",
-        count = trusted.size,
         trailing = if (trusted.isEmpty()) {
             {
                 Text(
@@ -435,7 +433,6 @@ private fun NearbySection(
 
     SectionHead(
         label = "Nearby",
-        count = devices.size,
         trailing = {
             ScanningTicker()
         },

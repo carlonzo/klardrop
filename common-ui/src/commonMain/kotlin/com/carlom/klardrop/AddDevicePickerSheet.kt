@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -24,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.Dialog
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.components.DeviceAvatar
 import com.carlom.klardrop.components.DeviceRow
@@ -37,82 +39,112 @@ import com.carlom.klardrop.theme.KdTheme
 @Composable
 internal fun AddDevicePickerSheet(
     candidates: List<DeviceUi>,
+    isLargeScreen: Boolean,
+    onDismiss: () -> Unit,
+    onPick: (DeviceUi) -> Unit,
+) {
+    val colors = KdTheme.colors
+    val radii = KdTheme.radii
+
+    if (isLargeScreen) {
+        Dialog(onDismissRequest = onDismiss) {
+            Surface(
+                shape = radii.shapeXl,
+                color = colors.bg1,
+            ) {
+                AddDevicePickerContent(
+                    candidates = candidates,
+                    onDismiss = onDismiss,
+                    onPick = onPick,
+                )
+            }
+        }
+    } else {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            shape = radii.shapeXl.copy(
+                bottomStart = androidx.compose.foundation.shape.ZeroCornerSize,
+                bottomEnd = androidx.compose.foundation.shape.ZeroCornerSize,
+            ),
+            containerColor = colors.bg1,
+        ) {
+            AddDevicePickerContent(
+                candidates = candidates,
+                onDismiss = onDismiss,
+                onPick = onPick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddDevicePickerContent(
+    candidates: List<DeviceUi>,
     onDismiss: () -> Unit,
     onPick: (DeviceUi) -> Unit,
 ) {
     val colors = KdTheme.colors
     val typography = KdTheme.typography
     val spacing = KdTheme.spacing
-    val radii = KdTheme.radii
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = radii.shapeXl.copy(
-            bottomStart = androidx.compose.foundation.shape.ZeroCornerSize,
-            bottomEnd = androidx.compose.foundation.shape.ZeroCornerSize,
-        ),
-        containerColor = colors.bg1,
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = spacing.s6),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = spacing.s6),
-        ) {
-            SectionHead(
-                label = "Add a device",
-                modifier = Modifier.padding(horizontal = spacing.s1),
-            )
+        SectionHead(
+            label = "Add a device",
+            modifier = Modifier.padding(horizontal = spacing.s1),
+        )
 
+        Text(
+            text = "Pick a nearby device to pair with. Trusted devices auto-share clipboard, Wi-Fi logins and notifications.",
+            style = typography.caption.copy(color = colors.text2),
+            modifier = Modifier.padding(start = spacing.s5, end = spacing.s5, bottom = spacing.s3),
+        )
+
+        if (candidates.isEmpty()) {
             Text(
-                text = "Pick a nearby device to pair with. Trusted devices auto-share clipboard, Wi-Fi logins and notifications.",
-                style = typography.caption.copy(color = colors.text2),
-                modifier = Modifier.padding(start = spacing.s5, end = spacing.s5, bottom = spacing.s3),
+                text = "No nearby devices right now. Make sure Klardrop is open on the device you want to pair, and that both are on the same Wi-Fi.",
+                style = typography.body.copy(color = colors.text2),
+                modifier = Modifier.padding(horizontal = spacing.s5),
             )
-
-            if (candidates.isEmpty()) {
-                Text(
-                    text = "No nearby devices right now. Make sure Klardrop is open on the device you want to pair, and that both are on the same Wi-Fi.",
-                    style = typography.body.copy(color = colors.text2),
-                    modifier = Modifier.padding(horizontal = spacing.s5),
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = spacing.s7 * 11),
-                ) {
-                    items(items = candidates, key = { it.deviceId }) { device ->
-                        DeviceRow(
-                            name = device.deviceName,
-                            subText = if (device.trustStatus == TrustStatus.Pairing) "Pairing…" else "Tap to pair",
-                            kind = device.deviceType.toKdDeviceKind(),
-                            avatarStyle = KdAvatarStyle.Neutral,
-                            rowState = if (device.trustStatus == TrustStatus.Pairing) KdRowState.Pairing else KdRowState.Idle,
-                            onClick = {
-                                if (device.trustStatus != TrustStatus.Pairing) {
-                                    onPick(device)
-                                }
-                            },
-                            modifier = Modifier.padding(horizontal = spacing.s3),
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(spacing.s2))
-
-            Row(
-                horizontalArrangement = Arrangement.End,
+        } else {
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(end = spacing.s4),
+                    .heightIn(max = spacing.s7 * 11),
             ) {
-                TextButton(onClick = onDismiss) {
-                    Text("Close", style = typography.body.copy(color = colors.accent))
+                items(items = candidates, key = { it.deviceId }) { device ->
+                    DeviceRow(
+                        name = device.deviceName,
+                        subText = if (device.trustStatus == TrustStatus.Pairing) "Pairing…" else "Tap to pair",
+                        kind = device.deviceType.toKdDeviceKind(),
+                        avatarStyle = KdAvatarStyle.Neutral,
+                        rowState = if (device.trustStatus == TrustStatus.Pairing) KdRowState.Pairing else KdRowState.Idle,
+                        onClick = {
+                            if (device.trustStatus != TrustStatus.Pairing) {
+                                onPick(device)
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = spacing.s3),
+                    )
                 }
+            }
+        }
+
+        Spacer(Modifier.height(spacing.s2))
+
+        Row(
+            horizontalArrangement = Arrangement.End,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = spacing.s4),
+        ) {
+            TextButton(onClick = onDismiss) {
+                Text("Close", style = typography.body.copy(color = colors.accent))
             }
         }
     }

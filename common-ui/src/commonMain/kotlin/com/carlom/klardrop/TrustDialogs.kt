@@ -1,5 +1,6 @@
 package com.carlom.klardrop
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -7,8 +8,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,10 +32,11 @@ private fun String.toKdDeviceKind(): KdDeviceKind = when (this.uppercase()) {
 @Composable
 internal fun PairingApprovalDialog(
   state: PairingDialogState,
+  isLargeScreen: Boolean,
   onDismiss: () -> Unit
 ) {
   if (state.isError) {
-    Dialog(onDismissRequest = onDismiss) {
+    PairingShell(isLargeScreen = isLargeScreen, onDismiss = onDismiss) {
       val colors = KdTheme.colors
       val typography = KdTheme.typography
       val radii = KdTheme.radii
@@ -79,7 +84,7 @@ internal fun PairingApprovalDialog(
       }
     }
   } else {
-    Dialog(onDismissRequest = onDismiss) {
+    PairingShell(isLargeScreen = isLargeScreen, onDismiss = onDismiss) {
       PairingDialog(
         remoteDeviceName = state.deviceName,
         remoteKind = state.deviceType.toKdDeviceKind(),
@@ -94,10 +99,11 @@ internal fun PairingApprovalDialog(
 @Composable
 internal fun LinkDeviceConfirmDialog(
   device: DeviceUi,
+  isLargeScreen: Boolean,
   onConfirm: () -> Unit,
   onDismiss: () -> Unit
 ) {
-  Dialog(onDismissRequest = onDismiss) {
+  PairingShell(isLargeScreen = isLargeScreen, onDismiss = onDismiss) {
     PairingDialog(
       remoteDeviceName = device.deviceName,
       remoteKind = device.deviceType.toKdDeviceKind(),
@@ -106,5 +112,36 @@ internal fun LinkDeviceConfirmDialog(
       onCancel = onDismiss,
       onConfirm = onConfirm,
     )
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PairingShell(
+  isLargeScreen: Boolean,
+  onDismiss: () -> Unit,
+  content: @Composable () -> Unit,
+) {
+  if (isLargeScreen) {
+    Dialog(onDismissRequest = onDismiss) {
+      content()
+    }
+  } else {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val spacing = KdTheme.spacing
+    ModalBottomSheet(
+      onDismissRequest = onDismiss,
+      sheetState = sheetState,
+      shape = KdTheme.radii.shapeSheet,
+      containerColor = KdTheme.colors.bg1,
+    ) {
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(start = spacing.s4, end = spacing.s4, bottom = spacing.s6),
+      ) {
+        content()
+      }
+    }
   }
 }

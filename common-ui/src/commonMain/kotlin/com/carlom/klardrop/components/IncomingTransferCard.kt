@@ -30,6 +30,9 @@ import com.carlom.klardrop.theme.KdTheme
  * @param senderName    display name of the sending device
  * @param fileName      the file being sent (optional)
  * @param fileSize      human-readable size string (optional)
+ * @param subtitle      verb describing the request (e.g. "wants to send you a file" /
+ *                       "wants to send you a message"). Defaults to the file phrasing for
+ *                       backwards-compat with existing call sites that only handle files.
  * @param onAccept      Accept button tap
  * @param onDecline     Decline button tap
  * @param modifier      applied to the Surface
@@ -39,6 +42,7 @@ fun IncomingTransferCard(
     senderName: String,
     fileName: String? = null,
     fileSize: String? = null,
+    subtitle: String = "wants to send you a file",
     onAccept: () -> Unit,
     onDecline: () -> Unit,
     modifier: Modifier = Modifier,
@@ -71,7 +75,7 @@ fun IncomingTransferCard(
                         style = typography.body.copy(color = colors.text),
                     )
                     Text(
-                        text = "wants to send you a file",
+                        text = subtitle,
                         style = typography.caption.copy(color = colors.text2),
                     )
                 }

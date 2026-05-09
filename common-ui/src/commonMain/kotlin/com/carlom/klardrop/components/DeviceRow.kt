@@ -99,7 +99,8 @@ fun DeviceRow(
             .clip(shape)
             .background(rowBg)
             .clickable(onClick = onClick)
-            .padding(horizontal = spacing.s3, vertical = spacing.s3),
+            .padding(horizontal = spacing.s3),
+        contentAlignment = Alignment.CenterStart,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

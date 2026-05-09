@@ -138,6 +138,7 @@ fun WideLayout(
     pendingLink?.let { device ->
         LinkDeviceConfirmDialog(
             device = device,
+            isLargeScreen = true,
             onConfirm = {
                 discoveryController.onAddToTrusted(device)
                 pendingLink = null
@@ -149,6 +150,7 @@ fun WideLayout(
     if (showAddDevicePicker) {
         AddDevicePickerSheet(
             candidates = state.devices.filter { it.trustStatus != TrustStatus.Trusted },
+            isLargeScreen = true,
             onDismiss = { showAddDevicePicker = false },
             onPick = { device ->
                 showAddDevicePicker = false
@@ -160,6 +162,7 @@ fun WideLayout(
     state.pairingDialogState?.let { pairingState ->
         PairingApprovalDialog(
             state = pairingState,
+            isLargeScreen = true,
             onDismiss = { discoveryController.dismissPairingDialog() }
         )
     }
@@ -198,7 +201,6 @@ private fun WideContent(
                 yoursSection = {
                     SectionHead(
                         label = "Your devices",
-                        count = trusted.size,
                         trailing = if (trusted.isNotEmpty()) ({
                             IconButton(
                                 onClick = onAddDeviceClick,
@@ -229,7 +231,6 @@ private fun WideContent(
                 nearbySection = {
                     SectionHead(
                         label = "Nearby",
-                        count = nearby.size,
                     )
                     if (nearby.isEmpty()) {
                         ScanningPlaceholderRow()

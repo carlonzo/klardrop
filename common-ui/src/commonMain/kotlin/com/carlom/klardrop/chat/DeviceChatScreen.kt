@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -145,16 +146,26 @@ fun DeviceChatScreen(
     Scaffold(
         modifier = dropModifier,
         topBar = {
-            ChatHeader(
-                deviceName = deviceName,
-                subText = headerSubText,
-                kind = KdDeviceKind.Unknown,
-                avatarStyle = headerAvatarStyle,
-                status = headerStatus,
-                isReachable = !isOffline,
-                toolbarVariant = mode == DeviceChatMode.Pane,
-                onBack = onBackClicked,
-            )
+            // In Pane mode the wide layout renders its own ChatHeader above the chat
+            // pane (see WideLayout's right-side Column), so a header here would stack
+            // a second one underneath. Render only on the standalone-screen variant.
+            //
+            // Push the header below the status bar — Android 15+ (targetSdk 35) draws
+            // edge-to-edge by default and we own the inset. The modifier is a no-op
+            // when the inset is zero (desktop/tablet without a status bar).
+            if (mode == DeviceChatMode.Screen) {
+                ChatHeader(
+                    deviceName = deviceName,
+                    subText = headerSubText,
+                    kind = KdDeviceKind.Unknown,
+                    avatarStyle = headerAvatarStyle,
+                    status = headerStatus,
+                    isReachable = !isOffline,
+                    toolbarVariant = false,
+                    onBack = onBackClicked,
+                    modifier = Modifier.statusBarsPadding(),
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = colors.bg0,

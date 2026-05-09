@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
+import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.components.IncomingTransferCard
@@ -69,10 +70,13 @@ fun ReceiveNotification(
             if (isPending) {
                 val status = receiveUpdate.status as ReceiveMessageStatus.PendingAuthorization
                 val firstFile = receiveUpdate.messages.filterIsInstance<FileMessage>().firstOrNull()
+                val isText = firstFile == null &&
+                    receiveUpdate.messages.any { it is TextMessage }
                 IncomingTransferCard(
                     senderName = receiveUpdate.device?.name ?: "Unknown device",
                     fileName = firstFile?.fileName,
                     fileSize = null,
+                    subtitle = if (isText) "wants to send you a message" else "wants to send you a file",
                     onAccept = {
                         status.acceptTransfer(true)
                         onClicked()
