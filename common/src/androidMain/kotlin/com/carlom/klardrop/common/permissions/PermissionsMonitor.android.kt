@@ -4,30 +4,32 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import com.carlom.klardrop.common.notifications.ForegroundState
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
-import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 
-actual class PermissionsMonitor(private val context: Context) {
+actual class PermissionsMonitor(
+  private val context: Context,
+  private val foregroundState: ForegroundState,
+) {
 
   /**
-   * Android has no runtime callback for "user changed a permission while we
-   * were running" beyond Activity result callbacks (which only fire when *we*
-   * requested it). The user can flip a runtime permission from system Settings
-   * at any time, so we re-check every [POLL_INTERVAL]; when nothing's
-   * outstanding the [distinctUntilChanged] keeps re-emissions free.
+   * The only way runtime permissions change while the process is alive is via
+   * system Settings, which requires leaving the app — so re-snapshotting on
+   * each foreground transition is sufficient, and avoids the log spam of a
+   * periodic poll. The initial emission comes from the StateFlow's replay of
+   * its current value the first time the activity is started.
    */
-  actual fun observe(): Flow<PermissionsState> = flow {
-    while (true) {
-      emit(snapshot())
-      delay(POLL_INTERVAL)
-    }
-  }
+  actual fun observe(): Flow<PermissionsState> = foregroundState.isForeground
+    .filter { it }
+    .map { snapshot() }
+    .onStart { emit(snapshot()) }
     .distinctUntilChanged()
     .flowOn(Dispatchers.Default)
 
@@ -89,9 +91,5 @@ actual class PermissionsMonitor(private val context: Context) {
 
   private fun hasPermission(perm: String): Boolean {
     return context.checkSelfPermission(perm) == PackageManager.PERMISSION_GRANTED
-  }
-
-  private companion object {
-    val POLL_INTERVAL = 2.seconds
   }
 }
