@@ -565,4 +565,79 @@ class MessagesRouterImplTest {
       "ACK must NOT use the inner application message id; the sender doesn't track that one.",
     )
   }
+
+  /**
+   * Regression test for the heartbeat-deadlock observed when an iPad sent a file or text
+   * to an unpaired Android peer:
+   *
+   *  1. iPad sends FILE header → Android router reads it
+   *  2. Router calls IncomingAuthorizer.authorize → suspends on the user's tap
+   *  3. While suspended, the read loop is parked, so iPad's PONG replies to Android's
+   *     own heartbeat PINGs sit unread in the buffer
+   *  4. Android's heartbeat hits its 5s timeout → connection torn down
+   *  5. Prompt is still on screen but the link is dead; tapping accept does nothing
+   *
+   * The fix spawns the authorize-and-followup work in a router-scoped coroutine so the
+   * read loop returns immediately and keeps draining the channel. This test replays that
+   * sequence: a TEXT (or FILE) header from an untrusted peer hits a blocking authorizer,
+   * then a PING arrives — the router must PONG it back even while the authorizer is
+   * still waiting. Pre-fix the second `onMessageIncoming` call would never even start.
+   */
+  @Test
+  fun authorizationDoesNotBlockSubsequentMessagesOnReadLoop() = runTest(testDispatcher) {
+    val fromDeviceId = "untrusted-peer"
+    val mockTrustManager = createMockTrustManager()
+    // Authorizer that never resolves — simulates a user who hasn't tapped yet.
+    val blockingAuthorizer = object : IncomingAuthorizer(mockTrustManager) {
+      override suspend fun authorize(
+        fromDeviceId: String,
+        kind: TransferKind,
+        headers: List<Message>,
+        receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+        notifyAwaitingUser: suspend () -> Unit,
+      ): Boolean {
+        kotlinx.coroutines.awaitCancellation()
+      }
+    }
+    val router = MessagesRouterImpl(
+      handlers = mockMessageHandlers,
+      fileMessageHandler = com.carlom.klardrop.common.communication.message.FileMessageHandler(
+        fileManager = object : com.carlom.klardrop.common.FileManager {
+          override fun prepareSaveFile(fileName: String, mimeType: String): com.carlom.klardrop.common.FileTransfer =
+            error("not used")
+          override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.RawSource = error("not used")
+          override suspend fun openFile(filePath: String): Boolean = false
+          override suspend fun openUrl(url: String): Boolean = false
+        },
+        clock = com.carlom.klardrop.common.utils.Clock(),
+        coroutines = mockCoroutines,
+        messageRepository = mockMessageRepository,
+      ),
+      messageSerializer = mockMessageSerializer,
+      coroutines = mockCoroutines,
+      messengeReceiver = mockMessageReceiver,
+      trustManager = mockTrustManager,
+      incomingAuthorizer = blockingAuthorizer,
+    )
+
+    // First message: TEXT requiring authorization (which will block forever).
+    val text = TextMessage(text = "blocked")
+    val textBytes = createMessageBytes(text)
+    val textRead = ByteReadChannel(textBytes)
+    val writeChannel = ByteChannel(true)
+    router.onMessageIncoming(fromDeviceId, writeChannel, textRead, ackCallback = { })
+
+    // Second message arrives on the same connection — a heartbeat PING. Pre-fix, the
+    // first call would still be parked in authorize() and we'd never get here at the
+    // read-loop level. Even with the test calling onMessageIncoming directly, pre-fix
+    // the first call wouldn't have returned, so reaching this line is itself part of
+    // the proof. We additionally verify that the router PONGs the PING back.
+    val ping = PingMessage(id = 91234)
+    val pingRead = ByteReadChannel(createMessageBytes(ping))
+    router.onMessageIncoming(fromDeviceId, writeChannel, pingRead, ackCallback = { })
+
+    val reply = writeChannel.readMessage(mockMessageSerializer)
+    assertTrue(reply is PongMessage, "Expected PONG while authorize is pending, got ${reply::class.simpleName}")
+    assertEquals(ping.id, reply.pingId)
+  }
 }
