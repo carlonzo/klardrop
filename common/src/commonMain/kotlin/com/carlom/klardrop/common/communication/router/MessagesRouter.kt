@@ -24,8 +24,11 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.invoke
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -91,6 +94,17 @@ internal class MessagesRouterImpl(
    */
   private val receivePipelines = mutableMapOf<Int, FileReceivePipeline>()
   private val receiveMutex = Mutex()
+
+  /**
+   * Fire-and-forget scope for work that may suspend on a human accept/reject decision
+   * (FILE header authorization, untrusted-TEXT first contact). Running these inline on
+   * the read loop's coroutine deadlocks the connection: the read loop is the only thing
+   * that consumes incoming bytes, so while it's parked in `IncomingAuthorizer.authorize`
+   * waiting for the user to tap, the peer's heartbeat PONGs sit unread in the buffer and
+   * our heartbeat sender hits its 5s timeout and tears the link down before the user can
+   * decide. SupervisorJob so a single failure doesn't cancel siblings.
+   */
+  private val authorizationScope = CoroutineScope(SupervisorJob() + coroutines.ioDispatcher)
 
   private suspend fun sendMessageToDevice(
     deviceId: String,
@@ -192,7 +206,15 @@ internal class MessagesRouterImpl(
 
     // ===== FILE chunked transfer special-case =====
     if (message is FileMessage) {
-      handleFileHeader(message, ackId, fromDeviceId, writeChannel, writeLock)
+      // Spawn off the read loop: handleFileHeader suspends inside IncomingAuthorizer
+      // until the user accepts/rejects, and we MUST keep draining the read channel in
+      // the meantime so heartbeat PONGs from the peer get processed (otherwise our own
+      // heartbeat times out and kills the connection before the user can decide). The
+      // sender doesn't push chunks until ACK_READY, so reordering with subsequent chunks
+      // for the same header isn't possible.
+      authorizationScope.launch {
+        handleFileHeader(message, ackId, fromDeviceId, writeChannel, writeLock)
+      }
       return@ioDispatcher
     }
     if (message is FileChunkMessage) {
@@ -214,26 +236,42 @@ internal class MessagesRouterImpl(
     // entirely, before the receive pipeline opens a sink). Trust-based control messages
     // (TRUST_PAIRING_*, CLIPBOARD_SYNC, CONNECTION_INFO) are not gated — pairing must
     // succeed before trust exists, and the others are already trust-restricted upstream.
+    //
+    // Same reasoning as the FILE header dispatch above: authorize() may suspend on a
+    // human decision, and parking the read loop on it deadlocks the heartbeat. Spawn the
+    // whole TEXT processing path off the read loop so PONGs continue to drain.
     if (message is TextMessage) {
-      val authorized = incomingAuthorizer.authorize(
-        fromDeviceId = fromDeviceId,
-        kind = IncomingAuthorizer.TransferKind.TEXT,
-        headers = listOf(message),
-        receiveFlow = receiveFlow,
-        notifyAwaitingUser = {
-          val ackAwaiting = MessageAcknowledgment(AckType.AWAITING_USER, ackId)
+      authorizationScope.launch {
+        val authorized = incomingAuthorizer.authorize(
+          fromDeviceId = fromDeviceId,
+          kind = IncomingAuthorizer.TransferKind.TEXT,
+          headers = listOf(message),
+          receiveFlow = receiveFlow,
+          notifyAwaitingUser = {
+            val ackAwaiting = MessageAcknowledgment(AckType.AWAITING_USER, ackId)
+            writeLock.withLock {
+              sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel)
+            }
+          },
+        )
+        if (!authorized) {
+          val ackRejected = MessageAcknowledgment(AckType.REJECTED, ackId)
           writeLock.withLock {
-            sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel)
+            sendMessageToDevice(fromDeviceId, ackRejected, writeChannel)
           }
-        },
-      )
-      if (!authorized) {
-        val ackRejected = MessageAcknowledgment(AckType.REJECTED, ackId)
-        writeLock.withLock {
-          sendMessageToDevice(fromDeviceId, ackRejected, writeChannel)
+          return@launch
         }
-        return@ioDispatcher
+        val messageHandler = handlers[message.type] ?: run {
+          log("MessagesRouter", "No handler for message type ${message.type}")
+          return@launch
+        }
+        messageHandler.handleIncoming(message, readChannel, receiveFlow)
+        val ackReceived = MessageAcknowledgment(AckType.RECEIVED, ackId)
+        writeLock.withLock {
+          sendMessageToDevice(fromDeviceId, ackReceived, writeChannel)
+        }
       }
+      return@ioDispatcher
     }
 
     if (message.hasPayload) {

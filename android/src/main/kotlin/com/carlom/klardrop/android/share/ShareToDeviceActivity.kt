@@ -7,25 +7,31 @@ import android.os.Bundle
 import android.os.Parcelable
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.carlom.klardrop.ActivityState
-import com.carlom.klardrop.DeviceDiscovery
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.OnDataToSend
-import com.carlom.klardrop.OnDeviceActionListener
+import com.carlom.klardrop.TrustStatus
 import com.carlom.klardrop.android.applicationComponent
 import com.carlom.klardrop.common.Klardrop
+import com.carlom.klardrop.common.communication.Reachability
+import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.components.KdDeviceKind
+import com.carlom.klardrop.components.KdShareDevice
+import com.carlom.klardrop.components.KdStatus
+import com.carlom.klardrop.components.ShareSheet
 import com.carlom.klardrop.theme.AppTheme
+import com.carlom.klardrop.theme.KdTheme
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.firstOrNull
@@ -41,7 +47,7 @@ class ShareToDeviceActivity : AppCompatActivity() {
 
   private lateinit var shareToDeviceController: ShareToDeviceController
 
-  @OptIn(ExperimentalLayoutApi::class)
+  @OptIn(ExperimentalMaterial3Api::class)
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     applicationComponent().inject(this)
@@ -49,38 +55,56 @@ class ShareToDeviceActivity : AppCompatActivity() {
     shareToDeviceController = ShareToDeviceController(klardrop.commonComponent)
 
     setContent {
-
-      val devices by shareToDeviceController.devicesFlow.collectAsState(emptyList())
-
       AppTheme {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        val devices by shareToDeviceController.devicesFlow.collectAsState(emptyList<DeviceUi>())
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+        var selectedId by remember { mutableStateOf<String?>(null) }
+        var dismissed by remember { mutableStateOf(false) }
 
-          Column {
-            Text("Share with:")
-
-            FlowRow {
-              devices.forEach {
-
-                DeviceDiscovery(it, isLargeScreen = false, onDeviceActionListener)
-
-              }
-            }
+        LaunchedEffect(dismissed) {
+          if (dismissed) {
+            sheetState.hide()
+            finish()
           }
+        }
 
+        val deviceList = devices.toList()
+        val byId = deviceList.associateBy { it.deviceId }
+        val (trustedShare, nearbyShare) = deviceList.partition {
+          it.trustStatus == TrustStatus.Trusted
+        }.let { (trusted, nearby) ->
+          trusted.map { it.toKdShareDevice() } to nearby.map { it.toKdShareDevice() }
+        }
 
+        ModalBottomSheet(
+          onDismissRequest = { dismissed = true },
+          sheetState = sheetState,
+          shape = KdTheme.radii.shapeSheet,
+          containerColor = KdTheme.colors.bg1,
+        ) {
+          ShareSheet(
+            trustedDevices = trustedShare,
+            nearbyDevices = nearbyShare,
+            selectedId = selectedId,
+            onSelectDevice = { selectedId = it.id },
+            onSend = { share ->
+              val target = share?.id?.let(byId::get) ?: return@ShareSheet
+              shareDevice(target)
+              dismissed = true
+            },
+          )
         }
       }
-
     }
 
     when (intent?.action) {
       Intent.ACTION_SEND -> {
         if ("text/plain" == intent.type) {
           log("ShareToDeviceActivity", "Handling text $intent")
-          handleSendText(intent) // Handle text being sent
+          handleSendText(intent)
         } else {
           log("ShareToDeviceActivity", "Handling file $intent")
-          handleSendFile(intent) // Handle single image being sent
+          handleSendFile(intent)
         }
       }
 
@@ -90,30 +114,25 @@ class ShareToDeviceActivity : AppCompatActivity() {
       }
 
       else -> {
-        // Handle other intents, such as being started from the home screen
         log("ShareToDeviceActivity", "Unhandled intent: $intent")
       }
     }
   }
 
-  private val onDeviceActionListener = object : OnDeviceActionListener {
-    override fun onDeviceClick(deviceUi: DeviceUi) {
-      shareToDeviceController.onDeviceClick(deviceUi)
+  private fun shareDevice(deviceUi: DeviceUi) {
+    shareToDeviceController.onDeviceClick(deviceUi)
 
-      // wait until sent is completed and then finish the activity
-      lifecycleScope.launch {
+    lifecycleScope.launch {
+      shareToDeviceController.devicesFlow
+        .mapNotNull {
+          it.firstOrNull { candidate -> candidate.deviceId == deviceUi.deviceId }
+        }
+        .filter { it.activityState is ActivityState.SentCompleted }
+        .onEach { log("ShareToDeviceActivity", "filtered $it") }
+        .firstOrNull()
 
-        shareToDeviceController.devicesFlow
-          .mapNotNull {
-            it.firstOrNull { it.deviceId == deviceUi.deviceId }
-          }
-          .filter { it.activityState is ActivityState.SentCompleted }
-          .onEach { log("ShareToDeviceActivity", "filtered $it") }
-          .firstOrNull()
-
-        log("ShareToDeviceActivity", "Received sent completed, finishing activity")
-        finish()
-      }
+      log("ShareToDeviceActivity", "Received sent completed, finishing activity")
+      finish()
     }
   }
 
@@ -152,5 +171,25 @@ class ShareToDeviceActivity : AppCompatActivity() {
     shareToDeviceController.dispose()
     super.onDestroy()
   }
+}
 
+private fun DeviceUi.toKdShareDevice(): KdShareDevice = KdShareDevice(
+  id = deviceId,
+  name = deviceName,
+  kind = deviceType.toShareKind(),
+  isTrusted = trustStatus == TrustStatus.Trusted,
+  status = reachability.toKdStatus(),
+)
+
+private fun DeviceType.toShareKind(): KdDeviceKind = when (this) {
+  DeviceType.MOBILE -> KdDeviceKind.Android
+  DeviceType.DESKTOP -> KdDeviceKind.Pc
+  DeviceType.UNKNOWN -> KdDeviceKind.Unknown
+}
+
+private fun Reachability.toKdStatus(): KdStatus? = when (this) {
+  Reachability.Reachable -> KdStatus.Ok
+  Reachability.Unreachable -> KdStatus.Err
+  Reachability.Probing,
+  Reachability.Unknown -> null
 }

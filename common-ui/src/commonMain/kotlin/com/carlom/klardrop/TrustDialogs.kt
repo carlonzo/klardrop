@@ -1,80 +1,147 @@
 package com.carlom.klardrop
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
+import com.carlom.klardrop.components.KdDeviceKind
+import com.carlom.klardrop.components.PairingDialog
+import com.carlom.klardrop.theme.KdTheme
+import com.carlom.klardrop.theme.kdElevation
+
+private fun String.toKdDeviceKind(): KdDeviceKind = when (this.uppercase()) {
+  "MOBILE" -> KdDeviceKind.Android
+  "DESKTOP" -> KdDeviceKind.Pc
+  else -> KdDeviceKind.Unknown
+}
 
 @Composable
 internal fun PairingApprovalDialog(
   state: PairingDialogState,
+  isLargeScreen: Boolean,
   onDismiss: () -> Unit
 ) {
-  AlertDialog(
-    onDismissRequest = onDismiss,
-    title = {
-      Text(
-        text = if (state.isError) "Couldn't link device" else "Is this your device?"
-      )
-    },
-    text = {
-      if (state.isError) {
-        Text(state.errorMessage ?: "Something went wrong while linking. Please try again.")
-      } else {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+  if (state.isError) {
+    PairingShell(isLargeScreen = isLargeScreen, onDismiss = onDismiss) {
+      val colors = KdTheme.colors
+      val typography = KdTheme.typography
+      val radii = KdTheme.radii
+      val spacing = KdTheme.spacing
+
+      Surface(
+        modifier = Modifier.kdElevation(level = 3, shape = radii.shapeXl),
+        shape = radii.shapeXl,
+        color = colors.bg2,
+      ) {
+        Column(
+          modifier = Modifier
+            .padding(spacing.s6)
+            .fillMaxWidth(),
+          horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
           Text(
-            text = "${state.deviceName} wants to link with this device.",
-            style = MaterialTheme.typography.bodyLarge
+            text = "Couldn't link device",
+            style = typography.headline.copy(color = colors.text),
+            textAlign = TextAlign.Center,
           )
+
+          Spacer(Modifier.height(spacing.s3))
+
           Text(
-            text = "Only accept if it's your own device. Linked devices stay in sync — clipboard, files, and message history are shared between them.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = state.errorMessage ?: "Something went wrong while linking. Please try again.",
+            style = typography.body.copy(color = colors.text2),
+            textAlign = TextAlign.Center,
           )
+
+          Spacer(Modifier.height(spacing.s6))
+
+          Button(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth(),
+            shape = radii.shapeMd,
+            colors = ButtonDefaults.buttonColors(
+              containerColor = colors.accent,
+              contentColor = colors.textInv,
+            ),
+          ) {
+            Text("Close", style = typography.body)
+          }
         }
       }
-    },
-    confirmButton = {
-      if (state.isError) {
-        Button(onClick = onDismiss) { Text("Close") }
-      } else {
-        Button(onClick = { state.onAccept() }) { Text("Yes, it's mine") }
-      }
-    },
-    dismissButton = {
-      if (!state.isError) {
-        TextButton(onClick = { state.onReject() }) { Text("Not mine") }
-      }
     }
-  )
+  } else {
+    PairingShell(isLargeScreen = isLargeScreen, onDismiss = onDismiss) {
+      PairingDialog(
+        remoteDeviceName = state.deviceName,
+        remoteKind = state.deviceType.toKdDeviceKind(),
+        body = "Accept this device into Your devices? You'll be able to send files and messages without prompting.",
+        onCancel = onDismiss,
+        onConfirm = state.onAccept,
+      )
+    }
+  }
 }
 
 @Composable
 internal fun LinkDeviceConfirmDialog(
   device: DeviceUi,
+  isLargeScreen: Boolean,
   onConfirm: () -> Unit,
   onDismiss: () -> Unit
 ) {
-  AlertDialog(
-    onDismissRequest = onDismiss,
-    title = { Text("Add ${device.deviceName} to your devices?") },
-    text = {
-      Text(
-        text = "Only do this if it's your own device. Your devices share clipboard, files, and message history with each other automatically.",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-      )
-    },
-    confirmButton = {
-      Button(onClick = onConfirm) { Text("Yes, it's mine") }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss) { Text("Cancel") }
+  PairingShell(isLargeScreen = isLargeScreen, onDismiss = onDismiss) {
+    PairingDialog(
+      remoteDeviceName = device.deviceName,
+      remoteKind = device.deviceType.toKdDeviceKind(),
+      body = "Only do this if it's your own device. Your devices share clipboard, files, and message history with each other automatically.",
+      confirmLabel = "Yes, it's mine",
+      onCancel = onDismiss,
+      onConfirm = onConfirm,
+    )
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PairingShell(
+  isLargeScreen: Boolean,
+  onDismiss: () -> Unit,
+  content: @Composable () -> Unit,
+) {
+  if (isLargeScreen) {
+    Dialog(onDismissRequest = onDismiss) {
+      content()
     }
-  )
+  } else {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val spacing = KdTheme.spacing
+    ModalBottomSheet(
+      onDismissRequest = onDismiss,
+      sheetState = sheetState,
+      shape = KdTheme.radii.shapeSheet,
+      containerColor = KdTheme.colors.bg1,
+    ) {
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(start = spacing.s4, end = spacing.s4, bottom = spacing.s6),
+      ) {
+        content()
+      }
+    }
+  }
 }

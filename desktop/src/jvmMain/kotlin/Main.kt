@@ -1,11 +1,14 @@
 @file:Suppress("DEPRECATION")
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -39,6 +42,15 @@ fun main(args: Array<String>) {
   BugsnagWrapper.init(
     applicationInfo.appVersion
   )
+
+  // macOS: use the system's full-window-content / transparent-title-bar mode.
+  // Combined with title="" and rootPane client properties below, this drops the
+  // title text and the title-bar border, leaving the traffic-light buttons
+  // floating over the dark content.
+  if (System.getProperty("os.name").lowercase().contains("mac")) {
+    System.setProperty("apple.awt.application.appearance", "system")
+    System.setProperty("apple.awt.application.name", "Klardrop")
+  }
 
   FileKit.init("klardrop")
 
@@ -87,7 +99,7 @@ fun main(args: Array<String>) {
     }
 
     Window(
-      title = "Klardrop",
+      title = "",
       onCloseRequest = {
         if (traySupported) {
           isWindowVisible = false
@@ -100,10 +112,23 @@ fun main(args: Array<String>) {
       state = windowState
     ) {
 
+      LaunchedEffect(window) {
+        // On macOS this hides the title-bar border + title text and lets the
+        // dark content extend under the chrome, keeping only the traffic
+        // lights visible. No-ops on other platforms.
+        runCatching {
+          window.rootPane.putClientProperty("apple.awt.fullWindowContent", true)
+          window.rootPane.putClientProperty("apple.awt.transparentTitleBar", true)
+          window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
+        }
+      }
+
+      val isMac = remember { System.getProperty("os.name").lowercase().contains("mac") }
+      val chromeInsets = if (isMac) PaddingValues(top = 28.dp) else PaddingValues(0.dp)
 
       AppTheme {
 
-        KlardropApp(k)
+        KlardropApp(k, contentInsets = chromeInsets)
       }
 
     }

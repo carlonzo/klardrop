@@ -66,7 +66,12 @@ class MessengerImpl(
       if (device == null) {
         log("Messenger", "❌ Device $deviceId is not visible in device list")
         log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
-        flow.emit(Error("$deviceId it is not visible"))
+        // The user-facing string never includes the raw deviceId — that's an internal
+        // identifier (random hex shortId) and is meaningless to a person. Prefer the
+        // cached friendly name; fall back to a generic label so the chat error banner
+        // reads like English.
+        val friendlyName = visibleDevices.cachedNameFor(deviceId) ?: "Device"
+        flow.emit(Error("$friendlyName is not visible"))
         return@launch
       }
 
