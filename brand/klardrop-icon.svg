@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Klardrop">
+  
+  <defs>
+    <clipPath id="kd-tile">
+      <rect x="0" y="0" width="1024" height="1024" rx="230.4" ry="230.4"></rect>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#kd-tile)">
+    <rect width="1024" height="1024" fill="#262a31"></rect>
+    
+    <rect width="1024" height="1024" fill="url(#kd-sheen)"></rect>
+  </g>
+  <defs>
+    <linearGradient id="kd-sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.04"></stop>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop>
+    </linearGradient>
+  </defs>
+
+  
+  <g transform="translate(182 182) scale(6.6)">
+    <path d="M 50 10 C 30 36, 22 54, 30 72 C 38 88, 62 88, 70 72 C 78 54, 70 36, 50 10 Z" fill="none" stroke="#f0a062" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"></path>
+  </g>
+</svg>

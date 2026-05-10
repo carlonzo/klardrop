@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.OnDataToSend
@@ -143,6 +144,12 @@ fun DeviceChatScreen(
     val colors = KdTheme.colors
     val spacing = KdTheme.spacing
 
+    // In Pane mode the chat sits inside the floating-layout right column;
+    // the window's outer Surface already paints the shell tone, so go fully
+    // transparent and let it show through. In Screen mode (mobile) the chat
+    // owns the full window and provides its own bg.
+    val chatBackground = if (mode == DeviceChatMode.Pane) Color.Transparent else colors.bg0
+
     Scaffold(
         modifier = dropModifier,
         topBar = {
@@ -168,9 +175,9 @@ fun DeviceChatScreen(
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = colors.bg0,
+        containerColor = chatBackground,
     ) { paddingValues ->
-        val dropTint = if (dropHovered) colors.accentBg else colors.bg0
+        val dropTint = if (dropHovered) colors.accentBg else chatBackground
 
         Column(
             modifier = Modifier
@@ -228,7 +235,7 @@ fun DeviceChatScreen(
                 desktopVariant = mode == DeviceChatMode.Pane,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(colors.bg0)
+                    .background(chatBackground)
                     .padding(horizontal = spacing.s3, vertical = spacing.s2)
                     .navigationBarsPadding(),
             )

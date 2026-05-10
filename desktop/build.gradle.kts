@@ -48,9 +48,11 @@ compose.desktop {
       modules("jdk.unsupported")
       modules("java.sql")
 
-      val icon = file("icon_launcher.png")
+      // Per-platform icons. Compose Desktop's bundler requires the native
+      // icon format for each target: .icns on macOS, .ico on Windows, .png
+      // on Linux. Sourced from the Klardrop brand asset set.
       macOS {
-        iconFile.set(icon)
+        iconFile.set(file("icons/Klardrop.icns"))
         infoPlist {
           extraKeysRawXml = """
             <key>NSBluetoothAlwaysUsageDescription</key>
@@ -59,10 +61,10 @@ compose.desktop {
         }
       }
       windows {
-        iconFile.set(icon)
+        iconFile.set(file("icons/Klardrop.ico"))
       }
       linux {
-        iconFile.set(icon)
+        iconFile.set(file("icons/Klardrop.png"))
       }
     }
     buildTypes.release.proguard {

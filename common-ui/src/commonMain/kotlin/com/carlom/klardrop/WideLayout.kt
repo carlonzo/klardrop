@@ -52,10 +52,10 @@ import com.carlom.klardrop.components.KdAvatarStyle
 import com.carlom.klardrop.components.KdDeviceKind
 import com.carlom.klardrop.components.KdRowState
 import com.carlom.klardrop.components.KdStatus
-import com.carlom.klardrop.components.KdVisibilityState
 import com.carlom.klardrop.components.SectionHead
 import com.carlom.klardrop.components.Sidebar
 import com.carlom.klardrop.theme.KdTheme
+import com.carlom.klardrop.theme.LocalContentInsets
 
 private val DesktopSidebarWidth = 300.dp
 private val TabletSidebarWidth = 320.dp
@@ -72,6 +72,7 @@ fun WideLayout(
     var activeDeviceId by remember { mutableStateOf<String?>(null) }
     var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
     var showAddDevicePicker by remember { mutableStateOf(false) }
+    var showRenameSheet by remember { mutableStateOf(false) }
 
     val hasTrustedDevice = state.devices.any { it.trustStatus == TrustStatus.Trusted }
     LaunchedEffect(hasTrustedDevice) {
@@ -129,9 +130,24 @@ fun WideLayout(
                 activeDeviceId = device.deviceId
             },
             onAddDeviceClick = { showAddDevicePicker = true },
+            onRenameLocalDevice = { showRenameSheet = true },
             onSendData = { device, data -> discoveryController.onSendData(device, data) },
             uiDependencies = uiDependencies,
             modifier = Modifier.fillMaxSize(),
+        )
+    }
+
+    if (showRenameSheet) {
+        val currentName = state.currentDeviceName?.takeIf { it.isNotBlank() }
+            ?: state.systemDeviceName
+            ?: ""
+        RenameSheet(
+            currentName = currentName,
+            onDismiss = { showRenameSheet = false },
+            onSave = { newName ->
+                discoveryController.saveCustomDeviceName(newName)
+                showRenameSheet = false
+            },
         )
     }
 
@@ -177,31 +193,37 @@ private fun WideContent(
     callbacks: ReceiveNotificationsCallbacks,
     onDeviceSelected: (DeviceUi) -> Unit,
     onAddDeviceClick: () -> Unit,
+    onRenameLocalDevice: () -> Unit,
     onSendData: (DeviceUi, OnDataToSend) -> Unit,
     uiDependencies: UiDependencies,
     modifier: Modifier = Modifier,
 ) {
     val colors = KdTheme.colors
-    val spacing = KdTheme.spacing
 
     val trusted = state.devices.filter { it.trustStatus == TrustStatus.Trusted }
     val nearby = state.devices.filter { it.trustStatus != TrustStatus.Trusted }
     val activeDevice = activeDeviceId?.let { id -> state.devices.firstOrNull { it.deviceId == id } }
 
-    val visibilityState: KdVisibilityState = state.currentDeviceName
-        ?.takeIf { it.isNotBlank() }
-        ?.let { KdVisibilityState.Visible(it) }
-        ?: KdVisibilityState.Hidden
+    val localDeviceName = state.currentDeviceName?.takeIf { it.isNotBlank() }
+        ?: state.systemDeviceName
+        ?: ""
 
-    Row(modifier = modifier) {
+    val topInset = LocalContentInsets.current.calculateTopPadding()
+    val bodyGutter = 10.dp
+
+    Row(
+        modifier = modifier
+            .padding(top = topInset)
+            .padding(bodyGutter),
+        horizontalArrangement = Arrangement.spacedBy(bodyGutter),
+    ) {
         if (showSidebar) {
             Sidebar(
                 width = sidebarWidth,
-                visibilityState = visibilityState,
                 yoursSection = {
                     SectionHead(
-                        label = "Your devices",
-                        trailing = if (trusted.isNotEmpty()) ({
+                        label = "My devices",
+                        trailing = ({
                             IconButton(
                                 onClick = onAddDeviceClick,
                                 modifier = Modifier.size(32.dp),
@@ -213,7 +235,7 @@ private fun WideContent(
                                     modifier = Modifier.size(16.dp),
                                 )
                             }
-                        }) else null,
+                        }),
                     )
                     if (trusted.isEmpty()) {
                         AddDevicePromptRow(onClick = onAddDeviceClick)
@@ -245,28 +267,14 @@ private fun WideContent(
                         }
                     }
                 },
-                footer = {
-                    val localName = (state.currentDeviceName?.takeIf { it.isNotBlank() }
-                        ?: state.systemDeviceName ?: "")
-                    if (localName.isNotBlank()) {
-                        Text(
-                            text = localName,
-                            style = KdTheme.typography.caption.copy(color = colors.text3),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = spacing.s2),
-                        )
-                    }
-                },
+                localDeviceName = localDeviceName,
+                localDeviceSub = "This device · tap to rename",
+                onLocalDeviceClick = onRenameLocalDevice,
             )
         }
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.bg1),
+            modifier = Modifier.fillMaxSize(),
         ) {
             if (activeDevice != null) {
                 ChatHeader(

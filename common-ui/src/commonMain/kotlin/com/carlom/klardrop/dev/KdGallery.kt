@@ -301,9 +301,8 @@ fun KdGallery() {
             GallerySection("C16 · Sidebar") {
                 Sidebar(
                     width = 300.dp,
-                    visibilityState = KdVisibilityState.Visible("Home"),
                     yoursSection = {
-                        SectionHead(label = "Your Devices", count = 2)
+                        SectionHead(label = "My devices", count = 2)
                         DeviceRow(
                             name = "Carlo's iPhone",
                             kind = KdDeviceKind.Iphone,
@@ -326,12 +325,8 @@ fun KdGallery() {
                             avatarStyle = KdAvatarStyle.Neutral,
                         )
                     },
-                    footer = {
-                        Text(
-                            text = "Carlo's MacBook Pro",
-                            style = KdTheme.typography.caption.copy(color = KdTheme.colors.text2),
-                        )
-                    },
+                    localDeviceName = "Carlo's MacBook Pro",
+                    localDeviceSub = "This device · tap to rename",
                     modifier = Modifier.height(400.dp),
                 )
             }

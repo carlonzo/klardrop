@@ -543,7 +543,7 @@ private fun UnreadBadge() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RenameSheet(
+internal fun RenameSheet(
     currentName: String,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,

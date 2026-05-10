@@ -10,12 +10,15 @@ import androidx.compose.ui.graphics.Color
 
 // ---- Dark (default) palette -----------------------------------------------
 
-private val _dark_bg0        = Color(0xFF0A0F13)
-private val _dark_bg1        = Color(0xFF151A1F)
-private val _dark_bg2        = Color(0xFF20252A)
-private val _dark_bg3        = Color(0xFF2B3035)
-private val _dark_border     = Color(0xFF30363C)
-private val _dark_divider    = Color(0xFF20252A)
+// bg-2 (#262A31) matches the locked app-icon tile so opening the app feels
+// like the icon expanding. Other slate steps were nudged to sit on the same
+// cool-slate ramp; trust / accent / status hues are unchanged.
+private val _dark_bg0        = Color(0xFF181B20)
+private val _dark_bg1        = Color(0xFF1F2228)
+private val _dark_bg2        = Color(0xFF262A31)
+private val _dark_bg3        = Color(0xFF2F343C)
+private val _dark_border     = Color(0xFF393F49)
+private val _dark_divider    = Color(0xFF262A31)
 
 private val _dark_text       = Color(0xFFF5F3F0)
 private val _dark_text2      = Color(0xFFACB2B9)
@@ -33,8 +36,10 @@ private val _dark_ok         = Color(0xFF77C87A)
 private val _dark_warn       = Color(0xFFE9B452)
 private val _dark_err        = Color(0xFFEE6A64)
 
-// Sidebar bg — oklch(0.185 0.012 250) — slightly darker than bg0, not in main token set
-private val _dark_bgSidebar  = Color(0xFF0F1318)
+// Window-shell bg — the deep slate behind the floating sidebar sheet. Set
+// noticeably darker than bg0 so the bg1 sheet reads as elevated. Not in the
+// main --kd-* token set; matches the design's --kd-shell.
+private val _dark_bgSidebar  = Color(0xFF0E1115)
 
 // ---- Light (paper) palette ------------------------------------------------
 

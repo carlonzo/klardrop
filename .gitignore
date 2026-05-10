@@ -4,6 +4,9 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+# Local working copy of the Claude Design handoff bundle — extracted on demand.
+.design-assets/
+
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml
