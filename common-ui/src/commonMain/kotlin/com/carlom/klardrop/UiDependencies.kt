@@ -19,6 +19,7 @@ class UiDependencies(private val commonComponent: CommonComponent) {
             deviceId = deviceId,
             messageRepository = commonComponent.messageRepository(),
             messenger = commonComponent.messenger(),
+            messageReceiver = commonComponent.messageReceiver(),
             coroutines = commonComponent.coroutines(),
             fileManager = commonComponent.fileManager(),
             platformFileSystem = commonComponent.platformFileSystem(),

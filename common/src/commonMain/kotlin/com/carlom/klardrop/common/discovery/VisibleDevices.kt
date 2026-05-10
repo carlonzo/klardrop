@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 interface VisibleDevices {
@@ -36,6 +37,17 @@ interface VisibleDevices {
    */
   fun cachedNameFor(deviceId: String): String?
 
+  /**
+   * Refresh [DiscoveryDevice.lastSeenTimestamp] for [deviceId] so the periodic stale-
+   * eviction loop doesn't drop a peer we know is alive via another channel (TCP
+   * heartbeat, BLE GATT). Called from the ConnectionMessenger PONG path so currently-
+   * connected peers never time out, regardless of whether their mDNS announcement
+   * triggers a fresh NsdManager onServiceFound/onServiceUpdated event.
+   *
+   * No-op if [deviceId] isn't in the visible map.
+   */
+  fun touchLastSeen(deviceId: String)
+
   fun onDeviceLost(deviceId: String)
   fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection)
 
@@ -49,7 +61,17 @@ internal class VisibleDevicesImpl(
 ) : VisibleDevices {
 
   private companion object {
-    val deviceTTLVisibility = 90.seconds
+    // mDNS NsdManager (Android) only fires onServiceFound / onServiceLost — it does NOT
+    // periodically re-emit onServiceUpdated for stable services that simply keep
+    // refreshing their TXT/SRV records. So our internal TTL has no fresh-event source
+    // for a peer that's announcing steadily; if we set it too short we evict perfectly-
+    // alive devices. 5 minutes gives the system mDNS its own TTL window to expire stale
+    // records (NsdManager fires onServiceLost when the underlying record actually
+    // expires, typically 75 min) while still removing genuinely-departed peers within a
+    // reasonable window. ConnectionMessenger.touchLastSeen() additionally refreshes the
+    // timestamp from the TCP heartbeat path so an actively-connected peer never expires
+    // here even if its mDNS announcement is missed by our browser.
+    val deviceTTLVisibility = 5.minutes
   }
 
   private val visibleDevicesFlow = MutableStateFlow(emptyMap<String, DiscoveryDevice>())
@@ -70,6 +92,24 @@ internal class VisibleDevicesImpl(
       while (isActive) {
         delay(30.seconds)
         cleanupStaleDevices()
+        // Snapshot the current visibility map every cleanup tick. Discovery flake
+        // bugs are notoriously hard to debug from event logs alone (devices appear
+        // and disappear, and you can't tell from a single line whether the *current*
+        // state is empty or just one removal in a longer sequence). This periodic
+        // dump gives us a known-state checkpoint when the user reports "I see
+        // nothing" — we can scroll back to the last dump and see what the app
+        // actually thought it had.
+        val snapshot = visibleDevicesFlow.value
+        if (snapshot.isEmpty()) {
+          log("VisibleDevices", "snapshot: <empty>")
+        } else {
+          val rows = snapshot.values.joinToString(separator = "\n  ") { d ->
+            val transports = d.deviceConnections.map { it.deviceConnectionType }.distinct()
+            val ageSec = (clock.currentTimeMillis() - d.lastSeenTimestamp) / 1000
+            "${d.deviceInfo.name} id=${d.deviceInfo.deviceId} transports=$transports age=${ageSec}s"
+          }
+          log("VisibleDevices", "snapshot (${snapshot.size}):\n  $rows")
+        }
       }
     }
   }
@@ -120,6 +160,15 @@ internal class VisibleDevicesImpl(
     return candidates
       .firstOrNull { it.name.isNotBlank() && it.name != it.deviceId }
       ?.name
+  }
+
+  override fun touchLastSeen(deviceId: String) {
+    visibleDevicesFlow.update { current ->
+      val device = current[deviceId] ?: return@update current
+      current.toMutableMap().apply {
+        put(deviceId, device.copy(lastSeenTimestamp = clock.currentTimeMillis()))
+      }
+    }
   }
 
   override fun onDeviceLost(deviceId: String) {

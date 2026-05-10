@@ -95,6 +95,7 @@ class CommonComponent(
   fun coroutines() = coroutines
   fun visibleDevices() = discoveryModule.visibleDevices()
   fun messenger() = communicationModule.messenger()
+  fun messageReceiver() = communicationModule.messageReceiver()
   fun reachability() = communicationModule.reachability()
 
   fun platformFileSystem() = platformFileSystem

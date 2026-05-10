@@ -8,7 +8,9 @@ import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.TransferRejectedException
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.logLocal
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.CoroutineScope
@@ -382,7 +384,14 @@ class ConnectionMessenger internal constructor(
         )
       }
     } catch (exception: Throwable) {
-      log("ConnectionMessenger: Exception while sending message ${message.id} to ${connection.deviceId}", exception)
+      // Peer hangups and TransferRejected are part of the protocol's normal life
+      // cycle; only surprise exceptions belong on the Bugsnag dashboard.
+      val expected = exception is TransferRejectedException || exception.isExpectedNetworkNoise()
+      if (expected) {
+        logLocal("ConnectionMessenger", "Send of message ${message.id} to ${connection.deviceId} ended: ${exception.message}", exception)
+      } else {
+        log("ConnectionMessenger: Exception while sending message ${message.id} to ${connection.deviceId}", exception)
+      }
       // Close the socket so the next send forces a fresh connection and so the
       // pool's isClosed() check evicts this entry. Do NOT emit a terminal flow
       // event here - retry/terminal is owned by Messenger.handleKlardropTransfer.

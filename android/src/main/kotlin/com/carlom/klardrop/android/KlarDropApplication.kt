@@ -7,6 +7,7 @@ import com.bugsnag.android.Configuration
 import com.carlom.klardrop.android.di.ApplicationComponent
 import com.carlom.klardrop.android.di.DaggerApplicationComponent
 import com.carlom.klardrop.common.ApplicationInfo
+import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import com.klardrop.common.BugsnagConfig
 
 class KlarDropApplication : Application(), ApplicationComponentProvider {
@@ -18,10 +19,19 @@ class KlarDropApplication : Application(), ApplicationComponentProvider {
   override fun onCreate() {
     super.onCreate()
 
-    Bugsnag.start(
-      this,
-      Configuration(BugsnagConfig.apiKey)
-    )
+    val bugsnagConfig = Configuration(BugsnagConfig.apiKey).apply {
+      // Only emit events from production builds. Development churn (debug builds,
+      // hot reload, manual disconnect tests) was filling the dashboard with peer-
+      // hangup noise that masked real production issues.
+      enabledReleaseStages = setOf("production")
+      addOnError { event ->
+        // Last-line drop for expected protocol noise (peer reset, connect refused,
+        // BLE handshake disconnect). Returning false discards the event.
+        val noise = event.originalError?.isExpectedNetworkNoise() == true
+        !noise
+      }
+    }
+    Bugsnag.start(this, bugsnagConfig)
 
     val applicationInfo = ApplicationInfo()
 

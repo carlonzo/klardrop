@@ -10,6 +10,7 @@ import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.logLocal
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.CompletableDeferred
@@ -69,7 +70,10 @@ class ClientImpl(
       for (connection in tcpConnections) {
         log("Client", "Connecting to $deviceId with address ${connection.address} port ${connection.port}")
         establishConnection(connection.address, connection.port, deviceId, connectionJob)
-          .onFailure { log("Client", "Failed TCP connect to $deviceId @ ${connection.address}", it) }
+          // TCP dial failures (peer not listening, connection refused, peer closed
+          // mid-handshake) are routine on a flaky LAN. Keep the on-device log,
+          // skip Bugsnag.
+          .onFailure { logLocal("Client", "Failed TCP connect to $deviceId @ ${connection.address}", it) }
         if (connectionJob.isCompleted) return@launch
       }
 
@@ -83,7 +87,7 @@ class ClientImpl(
         for (ble in bleConnections) {
           log("Client", "Connecting via BLE to $deviceId (address=${ble.address})")
           establishBleConnection(ble, deviceId, connectionJob)
-            .onFailure { log("Client", "Failed BLE connect to $deviceId @ ${ble.address}", it) }
+            .onFailure { logLocal("Client", "Failed BLE connect to $deviceId @ ${ble.address}", it) }
           if (connectionJob.isCompleted) return@launch
         }
       }

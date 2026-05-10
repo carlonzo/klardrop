@@ -7,6 +7,8 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.ext.SdkExtensions
 import com.carlom.klardrop.common.utils.log
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -14,12 +16,30 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.time.Duration.Companion.seconds
 
 actual class ServiceDiscoveryMdns(private val context: Context) {
 
   private val nsdManager by lazy { context.getSystemService(Context.NSD_SERVICE) as NsdManager }
+
+  /**
+   * Per-service-type publish locks. Mirrors the iOS fix: re-publishing the same service
+   * type before the previous unregister has fully completed makes NsdManager rename to
+   * `name (2)`, `name (3)`, … on the wire. Different service types (Klardrop vs Nearby)
+   * use independent mutexes so they don't block each other while each holds its own
+   * publish slot for the lifetime of the registration.
+   */
+  private val publishMutexByServiceType = mutableMapOf<String, Mutex>()
+  private val mutexMapMutex = Mutex()
+
+  private suspend fun publishMutexFor(serviceType: String): Mutex =
+    mutexMapMutex.withLock { publishMutexByServiceType.getOrPut(serviceType) { Mutex() } }
 
   actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
 
@@ -115,8 +135,15 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
   }
 
   actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
-
-    suspendCancellableCoroutine {
+    // Hold the per-service-type publish mutex for the lifetime of this registration.
+    // DiscoveryNetwork.republishKlardrop / republishNearbyShare cancel the previous
+    // job before launching the next; cancellation propagates here, the finally block
+    // requests unregister and waits for onServiceUnregistered before releasing the
+    // mutex. The next re-publish for the same type then can't collide with our
+    // teardown — without this, NsdManager renames the new instance to `name (2)`
+    // and the old one keeps living until its own unregister eventually completes.
+    publishMutexFor(registerServiceInfo.serviceType).withLock {
+      val unregistered = CompletableDeferred<Unit>()
 
       val listener = object : NsdManager.RegistrationListener {
         override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
@@ -125,18 +152,22 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
         override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
           log("ServiceDiscoveryMdns", "onRegistrationFailed: $serviceInfo $errorCode")
-          it.resumeWithException(Exception("Registration failed with error code $errorCode"))
+          // Treat failure as immediate "stopped" so the next caller doesn't wait
+          // the full timeout for an unregister that will never come.
+          unregistered.complete(Unit)
         }
 
         override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceUnregistered: $serviceInfo")
-          it.resume(Unit)
+          unregistered.complete(Unit)
         }
 
         override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
           log("ServiceDiscoveryMdns", "onUnregistrationFailed: $serviceInfo $errorCode")
+          // Even on failure, release the next caller — it's better to risk a stale
+          // entry on the wire than to deadlock the publish chain forever.
+          unregistered.complete(Unit)
         }
-
       }
 
       val lock = acquireWifiLock()
@@ -157,12 +188,23 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
       log("ServiceDiscoveryMdns", "Registering: $registerServiceInfo")
 
-      it.invokeOnCancellation {
-        lock.release()
-        nsdManager.unregisterService(listener)
+      try {
+        awaitCancellation()
+      } finally {
+        withContext(NonCancellable) {
+          log("ServiceDiscoveryMdns", "unregister requested for ${registerServiceInfo.serviceName}")
+          runCatching { nsdManager.unregisterService(listener) }
+            .onFailure { log("ServiceDiscoveryMdns", "unregisterService threw: ${it.message}") }
+          val ack = withTimeoutOrNull(2.seconds) { unregistered.await() }
+          log(
+            "ServiceDiscoveryMdns",
+            if (ack != null) "unregister confirmed for ${registerServiceInfo.serviceName}"
+            else "unregister TIMED OUT for ${registerServiceInfo.serviceName} — releasing publish lock anyway",
+          )
+          runCatching { lock.release() }
+        }
       }
     }
-
   }
 
   /**

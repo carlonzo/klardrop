@@ -56,6 +56,10 @@ class FakeVisibleDevices : VisibleDevices {
     return info?.name?.takeIf { it.isNotBlank() && it != info.deviceId }
   }
 
+  override fun touchLastSeen(deviceId: String) {
+    // No-op in the fake — TTL eviction isn't simulated here.
+  }
+
   override fun onDeviceLost(deviceId: String) {
     devices.removeAll { it.deviceInfo.deviceId == deviceId }
   }

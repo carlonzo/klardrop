@@ -54,7 +54,28 @@ object FileTypeUtils {
     // Additional common extensions not in original list
     "heic" to "image/heic",
     "heif" to "image/heif",
-    "mkv" to "video/x-matroska"
+    "mkv" to "video/x-matroska",
+    // Documents — pdf was previously missing and was the most-reported "unknown
+    // mime type" event from real users.
+    "pdf" to "application/pdf",
+    "doc" to "application/msword",
+    "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "xls" to "application/vnd.ms-excel",
+    "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ppt" to "application/vnd.ms-powerpoint",
+    "pptx" to "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "csv" to "text/csv",
+    "rtf" to "application/rtf",
+    // Archives
+    "zip" to "application/zip",
+    "rar" to "application/vnd.rar",
+    "7z" to "application/x-7z-compressed",
+    "tar" to "application/x-tar",
+    "gz" to "application/gzip",
+    // Code/text
+    "json" to "application/json",
+    "js" to "application/javascript",
+    "md" to "text/markdown"
   )
 
   private const val DEFAULT_MIME_TYPE = "application/octet-stream"
@@ -89,11 +110,10 @@ object FileTypeUtils {
     if (extension == null) return DEFAULT_MIME_TYPE
 
     return mimeTypes[extension] ?: run {
-      log(
-        "PlatformFileSystemImpl",
-        "Unknown mime type for extension $extension",
-        IllegalArgumentException("Unknown mime type for extension $extension")
-      )
+      // Falling back to octet-stream is harmless — receivers detect by magic
+      // bytes when this matters. Worth a local log so we can grow the map over
+      // time, but not worth a Bugsnag event.
+      nativeLogger("FileTypeUtils", "Unknown mime type for extension $extension; using $DEFAULT_MIME_TYPE")
       DEFAULT_MIME_TYPE
     }
   }

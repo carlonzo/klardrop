@@ -1,6 +1,6 @@
 package com.carlom.klardrop.common.ble
 
-import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.logLocal
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
@@ -68,7 +68,9 @@ class BleChannelBridge(
     } catch (e: CancellationException) {
       throw e
     } catch (e: Throwable) {
-      log(TAG, "write pump for ${session.deviceId} failed: ${e.message}", e)
+      // Pump failures here mean the BLE session ended — peer closed, link lost, or
+      // the caller cancelled. All routine; don't pollute Bugsnag.
+      logLocal(TAG, "write pump for ${session.deviceId} failed: ${e.message}", e)
     } finally {
       // If the caller stopped writing, close the session and the inbound side too so that
       // readers unblock and the ConnectionMessenger notices closure.
@@ -87,7 +89,7 @@ class BleChannelBridge(
     } catch (e: CancellationException) {
       throw e
     } catch (e: Throwable) {
-      log(TAG, "read pump for ${session.deviceId} failed: ${e.message}", e)
+      logLocal(TAG, "read pump for ${session.deviceId} failed: ${e.message}", e)
     } finally {
       runCatching { incoming.close() }
       // A closed session means the peer is gone — also close the outbound side so writers

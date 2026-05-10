@@ -83,6 +83,16 @@ internal class MessagesRouterImpl(
   private val messengeReceiver: MessageReceiver,
   private val trustManager: TrustManager,
   private val incomingAuthorizer: IncomingAuthorizer,
+  /**
+   * Called for every wire frame we successfully read from a peer. Wired in production to
+   * [com.carlom.klardrop.common.discovery.VisibleDevices.touchLastSeen] so any active TCP
+   * peer (heartbeat PINGs/PONGs included) refreshes its visibility timestamp — the
+   * VisibleDevices stale-eviction loop would otherwise drop peers whose mDNS announcement
+   * hasn't triggered a fresh `onServiceUpdated` from NsdManager (Android only fires it on
+   * actual SRV/TXT changes, not periodic refreshes). Default no-op so test fakes don't
+   * have to wire it.
+   */
+  private val onPeerLiveness: (deviceId: String) -> Unit = {},
 ) : MessagesRouter {
 
   /**
@@ -142,6 +152,9 @@ internal class MessagesRouterImpl(
       "MessagesRouter",
       "[DEBUG] Raw message received from $fromDeviceId: type=${rawMessage.type}, id=${rawMessage.id}, hasPayload=${rawMessage.hasPayload}"
     )
+    // Any wire frame from this peer is proof of life — refresh visibility so the
+    // 5-min mDNS-derived TTL doesn't evict a peer we're actively talking to.
+    onPeerLiveness(fromDeviceId)
     // The id the sender's ConnectionMessenger.send registered its pending-ACK channel
     // under is the wire-frame id, i.e. the OUTER TrustedMessage id when the message is
     // signed. The inner deserialized application message has its own (different) id that

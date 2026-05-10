@@ -9,7 +9,9 @@ import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.logLocal
 import com.google.location.nearby.connections.proto.OfflineFrame
 import com.google.location.nearby.connections.proto.V1Frame
 import io.ktor.network.selector.*
@@ -254,7 +256,14 @@ class Server(
     val receiveFlow = messageReceiver.onReceiveMessage(device?.deviceInfo?.deviceId ?: "")
 
     val exceptionHandler = CoroutineExceptionHandler { _, exception ->
-      log("Server", "Received exception on Nearby Share connection from $remoteAddress", exception)
+      // Nearby Share peers routinely close mid-frame (network drops, app
+      // backgrounding, user cancel). Anything in the noise classifier is logged
+      // locally; surprises still go to Bugsnag.
+      if (exception.isExpectedNetworkNoise()) {
+        logLocal("Server", "Nearby Share connection from $remoteAddress ended", exception)
+      } else {
+        log("Server", "Received exception on Nearby Share connection from $remoteAddress", exception)
+      }
       socket.dispose()
       receiveFlow.update {
         it.copy(status = com.carlom.klardrop.common.receiver.ReceiveMessageStatus.Failed(exception.message ?: "Unknown error"))

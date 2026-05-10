@@ -2,15 +2,18 @@ package com.klardrop.common
 
 import com.bugsnag.kmp.BreadcrumbType
 import com.bugsnag.kmp.Bugsnag
+import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 
 
 actual object BugsnagWrapper {
 
-  init {
-    com.bugsnag.cocoa.Bugsnag.startWithApiKey(BugsnagConfig.apiKey)
-  }
+  // Bugsnag is started from iosApp.swift (the Cocoa SDK reads its API key from
+  // Info.plist there). The previous `init {}` block here started it again as a
+  // side-effect of class-load, which fired during tests and produced phantom
+  // "production" reports for routine test failures.
 
   actual fun notify(throwable: Throwable) {
+    if (throwable.isExpectedNetworkNoise()) return
     try {
       // Use native iOS Bugsnag via Objective-C interop
       // This will be handled by the iOS app's Bugsnag configuration

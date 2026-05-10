@@ -16,9 +16,12 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserDomainMask
 import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationDidBecomeActiveNotification
 
 actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
@@ -49,7 +52,21 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     return ServiceDiscoveryMdns()
   }
 
-  private val networkLifecycleMonitor by lazy { NetworkLifecycleMonitor() }
+  private val networkLifecycleMonitor by lazy {
+    val monitor = NetworkLifecycleMonitor()
+    // iOS suspends NSNetService publishes when the app goes inactive (screen lock,
+    // backgrounded). They don't auto-resume on becomeActive — DiscoveryNetwork has to
+    // re-issue them. Hook the foreground transition into the existing
+    // rebuildMdnsState path by emitting a synthetic NetworkChangeEvent.Changed.
+    NSNotificationCenter.defaultCenter.addObserverForName(
+      name = UIApplicationDidBecomeActiveNotification,
+      `object` = null,
+      queue = NSOperationQueue.mainQueue,
+    ) { _ ->
+      monitor.trigger()
+    }
+    monitor
+  }
 
   actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 

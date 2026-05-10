@@ -18,6 +18,7 @@ import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
@@ -125,8 +126,16 @@ class DiscoveryNetwork internal constructor(
   
   private fun startDeviceFlowSubscriptionIfNeeded() {
     if (deviceFlowSubscription != null) return
-    
+
+    // distinctUntilChanged: the LocalPropertiesRepository flow re-emits on every
+    // DataStore tick — including the cold-start sequence where deviceId starts empty,
+    // gets generated and saved (re-emit), then customDeviceName loads (re-emit). Each
+    // emission was triggering a republish, and since NSNetService publish/stop are
+    // both async, the iPad ended up with N concurrent advertisements named `xxx`,
+    // `xxx (2)`, `xxx (3)`, … on the wire. Skipping no-op emissions keeps publishes
+    // serialized to actual identity changes (rename, new install).
     deviceFlowSubscription = currentDeviceProvider.deviceInfoFlow
+      .distinctUntilChanged()
       .onEach { deviceInfo ->
         log("DiscoveryNetwork", "Device info changed: ${deviceInfo.deviceName}")
         // Republish services if they were previously started

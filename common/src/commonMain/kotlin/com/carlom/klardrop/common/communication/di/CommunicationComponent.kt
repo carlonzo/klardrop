@@ -132,6 +132,7 @@ class CommunicationModule(
       messageReceiver,
       trustManager,
       incomingAuthorizer,
+      onPeerLiveness = visibleDevices::touchLastSeen,
     )
   }
 

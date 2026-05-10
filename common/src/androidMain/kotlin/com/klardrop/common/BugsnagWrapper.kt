@@ -1,10 +1,12 @@
 package com.klardrop.common
 
 import com.bugsnag.android.Bugsnag
+import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 
 actual object BugsnagWrapper {
 
   actual fun notify(throwable: Throwable) {
+    if (throwable.isExpectedNetworkNoise()) return
     try {
       Bugsnag.notify(throwable)
     } catch (e: IllegalStateException) {

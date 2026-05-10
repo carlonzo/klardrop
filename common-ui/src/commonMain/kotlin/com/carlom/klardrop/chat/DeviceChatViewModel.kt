@@ -12,6 +12,7 @@ import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.database.Messages
 import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
@@ -19,20 +20,16 @@ import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
@@ -41,6 +38,7 @@ class DeviceChatViewModel(
   private val deviceId: String,
   val messageRepository: MessageRepository,
   private val messenger: Messenger,
+  private val messageReceiver: MessageReceiver,
   private val coroutines: Coroutines,
   private val fileManager: FileManager,
   private val platformFileSystem: PlatformFileSystem,
@@ -65,21 +63,15 @@ class DeviceChatViewModel(
 
   /**
    * Most recent receive update from this device that's awaiting the user's accept/reject
-   * decision. Null when nothing is pending. Driven by [Messenger.receive] — the notifier
-   * is a SharedFlow without replay, so this only catches transfers that arrive while the
-   * chat screen is open. Earlier pending transfers stay visible on the discovery banner
-   * stack which subscribes from app start.
+   * decision. Null when nothing is pending. Subscribes directly to the per-device receive
+   * flow (a StateFlow with current value) instead of [Messenger.receive] which is a
+   * replay-less notifier — that previously meant the chat screen missed prompts that
+   * fired before it was opened, leaving them only on the discovery-screen banner stack.
+   * Going through [MessageReceiver.onReceiveMessage] gives us the current pending state
+   * the moment the chat screen subscribes, regardless of timing.
    */
-  @OptIn(ExperimentalCoroutinesApi::class)
   val pendingAuth: StateFlow<ReceiveMessageUpdate?> =
-    messenger.receive()
-      .filter { (id, _) -> id == deviceId }
-      .flatMapMerge { (_, flow) ->
-        flow.transformWhile { update ->
-          emit(update)
-          !update.status.isFinished()
-        }
-      }
+    messageReceiver.onReceiveMessage(deviceId)
       .map { update -> update.takeIf { it.status is ReceiveMessageStatus.PendingAuthorization } }
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 

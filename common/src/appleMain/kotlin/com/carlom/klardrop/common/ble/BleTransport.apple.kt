@@ -200,7 +200,17 @@ actual class BleTransport {
     ) {
       val peerId = didDiscoverPeripheral.identifier.UUIDString
       discovered[peerId] = didDiscoverPeripheral
-      val shortId = decodeShortDeviceId(advertisementData) ?: didDiscoverPeripheral.name ?: "unknown"
+      // Without the Klardrop service-data we can't know the peer's real shortDeviceId.
+      // Falling back to peripheral.name (the system Bluetooth name like "Galaxy A32")
+      // synthesised a bogus deviceId that wouldn't merge with the same peer's mDNS
+      // entry — the user saw the Samsung listed twice on iPad: once under the marketing
+      // name (bogus deviceId), once under the real mDNS deviceId. Drop the event; the
+      // scan callback will fire again as the peer keeps advertising and the next packet
+      // typically carries the service data we need.
+      val shortId = decodeShortDeviceId(advertisementData)
+      if (shortId == null) {
+        return
+      }
       peerEvents.trySend(
         BlePeerEvent.Found(
           address = peerId,
