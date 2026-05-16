@@ -16,18 +16,23 @@ import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.router.IncomingAuthorizer
-import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
-import kotlinx.coroutines.flow.MutableStateFlow
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.FakeVisibleDevices
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
+import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.trust.InMemoryTrustStorage
 import com.carlom.klardrop.common.utils.Clock
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.path
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import kotlinx.io.Buffer
 import kotlinx.io.RawSink
 import kotlinx.io.RawSource
@@ -40,8 +45,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
+import kotlin.time.TimeSource
 
 expect fun testClipboardReaderWriter(): ClipboardReaderWriter
 
@@ -52,9 +59,10 @@ fun FakeClipboardManager() = com.carlom.klardrop.common.features.ClipboardManage
   readerWriter = testClipboardReaderWriter()
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class KlardropIntegrationTest {
 
-  private val coroutines = TestCoroutines()
+  private val coroutines = TestCoroutines(dispatcher = UnconfinedTestDispatcher())
   private val clock = Clock()
   private val clientVisibleDevices = FakeVisibleDevices()
   private val clientDeviceId = "client01"
@@ -324,12 +332,9 @@ class KlardropIntegrationTest {
             dropServerConnections()
           }
 
-          // Wait a bit to ensure cleanup
-          advanceToCompletion()
-
-          // Give extra time for connection cleanup
-          coroutines.dispatcher.scheduler.advanceTimeBy(500)
-          coroutines.dispatcher.scheduler.runCurrent()
+          // Give both sides' real socket read loops time to observe EOF and mark stale
+          // pool entries closed before the reconnection attempt starts.
+          pumpVirtualAndRealTime(iterations = 10, virtualStepMs = 100, realSleepMs = 50)
 
           val messageReceiver = serverCommunicationModule.messageReceiver()
           val clientMessenger = clientCommunicationModule.messenger()
@@ -446,6 +451,12 @@ internal class KlardropTestContext(
 
   val clientFileManager = InMemoryTestFileManager()
   val serverFileManager = InMemoryTestFileManager()
+  private val testAckTimeoutConfig = AckTimeoutConfig(
+    noPayloadAckTimeout = 60.seconds,
+    readyAckTimeout = 60.seconds,
+    receivedAckTimeout = 120.seconds,
+  )
+  private val testHeartbeatConfig = HeartbeatConfig(enabled = false)
 
   // Auto-accepting authorizer used on both sides — these integration tests assert on
   // transport-level transfer behavior, so we bypass the per-message accept/reject prompt
@@ -478,6 +489,8 @@ internal class KlardropTestContext(
     messageRepository = FakeMessageRepository(),
     clipboardManager = FakeClipboardManager(),
     trustStorage = InMemoryTrustStorage(),
+    ackTimeoutConfig = testAckTimeoutConfig,
+    heartbeatConfig = testHeartbeatConfig,
     incomingAuthorizerOverride = autoAcceptAuthorizer,
   )
 
@@ -491,6 +504,8 @@ internal class KlardropTestContext(
     messageRepository = FakeMessageRepository(),
     clipboardManager = FakeClipboardManager(),
     trustStorage = InMemoryTrustStorage(),
+    ackTimeoutConfig = testAckTimeoutConfig,
+    heartbeatConfig = testHeartbeatConfig,
     incomingAuthorizerOverride = autoAcceptAuthorizer,
   )
 
@@ -540,16 +555,17 @@ internal class KlardropTestContext(
   // Bridges virtual time (mainDispatcher = TestDispatcher) and real time (ioDispatcher =
   // Dispatchers.IO, where sockets actually run). Advancing virtual time in a single large
   // chunk fires virtual-time timeouts (e.g. ACK withTimeout) before the real IO work has a
-  // chance to progress. Small virtual steps interleaved with Thread.sleep let the real
+  // chance to progress. Small virtual steps interleaved with real dispatcher delays let the real
   // socket threads catch up between virtual-time events.
-  fun pumpVirtualAndRealTime(iterations: Int, virtualStepMs: Long, realSleepMs: Long) {
+  suspend fun pumpVirtualAndRealTime(iterations: Int, virtualStepMs: Long, realSleepMs: Long) {
     repeat(iterations) {
       coroutines.dispatcher.scheduler.runCurrent()
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
       coroutines.dispatcher.scheduler.advanceTimeBy(virtualStepMs)
-      Thread.sleep(realSleepMs)
+      withContext(coroutines.ioDispatcher) {
+        delay(realSleepMs)
+      }
+      yield()
       coroutines.dispatcher.scheduler.runCurrent()
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
     }
   }
 
@@ -570,11 +586,7 @@ internal class KlardropTestContext(
   }
 
   suspend fun <T> ReceiveTurbine<T>.awaitFor(block: ((T) -> Boolean)): T {
-    var item: T
-    do {
-      item = awaitItem()
-    } while (!block(item))
-    return item
+    return awaitForPumping(block = block)
   }
 
   /**
@@ -601,14 +613,17 @@ internal class KlardropTestContext(
     block: (T) -> Boolean,
   ): T {
     val channel = asChannel()
-    val deadline = System.currentTimeMillis() + maxRealTimeMs
+    val deadline = TimeSource.Monotonic.markNow() + maxRealTimeMs.milliseconds
     var seenCount = 0
     var lastSeen: Any? = null
-    while (System.currentTimeMillis() < deadline) {
+    while (deadline.hasNotPassedNow()) {
       coroutines.dispatcher.scheduler.runCurrent()
       coroutines.dispatcher.scheduler.advanceTimeBy(pollVirtualStepMs)
       coroutines.dispatcher.scheduler.runCurrent()
-      Thread.sleep(pollRealSleepMs)
+      withContext(coroutines.ioDispatcher) {
+        delay(pollRealSleepMs)
+      }
+      yield()
       coroutines.dispatcher.scheduler.runCurrent()
 
       while (true) {
@@ -661,7 +676,7 @@ internal class KlardropTestContext(
     senderChannel.awaitFor { it is Completed }
 
     // Verify message received
-    coroutines.dispatcher.scheduler.advanceUntilIdle()
+    coroutines.dispatcher.scheduler.runCurrent()
     val completedUpdate = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
     assertIs<ReceiveMessageStatus.Completed>(completedUpdate.status)
     assertEquals(1, completedUpdate.messages.size)
@@ -703,7 +718,7 @@ internal class KlardropTestContext(
 
     senderChannel.awaitFor { it is Completed }
 
-    coroutines.dispatcher.scheduler.advanceUntilIdle()
+    coroutines.dispatcher.scheduler.runCurrent()
     val completedUpdate = receiverChannel.awaitFor { it.status is ReceiveMessageStatus.Completed }
     assertIs<ReceiveMessageStatus.Completed>(completedUpdate.status)
     assertEquals(1, completedUpdate.messages.size)

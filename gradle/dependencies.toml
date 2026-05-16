@@ -1,11 +1,11 @@
 [versions]
 agp = "9.2.1"
 kotlin = "2.3.21"
-coroutines = "1.10.2"
+coroutines = "1.11.0"
 serialization = "1.11.0"
-jetbrains-compose = "1.10.3"
+jetbrains-compose = "1.11.0"
 okio = "3.17.0"
-ktor = "3.4.3"
+ktor = "3.5.0"
 datastore = "1.2.1"
 dagger = "2.59.2"
 androidx-activity = "1.13.0"
@@ -87,6 +87,6 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "jetbrains-compose" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
-squareup-wire = { id = "com.squareup.wire", version = "6.2.0" }
+squareup-wire = { id = "com.squareup.wire", version = "6.4.0" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
-ksp = { id = "com.google.devtools.ksp", version = "2.3.7" }
+ksp = { id = "com.google.devtools.ksp", version = "2.3.8" }

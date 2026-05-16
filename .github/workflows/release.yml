@@ -1,0 +1,158 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g. 0.1.0). A tag v<version> will be created.'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos
+          - os: ubuntu-latest
+            target: linux-android
+          - os: windows-latest
+            target: windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build macOS DMG
+        if: matrix.target == 'macos'
+        run: ./gradlew :desktop:packageReleaseDmg
+
+      - name: Build Windows MSI
+        if: matrix.target == 'windows'
+        run: ./gradlew :desktop:packageReleaseMsi
+
+      - name: Build Linux DEB + Android APK
+        if: matrix.target == 'linux-android'
+        run: ./gradlew :desktop:packageReleaseDeb :android:assembleRelease
+
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # Compose Desktop drops bundlers under build/compose/binaries/main-release/<format>/
+          # (or main/<format>/ for non-release). Match both so the workflow keeps working if
+          # the desktop module ever stops calling proguard.
+          find desktop/build/compose/binaries -type f \
+            \( -name '*.dmg' -o -name '*.msi' -o -name '*.deb' \) \
+            -exec cp -v {} dist/ \;
+          if [ -d android/build/outputs/apk/release ]; then
+            find android/build/outputs/apk/release -name '*.apk' -exec cp -v {} dist/ \;
+          fi
+          ls -la dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: klardrop-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            TAG="v$VERSION"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"        >> "$GITHUB_OUTPUT"
+
+      - name: Generate checksums + latest.json
+        shell: bash
+        env:
+          REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG:     ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd artifacts
+          ls -la
+          # SHA256 sidecar per asset (also uploaded to the release).
+          for f in *; do
+            if [ -f "$f" ] && [[ "$f" != *.sha256 ]] && [[ "$f" != "latest.json" ]]; then
+              sha256sum "$f" | awk '{print $1}' > "$f.sha256"
+            fi
+          done
+
+          # Pick the canonical asset for each platform (first match wins — Compose
+          # Desktop only emits one of each format per host).
+          pick() { ls $1 2>/dev/null | head -n1 || true; }
+          DMG=$(pick "*.dmg")
+          MSI=$(pick "*.msi")
+          DEB=$(pick "*.deb")
+          APK=$(pick "*.apk")
+
+          export BASE="https://github.com/${REPO}/releases/download/${TAG}"
+          python3 - "$DMG" "$MSI" "$DEB" "$APK" <<'PY' > latest.json
+          import json, os, sys, datetime, pathlib
+          dmg, msi, deb, apk = sys.argv[1:5]
+          base = os.environ["BASE"]
+          def entry(name):
+              if not name: return None
+              digest = pathlib.Path(name + ".sha256").read_text().strip()
+              size   = pathlib.Path(name).stat().st_size
+              return {"url": f"{base}/{name}", "sha256": digest, "size": size}
+          platforms = {}
+          if dmg: platforms["macos"]     = entry(dmg)
+          if msi: platforms["windows"]   = entry(msi)
+          if deb: platforms["linux-deb"] = entry(deb)
+          if apk: platforms["android"]   = entry(apk)
+          out = {
+            "version":     os.environ["VERSION"],
+            "tag":         os.environ["TAG"],
+            "publishedAt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "notes":       f"https://github.com/{os.environ['REPO']}/releases/tag/{os.environ['TAG']}",
+            "platforms":   platforms,
+          }
+          print(json.dumps(out, indent=2))
+          PY
+          cat latest.json
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name:     Klardrop ${{ steps.version.outputs.version }}
+          files:    artifacts/*
+          draft: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true

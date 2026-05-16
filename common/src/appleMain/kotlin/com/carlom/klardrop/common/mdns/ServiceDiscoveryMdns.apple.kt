@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
 package com.carlom.klardrop.common.mdns
 
 import com.carlom.klardrop.common.utils.log

@@ -273,7 +273,7 @@ class ConnectionMessenger internal constructor(
     log("ConnectionMessenger: [DEBUG] Awaiting ACK $ackType for message $messageId from ${connection.deviceId} (timeout: ${initialTimeoutMs}ms)")
 
     try {
-      withContext(coroutines.mainDispatcher) {
+      withContext(coroutines.ioDispatcher) {
         var timeoutMs = initialTimeoutMs
         var awaitingUserActive = awaitingUserChannel
         while (true) {
