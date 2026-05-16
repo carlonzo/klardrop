@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.log
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
+import com.google.location.nearby.connections.proto.DisconnectionFrame
 import com.google.location.nearby.connections.proto.KeepAliveFrame
 import com.google.location.nearby.connections.proto.OfflineFrame
 import com.google.location.nearby.connections.proto.OsInfo
@@ -33,8 +34,22 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
-private const val SANE_FRAME_LENGTH = 524424
+private const val SANE_FRAME_LENGTH = 512 * 1024
 private const val LOG_DEBUG = true
+
+/**
+ * Test-observability hook: bumped every time either side of the Nearby Share
+ * conversation receives a DISCONNECTION frame from its peer. Used by the
+ * integration test that pins the post-transfer DISCONNECTION exchange so we
+ * don't regress it again. Not used by production code outside of bumping the
+ * counter.
+ */
+object NearbyDisconnectionObserver {
+  private var counter: Int = 0
+  fun recordPeerDisconnection() { counter += 1 }
+  fun observed(): Int = counter
+  fun reset() { counter = 0 }
+}
 
 private fun log(tag: String, message: String) {
   if (LOG_DEBUG)
@@ -42,13 +57,17 @@ private fun log(tag: String, message: String) {
 }
 
 internal fun createEndpointInfo(currentDevice: CurrentDevice): ByteArray {
-  val deviceName = currentDevice.deviceName
+  // The wire length is the UTF-8 byte count, not the UTF-16 code-unit count
+  // returned by String.length — they differ for non-ASCII names.
+  val nameBytes = currentDevice.deviceName.encodeToByteArray().let {
+    if (it.size > 255) it.copyOfRange(0, 255) else it
+  }
 
   return byteArrayOf(
     (deviceTypeId(currentDevice) shl 1).toByte(), // 0000 ddd0 (d == devicetype)
     *Random.nextBytes(16), // 16 bytes random
-    deviceName.length.toByte(),
-    *deviceName.encodeToByteArray()
+    nameBytes.size.toByte(),
+    *nameBytes,
   )
 }
 
@@ -99,9 +118,9 @@ internal suspend fun D2DConnectionContext.receiveEncryptedOfflineMessage(
   }
 
   if (offlineFrameContent.type == V1Frame.FrameType.DISCONNECTION) {
-    log("NearbyReceiverConnectionHandler", "Received disconnection. Replying")
-
-    throw IllegalStateException("Client sent disconnection message")
+    log("NearbyReceiverConnectionHandler", "Received DISCONNECTION from peer")
+    NearbyDisconnectionObserver.recordPeerDisconnection()
+    return offlineFrame
   }
 
   val header = offlineFrameContent.payload_transfer?.payload_header
@@ -197,6 +216,22 @@ internal suspend fun replyKeepAlive(writeChannel: ByteWriteChannel, nearbyConnec
       keep_alive = KeepAliveFrame(
         ack = true
       )
+    )
+  ).sendEncryptedNearby(writeChannel, nearbyConnection)
+}
+
+/**
+ * Send an encrypted DISCONNECTION offline frame, signalling a clean teardown
+ * to the peer. NearDrop sends this before closing the TCP socket; without it
+ * Android Quick Share treats the abrupt close as a protocol error and shows
+ * a failure to the user even when the bytes arrived intact.
+ */
+internal suspend fun sendDisconnection(writeChannel: ByteWriteChannel, nearbyConnection: D2DConnectionContext) {
+  OfflineFrame(
+    version = OfflineFrame.Version.V1,
+    v1 = V1Frame(
+      type = V1Frame.FrameType.DISCONNECTION,
+      disconnection = DisconnectionFrame(),
     )
   ).sendEncryptedNearby(writeChannel, nearbyConnection)
 }

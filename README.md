@@ -182,6 +182,18 @@ in the open. Issues and pull requests are welcome, especially:
 - Security review of the trust / pairing flow
 - UI polish on the shared Compose screens
 
+## Acknowledgements
+
+Huge thanks to [@grishka](https://github.com/grishka) and his project
+[**NearDrop**](https://github.com/grishka/NearDrop). Klardrop's Nearby Share /
+Quick Share support — and the ability to send to and receive from Android — is
+only possible because grishka reverse-engineered Google's protocol and wrote it
+up in [`PROTOCOL.md`](https://github.com/grishka/NearDrop/blob/master/PROTOCOL.md).
+The Kotlin port that lives in this repo started as a translation of his Swift
+implementation; the wire format, the UKEY2 handshake glue, the paired-key dance,
+and the payload-layer framing all follow his lead. Thank you for the work and
+for sharing it openly.
+
 ## License
 
 A license has not been chosen yet — until one is added to the repository, all

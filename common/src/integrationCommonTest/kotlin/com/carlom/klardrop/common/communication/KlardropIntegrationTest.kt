@@ -8,6 +8,7 @@ import app.cash.turbine.turbineScope
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
+import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.Message
@@ -20,6 +21,7 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.mdns.FakeVisibleDevices
+import com.carlom.klardrop.common.mdns.NearbyDisconnectionObserver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.trust.InMemoryTrustStorage
@@ -107,6 +109,122 @@ class KlardropIntegrationTest {
       with(testContext) {
         sendAndVerifyMessage("This is the first message")
         sendAndVerifyMessage("This is a second message!")
+      }
+    }
+  }
+
+  // Regression for the Quick Share interop fixes: the sender path used to inject
+  // a hardcoded byte payload between consent and the first file chunk, which
+  // Android Quick Share could not parse. A file transfer over the Nearby
+  // protocol exercises that same code path end-to-end.
+  @Test
+  fun testSendFileForNearby() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
+
+    turbineScope(timeout = 30.seconds) {
+      with(testContext) {
+        val testData = ByteArray(1024) { (it % 256).toByte() }
+        sendAndVerifyFile("nearby-document.txt", testData, "text/plain")
+      }
+    }
+  }
+
+  // Multi-chunk file: with SANE_FRAME_LENGTH = 512 KiB, a 1.5 MiB file is 3
+  // data chunks + 1 LAST_CHUNK trailer per file payload, plus introduction +
+  // response framing. Catches any regression in chunk offset advancement,
+  // payload_id reuse, or the LAST_CHUNK flag.
+  @Test
+  fun testSendLargeFileForNearby() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
+
+    turbineScope(timeout = 60.seconds) {
+      with(testContext) {
+        val testData = ByteArray(1_500_000) { (it % 256).toByte() }
+        sendAndVerifyFile("nearby-large.bin", testData, "application/octet-stream")
+      }
+    }
+  }
+
+  // Non-ASCII file name: introduction's FileMetadata.name is UTF-8 on the
+  // wire. Locks down that the sender doesn't truncate or mis-length it.
+  @Test
+  fun testSendNonAsciiFileNameForNearby() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
+
+    turbineScope(timeout = 30.seconds) {
+      with(testContext) {
+        val testData = "Köln 📱".encodeToByteArray()
+        sendAndVerifyFile("Köln-📱.txt", testData, "text/plain")
+      }
+    }
+  }
+
+  // Regression: when every advertised Nearby endpoint refuses the connection
+  // (e.g. the Android Quick Share session ended between discovery and our
+  // connect attempt), the sender must emit a clean Error to the flow rather
+  // than crashing the coroutine with NoSuchElementException via `.first {}`
+  // on the list of failed attempts.
+  @Test
+  fun testNearbySendEmitsErrorWhenAllConnectionsRefuse() = runTest(coroutines.dispatcher, timeout = 30.seconds) {
+    // Point the fake visible device at a port nothing is listening on. The
+    // OS will reject the connect with ECONNREFUSED.
+    testContext.addStaleNearbyDevice(address = "127.0.0.1", port = 1)
+
+    coroutines.dispatcher.scheduler.runCurrent()
+    coroutines.dispatcher.scheduler.advanceTimeBy(100)
+    coroutines.dispatcher.scheduler.runCurrent()
+
+    turbineScope(timeout = 20.seconds) {
+      val turbineScope = this
+      with(testContext) {
+        val clientMessenger = clientCommunicationModule.messenger()
+        val senderChannel = clientMessenger.send(serverDeviceIdForTest(), textSendRequest("does-not-matter")).testIn(turbineScope)
+
+        pumpVirtualAndRealTime(iterations = 8, virtualStepMs = 250, realSleepMs = 50)
+        senderChannel.awaitForPumping { it is Error }
+
+        senderChannel.cancelAndIgnoreRemainingEvents()
+      }
+    }
+  }
+
+  // Regression: at the end of a Nearby Share transfer the sender must emit a
+  // DISCONNECTION OfflineFrame *before* closing the TCP socket, and must drain
+  // the receiver's own DISCONNECTION back. Without the trailing DISCONNECTION
+  // Android Quick Share displays a transfer error to the user even though
+  // every file byte arrived. We assert this by observing the receiver-side
+  // counter that is bumped whenever DISCONNECTION is decoded off the wire.
+  @Test
+  fun testNearbyTransferEndsWithDisconnectionExchange() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+    NearbyDisconnectionObserver.reset()
+    testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
+
+    turbineScope(timeout = 30.seconds) {
+      with(testContext) {
+        sendAndVerifyFile("nearby-disconnect.bin", ByteArray(1024) { (it % 256).toByte() })
+        pumpVirtualAndRealTime(iterations = 6, virtualStepMs = 250, realSleepMs = 50)
+      }
+    }
+
+    // Both sides should have observed at least one peer DISCONNECTION on the
+    // wire: receiver decoded the sender's, sender decoded the receiver's.
+    assertTrue(
+      NearbyDisconnectionObserver.observed() >= 2,
+      "expected both sides to observe a peer DISCONNECTION, got ${NearbyDisconnectionObserver.observed()}"
+    )
+  }
+
+  // Text first, then a file, over the same Nearby connection — exercises the
+  // introduction frame carrying both text and file metadata in a single
+  // session and the receiver routing each payload by its own payload_id.
+  @Test
+  fun testSendTextAndFileInSequenceForNearby() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
+
+    turbineScope(timeout = 60.seconds) {
+      with(testContext) {
+        sendAndVerifyMessage("hello over nearby")
+        sendAndVerifyFile("after-text.bin", ByteArray(2048) { (it % 256).toByte() })
       }
     }
   }
@@ -584,6 +702,14 @@ internal class KlardropTestContext(
   fun textSendRequest(text: String = "klardrop protocol test"): SendMessageRequest {
     return SimpleSendMessageRequest(TextMessage("Test Title", text = text))
   }
+
+  /** Test hook: register a fake Nearby endpoint for the server device. */
+  fun addStaleNearbyDevice(address: String, port: Int) {
+    clientVisibleDevices.addNearbyDevice(serverDeviceId, address, port)
+  }
+
+  /** Test hook: expose the server device id without making the field public. */
+  fun serverDeviceIdForTest(): String = serverDeviceId
 
   suspend fun <T> ReceiveTurbine<T>.awaitFor(block: ((T) -> Boolean)): T {
     return awaitForPumping(block = block)

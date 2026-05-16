@@ -27,6 +27,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 import okio.ByteString.Companion.toByteString
 import sharing.nearby.Frame
 import sharing.nearby.PairedKeyEncryptionFrame
@@ -124,6 +126,16 @@ class NearbyReceiverConnectionHandler(
 
       log("NearbyReceiverConnectionHandler", "Starting file reception")
       receiveTransfer(readChannel, writeChannel, nearbyConnection)
+
+      // Signal a clean end-of-session and drain the peer's own DISCONNECTION
+      // before closing the socket. Mirrors NearDrop's receiver behavior; the
+      // half-step is what lets the *other* side report success in its UI
+      // instead of an error caused by an RST after our abrupt close.
+      runCatching { sendDisconnection(writeChannel, nearbyConnection) }
+        .onFailure { log("NearbyReceiverConnectionHandler", "Failed to send DISCONNECTION", it) }
+      withTimeoutOrNull(3.seconds) {
+        runCatching { nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel) }
+      }
     } catch (e: Exception) {
       log("NearbyReceiverConnectionHandler", "Receive failed", e)
       receiveFlow.update {
@@ -176,6 +188,9 @@ class NearbyReceiverConnectionHandler(
       // receive and wait until we get a filechunk
 
       val offlineFrame = nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
+      if (offlineFrame.v1?.type == V1Frame.FrameType.DISCONNECTION) {
+        throw IllegalStateException("Peer disconnected before all payloads were received")
+      }
       if (offlineFrame.v1?.type == V1Frame.FrameType.PAYLOAD_TRANSFER) {
 
         log("NearbyReceiverConnectionHandler", "Payload transfer received ${offlineFrame.v1}")
@@ -201,6 +216,10 @@ class NearbyReceiverConnectionHandler(
 
           if (payloadBody == null || payloadBody.size == 0) {
 
+            // Close (and thus flush) the buffered sink before finalising —
+            // otherwise the last chunk's bytes are still sitting in the okio
+            // buffer when onTransferCompleted reads the underlying storage.
+            runCatching { fileTransfer.bufferedSink.close() }
             fileTransfer.onTransferCompleted()
             log("NearbyReceiverConnectionHandler", "File transfer completed")
             pendingTransfers.remove(payloadId)

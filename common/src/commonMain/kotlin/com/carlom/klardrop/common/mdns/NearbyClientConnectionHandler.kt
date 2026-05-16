@@ -28,6 +28,8 @@ import io.ktor.utils.io.*
 import io.ktor.utils.io.core.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.io.buffered
 import okio.ByteString.Companion.toByteString
 import sharing.nearby.ConnectionResponseFrame.Status
@@ -71,6 +73,32 @@ class NearbyClientConnectionHandler(
       log("NearbyClientConnectionHandler", "Starting file transfer")
       initiateTransfer(writeChannel, nearbyConnection, sendFlow)
 
+      // Signal a clean end-of-session before we tear down the TCP socket.
+      // Android Quick Share otherwise reports an error to the user even when
+      // every byte arrived intact.
+      runCatching { sendDisconnection(writeChannel, nearbyConnection) }
+        .onFailure { log("NearbyClientConnectionHandler", "Failed to send DISCONNECTION", it) }
+
+      // Briefly drain the read side so we receive the peer's own DISCONNECTION
+      // (NearDrop's receiver sends one) before we close the socket. Closing
+      // immediately makes the kernel RST any data that arrives after our FIN,
+      // which Android's Quick Share UI surfaces as a failed transfer even when
+      // every byte already arrived.
+      withTimeoutOrNull(3.seconds) {
+        try {
+          while (!readChannel.isClosedForRead) {
+            val frame = runCatching {
+              nearbyConnection.receiveEncryptedOfflineMessage(readChannel, writeChannel)
+            }.getOrNull() ?: break
+            // receiveEncryptedOfflineMessage throws on DISCONNECTION; in case it
+            // ever doesn't, also bail out on a non-payload frame.
+            if (frame.v1?.payload_transfer == null) break
+          }
+        } catch (_: Exception) {
+          // Expected when the peer sends DISCONNECTION or closes the socket.
+        }
+      }
+
     } catch (e: Exception) {
       log("NearbyClientConnectionHandler", "Transfer failed", e)
       sendFlow.emit(MessengerSendProgress.Error(e.message ?: "Unknown error"))
@@ -89,13 +117,6 @@ class NearbyClientConnectionHandler(
     nearbyConnection: D2DConnectionContext,
     sendFlow: MutableSharedFlow<MessengerSendProgress>
   ) {
-    // Send initial protocol handshake payload
-    sendEncryptedWrappedPayload(
-      payload = listOf(8, 1, 18, 11, 8, 7, 58, 7, 13, 0, 0, 0, 0, 16, 1).toByteArray(),
-      writeChannel = writeChannel,
-      nearbyConnection = nearbyConnection
-    )
-
     transfers.forEach {
       val id = it.key
 
@@ -275,7 +296,7 @@ class NearbyClientConnectionHandler(
         connection_request = ConnectionRequestFrame(
           endpoint_id = endpointId,
           endpoint_info = endpointInfo.toByteString(),
-          endpoint_name = endpointInfo.toByteString().toString(),
+          endpoint_name = currentDevice.deviceName,
           mediums = listOf(ConnectionRequestFrame.Medium.WIFI_LAN),
           medium_metadata = MediumMetadata(wifi_lan_usable_channels = WifiLanUsableChannels())
         )
