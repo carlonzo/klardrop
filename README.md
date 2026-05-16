@@ -8,6 +8,12 @@
   Cross-platform, peer-to-peer nearby sharing for Android, iOS, macOS, and desktop.
 </p>
 
+<p align="center">
+  <a href="https://github.com/carlonzo/klardrop/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/carlonzo/klardrop?include_prereleases&label=release"></a>
+  <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
+  <img alt="Status: public beta" src="https://img.shields.io/badge/status-public%20beta-orange.svg">
+</p>
+
 ---
 
 ## What is Klardrop?
@@ -136,8 +142,24 @@ travel **directly between those two devices**.
 > Klardrop on networks you trust (your home / work Wi-Fi, your hotspot, or BLE),
 > rather than on shared open Wi-Fi.
 
-If you find a security issue, please open a GitHub issue marked `security` or reach
-out privately rather than posting a public proof-of-concept.
+If you find a security issue, please follow the private reporting instructions in
+[`SECURITY.md`](SECURITY.md) rather than posting a public proof-of-concept.
+
+## Install
+
+Binaries are published to [GitHub Releases](https://github.com/carlonzo/klardrop/releases/latest)
+on every tagged version.
+
+| Platform | Format | Notes |
+|---|---|---|
+| macOS    | `.dmg`     | Unsigned during beta — run `xattr -dr com.apple.quarantine /Applications/Klardrop.app` after first launch if Gatekeeper blocks it |
+| Windows  | `.msi`     | Unsigned during beta — SmartScreen will warn on first run |
+| Linux    | `.deb`     | Debian / Ubuntu / Mint; AppImage planned |
+| Android  | `.apk`     | Sideload; Play Store internal-testing track planned |
+| iOS      | TestFlight | Public invite link forthcoming |
+
+The desktop app checks for updates on launch via the `latest.json` manifest published
+alongside each release.
 
 ## Repository layout
 
@@ -154,23 +176,29 @@ out privately rather than posting a public proof-of-concept.
 
 ## Building and running
 
-Klardrop uses Gradle with the Kotlin DSL.
+Requires **JDK 21**. For mobile / native targets you also need the platform toolchain
+(Xcode for iOS and macOS, the Android SDK for Android). Everything else — Kotlin,
+Compose, Ktor, jmDNS, the cryptography library, the protobuf generator — is pulled in
+by Gradle, so there's no separate setup step.
 
 ```bash
-# Desktop (JVM)
+# Desktop (JVM) on the current host
 ./gradlew :desktop:run
-# or just:
+# or, equivalently:
 ./run-desktop.command
 
 # Android (install on a connected device or emulator)
 ./gradlew :android:installDebug
 
-# macOS / iOS
-# Open iosApp/iosApp.xcodeproj or the macos/ project in Xcode and run.
-```
+# Command-line client
+./gradlew :cli:run --args="--help"
 
-The build pulls everything else (Kotlin, Compose, Ktor, jmDNS, the cryptography
-library, the protobuf generator) via Gradle — there's no separate setup step.
+# macOS / iOS — open in Xcode
+open iosApp/iosApp.xcworkspace
+
+# Tests
+./gradlew test
+```
 
 ## Contributing
 
@@ -184,6 +212,4 @@ in the open. Issues and pull requests are welcome, especially:
 
 ## License
 
-A license has not been chosen yet — until one is added to the repository, all
-rights are reserved by the author. If you want to use the code, please open an
-issue and we'll figure it out.
+[Apache License 2.0](LICENSE) © 2022–2026 Carlo Marinangeli.
