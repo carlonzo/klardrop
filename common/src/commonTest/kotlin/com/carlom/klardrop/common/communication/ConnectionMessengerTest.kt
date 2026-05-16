@@ -21,11 +21,12 @@ import io.ktor.network.sockets.openWriteChannel
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -34,6 +35,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 class ConnectionMessengerTest {
 
@@ -184,9 +186,11 @@ class ConnectionMessengerTest {
 
     // Real-time wait for the heartbeat coroutine (running on Dispatchers.IO) to
     // emit a ping, fail to receive a pong, and close. 1s is plenty for 100ms+100ms.
-    val deadline = System.currentTimeMillis() + 5_000
-    while (!messenger.isClosed() && System.currentTimeMillis() < deadline) {
-      Thread.sleep(50)
+    val deadline = TimeSource.Monotonic.markNow() + 5.seconds
+    while (!messenger.isClosed() && deadline.hasNotPassedNow()) {
+      withContext(coroutines.ioDispatcher) {
+        delay(50.milliseconds)
+      }
     }
 
     assertTrue(messenger.isClosed(), "Heartbeat should close the connection when no PONG arrives")
@@ -220,7 +224,9 @@ class ConnectionMessengerTest {
     // Simpler invariant: after a single interval, isClosed() should still be
     // false because the timeout (500ms) hasn't elapsed yet. That's enough to
     // confirm the heartbeat doesn't spuriously close a fresh connection.
-    Thread.sleep(150)
+    withContext(coroutines.ioDispatcher) {
+      delay(150.milliseconds)
+    }
     assertTrue(!messenger.isClosed(), "Heartbeat must not close before its timeout has elapsed")
   }
 
@@ -257,11 +263,11 @@ class ConnectionMessengerTest {
   }
 
   private suspend fun openLoopbackClientSocket(): LoopbackHandle {
-    val selectorManager = SelectorManager(Dispatchers.IO)
+    val selectorManager = SelectorManager(coroutines.ioDispatcher)
     val serverSocket = aSocket(selectorManager).tcp().bind("127.0.0.1", 0)
     val port = (serverSocket.localAddress as InetSocketAddress).port
 
-    val acceptDeferred = coroutines.appScope.async(Dispatchers.IO) { serverSocket.accept() }
+    val acceptDeferred = coroutines.appScope.async(coroutines.ioDispatcher) { serverSocket.accept() }
     val clientSocket = aSocket(selectorManager).tcp().connect("127.0.0.1", port)
     val serverAccepted = acceptDeferred.await()
 
