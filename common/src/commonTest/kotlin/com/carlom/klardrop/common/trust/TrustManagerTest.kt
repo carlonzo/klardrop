@@ -33,6 +33,13 @@ class TrustManagerTest {
 
   private fun TestScope.newManager(deviceId: String): Pair<TrustManager, InMemoryTrustStorage> {
     val storage = InMemoryTrustStorage()
+    return newManager(deviceId, storage)
+  }
+
+  private fun TestScope.newManager(
+    deviceId: String,
+    storage: InMemoryTrustStorage
+  ): Pair<TrustManager, InMemoryTrustStorage> {
     val provider = CurrentDeviceProvider(FakeLocalPropertiesRepository(deviceId))
     val manager = TrustManager(
       crypto = TrustCrypto(),
@@ -47,12 +54,48 @@ class TrustManagerTest {
   fun initializeGeneratesAndPersistsPrivateKey() = runTest {
     val (manager, storage) = newManager(aliceId)
     assertNull(storage.getDevicePrivateKey())
+    assertNull(storage.getDevicePublicKey())
 
     manager.initialize()
 
-    val stored = storage.getDevicePrivateKey()
-    assertNotNull(stored, "Device private key must be persisted after initialize()")
-    assertTrue(stored.isNotEmpty(), "Private key bytes should not be empty")
+    val storedPrivate = storage.getDevicePrivateKey()
+    assertNotNull(storedPrivate, "Device private key must be persisted after initialize()")
+    assertTrue(storedPrivate.isNotEmpty(), "Private key bytes should not be empty")
+
+    val storedPublic = storage.getDevicePublicKey()
+    assertNotNull(storedPublic, "Device public key must be persisted after initialize()")
+    assertTrue(storedPublic.isNotEmpty(), "Public key bytes should not be empty")
+  }
+
+  @Test
+  fun signWithDeviceKeyRoundtripsAgainstStoredPublicKey() = runTest {
+    val (manager, storage) = newManager(aliceId)
+    val crypto = TrustCrypto()
+    manager.initialize()
+
+    val data = "round-trip data".encodeToByteArray()
+    val signature = storage.signWithDeviceKey(data, crypto)
+    assertNotNull(signature, "signWithDeviceKey must return bytes when an identity exists")
+
+    val publicKey = storage.getDevicePublicKey()!!
+    assertTrue(crypto.verifyECDSA(publicKey, data, signature), "Signature must verify against the stored public key")
+  }
+
+  @Test
+  fun secondInitializeReusesExistingKeypair() = runTest {
+    val storage = InMemoryTrustStorage()
+    val (manager1, _) = newManager(aliceId, storage)
+    manager1.initialize()
+    val publicAfterFirst = storage.getDevicePublicKey()!!.copyOf()
+
+    val (manager2, _) = newManager(aliceId, storage)
+    manager2.initialize()
+    val publicAfterSecond = storage.getDevicePublicKey()!!
+
+    assertTrue(
+      publicAfterFirst.contentEquals(publicAfterSecond),
+      "Second initialize() must not regenerate the keypair"
+    )
   }
 
   @Test
@@ -255,45 +298,6 @@ class TrustManagerTest {
       bob.verifyMessage(secondSigned),
       "Bob (using the public key Alice published at pairing time) MUST still verify Alice's signature after restart",
     )
-  }
-
-  /**
-   * Regression test for the upgrade-from-broken-build migration. Pre-fix, every restart
-   * rotated this device's signing keypair (without persisting the public half), so any
-   * peer that paired with us cached a public key that no longer matches our current
-   * private key. When the user upgrades to the persistence fix, our side will load the
-   * legacy private key, find no persisted public key, and have to generate ONE more
-   * fresh keypair — which means the peer's cached public key for us is now stale and
-   * every TrustedMessage we sign will fail verification on their side. The only safe
-   * recovery is to wipe local trust so the user re-pairs cleanly. The peer eventually
-   * does the same on their next launch, or unpairs manually after seeing the failures.
-   */
-  @Test
-  fun legacyStorageMigrationClearsLocalTrustToForceRePair() = runTest {
-    val storage = InMemoryTrustStorage()
-    // Simulate legacy state: only private key persisted (no public), AND a previously
-    // paired peer's ECDSA + ECDH keys cached locally.
-    storage.storeDevicePrivateKey(byteArrayOf(0x01, 0x02, 0x03))
-    storage.storeECDSAKey("peer-id", byteArrayOf(0x09))
-    storage.storeTrustedDevice("peer-id", byteArrayOf(0x0A))
-    assertTrue(storage.isTrusted("peer-id"), "precondition: peer is trusted")
-
-    val provider = CurrentDeviceProvider(FakeLocalPropertiesRepository(aliceId))
-    val manager = TrustManager(
-      crypto = TrustCrypto(),
-      storage = storage,
-      clock = clock,
-      currentDeviceProvider = provider,
-    )
-
-    manager.initialize()
-
-    assertFalse(
-      storage.isTrusted("peer-id"),
-      "Legacy migration must wipe local trust because the peer's cached public key for us is now stale",
-    )
-    assertNotNull(storage.getDevicePrivateKey(), "fresh private key must be persisted")
-    assertNotNull(storage.getDevicePublicKey(), "fresh public key must be persisted alongside")
   }
 
   /**

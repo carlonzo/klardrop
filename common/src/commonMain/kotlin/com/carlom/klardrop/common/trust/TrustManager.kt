@@ -46,8 +46,11 @@ class TrustManager(
   // Temporary storage for in-progress pairing sessions
   private val pairingSessions = mutableMapOf<String, PairingSession>()
 
-  // ECDSA keypair for this device (for signing messages)
-  private var deviceECDSAKeys: TrustCrypto.ECDSAKeyPair? = null
+  // Cached device ECDSA public key (needed for pairing requests/acceptances).
+  // The private half is intentionally NOT cached: signing goes through
+  // [TrustStorage.signWithDeviceKey] so platforms backed by Keystore /
+  // Keychain never need to export private bytes.
+  private var deviceECDSAPublicKey: TrustCrypto.ECDSAPublicKey? = null
 
   // Callback for UI approval dialogs
   private var pairingApprovalCallback: PairingApprovalCallback? = null
@@ -58,54 +61,16 @@ class TrustManager(
 
   /**
    * Initialize the trust manager and load or generate device signing keys.
-   * Device identity persists across app restarts so peers we've paired with can keep
-   * verifying our signatures using the public key we published to them at pairing time.
    *
-   * Pre-fix this method silently regenerated a brand-new keypair every restart (with a
-   * comment claiming public-key derivation wasn't supported), which rotated the device
-   * identity behind the user's back and broke every existing pairing. The actual fix is
-   * to persist BOTH halves of the keypair (private + public) and reconstruct from those
-   * bytes on subsequent runs — not generate.
+   * Device identity persists across app restarts so peers' cached public keys
+   * stay valid: an existing keypair is reused as-is, and a fresh one is only
+   * generated on first run. Both halves are persisted; the private half goes
+   * to a platform-secure store on production platforms.
    */
   suspend fun initialize() {
-    if (deviceECDSAKeys != null) return
-
-    val existingPrivate = storage.getDevicePrivateKey()
-    val existingPublic = storage.getDevicePublicKey()
-
-    if (existingPrivate != null && existingPublic != null) {
-      deviceECDSAKeys = TrustCrypto.ECDSAKeyPair(
-        publicKey = TrustCrypto.ECDSAPublicKey(existingPublic),
-        privateKey = TrustCrypto.ECDSAPrivateKey(existingPrivate),
-      )
-      log("🔐 TrustManager", "Loaded persisted device identity")
-      return
-    }
-
-    // Either a fresh install, or a legacy install that only persisted the private key
-    // (no way to recover the matching public key from the RAW scalar in this lib). Either
-    // way we have to generate; persist BOTH halves so the next restart can reconstruct
-    // without rotating identity again.
-    val isLegacyMigration = existingPrivate != null
-    val fresh = crypto.generateECDSAKeyPair()
-    deviceECDSAKeys = fresh
-    storage.storeDevicePrivateKey(fresh.privateKey.data)
-    storage.storeDevicePublicKey(fresh.publicKey.data)
-
-    if (isLegacyMigration) {
-      // Pre-fix builds rotated the keypair on every restart. Any peer paired with us
-      // therefore cached an obsolete public key — every signature we now produce will
-      // fail their verification. Wipe local trust so the user re-pairs cleanly; the
-      // peer's trust DB also gets reset on their first launch with the fix, so this
-      // recovery is symmetric.
-      storage.clearAllTrustedDevices()
-      log(
-        "🔐 TrustManager",
-        "Generated new device identity and reset local trust (legacy storage missing public key — peers must re-pair)",
-      )
-    } else {
-      log("🔐 TrustManager", "Generated and stored new device identity (no persisted identity)")
-    }
+    if (deviceECDSAPublicKey != null) return
+    deviceECDSAPublicKey = storage.ensureDeviceKey(crypto)
+    log("🔐 TrustManager", "Device identity ready")
   }
 
   /**
@@ -122,13 +87,13 @@ class TrustManager(
 
       // Ensure we have ECDSA keys
       initialize()
-      val ecdsaKeys = deviceECDSAKeys ?: return@withContext Result.failure(Exception("ECDSA keys not initialized"))
+      val ecdsaPublicKey = deviceECDSAPublicKey ?: return@withContext Result.failure(Exception("ECDSA keys not initialized"))
       log("🔐 TrustManager", " ECDSA keys initialized")
 
       // Generate ECDH keypair for this pairing session
       val ecdhKeyPair = crypto.generateECDHKeyPair()
       val ecdhPublicKeyBytes = crypto.encodePublicKey(ecdhKeyPair.publicKey)
-      val ecdsaPublicKeyBytes = crypto.encodeECDSAPublicKey(ecdsaKeys.publicKey)
+      val ecdsaPublicKeyBytes = crypto.encodeECDSAPublicKey(ecdsaPublicKey)
       log("🔐 TrustManager", " Generated ECDH keypair, public key size: ${ecdhPublicKeyBytes.size} bytes")
 
       // Store session for completion when response arrives
@@ -277,12 +242,12 @@ class TrustManager(
 
       // Ensure we have ECDSA keys
       initialize()
-      val ecdsaKeys = deviceECDSAKeys ?: return@withContext Result.failure(Exception("ECDSA keys not initialized"))
+      val ecdsaPublicKey = deviceECDSAPublicKey ?: return@withContext Result.failure(Exception("ECDSA keys not initialized"))
 
       // Generate our ECDH keypair
       val ourEcdhKeyPair = crypto.generateECDHKeyPair()
       val ourEcdhPublicKeyBytes = crypto.encodePublicKey(ourEcdhKeyPair.publicKey)
-      val ourEcdsaPublicKeyBytes = crypto.encodeECDSAPublicKey(ecdsaKeys.publicKey)
+      val ourEcdsaPublicKeyBytes = crypto.encodeECDSAPublicKey(ecdsaPublicKey)
 
       // Compute the ECDH shared secret from our private key + peer's public key. Both
       // sides arrive at the same 32 bytes. Persist it: the file-transfer path derives an
@@ -426,6 +391,10 @@ class TrustManager(
   /**
    * Sign a message with this device's ECDSA private key.
    *
+   * Lazily initializes if needed, then delegates the actual signing to
+   * [TrustStorage.signWithDeviceKey] so platforms backed by Keystore /
+   * Keychain can sign without ever exporting the private key.
+   *
    * @param message Message bytes to sign
    * @param id Optional id to assign to the resulting [TrustedMessage]. When the wrap is
    * being applied at the wire level around an existing application message, callers should
@@ -433,30 +402,19 @@ class TrustManager(
    * tracks pending-ACKs under, and which the receiver's MessagesRouter echoes back in
    * acks) matches what the application layer expects. Defaults to a fresh random id for
    * standalone signed payloads.
+   * @return Signed TrustedMessage, or null if no identity is available
    */
   suspend fun signMessage(message: ByteArray, id: Int = kotlin.random.Random.nextInt()): TrustedMessage? {
-    // Lazily ensure device identity is loaded. Pre-fix, only the pairing-creation paths
-    // called initialize(), so on a fresh app start the very first signMessage (typically
-    // a clipboard sync or a file send to an already-paired device) would see
-    // deviceECDSAKeys == null, return null, and the caller would fall back to sending the
-    // message UNSIGNED — which the trusted peer's security gate then rejected. Calling
-    // initialize() here makes signing a self-contained operation that just works.
-    initialize()
-    val signingKeys = deviceECDSAKeys ?: return null
-
     return try {
+      initialize()
       val timestamp = clock.currentTimeMillis()
       val nonce = crypto.generateNonce()
       val currentDevice = currentDeviceProvider.get()
 
-      // Create data to sign
       val dataToSign = crypto.combineForSigning(message, timestamp, nonce)
+      val signature = storage.signWithDeviceKey(dataToSign, crypto) ?: return null
 
-      // Sign data with ECDSA
-      val signature = crypto.signWithECDSA(signingKeys.privateKey, dataToSign)
-
-      // DIAGNOSTIC: Log what keys we're using for signing
-      log("🔐 TrustManager", " DIAGNOSTIC: Signing message with device ${currentDevice.shortDeviceId}")
+      log("🔐 TrustManager", "Signing message with device ${currentDevice.shortDeviceId}")
 
       TrustedMessage(
         payload = message,

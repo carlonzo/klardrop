@@ -10,7 +10,7 @@ import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.notifications.ForegroundState
 import com.carlom.klardrop.common.notifications.Notifier
 import com.carlom.klardrop.common.permissions.PermissionsMonitor
-import com.carlom.klardrop.common.trust.IosTrustStorage
+import com.carlom.klardrop.common.trust.AppleTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
@@ -101,7 +101,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
   }
 
   actual fun trustStorage(): TrustStorage {
-    return IosTrustStorage()
+    return AppleTrustStorage()
   }
 
   actual suspend fun openFile(filePath: String): Boolean {

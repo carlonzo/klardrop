@@ -1,5 +1,7 @@
 package com.carlom.klardrop.common.trust
 
+import com.carlom.klardrop.common.trust.secretstore.SecretStore
+import com.carlom.klardrop.common.trust.secretstore.pickSecretStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -9,22 +11,28 @@ import java.util.*
 import java.util.Base64
 
 /**
- * Desktop implementation of TrustStorage using Properties files.
- * Keys are stored as Base64-encoded strings in properties files.
- * 
- * Stores both ECDH keys (for key exchange) and ECDSA keys (for message signing).
+ * Desktop implementation of TrustStorage.
+ *
+ * Peer ECDH/ECDSA public keys live in plain Properties files under [appDir]
+ * (not secret). The device's own ECDSA P-256 private key is delegated to a
+ * platform-appropriate [SecretStore] — macOS Keychain, Windows DPAPI, Linux
+ * libsecret via secret-tool, with an AES-GCM encrypted-file fallback for
+ * Linux installs without a session keyring.
  */
-class DesktopTrustStorage(
-    private val appDir: File
+class DesktopTrustStorage internal constructor(
+    private val appDir: File,
+    private val secretStore: SecretStore,
 ) : TrustStorage {
-    
+
+    constructor(appDir: File) : this(appDir, pickSecretStore(appDir))
+
     companion object {
         private const val TRUST_FILE_NAME = "trusted_devices.properties"
         private const val ECDSA_FILE_NAME = "ecdsa_keys.properties"
         private const val SHARED_SECRETS_FILE_NAME = "shared_secrets.properties"
         private const val DEVICE_KEY_FILE_NAME = "device_private_key.properties"
-        private const val DEVICE_PRIVATE_KEY = "device_private_key"
         private const val DEVICE_PUBLIC_KEY = "device_public_key"
+        private const val SECRET_ACCOUNT_DEVICE_PRIVATE_KEY = "device-private-key"
     }
 
     private val trustFile = File(appDir, TRUST_FILE_NAME)
@@ -32,7 +40,7 @@ class DesktopTrustStorage(
     private val sharedSecretsFile = File(appDir, SHARED_SECRETS_FILE_NAME)
     private val deviceKeyFile = File(appDir, DEVICE_KEY_FILE_NAME)
     private val fileMutex = Mutex() // Prevent concurrent file access
-    
+
     init {
         // Ensure app directory exists
         if (!appDir.exists()) {
@@ -166,32 +174,23 @@ class DesktopTrustStorage(
     // Device Identity Persistence Methods
     
     override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {
-        fileMutex.withLock {
-            // Preserve any already-stored public key so a separate store call sequence
-            // (private then public) doesn't blow away the public half mid-write.
-            val props = loadProperties(deviceKeyFile)
-            val encodedKey = Base64.getEncoder().encodeToString(privateKey)
-            props.setProperty(DEVICE_PRIVATE_KEY, encodedKey)
-            saveProperties(props, deviceKeyFile, "Klardrop Device Identity - Do not manually edit this file")
+        withContext(Dispatchers.IO) {
+            secretStore.put(SECRET_ACCOUNT_DEVICE_PRIVATE_KEY, privateKey)
         }
     }
 
-    override suspend fun getDevicePrivateKey(): ByteArray? {
-        fileMutex.withLock {
-            val props = loadProperties(deviceKeyFile)
-            val encodedKey = props.getProperty(DEVICE_PRIVATE_KEY) ?: return null
+    override suspend fun getDevicePrivateKey(): ByteArray? = withContext(Dispatchers.IO) {
+        secretStore.get(SECRET_ACCOUNT_DEVICE_PRIVATE_KEY)
+    }
 
-            return try {
-                Base64.getDecoder().decode(encodedKey)
-            } catch (e: IllegalArgumentException) {
-                props.remove(DEVICE_PRIVATE_KEY)
-                saveProperties(props, deviceKeyFile, "Klardrop Device Identity - Do not manually edit this file")
-                null
-            }
-        }
+    override suspend fun hasDeviceKey(): Boolean = withContext(Dispatchers.IO) {
+        secretStore.get(SECRET_ACCOUNT_DEVICE_PRIVATE_KEY) != null
     }
 
     override suspend fun deleteDevicePrivateKey() {
+        withContext(Dispatchers.IO) {
+            secretStore.delete(SECRET_ACCOUNT_DEVICE_PRIVATE_KEY)
+        }
         fileMutex.withLock {
             if (deviceKeyFile.exists()) {
                 deviceKeyFile.delete()
