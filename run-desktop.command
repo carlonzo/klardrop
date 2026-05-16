@@ -1,3 +1,3 @@
 #!/bin/bash
-cd "/Users/carlo/Projects/klardrop"
+cd "$(dirname "$0")"
 ./gradlew :desktop:run

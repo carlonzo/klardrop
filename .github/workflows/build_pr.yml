@@ -10,34 +10,69 @@ permissions:
   pull-requests: write
 
 jobs:
-  build:
-
-    strategy:
-      matrix:
-        os: [ ubuntu-latest ] # macos-latest, windows-latest ]
-
-    runs-on: ${{ matrix.os }}
-
+  # Linux carries the bulk of the test suite: common, Android host-tests, desktop JVM,
+  # CLI. Kotlin/Native mac/iOS targets are skipped automatically when no Apple
+  # toolchain is present, so we run a plain `./gradlew build` and let host-locking
+  # decide what compiles.
+  build-linux:
+    name: Build & test (Linux)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
-          java-version: '21'
+          java-version: '25'
           distribution: 'zulu'
           java-package: jdk
 
-      - name: Gradle Build Action
-        uses: gradle/actions/setup-gradle@v6
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Build
         run: ./gradlew build
 
       - name: Publish Test Report
         uses: dorny/test-reporter@v3
-        if: ${{ !cancelled() }}  
+        if: ${{ !cancelled() }}
         with:
-          name: Test Results
+          name: Test Results (Linux)
+          path: '**/build/test-results/**/TEST-*.xml'
+          reporter: java-junit
+
+  # macOS only runs the targets Linux can't: the iOS simulator tests and the macOS
+  # native tests. Everything else is already covered on the Linux job, so we keep
+  # this minimal to save Mac runner minutes.
+  build-macos:
+    name: Test (macOS / iOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'zulu'
+          java-package: jdk
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Run macOS + iOS native tests
+        # iOS Simulator covers the shared multiplatform modules (klardrop-common,
+        # common-ui, protos). macosArm64Test only exists on :macos (the standalone
+        # native macOS app); the other modules don't declare a macosArm64 target.
+        run: |
+          ./gradlew \
+            :klardrop-common:iosSimulatorArm64Test \
+            :common-ui:iosSimulatorArm64Test \
+            :protos:iosSimulatorArm64Test \
+            :macos:macosArm64Test
+
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v3
+        if: ${{ !cancelled() }}
+        with:
+          name: Test Results (macOS / iOS)
           path: '**/build/test-results/**/TEST-*.xml'
           reporter: java-junit
