@@ -53,9 +53,16 @@ kotlin {
   // that some pods compile against. The SubFrameworks directory isn't on the
   // default kotlinc-native framework search path, so add it explicitly per
   // target so `-framework UIUtilities` resolves.
-  val xcodeDeveloper = providers.exec {
-    commandLine("xcode-select", "-p")
-  }.standardOutput.asText.get().trim()
+  // xcode-select only exists on macOS hosts; iOS targets can't link off macOS,
+  // so resolve the SDK path lazily and skip the lookup on Linux/Windows CI.
+  val isMacOsHost = org.gradle.internal.os.OperatingSystem.current().isMacOsX
+  val xcodeDeveloper = if (isMacOsHost) {
+    providers.exec {
+      commandLine("xcode-select", "-p")
+    }.standardOutput.asText.get().trim()
+  } else {
+    ""
+  }
   val deviceSdkSubFrameworks =
     "$xcodeDeveloper/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/System/Library/SubFrameworks"
   val simSdkSubFrameworks =
@@ -63,12 +70,12 @@ kotlin {
 
   iosArm64().binaries.all {
     deviceBugsnagPaths.forEach { linkerOpts("-F", it) }
-    linkerOpts("-F", deviceSdkSubFrameworks)
+    if (isMacOsHost) linkerOpts("-F", deviceSdkSubFrameworks)
     linkerOpts("-lsqlite3")
   }
   iosSimulatorArm64().binaries.all {
     simBugsnagPaths.forEach { linkerOpts("-F", it) }
-    linkerOpts("-F", simSdkSubFrameworks)
+    if (isMacOsHost) linkerOpts("-F", simSdkSubFrameworks)
     linkerOpts("-lsqlite3")
   }
 

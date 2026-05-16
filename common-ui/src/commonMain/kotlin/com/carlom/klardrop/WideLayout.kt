@@ -141,7 +141,10 @@ fun WideLayout(
         val currentName = state.currentDeviceName?.takeIf { it.isNotBlank() }
             ?: state.systemDeviceName
             ?: ""
-        RenameSheet(
+        // Desktop uses a Dialog rather than a bottom sheet — sheets are a
+        // touch / small-screen pattern; on a large window they feel out of
+        // place.
+        RenameDialog(
             currentName = currentName,
             onDismiss = { showRenameSheet = false },
             onSave = { newName ->
@@ -210,16 +213,21 @@ private fun WideContent(
 
     val topInset = LocalContentInsets.current.calculateTopPadding()
     val bodyGutter = 10.dp
+    // macOS traffic lights can't be repositioned without a JNA libdispatch
+    // bridge (the AppKit main thread isn't reachable from AWT's EDT on
+    // stock OpenJDK). Sidebar therefore starts below the title bar so the
+    // buttons sit in empty space above it. The chat pane on the right has
+    // nothing to dodge and hugs the window top with just the gutter.
+    val sidebarTopOffset = (topInset - bodyGutter).coerceAtLeast(0.dp)
 
     Row(
-        modifier = modifier
-            .padding(top = topInset)
-            .padding(bodyGutter),
+        modifier = modifier.padding(bodyGutter),
         horizontalArrangement = Arrangement.spacedBy(bodyGutter),
     ) {
         if (showSidebar) {
             Sidebar(
                 width = sidebarWidth,
+                modifier = Modifier.padding(top = sidebarTopOffset),
                 yoursSection = {
                     SectionHead(
                         label = "My devices",
@@ -268,7 +276,7 @@ private fun WideContent(
                     }
                 },
                 localDeviceName = localDeviceName,
-                localDeviceSub = "This device · tap to rename",
+                localDeviceSub = null,
                 onLocalDeviceClick = onRenameLocalDevice,
             )
         }
@@ -279,7 +287,7 @@ private fun WideContent(
             if (activeDevice != null) {
                 ChatHeader(
                     deviceName = activeDevice.deviceName,
-                    subText = reachabilityLabel(activeDevice.reachability),
+                    subText = chatHeaderSubText(activeDevice),
                     kind = activeDevice.deviceType.toKdDeviceKind(),
                     avatarStyle = if (activeDevice.trustStatus == TrustStatus.Trusted)
                         KdAvatarStyle.Tinted else KdAvatarStyle.Neutral,
@@ -448,16 +456,25 @@ private fun Reachability.toKdStatus(): KdStatus? = when (this) {
     Reachability.Unknown -> null
 }
 
-private fun reachabilityLabel(reachability: Reachability): String = when (reachability) {
-    Reachability.Reachable -> "Reachable"
-    Reachability.Unreachable -> "Offline"
-    Reachability.Probing -> "Connecting…"
-    Reachability.Unknown -> ""
+// Chat header subline: only show when the connection is *not* healthy. The
+// green dot already says "reachable", so writing "Reachable" next to it just
+// repeats the same bit twice. Offline / connecting / pairing earn the line.
+private fun chatHeaderSubText(device: DeviceUi): String = when {
+    device.trustStatus == TrustStatus.Pairing -> "Pairing…"
+    device.reachability == Reachability.Unreachable -> "Offline"
+    device.reachability == Reachability.Probing -> "Connecting…"
+    else -> ""
 }
 
-private fun deviceSubLabel(device: DeviceUi): String = when (device.trustStatus) {
-    TrustStatus.Trusted -> reachabilityLabel(device.reachability)
+// Same rule for the sidebar row: nothing under the name when the device is
+// trusted and reachable — the status dot is enough. Untrusted devices keep a
+// hint because they don't show the dot.
+private fun deviceSubLabel(device: DeviceUi): String? = when (device.trustStatus) {
+    TrustStatus.Trusted -> when (device.reachability) {
+        Reachability.Reachable, Reachability.Unknown -> null
+        Reachability.Unreachable -> "Offline"
+        Reachability.Probing -> "Connecting…"
+    }
     TrustStatus.Pairing -> "Pairing…"
-    TrustStatus.Untrusted -> "Nearby"
-    TrustStatus.Unknown -> "Nearby"
+    TrustStatus.Untrusted, TrustStatus.Unknown -> null
 }

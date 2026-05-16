@@ -62,7 +62,14 @@ import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageType
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.utils.FileTypeUtils
 import com.carlom.klardrop.theme.KdTheme
+import coil3.compose.AsyncImage
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
@@ -121,11 +128,15 @@ fun DeviceChatScreen(
         else -> KdStatus.Warn
     }
 
+    // Only surface a subline when the connection isn't healthy. The status dot
+    // on the avatar already conveys reachability — writing "Reachable" next to
+    // a green dot is duplication.
     val headerSubText = when {
-        isOwned -> "Your device"
-        reachability == Reachability.Reachable -> "Reachable"
+        isOwned -> ""
+        reachability == Reachability.Reachable -> ""
         reachability == Reachability.Unreachable -> "Offline"
-        else -> "Connecting…"
+        reachability == Reachability.Probing -> "Connecting…"
+        else -> ""
     }
 
     val headerAvatarStyle = if (isOwned) KdAvatarStyle.Tinted else KdAvatarStyle.Neutral
@@ -545,10 +556,39 @@ private fun FileMessageBubble(
         !isSender && currentStatus == FileTransferStatus.COMPLETED.name
     }
 
+    // Show an inline thumbnail for images once the file is on disk. Senders
+    // see it immediately (file already exists locally); receivers see it once
+    // the transfer is Completed. The preview is capped to 200 dp tall and to
+    // the bubble's natural max-width (78% of the chat pane).
+    val previewablePath: String? = filePath?.takeIf { path ->
+        val ready = if (isSender) true else currentStatus == FileTransferStatus.COMPLETED.name
+        ready && FileTypeUtils.isImageMimeType(
+            FileTypeUtils.getMimeTypeFromExtension(path.substringAfterLast('.', "").lowercase())
+        )
+    }
+
     Bubble(
         direction = direction,
         timestamp = timestamp,
         content = {
+            if (previewablePath != null) {
+                val openClick = if (openablePath != null) {
+                    Modifier.combinedClickable(onClick = { onOpenFileRequest(openablePath) })
+                } else Modifier
+                AsyncImage(
+                    model = "file://$previewablePath",
+                    contentDescription = fileName,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .widthIn(max = 320.dp)
+                        .heightIn(max = 200.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .then(openClick),
+                )
+                androidx.compose.foundation.layout.Spacer(
+                    Modifier.height(KdTheme.spacing.s1),
+                )
+            }
             FileCard(
                 fileName = fileName,
                 fileSize = if (totalSize > 0) formatBytes(totalSize) else null,

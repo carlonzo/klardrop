@@ -60,6 +60,7 @@ private val SidebarRadius = 12.dp
 @Composable
 fun Sidebar(
     width: Dp = 300.dp,
+    topInset: Dp = 0.dp,
     yoursSection: @Composable ColumnScope.() -> Unit = {},
     nearbySection: @Composable ColumnScope.() -> Unit = {},
     localDeviceName: String,
@@ -84,7 +85,8 @@ fun Sidebar(
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
             ) {
-                Spacer(Modifier.height(spacing.s2))
+                // No extra spacer above the first section — the section
+                // header's own top padding is the only breathing room.
                 yoursSection()
                 Spacer(Modifier.height(spacing.s4))
                 nearbySection()

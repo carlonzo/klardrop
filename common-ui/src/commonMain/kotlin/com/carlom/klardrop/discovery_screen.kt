@@ -541,6 +541,80 @@ private fun UnreadBadge() {
     )
 }
 
+/**
+ * Desktop / large-screen rename UI — a Dialog rather than a bottom sheet.
+ *
+ * Bottom sheets are a touch idiom; on a windowed desktop a sheet that slides
+ * up from the bottom of the OS window looks wrong. A centered Dialog matches
+ * the rest of the desktop UX (LinkDeviceConfirmDialog, PairingApprovalDialog).
+ */
+@Composable
+internal fun RenameDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+    val radii = KdTheme.radii
+
+    var newName by remember { mutableStateOf(currentName) }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .clip(radii.shapeLg)
+                .background(colors.bg1)
+                .border(width = 1.dp, color = colors.border, shape = radii.shapeLg)
+                .padding(spacing.s6),
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(spacing.s4),
+            ) {
+                Text(
+                    text = "Rename device",
+                    style = typography.headline.copy(color = colors.text),
+                )
+                Text(
+                    text = "This is how others will see you when sharing.",
+                    style = typography.body.copy(color = colors.text2),
+                )
+
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = {
+                        Text("Device name", style = typography.caption.copy(color = colors.text2))
+                    },
+                    textStyle = typography.body.copy(color = colors.text),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardActions = KeyboardActions(onDone = { onSave(newName) }),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.border,
+                        cursorColor = colors.accent,
+                    ),
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(spacing.s2, Alignment.End),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", style = typography.body.copy(color = colors.text2))
+                    }
+                    TextButton(onClick = { onSave(newName) }) {
+                        Text("Save", style = typography.body.copy(color = colors.accent))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RenameSheet(
@@ -610,19 +684,21 @@ internal fun RenameSheet(
     }
 }
 
-private fun deviceSubText(device: DeviceUi): String = when (device.trustStatus) {
-    TrustStatus.Trusted -> when (device.activityState) {
+// Sub-line policy: only show text when something is happening or wrong. The
+// green/red status dot is the canonical "is this device reachable" signal;
+// writing "Online" / "Nearby" next to it is noise.
+private fun deviceSubText(device: DeviceUi): String? = when (device.trustStatus) {
+    TrustStatus.Trusted -> when (val a = device.activityState) {
         is ActivityState.Sending -> "Sending…"
-        is ActivityState.SentCompleted -> if ((device.activityState as ActivityState.SentCompleted).error) "Failed" else "Done"
-        ActivityState.Idle -> null
-    } ?: when (device.reachability) {
-        com.carlom.klardrop.common.communication.Reachability.Reachable -> "Online"
-        com.carlom.klardrop.common.communication.Reachability.Unreachable -> "Offline"
-        else -> null
-    } ?: "Trusted"
+        is ActivityState.SentCompleted -> if (a.error) "Failed" else null
+        ActivityState.Idle -> when (device.reachability) {
+            com.carlom.klardrop.common.communication.Reachability.Unreachable -> "Offline"
+            com.carlom.klardrop.common.communication.Reachability.Probing -> "Connecting…"
+            else -> null
+        }
+    }
     TrustStatus.Pairing -> "Pairing…"
-    TrustStatus.Untrusted -> "Nearby"
-    TrustStatus.Unknown -> "Nearby"
+    TrustStatus.Untrusted, TrustStatus.Unknown -> null
 }
 
 private fun DeviceUi.reachabilityStatus(): KdStatus? = when (reachability) {
