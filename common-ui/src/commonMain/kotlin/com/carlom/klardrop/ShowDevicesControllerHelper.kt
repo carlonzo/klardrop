@@ -36,12 +36,15 @@ class ShowDevicesControllerHelper(
         messageRepository.getAllDevicesWithUnreadCounts(),
         reachabilitySource,
       ) { devices, unreadCounts, reachabilityMap ->
+        // Fetch all trusted devices once to avoid N+1 disk reads inside the map loop
+        val allTrustedDevices = trustStorage.getAllTrustedDevices()
+
         devices.values.map { device ->
           val deviceInfo = device.deviceInfo
           val unreadCount = unreadCounts[deviceInfo.deviceId] ?: 0L
 
           // Check trust status
-          val isTrusted = trustStorage.isTrusted(deviceInfo.deviceId)
+          val isTrusted = allTrustedDevices.containsKey(deviceInfo.deviceId)
           val trustStatus = if (isTrusted) TrustStatus.Trusted else TrustStatus.Untrusted
 
           DeviceUi(
