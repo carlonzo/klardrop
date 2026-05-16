@@ -25,11 +25,11 @@ import java.awt.Taskbar
 import java.awt.Window as AwtWindow
 import javax.imageio.ImageIO
 
-// Height of the macOS unified title bar (in pixels). Tall enough to give the
-// traffic-light buttons obvious vertical breathing room above and below — and
-// to leave room for the floating sidebar's 10 dp body gutter to also be
-// visible above the buttons.
-private const val MAC_TITLE_BAR_HEIGHT = 64f
+// Height of the macOS title-bar inset (points). Sized just tall enough to
+// clear the default macOS traffic-light cluster (~28 pt) with a hair of
+// margin below — the sidebar pane starts at this y, so anything bigger
+// leaves an awkward gap of empty window background above the pane.
+private const val MAC_TITLE_BAR_HEIGHT = 36f
 
 /**
  * Ask the JetBrains Runtime (the JDK that ships with Compose Desktop) to give
@@ -173,7 +173,8 @@ fun main(args: Array<String>) {
           window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
         }
         if (isMacOs) {
-          // Push the traffic lights down into a taller, Xcode-style title bar.
+          // Push the traffic lights down into a taller, Xcode-style title
+          // bar. JBR-only — silently no-ops on stock OpenJDK.
           applyMacCustomTitleBar(window, MAC_TITLE_BAR_HEIGHT)
         }
       }

@@ -62,6 +62,13 @@ open class IncomingAuthorizer(
     receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
     notifyAwaitingUser: suspend () -> Unit = {},
   ): Boolean {
+    // Defensive: a prompt with no headers would render as "wants to send you
+    // a file" with nothing behind it — a ghost popup the user can't
+    // meaningfully decide on. Treat empty-bundle authorizes as pass-throughs.
+    if (headers.isEmpty()) {
+      log("IncomingAuthorizer", "Skipping prompt — no headers in $kind from $fromDeviceId")
+      return true
+    }
     if (trustManager.isTrusted(fromDeviceId)) {
       log("IncomingAuthorizer", "Auto-accepting transfer from trusted device $fromDeviceId")
       return true
