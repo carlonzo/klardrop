@@ -50,20 +50,22 @@ internal class NearbyShareDiscoveryUtils {
 
     // 1 byte: Version(3 bits)|Visibility(1 bit)|Device Type(3 bits)|Reserved(1 bits)
     val deviceInfoByte = endpointInfoBytes[0].toInt()
+    val hasPlaintextName = (deviceInfoByte and 0x10) == 0
 
-    val deviceTypeId = deviceInfoByte and 0b0000_1110
-    val deviceType = deviceTypeFromId(deviceTypeId shr 1) // 0000 ddd0 (d == devicetype)
-    val osType = osTypeFromId(deviceTypeId shr 1) // 0000 ddd0 (d == devicetype)
-    val deviceNameLength = if (endpointInfoBytes.size > 18) {
-      endpointInfoBytes[17].toInt()
+    val deviceTypeId = (deviceInfoByte and 0b0000_1110) shr 1
+    val deviceType = deviceTypeFromId(deviceTypeId)
+    val osType = osTypeFromId(deviceTypeId)
+
+    val deviceName = if (hasPlaintextName && endpointInfoBytes.size > 18) {
+      val nameLength = endpointInfoBytes[17].toInt() and 0xFF
+      if (nameLength > 0 && 18 + nameLength <= endpointInfoBytes.size) {
+        endpointInfoBytes.sliceArray(18 until 18 + nameLength).decodeToString()
+      } else {
+        "unknown device name"
+      }
     } else {
-      0
-    }
-
-
-    val deviceName = if (deviceNameLength > 0) {
-      endpointInfoBytes.sliceArray(18 until 18 + deviceNameLength).decodeToString()
-    } else {
+      // Visibility-restricted services (and any malformed buffer) fall back to a
+      // placeholder; we still surface the device so users see something.
       "unknown device name"
     }
 
@@ -144,16 +146,9 @@ fun com.google.security.cryptauth.lib.securegcm.DeviceType?.toOsType(): OsType {
 
 @OptIn(ExperimentalEncodingApi::class)
 internal fun urlSafeBase64EncodedString(data: ByteArray): String {
-  return Base64.UrlSafe.encode(data)
-//    .map {
-//    when (it) {
-//      '+' -> '-'
-//      '/' -> '_'
-//      '=' -> ""
-//      else -> it
-//    }
-//  }
-//    .joinToString(separator = "")
+  // Android Quick Share refuses to decode the mDNS service name and "n" TXT
+  // record when '=' padding is present; NearDrop strips it too.
+  return Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).encode(data)
 }
 
 internal fun urlSafeBase64EncodedString(data: String): String {

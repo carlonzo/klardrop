@@ -163,23 +163,41 @@ class MessengerImpl(
     sendFlow: MutableSharedFlow<MessengerSendProgress>
   ): Boolean {
 
-    val device = visibleDevices.getDevice(deviceId) ?: throw IllegalStateException("Device $deviceId is not found!")
-    val nearbyConnections = device.getNearbyConnection()
-
-    require(nearbyConnections.isNotEmpty()) { "Device $deviceId has no nearby connections" }
-
-    nearbyConnections.first {
-      log("Messenger", "Client sending message to $deviceId: ${it.address} ${it.port}")
-
-      runCatching {
-        nearbyClient.value.send(it.address, it.port, listOf(messageRequest), sendFlow)
-      }.onFailure { exception ->
-        log("Messenger", "Error sending message to $deviceId", exception)
-      }.isSuccess
-
+    val device = visibleDevices.getDevice(deviceId)
+    if (device == null) {
+      log("Messenger", "Device $deviceId is not visible; nearby transfer aborted")
+      sendFlow.emit(Error("Device is no longer visible"))
+      return false
     }
 
-    return true
+    val nearbyConnections = device.getNearbyConnection()
+    if (nearbyConnections.isEmpty()) {
+      log("Messenger", "Device $deviceId has no nearby connections")
+      sendFlow.emit(Error("No nearby connection available"))
+      return false
+    }
+
+    // Walk every advertised endpoint until one succeeds. The Quick Share
+    // service can advertise stale ports if the peer's Quick Share session
+    // ended between discovery and our connect, so a "Connection refused" on
+    // the first endpoint is normal — try the rest before giving up.
+    var lastError: Throwable? = null
+    val success = nearbyConnections.any { connection ->
+      log("Messenger", "Client sending message to $deviceId: ${connection.address} ${connection.port}")
+      runCatching {
+        nearbyClient.value.send(connection.address, connection.port, listOf(messageRequest), sendFlow)
+      }.onFailure { exception ->
+        lastError = exception
+        log("Messenger", "Error sending message to $deviceId via ${connection.address}:${connection.port}", exception)
+      }.isSuccess
+    }
+
+    if (!success) {
+      val reason = lastError?.message?.takeIf { it.isNotBlank() }
+        ?: "Could not reach $deviceId over Nearby Share"
+      sendFlow.emit(Error(reason))
+    }
+    return success
   }
 
   private suspend fun handleKlardropTransfer(
