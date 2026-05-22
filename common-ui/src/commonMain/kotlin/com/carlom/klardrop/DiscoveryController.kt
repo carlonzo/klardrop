@@ -123,6 +123,33 @@ class DiscoveryController(
     trustManager.setPairingApprovalCallback(this)
     log("DiscoveryController", "Registered pairingApprovalCallback with TrustManager.")
     
+    // Observe peer revocations: local trust is already gone by the time we see the event;
+    // we just surface it to the user with Dismiss / Pair actions in the banner stack.
+    controllerScope.launch {
+      pairingProtocolCoordinator.peerRevokedTrust.collect { event ->
+        val deviceName = screenStateFlow.value.devices
+          .firstOrNull { it.deviceId == event.deviceId }
+          ?.deviceName
+          ?: event.deviceId
+        log("DiscoveryController", "PeerRevokedTrust from $deviceName (${event.deviceId})")
+        updateDeviceTrustStatus(event.deviceId, TrustStatus.Untrusted)
+        screenStateFlow.update { state ->
+          // Dedupe: at most one revoked-trust notification per peer at a time.
+          val existing = state.notifications.firstOrNull {
+            it is UiNotification.PeerRevokedTrust && it.deviceId == event.deviceId
+          }
+          if (existing != null) return@update state
+          state.copy(
+            notifications = state.notifications + UiNotification.PeerRevokedTrust(
+              id = Random.nextInt(),
+              deviceId = event.deviceId,
+              deviceName = deviceName,
+            )
+          )
+        }
+      }
+    }
+
     // Register pairing completion callback
     pairingProtocolCoordinator.onPairingCompleted = { deviceId, deviceName, success ->
       log("DiscoveryController", "Pairing completion callback: $deviceName ($deviceId), success: $success")
@@ -332,13 +359,40 @@ class DiscoveryController(
     }
   }
 
-  override fun onRemoveTrust(deviceUi: DeviceUi) {
-    log("DiscoveryController", "Removing trust for device ${deviceUi.deviceName}")
-    
+  override fun onForgetDevice(deviceUi: DeviceUi) {
+    log("DiscoveryController", "Forgetting trusted device ${deviceUi.deviceName}")
+
     coroutines.appScope.launch {
-      trustStorage.removeTrustedDevice(deviceUi.deviceId)
+      // Coordinator sends a signed revocation (best-effort) BEFORE wiping the local
+      // trust entry, then removes locally regardless of send outcome.
+      pairingProtocolCoordinator.unpair(deviceUi.deviceId, reason = "user_unpaired")
       updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Untrusted)
     }
+  }
+
+  override fun onNotificationDismissed(notificationId: Int) {
+    screenStateFlow.update { state ->
+      state.copy(notifications = state.notifications.filterNot { it.id == notificationId })
+    }
+  }
+
+  override fun onNotificationPair(notificationId: Int) {
+    val notification = screenStateFlow.value.notifications.firstOrNull { it.id == notificationId }
+      ?: return
+    when (notification) {
+      is UiNotification.PeerRevokedTrust -> {
+        // Reuse the same path as tapping "+" on a Nearby row — confirmation has already
+        // been given implicitly by tapping Pair on the notification, so no second prompt.
+        val deviceUi = screenStateFlow.value.devices.firstOrNull { it.deviceId == notification.deviceId }
+        if (deviceUi != null) {
+          onAddToTrusted(deviceUi)
+        } else {
+          log("DiscoveryController", "onNotificationPair: device ${notification.deviceId} no longer visible")
+        }
+      }
+    }
+    // Always remove the notification once the user has acted on it.
+    onNotificationDismissed(notificationId)
   }
 
   private fun updateDeviceTrustStatus(deviceId: String, newStatus: TrustStatus) {
@@ -493,8 +547,29 @@ data class DiscoveryScreenState(
   val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap(),
   val pairingDialogState: PairingDialogState? = null,
   val currentDeviceName: String? = null,
-  val systemDeviceName: String? = null
+  val systemDeviceName: String? = null,
+  /**
+   * In-app notifications surfaced in the top banner stack. Distinct from
+   * [receivingMessages] (which is purely about inbound transfers); this is the
+   * generic surface for system-level events the user should see — currently
+   * just peer-revoked-trust, but the seam exists for future ones.
+   */
+  val notifications: List<UiNotification> = emptyList(),
 )
+
+sealed interface UiNotification {
+  val id: Int
+
+  /**
+   * A previously-paired peer revoked us. Local trust has already been removed by the
+   * time this is surfaced. The banner offers Dismiss (clear it) and Pair (re-pair).
+   */
+  data class PeerRevokedTrust(
+    override val id: Int,
+    val deviceId: String,
+    val deviceName: String,
+  ) : UiNotification
+}
 
 data class PairingDialogState(
   val deviceId: String,

@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
+import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Clock
@@ -35,6 +36,16 @@ class PairingProtocolCoordinatorTest {
   private fun newTrustManager(deviceId: String) = TrustManager(
     crypto = TrustCrypto(),
     storage = InMemoryTrustStorage(),
+    clock = Clock(),
+    currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(deviceId))
+  )
+
+  private fun newTrustManagerWith(
+    deviceId: String,
+    storage: InMemoryTrustStorage,
+  ) = TrustManager(
+    crypto = TrustCrypto(),
+    storage = storage,
     clock = Clock(),
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(deviceId))
   )
@@ -95,6 +106,49 @@ class PairingProtocolCoordinatorTest {
     val (deviceId, success) = signal.await()
     assertEquals(response.deviceId, deviceId)
     assertEquals(true, success)
+  }
+
+  @Test
+  fun unpairSendsRevocationAndRemovesLocalTrust() = runTest {
+    // Pair Alice ↔ Bob so Alice has Bob in her trust store. After unpair():
+    //  1. A revocation message was sent to Bob via Messenger.
+    //  2. Alice's local trust entry for Bob is gone.
+    val aliceStorage = InMemoryTrustStorage()
+    val alice = newTrustManagerWith(aliceId, aliceStorage)
+    val bob = newTrustManager(bobId)
+    val response = bob.createPairingAcceptance(alice.createPairingRequest(bobId).getOrThrow()).getOrThrow()
+    alice.finalizePairing(response)
+    assertTrue(aliceStorage.isTrusted(bobId), "precondition: Alice trusts Bob")
+
+    val messenger = RecordingMessenger(response = MessengerSendProgress.Completed)
+    val coordinator = PairingProtocolCoordinator(alice, messenger)
+    coordinator.unpair(bobId, reason = "user_unpaired")
+
+    val revocationSends = messenger.sentRequests.filter { it.request.message is TrustRevocationMessage }
+    assertEquals(1, revocationSends.size, "Expected exactly one revocation send")
+    val revocation = revocationSends.single().request.message as TrustRevocationMessage
+    assertEquals(aliceId, revocation.senderId)
+    assertEquals(bobId, revocation.targetDeviceId)
+    assertEquals("user_unpaired", revocation.reason)
+
+    assertFalse(aliceStorage.isTrusted(bobId), "Local trust must be removed after unpair()")
+  }
+
+  @Test
+  fun unpairRemovesLocalTrustEvenWhenMessengerErrors() = runTest {
+    // Send failures (peer offline, transport down) are tolerated — local removal
+    // must still happen so the user's intent is honoured.
+    val aliceStorage = InMemoryTrustStorage()
+    val alice = newTrustManagerWith(aliceId, aliceStorage)
+    val bob = newTrustManager(bobId)
+    val response = bob.createPairingAcceptance(alice.createPairingRequest(bobId).getOrThrow()).getOrThrow()
+    alice.finalizePairing(response)
+
+    val messenger = RecordingMessenger(response = MessengerSendProgress.Error("peer offline"))
+    val coordinator = PairingProtocolCoordinator(alice, messenger)
+    coordinator.unpair(bobId)
+
+    assertFalse(aliceStorage.isTrusted(bobId), "Send failure must NOT block local removal")
   }
 
   @Test

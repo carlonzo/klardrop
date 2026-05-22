@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
+import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
@@ -91,9 +92,10 @@ class MessengerImpl(
       val finalMessageRequest = try {
         val message = messageRequest.message
         val isPairingMessage = message is TrustPairingRequest || message is TrustPairingResponse
+        val isRevocation = message is TrustRevocationMessage
         val isFileMessage = message is com.carlom.klardrop.common.communication.message.FileMessage
 
-        if (!isPairingMessage && !isFileMessage && trustChecker.value.isTrusted(deviceId)) {
+        if (!isPairingMessage && !isRevocation && !isFileMessage && trustChecker.value.isTrusted(deviceId)) {
           log("Messenger", "Device $deviceId is trusted, creating TrustedMessage")
 
           // Serialize the original message
@@ -115,6 +117,8 @@ class MessengerImpl(
         } else {
           if (isPairingMessage) {
             log("Messenger", "Device $deviceId: Pairing message detected, sending unsigned for protocol handshake")
+          } else if (isRevocation) {
+            log("Messenger", "Device $deviceId: Revocation flows unwrapped with its own embedded signature")
           } else if (isFileMessage) {
             log("Messenger", "Device $deviceId: FileMessage flows through unwrapped; per-frame wrap happens at the wire layer for the chunked path")
           } else {

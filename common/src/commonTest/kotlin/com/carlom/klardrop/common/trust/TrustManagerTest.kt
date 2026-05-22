@@ -360,6 +360,61 @@ class TrustManagerTest {
     assertFalse(alice.isTrusted(response.deviceId))
   }
 
+  @Test
+  fun revocationMessageRoundTripsAndIsAppliedByRecipient() = runTest {
+    // Alice and Bob pair, then Alice forgets Bob. Bob (still paired) should accept
+    // Alice's signed revocation and remove the local trust entry.
+    val (alice, _) = newManager(aliceId)
+    val (bob, bobStorage) = newManager(bobId)
+    val response = bob.createPairingAcceptance(alice.createPairingRequest(bobId).getOrThrow()).getOrThrow()
+    alice.finalizePairing(response)
+    assertTrue(bobStorage.isTrusted(aliceId), "precondition: Bob trusts Alice")
+
+    val revocation = assertNotNull(alice.createRevocationMessage(bobId, reason = "user_unpaired"))
+    assertEquals(aliceId, revocation.senderId)
+    assertEquals(bobId, revocation.targetDeviceId)
+
+    assertTrue(bob.verifyRevocationMessage(revocation), "Bob must verify a properly-signed revocation from Alice")
+    bob.applyVerifiedRevocation(revocation)
+    assertFalse(bobStorage.isTrusted(aliceId), "Bob's local trust entry for Alice must be removed")
+  }
+
+  @Test
+  fun revocationFromUnknownSenderFailsVerification() = runTest {
+    // Bob has never paired with Alice — he doesn't hold her ECDSA key, so a revocation
+    // claiming to be from her must fail verification and not silently revoke anything.
+    val (alice, _) = newManager(aliceId)
+    val (bob, _) = newManager(bobId)
+
+    val revocation = assertNotNull(alice.createRevocationMessage(bobId))
+    assertFalse(bob.verifyRevocationMessage(revocation), "Unknown sender must fail verification")
+  }
+
+  @Test
+  fun revocationWithTamperedTargetIdFailsVerification() = runTest {
+    val (alice, _) = newManager(aliceId)
+    val (bob, _) = newManager(bobId)
+    bob.createPairingAcceptance(alice.createPairingRequest(bobId).getOrThrow()).getOrThrow()
+
+    val original = assertNotNull(alice.createRevocationMessage(bobId))
+    val tampered = original.copy(targetDeviceId = "someone_else")
+    assertFalse(
+      bob.verifyRevocationMessage(tampered),
+      "Modifying the signed targetDeviceId field must invalidate the signature",
+    )
+  }
+
+  @Test
+  fun revocationReplayIsRejected() = runTest {
+    val (alice, _) = newManager(aliceId)
+    val (bob, _) = newManager(bobId)
+    bob.createPairingAcceptance(alice.createPairingRequest(bobId).getOrThrow()).getOrThrow()
+
+    val revocation = assertNotNull(alice.createRevocationMessage(bobId))
+    assertTrue(bob.verifyRevocationMessage(revocation), "first delivery should succeed")
+    assertFalse(bob.verifyRevocationMessage(revocation), "replay of the same nonce must be rejected")
+  }
+
   private fun syntheticRequest(timestamp: Long) = TrustPairingRequest(
     deviceId = "attacker",
     deviceName = "Attacker",
