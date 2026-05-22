@@ -16,6 +16,7 @@ import com.carlom.klardrop.theme.KdTheme
 internal fun IncomingBannerStack(
     state: DiscoveryScreenState,
     callbacks: ReceiveNotificationsCallbacks,
+    modifier: Modifier = Modifier,
 ) {
     // Only surface receive updates that genuinely need user attention:
     //   - PendingAuthorization carrying real Text/File headers — these are
@@ -40,7 +41,7 @@ internal fun IncomingBannerStack(
     val spacing = KdTheme.spacing
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = spacing.s3, vertical = spacing.s2),
         verticalArrangement = Arrangement.spacedBy(spacing.s2),

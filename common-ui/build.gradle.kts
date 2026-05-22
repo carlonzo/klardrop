@@ -97,6 +97,10 @@ kotlin {
         api(deps.coil3.compose)
         api(deps.coil3.network.ktor)
 
+        implementation(deps.haze)
+        implementation(deps.haze.blur)
+        implementation(deps.haze.blur.materials)
+
         implementation(project(":klardrop-common"))
       }
     }

@@ -26,11 +26,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.theme.KdTheme
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.CupertinoMaterials
 
 // ---------------------------------------------------------------------------
 // C16 · Sidebar — floating sheet
@@ -66,17 +71,34 @@ fun Sidebar(
     localDeviceName: String,
     localDeviceSub: String? = null,
     onLocalDeviceClick: () -> Unit = {},
+    hazeState: HazeState? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = KdTheme.colors
     val spacing = KdTheme.spacing
+    val glassStyle = hazeState?.let { CupertinoMaterials.regular(colors.bg1) }
+
+    // When a HazeState is supplied the sidebar renders as a frosted-glass
+    // pane: the Surface goes transparent and a CupertinoMaterials blur reads
+    // the content drawn into hazeState behind it. Without a state, fall back
+    // to the original opaque slate.
+    val sidebarModifier = if (hazeState != null && glassStyle != null) {
+        modifier
+            .width(width)
+            .fillMaxHeight()
+            .hazeEffect(state = hazeState) {
+                blurEffect { style = glassStyle }
+            }
+    } else {
+        modifier
+            .width(width)
+            .fillMaxHeight()
+    }
 
     Surface(
-        modifier = modifier
-            .width(width)
-            .fillMaxHeight(),
+        modifier = sidebarModifier,
         shape = RoundedCornerShape(SidebarRadius),
-        color = colors.bg1,
+        color = if (hazeState != null) Color.Transparent else colors.bg1,
         border = BorderStroke(1.dp, colors.border),
     ) {
         Column(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {

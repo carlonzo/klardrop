@@ -56,6 +56,8 @@ import com.carlom.klardrop.components.SectionHead
 import com.carlom.klardrop.components.Sidebar
 import com.carlom.klardrop.theme.KdTheme
 import com.carlom.klardrop.theme.LocalContentInsets
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 private val DesktopSidebarWidth = 300.dp
 private val TabletSidebarWidth = 320.dp
@@ -220,14 +222,77 @@ private fun WideContent(
     // nothing to dodge and hugs the window top with just the gutter.
     val sidebarTopOffset = (topInset - bodyGutter).coerceAtLeast(0.dp)
 
-    Row(
-        modifier = modifier.padding(bodyGutter),
-        horizontalArrangement = Arrangement.spacedBy(bodyGutter),
-    ) {
+    // hazeState wires the sidebar's CupertinoMaterials glass to the chat
+    // backdrop column below: whatever is drawn into the hazeSource layer
+    // gets blurred behind the sidebar's hazeEffect overlay.
+    val hazeState = rememberHazeState()
+    val chatStartPadding = if (showSidebar) sidebarWidth + bodyGutter else 0.dp
+
+    Box(modifier = modifier.padding(bodyGutter)) {
+        // Backdrop layer — fills the entire content area and captures itself
+        // as the haze source. Chat children apply chatStartPadding so the
+        // usable UI stays clear of the sidebar overlay; the column's own
+        // bounds still extend the full width so the glass has a continuous
+        // backdrop.
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState),
+        ) {
+            if (activeDevice != null) {
+                ChatHeader(
+                    deviceName = activeDevice.deviceName,
+                    subText = chatHeaderSubText(activeDevice),
+                    kind = activeDevice.deviceType.toKdDeviceKind(),
+                    avatarStyle = if (activeDevice.trustStatus == TrustStatus.Trusted)
+                        KdAvatarStyle.Tinted else KdAvatarStyle.Neutral,
+                    status = activeDevice.reachability.toKdStatus(),
+                    isReachable = activeDevice.reachability == Reachability.Reachable,
+                    toolbarVariant = true,
+                    modifier = Modifier.padding(start = chatStartPadding),
+                )
+            }
+
+            IncomingBannerStack(
+                state = state,
+                callbacks = callbacks,
+                modifier = Modifier.padding(start = chatStartPadding),
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = chatStartPadding),
+            ) {
+                if (activeDeviceId != null && activeDevice != null) {
+                    val chatViewModel = remember(activeDeviceId) {
+                        uiDependencies.deviceChatViewModelFactory(activeDeviceId)
+                    }
+                    DeviceChatScreen(
+                        deviceName = activeDevice.deviceName,
+                        isOwned = activeDevice.trustStatus == TrustStatus.Trusted,
+                        viewModel = chatViewModel,
+                        onBackClicked = {},
+                        onOpenFileRequest = { path -> chatViewModel.openFileClicked(path) },
+                        onOpenUrlRequest = { url -> chatViewModel.openUrlClicked(url) },
+                        mode = DeviceChatMode.Pane,
+                    )
+                } else {
+                    WideEmptyPane()
+                }
+            }
+        }
+
+        // Sidebar overlay — frosted glass over the chat backdrop. Aligned to
+        // the top-start of the padded Box; sidebarTopOffset preserves the
+        // dodge for macOS traffic lights.
         if (showSidebar) {
             Sidebar(
                 width = sidebarWidth,
-                modifier = Modifier.padding(top = sidebarTopOffset),
+                hazeState = hazeState,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = sidebarTopOffset),
                 yoursSection = {
                     SectionHead(
                         label = "My devices",
@@ -279,47 +344,6 @@ private fun WideContent(
                 localDeviceSub = null,
                 onLocalDeviceClick = onRenameLocalDevice,
             )
-        }
-
-        Column(
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            if (activeDevice != null) {
-                ChatHeader(
-                    deviceName = activeDevice.deviceName,
-                    subText = chatHeaderSubText(activeDevice),
-                    kind = activeDevice.deviceType.toKdDeviceKind(),
-                    avatarStyle = if (activeDevice.trustStatus == TrustStatus.Trusted)
-                        KdAvatarStyle.Tinted else KdAvatarStyle.Neutral,
-                    status = activeDevice.reachability.toKdStatus(),
-                    isReachable = activeDevice.reachability == Reachability.Reachable,
-                    toolbarVariant = true,
-                )
-            }
-
-            IncomingBannerStack(
-                state = state,
-                callbacks = callbacks,
-            )
-
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (activeDeviceId != null && activeDevice != null) {
-                    val chatViewModel = remember(activeDeviceId) {
-                        uiDependencies.deviceChatViewModelFactory(activeDeviceId)
-                    }
-                    DeviceChatScreen(
-                        deviceName = activeDevice.deviceName,
-                        isOwned = activeDevice.trustStatus == TrustStatus.Trusted,
-                        viewModel = chatViewModel,
-                        onBackClicked = {},
-                        onOpenFileRequest = { path -> chatViewModel.openFileClicked(path) },
-                        onOpenUrlRequest = { url -> chatViewModel.openUrlClicked(url) },
-                        mode = DeviceChatMode.Pane,
-                    )
-                } else {
-                    WideEmptyPane()
-                }
-            }
         }
     }
 }
