@@ -54,6 +54,19 @@ private fun applyMacCustomTitleBar(window: AwtWindow, heightPx: Float) {
 
 fun main(args: Array<String>) {
 
+  // Linux/X11: the JVM turns the GDK_SCALE env var into an AWT UI scale. On a
+  // 4K display whose compositor isn't scaling (e.g. a Hyprland monitor at
+  // scale 1.0), an inherited GDK_SCALE=2 doubles every dp and the window comes
+  // out twice the intended size. Pin the UI scale to 1 unless the user has
+  // explicitly overridden it with -Dsun.java2d.uiScale. Must run before any
+  // AWT class initializes, since the scale is read during toolkit startup.
+  // macOS and Windows resolve HiDPI through their own paths, so leave them be.
+  if (System.getProperty("os.name").lowercase().contains("linux") &&
+    System.getProperty("sun.java2d.uiScale") == null
+  ) {
+    System.setProperty("sun.java2d.uiScale", "1")
+  }
+
   println("Args: ${args.joinToString(", ")}")
 
   val debug = args.contains("--debug")
