@@ -19,6 +19,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -37,10 +41,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.OnDataToSend
 import com.carlom.klardrop.components.Banner
 import com.carlom.klardrop.components.Bubble
+import com.carlom.klardrop.components.BubbleQuickActions
 import com.carlom.klardrop.components.ChatHeader
 import com.carlom.klardrop.components.DateChip
 import com.carlom.klardrop.components.DeviceAvatar
@@ -48,10 +54,12 @@ import com.carlom.klardrop.components.FileCard
 import com.carlom.klardrop.components.KdAvatarStyle
 import com.carlom.klardrop.components.KdBannerTone
 import com.carlom.klardrop.components.KdBubbleDirection
+import com.carlom.klardrop.components.KdBubbleMaxContentHeight
 import com.carlom.klardrop.components.KdDeviceKind
 import com.carlom.klardrop.components.KdFileState
 import com.carlom.klardrop.components.KdStatus
 import com.carlom.klardrop.components.MessageInput
+import com.carlom.klardrop.components.QuickActionButton
 import com.carlom.klardrop.dropTargetForSending
 import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.FileMessage as ProtoFileMessage
@@ -112,6 +120,13 @@ fun DeviceChatScreen(
         LaunchedEffect(error) {
             snackbarHostState.showSnackbar(error)
             viewModel.clearError()
+        }
+    }
+
+    uiState.notice?.let { notice ->
+        LaunchedEffect(notice) {
+            snackbarHostState.showSnackbar(notice)
+            viewModel.clearNotice()
         }
     }
 
@@ -226,8 +241,10 @@ fun DeviceChatScreen(
                     messageRepository = viewModel.messageRepository,
                     onOpenFileRequest = onOpenFileRequest,
                     onOpenUrlRequest = onOpenUrlRequest,
+                    onCopyText = viewModel::copyText,
                     onRetryFile = viewModel::retryFileTransfer,
                     isOffline = isOffline,
+                    isLargeScreen = mode == DeviceChatMode.Pane,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -373,8 +390,10 @@ private fun MessagesList(
     messageRepository: MessageRepository,
     onOpenFileRequest: (filePath: String) -> Unit,
     onOpenUrlRequest: (url: String) -> Unit,
+    onCopyText: (text: String) -> Unit,
     onRetryFile: (fileTransferId: Long) -> Unit,
     isOffline: Boolean,
+    isLargeScreen: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -416,8 +435,10 @@ private fun MessagesList(
                 messageRepository = messageRepository,
                 onOpenFileRequest = onOpenFileRequest,
                 onOpenUrlRequest = onOpenUrlRequest,
+                onCopyText = onCopyText,
                 onRetryFile = onRetryFile,
                 isFirstOfGroup = isFirstOfGroup,
+                isLargeScreen = isLargeScreen,
             )
 
             if (showDayDivider) {
@@ -437,8 +458,10 @@ private fun MessageRow(
     messageRepository: MessageRepository,
     onOpenFileRequest: (filePath: String) -> Unit,
     onOpenUrlRequest: (url: String) -> Unit,
+    onCopyText: (text: String) -> Unit,
     onRetryFile: (fileTransferId: Long) -> Unit,
     isFirstOfGroup: Boolean,
+    isLargeScreen: Boolean,
 ) {
     val isSender = message.is_sender != 0L
     val direction = if (isSender) KdBubbleDirection.Out else KdBubbleDirection.In
@@ -462,7 +485,9 @@ private fun MessageRow(
                     message = message,
                     direction = direction,
                     timestamp = timestamp,
+                    isLargeScreen = isLargeScreen,
                     onOpenUrlRequest = onOpenUrlRequest,
+                    onCopyText = onCopyText,
                 )
             }
             else -> {
@@ -482,41 +507,79 @@ private fun TextMessageBubble(
     message: Messages,
     direction: KdBubbleDirection,
     timestamp: String,
+    isLargeScreen: Boolean,
     onOpenUrlRequest: (url: String) -> Unit,
+    onCopyText: (text: String) -> Unit,
 ) {
     val colors = KdTheme.colors
     val typography = KdTheme.typography
     val openableUrl = remember(message.content) { openableUrlOrNull(message.content) }
 
-    if (openableUrl != null) {
-        Bubble(
-            direction = direction,
-            timestamp = timestamp,
-            content = {
-                Text(
-                    text = message.content,
-                    style = typography.body.copy(
-                        color = colors.accent,
-                        textDecoration = TextDecoration.Underline,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .combinedClickable(onClick = { onOpenUrlRequest(openableUrl) }),
-                )
-            },
-        )
-    } else {
-        Bubble(
-            direction = direction,
-            timestamp = timestamp,
-            content = {
-                SelectionContainer {
+    // True once the message is taller than the shared bubble cap and gets
+    // clipped — only then do we surface the Expand quick action.
+    var overflowing by remember(message.content) { mutableStateOf(false) }
+    var showViewer by remember(message.content) { mutableStateOf(false) }
+
+    Column {
+        if (openableUrl != null) {
+            Bubble(
+                direction = direction,
+                timestamp = timestamp,
+                content = {
                     Text(
                         text = message.content,
-                        style = typography.body.copy(color = colors.text),
+                        style = typography.body.copy(
+                            color = colors.accent,
+                            textDecoration = TextDecoration.Underline,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(onClick = { onOpenUrlRequest(openableUrl) }),
                     )
-                }
-            },
+                },
+            )
+        } else {
+            Bubble(
+                direction = direction,
+                timestamp = timestamp,
+                content = {
+                    SelectionContainer {
+                        Text(
+                            text = message.content,
+                            style = typography.body.copy(color = colors.text),
+                            overflow = TextOverflow.Clip,
+                            onTextLayout = { result ->
+                                overflowing = result.hasVisualOverflow
+                            },
+                            modifier = Modifier.heightIn(max = KdBubbleMaxContentHeight),
+                        )
+                    }
+                },
+            )
+        }
+
+        BubbleQuickActions(direction = direction) {
+            QuickActionButton(
+                icon = Icons.Default.ContentCopy,
+                contentDescription = "Copy text",
+                onClick = { onCopyText(message.content) },
+            )
+            if (overflowing) {
+                QuickActionButton(
+                    icon = Icons.Default.OpenInFull,
+                    contentDescription = "Show full message",
+                    onClick = { showViewer = true },
+                )
+            }
+        }
+    }
+
+    if (showViewer) {
+        TextMessageViewer(
+            text = message.content,
+            isLargeScreen = isLargeScreen,
+            onCopy = { onCopyText(message.content) },
+            onDismiss = { showViewer = false },
         )
     }
 }
@@ -567,45 +630,56 @@ private fun FileMessageBubble(
         )
     }
 
-    Bubble(
-        direction = direction,
-        timestamp = timestamp,
-        content = {
-            if (previewablePath != null) {
-                val openClick = if (openablePath != null) {
-                    Modifier.combinedClickable(onClick = { onOpenFileRequest(openablePath) })
-                } else Modifier
-                AsyncImage(
-                    model = "file://$previewablePath",
-                    contentDescription = fileName,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .widthIn(max = 320.dp)
-                        .heightIn(max = 200.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .then(openClick),
+    Column {
+        Bubble(
+            direction = direction,
+            timestamp = timestamp,
+            content = {
+                if (previewablePath != null) {
+                    val openClick = if (openablePath != null) {
+                        Modifier.combinedClickable(onClick = { onOpenFileRequest(openablePath) })
+                    } else Modifier
+                    AsyncImage(
+                        model = "file://$previewablePath",
+                        contentDescription = fileName,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .widthIn(max = 320.dp)
+                            .heightIn(max = KdBubbleMaxContentHeight)
+                            .clip(RoundedCornerShape(10.dp))
+                            .then(openClick),
+                    )
+                    Spacer(Modifier.height(KdTheme.spacing.s1))
+                }
+                FileCard(
+                    fileName = fileName,
+                    fileSize = if (totalSize > 0) formatBytes(totalSize) else null,
+                    state = fileState,
+                    onRetry = {
+                        if (isSender) {
+                            message.file_transfer_id?.let(onRetryFile)
+                        }
+                    },
+                    modifier = if (openablePath != null) {
+                        Modifier.combinedClickable(onClick = { onOpenFileRequest(openablePath) })
+                    } else {
+                        Modifier
+                    },
                 )
-                androidx.compose.foundation.layout.Spacer(
-                    Modifier.height(KdTheme.spacing.s1),
+            },
+        )
+
+        // Quick action: open the received file in the platform's default app.
+        if (openablePath != null) {
+            BubbleQuickActions(direction = direction) {
+                QuickActionButton(
+                    icon = Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = "Open file",
+                    onClick = { onOpenFileRequest(openablePath) },
                 )
             }
-            FileCard(
-                fileName = fileName,
-                fileSize = if (totalSize > 0) formatBytes(totalSize) else null,
-                state = fileState,
-                onRetry = {
-                    if (isSender) {
-                        message.file_transfer_id?.let(onRetryFile)
-                    }
-                },
-                modifier = if (openablePath != null) {
-                    Modifier.combinedClickable(onClick = { onOpenFileRequest(openablePath) })
-                } else {
-                    Modifier
-                },
-            )
-        },
-    )
+        }
+    }
 }
 
 @Composable

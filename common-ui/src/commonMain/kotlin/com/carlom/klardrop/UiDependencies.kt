@@ -23,6 +23,7 @@ class UiDependencies(private val commonComponent: CommonComponent) {
             coroutines = commonComponent.coroutines(),
             fileManager = commonComponent.fileManager(),
             platformFileSystem = commonComponent.platformFileSystem(),
+            clipboardManager = commonComponent.clipboardManager(),
             reachabilitySource = commonComponent.reachability(),
         )
     }
