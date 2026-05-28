@@ -34,9 +34,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -188,6 +192,7 @@ private fun DiscoveryDashboard(
 ) {
     var showRenameSheet by remember { mutableStateOf(false) }
     var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
+    var pendingForget by remember { mutableStateOf<DeviceUi?>(null) }
     var showAddDevicePicker by remember { mutableStateOf(false) }
 
     val currentDeviceName = state.currentDeviceName ?: state.systemDeviceName ?: ""
@@ -243,6 +248,8 @@ private fun DiscoveryDashboard(
                 IncomingBannerStack(
                     state = state,
                     callbacks = receiveCallbacks,
+                    onNotificationDismissed = onDeviceActionListener::onNotificationDismissed,
+                    onNotificationPair = onDeviceActionListener::onNotificationPair,
                 )
 
                 YourDevicesSection(
@@ -250,6 +257,7 @@ private fun DiscoveryDashboard(
                     isLargeScreen = isLargeScreen,
                     onDeviceActionListener = gridListener,
                     onAddDeviceClick = { showAddDevicePicker = true },
+                    onForgetClick = { device -> pendingForget = device },
                 )
 
                 NearbySection(
@@ -283,6 +291,18 @@ private fun DiscoveryDashboard(
                 pendingLink = null
             },
             onDismiss = { pendingLink = null },
+        )
+    }
+
+    pendingForget?.let { device ->
+        ForgetDeviceConfirmDialog(
+            device = device,
+            isLargeScreen = isLargeScreen,
+            onConfirm = {
+                onDeviceActionListener.onForgetDevice(device)
+                pendingForget = null
+            },
+            onDismiss = { pendingForget = null },
         )
     }
 
@@ -372,6 +392,7 @@ private fun YourDevicesSection(
     isLargeScreen: Boolean,
     onDeviceActionListener: OnDeviceActionListener,
     onAddDeviceClick: () -> Unit,
+    onForgetClick: (DeviceUi) -> Unit,
 ) {
     val spacing = KdTheme.spacing
     val colors = KdTheme.colors
@@ -409,13 +430,55 @@ private fun YourDevicesSection(
                 avatarStyle = KdAvatarStyle.Tinted,
                 rowState = deviceRowState(device),
                 status = device.reachabilityStatus(),
-                trailing = if (device.hasUnreadMessages) {
-                    {
+                trailing = {
+                    if (device.hasUnreadMessages) {
                         UnreadBadge()
+                        Spacer(Modifier.width(spacing.s2))
                     }
-                } else null,
+                    TrustedDeviceMenu(onForget = { onForgetClick(device) })
+                },
                 onClick = { onDeviceActionListener.onDeviceClick(device) },
                 modifier = Modifier.padding(horizontal = spacing.s3),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrustedDeviceMenu(onForget: () -> Unit) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(spacing.s6),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.MoreVert,
+                contentDescription = "Device options",
+                tint = colors.text2,
+                modifier = Modifier.size(spacing.s4),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = "Forget this device",
+                        style = typography.body.copy(color = colors.err),
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onForget()
+                },
             )
         }
     }

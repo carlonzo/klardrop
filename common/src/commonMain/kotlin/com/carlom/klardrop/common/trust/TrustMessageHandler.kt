@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
+import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.sendMessage
@@ -108,6 +109,52 @@ class TrustPairingResponseHandler(
         log("TrustPairingResponseHandler", "Sending pairing response to ${message.deviceName}")
         
         // Send the message
+        writeChannel.sendMessage(message, serializer)
+    }
+}
+
+/**
+ * Message handler for [TrustRevocationMessage].
+ *
+ * Verifies the signature against the sender's stored ECDSA public key. If verification
+ * succeeds, removes the peer from trust storage and emits a [PairingEvent.PeerRevokedTrust]
+ * via [TrustManager]. If verification fails (bad signature, unknown sender, replay, stale
+ * timestamp) the message is dropped silently — accepting unverifiable revocations would let
+ * any LAN attacker forge "you've been unpaired" frames and tear down every pairing.
+ */
+class TrustRevocationMessageHandler(
+    private val serializer: MessageSerializer,
+    private val trustManager: TrustManager,
+) : MessageHandler<TrustRevocationMessage, SimpleSendMessageRequest> {
+
+    override suspend fun handleIncoming(
+        message: TrustRevocationMessage,
+        readChannel: ByteReadChannel,
+        receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
+    ) {
+        log("TrustRevocationMessageHandler", "Received revocation from ${message.senderId}")
+        val verified = trustManager.verifyRevocationMessage(message)
+        if (!verified) {
+            log("TrustRevocationMessageHandler", "Dropping unverifiable revocation from ${message.senderId}")
+            receiveFlow.update {
+                it.copy(status = ReceiveMessageStatus.Failed("Invalid revocation signature"))
+            }
+            return
+        }
+        trustManager.applyVerifiedRevocation(message)
+        receiveFlow.update {
+            it.copy(messages = listOf(message), status = ReceiveMessageStatus.Completed)
+        }
+    }
+
+    override suspend fun handleOutgoing(
+        toDeviceId: String,
+        request: SimpleSendMessageRequest,
+        writeChannel: ByteWriteChannel,
+        progressFlow: MutableSharedFlow<MessengerSendProgress>
+    ) {
+        val message = request.message as TrustRevocationMessage
+        log("TrustRevocationMessageHandler", "Sending revocation to $toDeviceId")
         writeChannel.sendMessage(message, serializer)
     }
 }

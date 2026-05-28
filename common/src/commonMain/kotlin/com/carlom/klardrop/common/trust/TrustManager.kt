@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.trust
 
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
+import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.utils.Clock
@@ -389,6 +390,121 @@ class TrustManager(
   }
 
   /**
+   * Build a signed [TrustRevocationMessage] aimed at [targetDeviceId]. The recipient verifies
+   * using our (sender's) ECDSA public key, which they hold from the original pairing. Works
+   * even after the local trust entry for [targetDeviceId] has been removed: we sign with our
+   * own identity, which is independent of any peer-specific state.
+   *
+   * @return signed revocation, or null if the device's signing identity is unavailable
+   *         (shouldn't happen post-initialize but we degrade silently).
+   */
+  suspend fun createRevocationMessage(
+    targetDeviceId: String,
+    reason: String? = null,
+  ): TrustRevocationMessage? = withContext(Dispatchers.Default) {
+    try {
+      initialize()
+      val currentDevice = currentDeviceProvider.get()
+      val timestamp = clock.currentTimeMillis()
+      val nonce = crypto.generateNonce()
+      val dataToSign = revocationDataToSign(
+        senderId = currentDevice.shortDeviceId,
+        targetDeviceId = targetDeviceId,
+        timestamp = timestamp,
+        nonce = nonce,
+      )
+      val signature = storage.signWithDeviceKey(dataToSign, crypto) ?: return@withContext null
+      TrustRevocationMessage(
+        senderId = currentDevice.shortDeviceId,
+        targetDeviceId = targetDeviceId,
+        timestamp = timestamp,
+        nonce = nonce,
+        signature = signature,
+        reason = reason,
+      )
+    } catch (e: Exception) {
+      log("🔐 TrustManager", "Failed to create revocation message for $targetDeviceId", e)
+      null
+    }
+  }
+
+  /**
+   * Verify a [TrustRevocationMessage] received from a peer. Returns true only when:
+   *   - we still hold the sender's ECDSA public key (otherwise there's nothing to verify
+   *     against — and nothing to revoke locally, so the message is moot anyway),
+   *   - the timestamp is within the ±5min window,
+   *   - the nonce hasn't been seen before from this sender,
+   *   - the ECDSA signature checks out.
+   *
+   * Uses bitwise `and` over individual checks to keep timing roughly uniform across paths.
+   */
+  suspend fun verifyRevocationMessage(message: TrustRevocationMessage): Boolean {
+    return try {
+      val senderEcdsaKey = storage.getECDSAKey(message.senderId) ?: return false
+
+      val currentTime = clock.currentTimeMillis()
+      val isTimestampValid =
+        kotlin.math.abs(currentTime - message.timestamp) <= MAX_TIME_DIFF_SECONDS * 1000
+
+      val isNonceValid = nonceManager.isNonceValid(message.senderId, message.nonce)
+
+      val dataToVerify = revocationDataToSign(
+        senderId = message.senderId,
+        targetDeviceId = message.targetDeviceId,
+        timestamp = message.timestamp,
+        nonce = message.nonce,
+      )
+      val isSignatureValid = crypto.verifyECDSA(senderEcdsaKey, dataToVerify, message.signature)
+
+      isTimestampValid and isNonceValid and isSignatureValid
+    } catch (e: Exception) {
+      log("🔐 TrustManager", "Internal error during revocation verification", e)
+      false
+    }
+  }
+
+  /**
+   * Process a verified incoming revocation: drop the peer from trust storage and emit a
+   * [PairingEvent.PeerRevokedTrust] so coordinators / UI can react. Caller is responsible
+   * for verifying the signature first via [verifyRevocationMessage].
+   */
+  suspend fun applyVerifiedRevocation(message: TrustRevocationMessage) {
+    storage.removeTrustedDevice(message.senderId)
+    log("🔐 TrustManager", "Trust revoked by ${message.senderId}; local pairing removed")
+    _pairingEvents.tryEmit(PairingEvent.PeerRevokedTrust(message.senderId, message.reason))
+  }
+
+  private fun revocationDataToSign(
+    senderId: String,
+    targetDeviceId: String,
+    timestamp: Long,
+    nonce: ByteArray,
+  ): ByteArray {
+    // Layout: senderId-utf8 || 0x00 || targetDeviceId-utf8 || 0x00 || 8-byte BE timestamp || nonce.
+    // Null bytes separate the variable-length id fields so the boundary between them is
+    // unambiguous — without them an attacker could shift bytes between the two ids and still
+    // produce the same concatenation.
+    val senderBytes = senderId.encodeToByteArray()
+    val targetBytes = targetDeviceId.encodeToByteArray()
+    val out = ByteArray(senderBytes.size + 1 + targetBytes.size + 1 + 8 + nonce.size)
+    var pos = 0
+    senderBytes.copyInto(out, pos); pos += senderBytes.size
+    out[pos++] = 0
+    targetBytes.copyInto(out, pos); pos += targetBytes.size
+    out[pos++] = 0
+    out[pos++] = (timestamp ushr 56).toByte()
+    out[pos++] = (timestamp ushr 48).toByte()
+    out[pos++] = (timestamp ushr 40).toByte()
+    out[pos++] = (timestamp ushr 32).toByte()
+    out[pos++] = (timestamp ushr 24).toByte()
+    out[pos++] = (timestamp ushr 16).toByte()
+    out[pos++] = (timestamp ushr 8).toByte()
+    out[pos++] = timestamp.toByte()
+    nonce.copyInto(out, pos)
+    return out
+  }
+
+  /**
    * Sign a message with this device's ECDSA private key.
    *
    * Lazily initializes if needed, then delegates the actual signing to
@@ -587,6 +703,13 @@ sealed interface PairingEvent {
     PairingEvent
 
   data class PairingCompleted(val deviceId: String, val deviceName: String, val success: Boolean) : PairingEvent
+
+  /**
+   * Fired after a verified [TrustRevocationMessage] from [deviceId] has been applied — local
+   * trust is already removed by the time subscribers see this. Coordinators surface this to
+   * the UI so the user can choose to re-pair or dismiss.
+   */
+  data class PeerRevokedTrust(val deviceId: String, val reason: String? = null) : PairingEvent
 }
 
 /**

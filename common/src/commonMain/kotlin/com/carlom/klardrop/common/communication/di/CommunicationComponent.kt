@@ -40,6 +40,7 @@ import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.trust.TrustMessageWrapper
 import com.carlom.klardrop.common.trust.TrustPairingRequestHandler
 import com.carlom.klardrop.common.trust.TrustPairingResponseHandler
+import com.carlom.klardrop.common.trust.TrustRevocationMessageHandler
 import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
@@ -104,6 +105,7 @@ class CommunicationModule(
       MessageType.ACK_RECEIVED to AckMessageHandler(),
       MessageType.TRUST_PAIRING_REQUEST to TrustPairingRequestHandler(serializer, trustManager),
       MessageType.TRUST_PAIRING_RESPONSE to TrustPairingResponseHandler(serializer, trustManager),
+      MessageType.TRUST_REVOCATION to TrustRevocationMessageHandler(serializer, trustManager),
       MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager),
       MessageType.CONNECTION_INFO to ConnectionInfoMessageHandler(serializer),
     )

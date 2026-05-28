@@ -14,6 +14,7 @@ import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.readMessage
@@ -643,5 +644,109 @@ class MessagesRouterImplTest {
     val reply = writeChannel.readMessage(mockMessageSerializer)
     assertTrue(reply is PongMessage, "Expected PONG while authorize is pending, got ${reply::class.simpleName}")
     assertEquals(ping.id, reply.pingId)
+  }
+
+  /**
+   * Reactive mismatch path: when an unknown peer sends a TrustedMessage we cannot verify
+   * (because we don't hold their ECDSA key — typically because we previously unpaired them),
+   * the router must respond with a signed TrustRevocationMessage on the same connection so
+   * the peer can clean up. Without this, the peer keeps believing we're paired and silent
+   * asymmetric state lingers forever.
+   */
+  @Test
+  fun trustedMessageFromUnknownSenderTriggersRevocationReply() = runTest(testDispatcher) {
+    val senderId = "sender01"  // 8 chars so shortDeviceId matches
+    val receiverId = "receivr1"
+    val clock = com.carlom.klardrop.common.utils.Clock()
+    val crypto = com.carlom.klardrop.common.trust.TrustCrypto()
+
+    fun localPropsRepo(deviceId: String) = object : com.carlom.klardrop.common.persistence.LocalPropertiesRepository {
+      override val properties = kotlinx.coroutines.flow.flowOf(
+        com.carlom.klardrop.common.persistence.KlardropProperties(deviceId, deviceId)
+      )
+      override suspend fun getProperty() =
+        com.carlom.klardrop.common.persistence.KlardropProperties(deviceId, deviceId)
+      override suspend fun save(properties: com.carlom.klardrop.common.persistence.KlardropProperties) {}
+      override suspend fun saveCustomDeviceName(customDeviceName: String?) {}
+    }
+
+    val senderStorage = com.carlom.klardrop.common.trust.InMemoryTrustStorage()
+    val senderTrust = com.carlom.klardrop.common.trust.TrustManager(
+      crypto = crypto,
+      storage = senderStorage,
+      clock = clock,
+      currentDeviceProvider = com.carlom.klardrop.common.discovery.CurrentDeviceProvider(localPropsRepo(senderId)),
+    )
+
+    // Receiver: HAS identity (so it can sign a revocation back), but has NEVER paired with
+    // the sender (so signature verification will fail with "unknown sender").
+    val receiverStorage = com.carlom.klardrop.common.trust.InMemoryTrustStorage()
+    val receiverTrust = com.carlom.klardrop.common.trust.TrustManager(
+      crypto = crypto,
+      storage = receiverStorage,
+      clock = clock,
+      currentDeviceProvider = com.carlom.klardrop.common.discovery.CurrentDeviceProvider(localPropsRepo(receiverId)),
+    )
+    receiverTrust.initialize()
+    val receiverPublicKey = receiverStorage.getDevicePublicKey()!!
+    // Sender pre-pairs the receiver locally — only on the sender's side — so the sender can
+    // verify the revocation reply against the receiver's key. Stand-in for the original
+    // pairing that happened before the receiver wiped their trust entry.
+    senderStorage.storeECDSAKey(receiverId, receiverPublicKey)
+    senderStorage.storeTrustedDevice(receiverId, byteArrayOf(0x1)) // marker; ECDH not exercised here
+
+    val authorizer = object : IncomingAuthorizer(receiverTrust) {
+      override suspend fun authorize(
+        fromDeviceId: String,
+        kind: TransferKind,
+        headers: List<Message>,
+        receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
+        notifyAwaitingUser: suspend () -> Unit,
+      ): Boolean = true
+    }
+    val router = MessagesRouterImpl(
+      handlers = mockMessageHandlers,
+      fileMessageHandler = com.carlom.klardrop.common.communication.message.FileMessageHandler(
+        fileManager = object : com.carlom.klardrop.common.FileManager {
+          override fun prepareSaveFile(fileName: String, mimeType: String) = error("unused")
+          override fun getReadStreamFrom(file: PlatformFile): kotlinx.io.RawSource = error("unused")
+          override suspend fun openFile(filePath: String) = false
+          override suspend fun openUrl(url: String) = false
+        },
+        clock = clock,
+        coroutines = mockCoroutines,
+        messageRepository = mockMessageRepository,
+      ),
+      messageSerializer = mockMessageSerializer,
+      coroutines = mockCoroutines,
+      messengeReceiver = mockMessageReceiver,
+      trustManager = receiverTrust,
+      incomingAuthorizer = authorizer,
+    )
+
+    // Sender wraps a TextMessage in a signed TrustedMessage and ships it to the receiver.
+    val innerText = TextMessage(text = "hello from forgotten peer")
+    val payload = mockMessageSerializer.serialize(innerText)
+    val signed = senderTrust.signMessage(payload)
+      ?: error("signMessage returned null — sender trust setup broken")
+
+    val readChannel = ByteReadChannel(createMessageBytes(signed))
+    val writeChannel = ByteChannel(true)
+    router.onMessageIncoming(senderId, writeChannel, readChannel, ackCallback = { })
+
+    // Router should have written back a TrustRevocationMessage signed by the receiver,
+    // targeting the sender.
+    val reply = writeChannel.readMessage(mockMessageSerializer)
+    assertTrue(
+      reply is TrustRevocationMessage,
+      "Expected TrustRevocationMessage from receiver, got ${reply::class.simpleName}",
+    )
+    assertEquals(receiverId, reply.senderId, "Revocation must be from the receiver")
+    assertEquals(senderId, reply.targetDeviceId, "Revocation must target the unknown sender")
+    // Confirm the revocation can be verified end-to-end by the sender (who knows the receiver).
+    assertTrue(
+      senderTrust.verifyRevocationMessage(reply),
+      "Revocation reply must verify against the sender's stored receiver-key",
+    )
   }
 }

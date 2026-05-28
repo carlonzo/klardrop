@@ -165,35 +165,49 @@ data class ClipboardSyncMessage(
     }
 }
 
+/**
+ * Notifies a peer that the sender has revoked the trust relationship with [targetDeviceId].
+ *
+ * Signed with the SENDER'S ECDSA private key over `(senderId || targetDeviceId || timestamp || nonce)`.
+ * The recipient verifies using the sender's stored ECDSA public key — so the recipient must still
+ * hold a pairing for [senderId] at verify time, otherwise the message is silently dropped.
+ * [nonce] + [timestamp] protect against replay (same window/check used for [TrustedMessage]).
+ */
 @Serializable
 data class TrustRevocationMessage(
-    val deviceId: String,               // Device being revoked
+    val senderId: String,               // Device sending the revocation (us)
+    val targetDeviceId: String,         // Device whose trust we are revoking (the recipient)
     val timestamp: Long,
+    val nonce: ByteArray,               // 16 random bytes for replay protection
+    val signature: ByteArray,           // ECDSA signature from sender over (senderId||targetDeviceId||timestamp||nonce)
     val reason: String? = null,         // Optional reason for revocation
-    val signature: ByteArray,           // Signature from revoking device
     override val id: Int = Random.nextInt(),
 ) : Message() {
     override val type: MessageType = MessageType.TRUST_REVOCATION
     override val hasPayload: Boolean = false
-    
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is TrustRevocationMessage) return false
-        
-        if (deviceId != other.deviceId) return false
+
+        if (senderId != other.senderId) return false
+        if (targetDeviceId != other.targetDeviceId) return false
         if (timestamp != other.timestamp) return false
-        if (reason != other.reason) return false
+        if (!nonce.contentEquals(other.nonce)) return false
         if (!signature.contentEquals(other.signature)) return false
+        if (reason != other.reason) return false
         if (id != other.id) return false
-        
+
         return true
     }
-    
+
     override fun hashCode(): Int {
-        var result = deviceId.hashCode()
+        var result = senderId.hashCode()
+        result = 31 * result + targetDeviceId.hashCode()
         result = 31 * result + timestamp.hashCode()
-        result = 31 * result + (reason?.hashCode() ?: 0)
+        result = 31 * result + nonce.contentHashCode()
         result = 31 * result + signature.contentHashCode()
+        result = 31 * result + (reason?.hashCode() ?: 0)
         result = 31 * result + id
         return result
     }

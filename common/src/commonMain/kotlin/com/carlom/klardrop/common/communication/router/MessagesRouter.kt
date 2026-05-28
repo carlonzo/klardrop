@@ -15,6 +15,7 @@ import com.carlom.klardrop.common.communication.message.PingMessage
 import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.readMessage
 import com.carlom.klardrop.common.communication.sendMessage
@@ -164,9 +165,32 @@ internal class MessagesRouterImpl(
 
     val message = when {
       rawMessage is TrustedMessage -> {
+        // Two distinct failure modes:
+        //   (a) we have the sender's ECDSA key but signature is invalid → tampering / replay /
+        //       key rotation glitch. Drop silently — we don't want to leak verification oracles
+        //       or amplify spoofed traffic.
+        //   (b) we have no key for the sender at all → we previously unpaired them, but they
+        //       still believe we're paired. Tell them so they can clean up. We sign this with
+        //       our own identity, which they still hold from the original pairing.
+        val senderKnown = trustManager.isTrusted(rawMessage.senderId)
         val isValid = trustManager.verifyMessage(rawMessage)
         if (!isValid) {
-          log("MessagesRouter", "SECURITY: signature verification failed for TrustedMessage from $fromDeviceId")
+          if (!senderKnown) {
+            log("MessagesRouter", "Unknown sender ${rawMessage.senderId} sent TrustedMessage; replying with revocation")
+            val revocation = trustManager.createRevocationMessage(
+              targetDeviceId = rawMessage.senderId,
+              reason = "device_unknown",
+            )
+            if (revocation != null) {
+              writeLock.withLock {
+                writeChannel.sendMessage(revocation, messageSerializer)
+              }
+            } else {
+              log("MessagesRouter", "Failed to build revocation reply for ${rawMessage.senderId}")
+            }
+          } else {
+            log("MessagesRouter", "SECURITY: signature verification failed for TrustedMessage from $fromDeviceId")
+          }
           return@ioDispatcher
         }
         messageSerializer.deserialize(rawMessage.payload)
@@ -175,7 +199,12 @@ internal class MessagesRouterImpl(
       else -> {
         val isTrustedDevice = trustManager.isTrusted(fromDeviceId)
         val isPairingMessage = rawMessage is com.carlom.klardrop.common.communication.message.TrustPairingRequest ||
-            rawMessage is com.carlom.klardrop.common.communication.message.TrustPairingResponse
+            rawMessage is com.carlom.klardrop.common.communication.message.TrustPairingResponse ||
+            // Revocations carry their own ECDSA signature inside the frame; the handler
+            // verifies it against the sender's stored public key before applying. Wrapping
+            // them in TrustedMessage doesn't work because we may have already removed our
+            // local trust entry for the peer by the time we receive (or send) one.
+            rawMessage is TrustRevocationMessage
         // Control-plane frames (heartbeat ping/pong, ACKs) carry no application data and
         // are exempt from the signed-from-trusted requirement. Heartbeat in particular
         // is sent from ConnectionMessenger which has no TrustManager handle, so we can't

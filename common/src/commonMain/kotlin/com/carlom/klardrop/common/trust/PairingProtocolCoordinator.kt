@@ -4,15 +4,21 @@ import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
+import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Coordinates pairing protocol communication between TrustManager and Messenger.
@@ -30,9 +36,20 @@ class PairingProtocolCoordinator(
     private val messenger: Messenger
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    
+
     // Callback for when pairing is completed (for UI updates)
     var onPairingCompleted: ((deviceId: String, deviceName: String, success: Boolean) -> Unit)? = null
+
+    /**
+     * Emits whenever a verified peer revocation has been applied locally — typically because
+     * the peer tapped "Forget device" on their end (or because we contacted a peer who no
+     * longer trusts us and they replied with a revocation). Consumers (DiscoveryController)
+     * surface this to the user as a banner with Dismiss / Pair actions.
+     */
+    private val _peerRevokedTrust = MutableSharedFlow<PeerRevokedTrust>(extraBufferCapacity = 8)
+    val peerRevokedTrust: SharedFlow<PeerRevokedTrust> = _peerRevokedTrust.asSharedFlow()
+
+    data class PeerRevokedTrust(val deviceId: String, val reason: String?)
 
     init {
         // Listen to pairing events from TrustManager
@@ -61,9 +78,48 @@ class PairingProtocolCoordinator(
                         println("🔐 [PairingProtocolCoordinator] Pairing completed for ${event.deviceName} (${event.deviceId}), success: ${event.success}")
                         onPairingCompleted?.invoke(event.deviceId, event.deviceName, event.success)
                     }
+
+                    is PairingEvent.PeerRevokedTrust -> {
+                        log("PairingProtocolCoordinator", "Peer ${event.deviceId} revoked trust (reason=${event.reason})")
+                        _peerRevokedTrust.tryEmit(PeerRevokedTrust(event.deviceId, event.reason))
+                    }
                 }
             }
             .launchIn(scope)
+    }
+
+    /**
+     * Forget [targetDeviceId] locally and best-effort notify the peer.
+     *
+     * Order matters: we send the revocation BEFORE removing local trust. The send path
+     * needs the peer's identity in storage so the Messenger can pick a transport, and the
+     * peer needs us to be able to sign the revocation with our identity (independent of
+     * theirs — that part still works post-removal, but their delivery may not, so we err
+     * on the side of "notify, then forget").
+     *
+     * Send failures (peer offline, transport down) are tolerated — local removal happens
+     * either way. If/when the peer next contacts us with a TrustedMessage we can no longer
+     * verify, the reactive mismatch path in [MessagesRouter] will send them a fresh
+     * revocation and heal the asymmetry.
+     */
+    suspend fun unpair(targetDeviceId: String, reason: String? = null) {
+        log("PairingProtocolCoordinator", "unpair($targetDeviceId)")
+        val revocation = trustManager.createRevocationMessage(targetDeviceId, reason)
+        if (revocation != null) {
+            // 3-second cap so a misbehaving peer can't hang the user's unpair tap. The
+            // revocation is best-effort by design; missed deliveries get healed reactively.
+            withTimeoutOrNull(3.seconds) {
+                runCatching {
+                    messenger.send(targetDeviceId, revocation.toSimpleSendRequest())
+                        .first { it.isCompleted() }
+                }.onFailure {
+                    log("PairingProtocolCoordinator", "Revocation send failed for $targetDeviceId: ${it.message}")
+                }
+            } ?: log("PairingProtocolCoordinator", "Revocation send timed out for $targetDeviceId; proceeding with local removal")
+        } else {
+            log("PairingProtocolCoordinator", "createRevocationMessage returned null; skipping notify and removing locally")
+        }
+        trustManager.removeTrust(targetDeviceId)
     }
 
     /**

@@ -16,7 +16,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.LaptopMac
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -73,6 +76,7 @@ fun WideLayout(
     var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
     var showAddDevicePicker by remember { mutableStateOf(false) }
     var showRenameSheet by remember { mutableStateOf(false) }
+    var pendingForget by remember { mutableStateOf<DeviceUi?>(null) }
 
     val hasTrustedDevice = state.devices.any { it.trustStatus == TrustStatus.Trusted }
     LaunchedEffect(hasTrustedDevice) {
@@ -132,8 +136,23 @@ fun WideLayout(
             onAddDeviceClick = { showAddDevicePicker = true },
             onRenameLocalDevice = { showRenameSheet = true },
             onSendData = { device, data -> discoveryController.onSendData(device, data) },
+            onNotificationDismissed = discoveryController::onNotificationDismissed,
+            onNotificationPair = discoveryController::onNotificationPair,
+            onForgetTrustedDevice = { device -> pendingForget = device },
             uiDependencies = uiDependencies,
             modifier = Modifier.fillMaxSize(),
+        )
+    }
+
+    pendingForget?.let { device ->
+        ForgetDeviceConfirmDialog(
+            device = device,
+            isLargeScreen = true,
+            onConfirm = {
+                discoveryController.onForgetDevice(device)
+                pendingForget = null
+            },
+            onDismiss = { pendingForget = null },
         )
     }
 
@@ -198,6 +217,9 @@ private fun WideContent(
     onAddDeviceClick: () -> Unit,
     onRenameLocalDevice: () -> Unit,
     onSendData: (DeviceUi, OnDataToSend) -> Unit,
+    onNotificationDismissed: (Int) -> Unit,
+    onNotificationPair: (Int) -> Unit,
+    onForgetTrustedDevice: (DeviceUi) -> Unit,
     uiDependencies: UiDependencies,
     modifier: Modifier = Modifier,
 ) {
@@ -254,6 +276,7 @@ private fun WideContent(
                                 isActive = device.deviceId == activeDeviceId,
                                 onClick = { onDeviceSelected(device) },
                                 onDropData = { data -> onSendData(device, data) },
+                                onForget = { onForgetTrustedDevice(device) },
                             )
                         }
                     }
@@ -300,6 +323,8 @@ private fun WideContent(
             IncomingBannerStack(
                 state = state,
                 callbacks = callbacks,
+                onNotificationDismissed = onNotificationDismissed,
+                onNotificationPair = onNotificationPair,
             )
 
             Box(modifier = Modifier.fillMaxSize()) {
@@ -330,6 +355,7 @@ private fun SidebarDeviceRow(
     isActive: Boolean,
     onClick: () -> Unit,
     onDropData: (OnDataToSend) -> Unit,
+    onForget: (() -> Unit)? = null,
 ) {
     var dropHovered by remember { mutableStateOf(false) }
 
@@ -349,6 +375,9 @@ private fun SidebarDeviceRow(
             KdAvatarStyle.Tinted else KdAvatarStyle.Neutral,
         rowState = rowState,
         status = device.reachability.toKdStatus(),
+        trailing = if (onForget != null) {
+            { SidebarRowMenu(onForget = onForget) }
+        } else null,
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
@@ -358,6 +387,44 @@ private fun SidebarDeviceRow(
                 onDragStateChange = { dropHovered = it },
             ),
     )
+}
+
+@Composable
+private fun SidebarRowMenu(onForget: () -> Unit) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(28.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "Device options",
+                tint = colors.text2,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = "Forget this device",
+                        style = typography.body.copy(color = colors.err),
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onForget()
+                },
+            )
+        }
+    }
 }
 
 @Composable

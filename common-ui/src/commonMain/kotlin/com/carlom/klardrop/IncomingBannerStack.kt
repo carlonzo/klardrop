@@ -10,12 +10,15 @@ import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
+import com.carlom.klardrop.components.SystemNotificationCard
 import com.carlom.klardrop.theme.KdTheme
 
 @Composable
 internal fun IncomingBannerStack(
     state: DiscoveryScreenState,
     callbacks: ReceiveNotificationsCallbacks,
+    onNotificationDismissed: (Int) -> Unit = {},
+    onNotificationPair: (Int) -> Unit = {},
 ) {
     // Only surface receive updates that genuinely need user attention:
     //   - PendingAuthorization carrying real Text/File headers — these are
@@ -35,7 +38,7 @@ internal fun IncomingBannerStack(
         (update.status is ReceiveMessageStatus.PendingAuthorization && hasRealHeader) ||
             hasConnectionInfo
     }
-    if (updates.isEmpty()) return
+    if (updates.isEmpty() && state.notifications.isEmpty()) return
 
     val spacing = KdTheme.spacing
 
@@ -45,6 +48,23 @@ internal fun IncomingBannerStack(
             .padding(horizontal = spacing.s3, vertical = spacing.s2),
         verticalArrangement = Arrangement.spacedBy(spacing.s2),
     ) {
+        // System notifications render above transfer cards — they describe state changes
+        // that may affect whether transfers will succeed at all (e.g. peer un-paired us).
+        state.notifications.forEach { notification ->
+            when (notification) {
+                is UiNotification.PeerRevokedTrust -> {
+                    SystemNotificationCard(
+                        title = notification.deviceName,
+                        body = "removed this device. You're no longer paired.",
+                        primaryAction = "Pair",
+                        onPrimary = { onNotificationPair(notification.id) },
+                        secondaryAction = "Dismiss",
+                        onSecondary = { onNotificationDismissed(notification.id) },
+                    )
+                }
+            }
+        }
+
         updates.forEach { (id, update) ->
             ReceiveNotification(
                 receiveUpdate = update,

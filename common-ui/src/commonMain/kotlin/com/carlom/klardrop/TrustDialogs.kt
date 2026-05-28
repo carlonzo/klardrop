@@ -115,6 +115,31 @@ internal fun LinkDeviceConfirmDialog(
   }
 }
 
+/**
+ * Confirms a destructive Forget Device action initiated from the overflow menu on a
+ * trusted-device row. Reuses [PairingDialog] for visual consistency with the link-confirm
+ * counterpart on the other side of the device's lifecycle.
+ */
+@Composable
+internal fun ForgetDeviceConfirmDialog(
+  device: DeviceUi,
+  isLargeScreen: Boolean,
+  onConfirm: () -> Unit,
+  onDismiss: () -> Unit,
+) {
+  PairingShell(isLargeScreen = isLargeScreen, onDismiss = onDismiss) {
+    PairingDialog(
+      remoteDeviceName = device.deviceName,
+      remoteKind = device.deviceType.toKdDeviceKind(),
+      body = "This device will no longer share files, messages, or clipboard with " +
+        "${device.deviceName}. You'll have to pair again to reconnect.",
+      confirmLabel = "Forget",
+      onCancel = onDismiss,
+      onConfirm = onConfirm,
+    )
+  }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PairingShell(
