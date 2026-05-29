@@ -39,6 +39,12 @@ class ConnectionMessenger internal constructor(
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
   private val messageSerializer: MessageSerializer? = null,
+  /**
+   * True if WE opened this connection (we were the TCP/BLE client), false if the peer dialed us
+   * (we were the server). [ConnectionsPool] uses this to deterministically resolve simultaneous
+   * opens — both peers keep the connection initiated by the device with the smaller id.
+   */
+  val initiatedByUs: Boolean = false,
 ) {
 
   /** True when this messenger is bound to a BLE GATT session rather than a TCP socket. */

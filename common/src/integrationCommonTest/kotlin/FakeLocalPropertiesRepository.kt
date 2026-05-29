@@ -20,4 +20,8 @@ class FakeLocalPropertiesRepository(private val currentDeviceId: String = Random
     val current = getProperty()
     save(current.copy(customDeviceName = customDeviceName))
   }
+
+  override suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean) {
+    save(getProperty().copy(backgroundDiscoveryEnabled = enabled))
+  }
 }

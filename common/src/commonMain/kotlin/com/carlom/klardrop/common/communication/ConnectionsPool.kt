@@ -60,11 +60,15 @@ sealed interface Reachability {
 internal class ConnectionsPoolImpl(
   coroutines: Coroutines? = null,
   networkLifecycleMonitor: NetworkLifecycleMonitor? = null,
+  private val currentDeviceProvider: com.carlom.klardrop.common.discovery.CurrentDeviceProvider? = null,
 ) : ConnectionsPool {
 
   private val mutex = Mutex(locked = false)
   private val connections = mutableMapOf<String, ConnectionMessenger>()
   private val reachabilityFlow = MutableStateFlow<Map<String, Reachability>>(emptyMap())
+
+  // Our own short device id, resolved once and cached, used to break simultaneous-open ties.
+  private var cachedSelfShortId: String? = null
 
   override val reachability: StateFlow<Map<String, Reachability>> = reachabilityFlow.asStateFlow()
 
@@ -116,19 +120,33 @@ internal class ConnectionsPoolImpl(
     mutex.withLock {
       log("ConnectionPool", "[DEBUG] updateConnection() called for $deviceId")
 
-      connections[deviceId]?.let { oldConnectionMessenger ->
-        val isOldClosed = oldConnectionMessenger.isClosed()
-        log("ConnectionPool", "[DEBUG] Found existing connection for $deviceId, isClosed = $isOldClosed")
-
-        if (isOldClosed) {
-          log("ConnectionPool", "[DEBUG] Old connection is closed, safe to replace for $deviceId")
+      val existing = connections[deviceId]
+      if (existing != null && !existing.isClosed()) {
+        // Tie-break ONLY a genuine simultaneous open — one connection WE dialed and one the PEER
+        // dialed (different initiatedByUs). Keep the one initiated by the smaller short id so both
+        // peers deterministically converge on the same socket. If the directions are the SAME, this
+        // is a reconnect (the peer re-dialed after a stale/dead socket), not a race: the NEW one
+        // must win, otherwise we'd keep a dead connection and RST the peer's fresh one.
+        val selfId = resolveSelfShortId()
+        val isSimultaneousOpen = selfId != null && existing.initiatedByUs != connectionMessenger.initiatedByUs
+        if (isSimultaneousOpen) {
+          val weShouldInitiate = selfId!! < deviceId
+          val keepExisting = existing.initiatedByUs == weShouldInitiate
+          if (keepExisting) {
+            log("ConnectionPool", "Simultaneous open for $deviceId: keeping existing (initiatedByUs=${existing.initiatedByUs}), dropping incoming")
+            connectionMessenger.close()
+            return@withLock
+          }
+          log("ConnectionPool", "Simultaneous open for $deviceId: replacing existing with incoming (tie-break)")
         } else {
-          log("ConnectionPool", "[DEBUG] WARNING: Closing ACTIVE connection for $deviceId to replace it!")
+          log("ConnectionPool", "Replacing live connection for $deviceId with reconnect (initiatedByUs=${connectionMessenger.initiatedByUs})")
         }
-
-        oldConnectionMessenger.close()
+        existing.close()
         connections.remove(deviceId)
-        log("ConnectionPool", "Closing connection before updating with $deviceId")
+      } else if (existing != null) {
+        log("ConnectionPool", "[DEBUG] Old connection is closed, replacing for $deviceId")
+        existing.close()
+        connections.remove(deviceId)
       }
 
       connections[deviceId] = connectionMessenger
@@ -136,6 +154,14 @@ internal class ConnectionsPoolImpl(
       log("ConnectionPool", "[DEBUG] Total connections: ${connections.size}")
     }
     setReachability(deviceId, Reachability.Reachable)
+  }
+
+  /** Resolve and cache our own short device id (used only for simultaneous-open tie-breaking). */
+  private suspend fun resolveSelfShortId(): String? {
+    cachedSelfShortId?.let { return it }
+    return runCatching { currentDeviceProvider?.get()?.shortDeviceId }
+      .getOrNull()
+      ?.also { cachedSelfShortId = it }
   }
 
   override suspend fun getConnection(deviceId: String): ConnectionMessenger? {

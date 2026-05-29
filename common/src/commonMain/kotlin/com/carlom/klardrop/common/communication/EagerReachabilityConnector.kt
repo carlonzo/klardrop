@@ -10,7 +10,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 /**
@@ -43,18 +43,28 @@ class EagerReachabilityConnector(
   private var watchJob: Job? = null
   private var lifecycleJob: Job? = null
 
-  // Per-peer cooldown after a failed probe. Re-probing every visibleDevices
-  // update on an unreachable peer would waste resources; cooldown lets us
-  // back off and try again later (e.g. after the next network change).
+  // Per-peer cooldown after a failed probe. Re-probing on every visibleDevices update for a
+  // peer that's announcing-but-unreachable would waste the radio, so we back off briefly. The
+  // cooldown is intentionally short (vs. minutes) so a peer that comes back is re-dialed fast —
+  // important because when the peer is behind a default-deny-inbound firewall, OUR outbound dial
+  // is the only way a connection can ever form, and a pending send is waiting on exactly that.
+  // The cooldown is also cleared the instant a device (re)appears in discovery (see [start]).
   private val failureCooldownUntil = mutableMapOf<String, TimeSource.Monotonic.ValueTimeMark>()
-  private val cooldownDuration = 1.minutes
+  private val cooldownDuration = 5.seconds
 
   fun start() {
     if (watchJob?.isActive == true) return
 
     watchJob = scope.launch {
       val self = currentDeviceProvider.get().shortDeviceId
+      var previouslyVisible = emptySet<String>()
       visibleDevices.visibleDevices.collect { devices ->
+        // A device that just (re)appeared in discovery is a strong "it's back" signal: clear any
+        // failure cooldown so we re-dial it immediately instead of waiting the cooldown out.
+        val currentlyVisible = devices.keys.toSet()
+        (currentlyVisible - previouslyVisible).forEach { failureCooldownUntil.remove(it) }
+        previouslyVisible = currentlyVisible
+
         for ((deviceId, device) in devices) {
           if (deviceId == self) continue
           if (!device.hasKlardropConnection()) continue

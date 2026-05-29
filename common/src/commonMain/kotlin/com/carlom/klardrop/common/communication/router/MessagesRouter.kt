@@ -427,9 +427,16 @@ internal class MessagesRouterImpl(
       receivePipelines[header.id] = pipeline
     }
 
+    // If the connection dropped between accept and here, sending ACK_READY throws. Don't let that
+    // escape uncaught (it crashed a dispatcher worker) and don't leak the registered pipeline — the
+    // sender never got ACK_READY so it won't stream chunks; fail the transfer and drop the pipeline.
     val ackReady = MessageAcknowledgment(AckType.READY, ackId)
-    writeLock.withLock {
-      sendMessageToDevice(fromDeviceId, ackReady, writeChannel)
+    val ackSent = runCatching { writeLock.withLock { sendMessageToDevice(fromDeviceId, ackReady, writeChannel) } }
+    if (ackSent.isFailure) {
+      val error = ackSent.exceptionOrNull() ?: IllegalStateException("ACK_READY send failed")
+      log("MessagesRouter", "Failed to send ACK_READY for ${header.fileName} to $fromDeviceId (connection dropped?); failing transfer", error)
+      receiveMutex.withLock { receivePipelines.remove(header.id) }
+      runCatching { pipeline.fail(error) }
     }
   }
 

@@ -6,9 +6,13 @@ import com.bugsnag.android.Bugsnag
 import com.bugsnag.android.Configuration
 import com.carlom.klardrop.android.di.ApplicationComponent
 import com.carlom.klardrop.android.di.DaggerApplicationComponent
+import com.carlom.klardrop.android.service.DiscoveryForegroundService
 import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import com.klardrop.common.BugsnagConfig
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 class KlarDropApplication : Application(), ApplicationComponentProvider {
 
@@ -36,7 +40,26 @@ class KlarDropApplication : Application(), ApplicationComponentProvider {
     val applicationInfo = ApplicationInfo()
 
     component = DaggerApplicationComponent.factory().create(this, applicationInfo)
-    component.klardrop().init()
+    val klardrop = component.klardrop()
+    klardrop.init()
+
+    // Drive the opt-in "stay discoverable" foreground service off the persisted preference: start
+    // it when the user enables background discovery, stop it when they disable it. startForeground
+    // can be blocked if we're in the background (Android 12+), so guard it — MainActivity re-ensures
+    // the service on next foreground launch.
+    val commonComponent = klardrop.commonComponent
+    commonComponent.coroutines().appScope.launch {
+      commonComponent.localPropertiesRepository().properties
+        .map { it.backgroundDiscoveryEnabled }
+        .distinctUntilChanged()
+        .collect { enabled ->
+          if (enabled) {
+            runCatching { DiscoveryForegroundService.start(this@KlarDropApplication) }
+          } else {
+            DiscoveryForegroundService.stop(this@KlarDropApplication)
+          }
+        }
+    }
   }
 
 }

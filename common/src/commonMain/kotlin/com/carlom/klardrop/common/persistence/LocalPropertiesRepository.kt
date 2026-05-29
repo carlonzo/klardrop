@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.persistence
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.carlom.klardrop.common.utils.Coroutines
@@ -19,6 +20,10 @@ interface LocalPropertiesRepository {
   suspend fun save(properties: KlardropProperties)
   suspend fun saveCustomDeviceName(customDeviceName: String?)
 
+  /** Opt-in: keep the device discoverable/connectable while the app is backgrounded
+   *  (Android backs this with a foreground service). */
+  suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean)
+
 }
 
 internal class LocalPropertiesRepositoryImpl(
@@ -28,11 +33,13 @@ internal class LocalPropertiesRepositoryImpl(
 
   private val deviceIdKey = stringPreferencesKey("device_id")
   private val customDeviceNameKey = stringPreferencesKey("custom_device_name")
+  private val backgroundDiscoveryEnabledKey = booleanPreferencesKey("background_discovery_enabled")
 
   override val properties: Flow<KlardropProperties> = dataStore.data.mapLatest {
     KlardropProperties(
       deviceId = it[deviceIdKey] ?: "",
-      customDeviceName = it[customDeviceNameKey]
+      customDeviceName = it[customDeviceNameKey],
+      backgroundDiscoveryEnabled = it[backgroundDiscoveryEnabledKey] ?: false,
     )
   }
 
@@ -45,7 +52,14 @@ internal class LocalPropertiesRepositoryImpl(
       dataStore.edit {
         it.putOrRemove(deviceIdKey, properties.deviceId)
         it.putOrRemove(customDeviceNameKey, properties.customDeviceName)
+        it[backgroundDiscoveryEnabledKey] = properties.backgroundDiscoveryEnabled
       }
+    }
+  }
+
+  override suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean) {
+    withContext(coroutines.ioDispatcher) {
+      dataStore.edit { it[backgroundDiscoveryEnabledKey] = enabled }
     }
   }
 
@@ -66,5 +80,6 @@ internal fun <T>MutablePreferences.putOrRemove(key: Preferences.Key<T>, value: T
 
 data class KlardropProperties(
   val deviceId: String,
-  val customDeviceName: String? = null
+  val customDeviceName: String? = null,
+  val backgroundDiscoveryEnabled: Boolean = false,
 )

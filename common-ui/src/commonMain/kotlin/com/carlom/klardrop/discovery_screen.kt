@@ -44,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -91,9 +92,11 @@ fun DiscoveryScreen(
 ) {
     val discoveryState by discoveryController.screenStateFlow.collectAsState()
     val permissionsState by discoveryController.permissionsState.collectAsState()
+    val backgroundDiscoveryEnabled by discoveryController.backgroundDiscoveryEnabled.collectAsState()
 
     var deviceUiForShare by remember { mutableStateOf<DeviceUi?>(null) }
     var showShareSheet by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
     val shareSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val filePickerLauncher = rememberFilePickerLauncher(mode = FileKitMode.Multiple()) { files ->
@@ -133,7 +136,17 @@ fun DiscoveryScreen(
         receiveCallbacks = discoveryController,
         onDeviceRename = { newName -> discoveryController.saveCustomDeviceName(newName) },
         onRequestCapability = onRequestCapability,
+        onSettingsClick = { showSettings = true },
     )
+
+    if (showSettings) {
+        SettingsSheet(
+            backgroundDiscoveryEnabled = backgroundDiscoveryEnabled,
+            showBackgroundDiscoveryToggle = discoveryController.supportsBackgroundDiscovery,
+            onBackgroundDiscoveryChange = { discoveryController.setBackgroundDiscoveryEnabled(it) },
+            onDismiss = { showSettings = false },
+        )
+    }
 
     if (showShareSheet) {
         val devices = discoveryState.devices
@@ -189,6 +202,7 @@ private fun DiscoveryDashboard(
     receiveCallbacks: ReceiveNotificationsCallbacks,
     onDeviceRename: (String) -> Unit,
     onRequestCapability: (Capability) -> Unit,
+    onSettingsClick: () -> Unit = {},
 ) {
     var showRenameSheet by remember { mutableStateOf(false) }
     var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
@@ -221,6 +235,7 @@ private fun DiscoveryDashboard(
             DiscoveryHeader(
                 currentDeviceName = currentDeviceName,
                 onEditIdentity = { showRenameSheet = true },
+                onSettingsClick = onSettingsClick,
             )
 
             Column(
@@ -323,6 +338,7 @@ private fun DiscoveryDashboard(
 private fun DiscoveryHeader(
     currentDeviceName: String,
     onEditIdentity: () -> Unit,
+    onSettingsClick: () -> Unit = {},
 ) {
     val colors = KdTheme.colors
     val typography = KdTheme.typography
@@ -373,7 +389,7 @@ private fun DiscoveryHeader(
                 .size(spacing.s8)
                 .clip(CircleShape)
                 .background(colors.bg2)
-                .clickable { },
+                .clickable(onClick = onSettingsClick),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -382,6 +398,66 @@ private fun DiscoveryHeader(
                 tint = colors.text2,
                 modifier = Modifier.size(spacing.s5),
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsSheet(
+    backgroundDiscoveryEnabled: Boolean,
+    showBackgroundDiscoveryToggle: Boolean,
+    onBackgroundDiscoveryChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = KdTheme.radii.shapeSheet,
+        containerColor = colors.bg1,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = spacing.s4)
+                .padding(bottom = spacing.s6),
+        ) {
+            Text(text = "Settings", style = typography.title.copy(color = colors.text))
+            Spacer(Modifier.height(spacing.s4))
+
+            if (showBackgroundDiscoveryToggle) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Stay discoverable in background",
+                            style = typography.body.copy(color = colors.text),
+                        )
+                        Text(
+                            text = "Keep this device visible and able to receive when the app is closed. " +
+                                "Shows a persistent notification and uses more battery.",
+                            style = typography.caption.copy(color = colors.text2),
+                        )
+                    }
+                    Spacer(Modifier.width(spacing.s3))
+                    Switch(
+                        checked = backgroundDiscoveryEnabled,
+                        onCheckedChange = onBackgroundDiscoveryChange,
+                    )
+                }
+            } else {
+                Text(
+                    text = "No settings available on this platform yet.",
+                    style = typography.caption.copy(color = colors.text2),
+                )
+            }
         }
     }
 }

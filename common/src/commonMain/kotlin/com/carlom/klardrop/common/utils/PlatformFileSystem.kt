@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.utils
 
 import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.getAvailableFilePath
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.cacheDir
@@ -26,6 +27,20 @@ interface PlatformFileSystem {
   fun getWriteStreamTo(path: Path): RawSink
 
   fun getResolvedFileData(platformFile: PlatformFile): ResolvedFileData
+
+  /**
+   * Copy [platformFile] into a stable, app-private cache file and return a handle to the copy
+   * plus the resolved metadata (with [ResolvedFileData.fileSize] set to the exact number of bytes
+   * actually copied).
+   *
+   * Must be called while the caller still holds read access to the source. On Android a
+   * `content://` URI handed in via a share Intent is only readable for the lifetime of the
+   * receiving Activity — once it finishes, re-opening the URI throws SecurityException. Since a
+   * file transfer only streams its bytes *after* the remote peer accepts (well after the share
+   * sheet is gone), we materialize a local copy up-front. The returned file is backed by a real
+   * on-disk path, so it streams fine after the grant is gone and survives transfer retries.
+   */
+  suspend fun prepareFileForSending(platformFile: PlatformFile): PreparedSendFile
 
   suspend fun delete(path: Path)
 
@@ -60,6 +75,23 @@ internal class PlatformFileSystemImpl(
       fileSize = platformFile.size()
     )
   }
+
+  override suspend fun prepareFileForSending(platformFile: PlatformFile): PreparedSendFile =
+    withContext(coroutines.ioDispatcher) {
+      val data = getResolvedFileData(platformFile)
+      val destination = getAvailableFilePath(getTempStoragePath(), data.fileName, SystemFileSystem)
+
+      // Open the source stream here, while the caller still holds the read grant. Once the
+      // descriptor is acquired the copy keeps working even if the grant is revoked mid-copy.
+      val copied = getReadStreamFrom(platformFile).buffered().use { source ->
+        getWriteStreamTo(destination).buffered().use { sink -> source.transferTo(sink) }
+      }
+
+      log("PlatformFileSystem", "Cached ${data.fileName} ($copied bytes) for sending at $destination")
+      // Trust the byte count we actually copied over the source's reported size — the latter can
+      // be stale/unknown (-1) for content providers, and the streaming loop keys off fileSize.
+      PreparedSendFile(file = PlatformFile(destination), data = data.copy(fileSize = copied))
+    }
 
   override suspend fun delete(path: Path) {
     PlatformFile(path).delete()
@@ -132,6 +164,13 @@ data class ResolvedFileData(
   val fileName: String,
   val mimeType: String,
   val fileSize: Long
+)
+
+/** A shared file copied to app-private storage, ready to stream regardless of the original
+ *  source's lifecycle. See [PlatformFileSystem.prepareFileForSending]. */
+data class PreparedSendFile(
+  val file: PlatformFile,
+  val data: ResolvedFileData,
 )
 
 internal fun PlatformFile.mimeTypeFromExtension(): String {

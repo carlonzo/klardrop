@@ -181,7 +181,21 @@ internal fun String.isReachableAddress(): Boolean {
   if (startsWith("127.")) return false
   // IPv6 loopback, tolerating an optional zone id like "::1%eth0".
   if (substringBefore('%').equals("::1", ignoreCase = true)) return false
+  // Tailscale / CGNAT: 100.64.0.0/10 (IPv4) and Tailscale's fd7a:115c:a1e0::/48 (IPv6 ULA). These
+  // are only reachable over the tailnet, never on the LAN — dialing a peer's tailnet address just
+  // wastes connect attempts and can introduce asymmetric-routing resets on multi-homed peers.
+  if (isCgnatIpv4()) return false
+  if (substringBefore('%').lowercase().startsWith("fd7a:115c:a1e0")) return false
   return true
+}
+
+/** True for the 100.64.0.0/10 carrier-grade-NAT range that Tailscale (and CGNAT) use. */
+private fun String.isCgnatIpv4(): Boolean {
+  val octets = substringBefore('%').split('.')
+  if (octets.size != 4) return false
+  val first = octets[0].toIntOrNull() ?: return false
+  val second = octets[1].toIntOrNull() ?: return false
+  return first == 100 && second in 64..127
 }
 
 /**
