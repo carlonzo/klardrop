@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
 import com.carlom.klardrop.common.communication.message.PongMessage
@@ -18,6 +19,7 @@ open class FakeMessagesRouter: MessagesRouter {
     ackCallback: (suspend (MessageAcknowledgment) -> Unit),
     pongCallback: (suspend (PongMessage) -> Unit),
     writeLock: Mutex,
+    cipher: FrameCipher,
   ) {
 
   }
@@ -30,6 +32,7 @@ open class FakeMessagesRouter: MessagesRouter {
     progress: MutableSharedFlow<MessengerSendProgress>,
     awaitReadyAck: suspend () -> Unit,
     writeLock: Mutex,
+    cipher: FrameCipher,
   ) {
   }
 

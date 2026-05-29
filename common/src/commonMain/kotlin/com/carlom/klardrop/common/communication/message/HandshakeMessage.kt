@@ -13,6 +13,13 @@ import kotlin.random.Random
  *
  * The new fields default to empty/UNKNOWN, which keeps wire compatibility with
  * older peers that only emit [deviceId].
+ *
+ * [supportsEncryption] advertises whether this peer speaks the UKEY2-encrypted
+ * Klardrop transport. It is appended LAST so the positional protobuf field numbers
+ * of the existing fields are unchanged — older peers simply omit it and it decodes
+ * to `false`, which the TCP path treats as "does not support encryption". The
+ * field is set to `true` only on the TCP handshake (Client/Server); the BLE path
+ * leaves it `false` because BLE transfers stay cleartext for now.
  */
 @Serializable
 data class HandshakeMessage(
@@ -21,6 +28,7 @@ data class HandshakeMessage(
   val osType: OsType = OsType.UNKNOWN,
   val deviceType: DeviceType = DeviceType.UNKNOWN,
   override val id: Int = Random.nextInt(),
+  val supportsEncryption: Boolean = false,
 ) : Message() {
   override val type: MessageType = MessageType.HANDSHAKE
   override val hasPayload: Boolean = false

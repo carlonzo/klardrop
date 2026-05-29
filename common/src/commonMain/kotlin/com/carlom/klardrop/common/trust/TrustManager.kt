@@ -40,6 +40,14 @@ class TrustManager(
      * can rotate the derivation later without colliding with existing deployed keys.
      */
     private val CHUNK_MAC_INFO = "klardrop-chunk-mac-v1".encodeToByteArray()
+
+    /**
+     * Domain-separation prefix for the UKEY2 channel-binding signature. Prepended to the UKEY2
+     * verification string before signing so a binding signature can never be replayed as a
+     * signature over an application message (which is signed over a different layout) or vice
+     * versa. Versioned so the binding scheme can be rotated later.
+     */
+    private val UKEY2_BIND_CONTEXT = "klardrop-ukey2-bind-v1".encodeToByteArray()
   }
 
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -589,6 +597,37 @@ class TrustManager(
       log("🔐 TrustManager", "Internal error during message verification", e)
       return false
     }
+  }
+
+  /**
+   * Sign the UKEY2 [verificationString] with this device's persistent ECDSA identity key so the
+   * peer can bind the freshly negotiated (otherwise anonymous) UKEY2 channel to our known device
+   * identity. Reuses the same Keystore/Keychain-backed signing path as message signing.
+   *
+   * @return RAW 64-byte P-256/SHA-256 signature, or null if no device identity is available.
+   */
+  suspend fun signUkey2Binding(verificationString: ByteArray): ByteArray? = withContext(Dispatchers.Default) {
+    try {
+      initialize()
+      storage.signWithDeviceKey(UKEY2_BIND_CONTEXT + verificationString, crypto)
+    } catch (e: Exception) {
+      log("🔐 TrustManager", "Failed to sign UKEY2 binding", e)
+      null
+    }
+  }
+
+  /**
+   * Verify a peer's UKEY2 channel-binding [signature] over [verificationString] against the
+   * peer's stored ECDSA public key. Returns false if we hold no key for [peerDeviceId] (the
+   * caller decides whether to treat that as trust-on-first-use) or the signature is invalid.
+   */
+  suspend fun verifyUkey2Binding(
+    peerDeviceId: String,
+    verificationString: ByteArray,
+    signature: ByteArray,
+  ): Boolean = withContext(Dispatchers.Default) {
+    val peerKey = storage.getECDSAKey(peerDeviceId) ?: return@withContext false
+    crypto.verifyECDSA(peerKey, UKEY2_BIND_CONTEXT + verificationString, signature)
   }
 
   /**

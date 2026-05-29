@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.communication.message
 
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
+import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
@@ -351,7 +352,8 @@ class FileMessageHandler(
     toDeviceId: String,
     request: FileMessage.FileSendRequest,
     writeChannel: ByteWriteChannel,
-    progressFlow: MutableSharedFlow<MessengerSendProgress>
+    progressFlow: MutableSharedFlow<MessengerSendProgress>,
+    cipher: FrameCipher,
   ) {
     error("FileMessageHandler.handleOutgoing is bypassed by the router for FILE messages; " +
         "use handleOutgoingChunked() instead.")
@@ -363,6 +365,7 @@ class FileMessageHandler(
     writeChannel: ByteWriteChannel,
     progressFlow: MutableSharedFlow<MessengerSendProgress>,
     awaitReady: suspend () -> Unit,
+    cipher: FrameCipher,
   ) {
     error("FileMessageHandler.handleOutgoingWithReadyAck is bypassed by the router for FILE " +
         "messages; use handleOutgoingChunked() instead.")

@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.logLocal
@@ -31,6 +32,7 @@ class ClientImpl(
   private val serializer: MessageSerializer,
   private val visibleDevices: VisibleDevices,
   private val currentDeviceProvider: CurrentDeviceProvider,
+  private val trustManager: TrustManager,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
   private val bleTransport: BleTransport? = null,
@@ -117,6 +119,7 @@ class ClientImpl(
       deviceName = self.deviceName,
       osType = self.osType,
       deviceType = self.deviceType,
+      supportsEncryption = true,
     )
     val writeChannel = socket.openWriteChannel(autoFlush = true)
     writeChannel.sendMessage(handshakeMessage, serializer)
@@ -126,46 +129,67 @@ class ClientImpl(
     val readChannel = socket.openReadChannel()
     val serverHandshakeMessage = readChannel.readMessage(serializer) as HandshakeMessage
 
-    if (serverHandshakeMessage.deviceId == deviceId) {
-      log("Client", "Connection established with ${serverHandshakeMessage.deviceId}")
-
-      // Check if client and server have the same device ID (test scenario)
-      val clientDeviceId = currentDeviceProvider.get().shortDeviceId
-      if (clientDeviceId == deviceId) {
-        log("Client", "Client and server have same device ID - server will manage the connection")
-        // Don't create a client-side ConnectionMessenger to avoid conflicts
-        // The server has already created one and stored it with the same key
-      } else {
-        // Create a ConnectionMessenger for the client side to send messages to the server
-        val connection = Connection.Tcp(socket, deviceId)
-        val connectionMessenger = ConnectionMessenger(
-          coroutines = coroutines,
-          connection = connection,
-          messagesRouter = messagesRouter,
-          readChannel = readChannel,
-          writeChannel = writeChannel,
-          ackTimeoutConfig = ackTimeoutConfig,
-          heartbeatConfig = heartbeatConfig,
-          messageSerializer = serializer,
-          initiatedByUs = true,
-        )
-        
-        // Store the connection in the client's pool keyed by the server's device ID
-        connectionsPool.updateConnection(deviceId, connectionMessenger)
-        
-        // Start listening for incoming messages (including ACKs) in a separate coroutine
-        clientScope.launch {
-          connectionMessenger.acceptIncomingMessages()
-        }
-      }
-      
-      connectionJob.complete(true)
-    } else {
+    if (serverHandshakeMessage.deviceId != deviceId) {
       log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
       connectionJob.complete(false)
       socket.close()
+      return@runCatching
     }
 
+    // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
+    // than silently falling back to cleartext.
+    if (!serverHandshakeMessage.supportsEncryption) {
+      log("Client", "Device $deviceId does not support encrypted transport; refusing (encryption required)")
+      connectionJob.complete(false)
+      socket.close()
+      return@runCatching
+    }
+
+    log("Client", "Connection established with ${serverHandshakeMessage.deviceId}; starting UKEY2 handshake")
+
+    // Run the UKEY2 handshake (initiator role) over the same socket and bind it to the peer's
+    // device identity. Done before any ConnectionMessenger exists so every subsequent frame is
+    // encrypted.
+    val cipher = KlardropEncryptedTransport.runInitiatorHandshake(
+      readChannel = readChannel,
+      writeChannel = writeChannel,
+      selfDeviceId = self.shortDeviceId,
+      peerDeviceId = deviceId,
+      trustManager = trustManager,
+    )
+
+    // Check if client and server have the same device ID (test scenario). The UKEY2 handshake
+    // above still ran so the server side completes; we just don't create a competing
+    // client-side messenger — the server already manages this socket.
+    val clientDeviceId = self.shortDeviceId
+    if (clientDeviceId == deviceId) {
+      log("Client", "Client and server have same device ID - server will manage the connection")
+    } else {
+      // Create a ConnectionMessenger for the client side to send messages to the server
+      val connection = Connection.Tcp(socket, deviceId)
+      val connectionMessenger = ConnectionMessenger(
+        coroutines = coroutines,
+        connection = connection,
+        messagesRouter = messagesRouter,
+        readChannel = readChannel,
+        writeChannel = writeChannel,
+        ackTimeoutConfig = ackTimeoutConfig,
+        heartbeatConfig = heartbeatConfig,
+        messageSerializer = serializer,
+        cipher = cipher,
+        initiatedByUs = true,
+      )
+
+      // Store the connection in the client's pool keyed by the server's device ID
+      connectionsPool.updateConnection(deviceId, connectionMessenger)
+
+      // Start listening for incoming messages (including ACKs) in a separate coroutine
+      clientScope.launch {
+        connectionMessenger.acceptIncomingMessages()
+      }
+    }
+
+    connectionJob.complete(true)
   }
 
   private suspend fun establishBleConnection(
@@ -187,6 +211,7 @@ class ClientImpl(
         deviceName = self.deviceName,
         osType = self.osType,
         deviceType = self.deviceType,
+        supportsEncryption = true,
       ),
       serializer,
     )
@@ -194,6 +219,14 @@ class ClientImpl(
 
     if (serverHandshake.deviceId != deviceId) {
       log("Client", "BLE handshake id mismatch: expected $deviceId got ${serverHandshake.deviceId}")
+      bridge.close()
+      connectionJob.complete(false)
+      return@runCatching
+    }
+
+    // Encryption is required: refuse peers (e.g. older builds) that don't advertise it.
+    if (!serverHandshake.supportsEncryption) {
+      log("Client", "BLE peer $deviceId does not support encrypted transport; refusing (encryption required)")
       bridge.close()
       connectionJob.complete(false)
       return@runCatching
@@ -216,6 +249,16 @@ class ClientImpl(
       }
     }
 
+    // We (the central) spoke first, so we are the UKEY2 initiator — same role mapping as the
+    // TCP client. Runs over the BLE bridge channels before any messenger exists.
+    val cipher = KlardropEncryptedTransport.runInitiatorHandshake(
+      readChannel = bridge.readChannel,
+      writeChannel = bridge.writeChannel,
+      selfDeviceId = self.shortDeviceId,
+      peerDeviceId = deviceId,
+      trustManager = trustManager,
+    )
+
     val connection = Connection.Ble(session, deviceId)
     val connectionMessenger = ConnectionMessenger(
       coroutines = coroutines,
@@ -226,6 +269,7 @@ class ClientImpl(
       ackTimeoutConfig = ackTimeoutConfig,
       heartbeatConfig = heartbeatConfig,
       messageSerializer = serializer,
+      cipher = cipher,
       initiatedByUs = true,
     )
     connectionsPool.updateConnection(deviceId, connectionMessenger)

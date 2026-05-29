@@ -146,6 +146,7 @@ class CommunicationModule(
       serializer,
       visibleDevices,
       currentDeviceProvider,
+      trustManager,
       ackTimeoutConfig,
       heartbeatConfig,
       bleTransport,
@@ -162,6 +163,7 @@ class CommunicationModule(
         messagesRouter = messagesRouter,
         connectionsPool = connectionsPool,
         visibleDevices = visibleDevices,
+        trustManager = trustManager,
         ackTimeoutConfig = ackTimeoutConfig,
         heartbeatConfig = heartbeatConfig,
       )
@@ -209,6 +211,7 @@ class CommunicationModule(
       visibleDevices,
       messageReceiver,
       protoBuf,
+      trustManager,
       ackTimeoutConfig,
       heartbeatConfig,
     )

@@ -57,6 +57,19 @@ class ServerTest {
   }
 
   @Test
+  fun testDetectKlardropProtocolWithEncryptionFlag() {
+    // Wire-compat regression: a handshake carrying the new supportsEncryption field must still
+    // be classified as KLARDROP (the field is appended last, so existing field numbers are
+    // unchanged and detection only inspects the first cleartext handshake frame).
+    val handshakeMessage = HandshakeMessage("test-device-id", supportsEncryption = true)
+    val serializedHandshake = protoBuf.encodeToByteArray(HandshakeMessage.serializer(), handshakeMessage)
+    val payload = byteArrayOf(MessageType.HANDSHAKE.id) + serializedHandshake
+
+    val server = createTestServer()
+    assertEquals(Server.Protocol.KLARDROP, server.detectProtocol(payload))
+  }
+
+  @Test
   fun testDetectNearbyShareProtocol() {
     // Create a Nearby Share connection request
     val connectionRequest = OfflineFrame(
@@ -174,29 +187,29 @@ internal fun createTestServer(
 ): Server {
   val currentDeviceProvider = CurrentDeviceProvider(localPropertiesRepository)
 
+  val trustManager = com.carlom.klardrop.common.trust.TrustManager(
+    crypto = com.carlom.klardrop.common.trust.TrustCrypto(),
+    storage = object : com.carlom.klardrop.common.trust.TrustStorage {
+      override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {}
+      override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {}
+      override suspend fun getTrustedDeviceKey(deviceId: String): ByteArray? = null
+      override suspend fun getECDSAKey(deviceId: String): ByteArray? = null
+      override suspend fun getAllTrustedDevices(): Map<String, ByteArray> = emptyMap()
+      override suspend fun removeTrustedDevice(deviceId: String) {}
+      override suspend fun clearAllTrustedDevices() {}
+      override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {}
+      override suspend fun getDevicePrivateKey(): ByteArray? = null
+      override suspend fun storeDevicePublicKey(publicKey: ByteArray) {}
+      override suspend fun getDevicePublicKey(): ByteArray? = null
+      override suspend fun deleteDevicePrivateKey() {}
+    },
+    clock = com.carlom.klardrop.common.utils.Clock(),
+    currentDeviceProvider = currentDeviceProvider,
+  )
+
   // Always-accept authorizer — these tests exercise protocol detection only,
   // they never reach the receive pipeline that invokes it.
-  val authorizer = object : IncomingAuthorizer(
-    com.carlom.klardrop.common.trust.TrustManager(
-      crypto = com.carlom.klardrop.common.trust.TrustCrypto(),
-      storage = object : com.carlom.klardrop.common.trust.TrustStorage {
-        override suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray) {}
-        override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {}
-        override suspend fun getTrustedDeviceKey(deviceId: String): ByteArray? = null
-        override suspend fun getECDSAKey(deviceId: String): ByteArray? = null
-        override suspend fun getAllTrustedDevices(): Map<String, ByteArray> = emptyMap()
-        override suspend fun removeTrustedDevice(deviceId: String) {}
-        override suspend fun clearAllTrustedDevices() {}
-        override suspend fun storeDevicePrivateKey(privateKey: ByteArray) {}
-        override suspend fun getDevicePrivateKey(): ByteArray? = null
-        override suspend fun storeDevicePublicKey(publicKey: ByteArray) {}
-        override suspend fun getDevicePublicKey(): ByteArray? = null
-        override suspend fun deleteDevicePrivateKey() {}
-      },
-      clock = com.carlom.klardrop.common.utils.Clock(),
-      currentDeviceProvider = currentDeviceProvider,
-    )
-  ) {
+  val authorizer = object : IncomingAuthorizer(trustManager) {
     override suspend fun authorize(
       fromDeviceId: String,
       kind: TransferKind,
@@ -219,6 +232,7 @@ internal fun createTestServer(
     ),
     visibleDevices = visibleDevices,
     messageReceiver = messageReceiver,
-    protoBuf = ProtoBuf
+    protoBuf = ProtoBuf,
+    trustManager = trustManager,
   )
 }

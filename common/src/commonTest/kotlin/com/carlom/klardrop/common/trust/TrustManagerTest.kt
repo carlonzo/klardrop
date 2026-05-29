@@ -82,6 +82,30 @@ class TrustManagerTest {
   }
 
   @Test
+  fun ukey2BindingSignatureVerifiesViaPeerManager() = runTest {
+    // Alice signs the UKEY2 verification string; Bob, holding Alice's stored ECDSA public key,
+    // verifies it — the basis of the channel-identity binding.
+    val (alice, aliceStorage) = newManager(aliceId)
+    alice.initialize()
+    val (bob, bobStorage) = newManager(bobId)
+    bob.initialize()
+    bobStorage.storeECDSAKey(aliceId, aliceStorage.getDevicePublicKey()!!)
+
+    val verificationString = ByteArray(32) { it.toByte() }
+    val signature = alice.signUkey2Binding(verificationString)
+    assertNotNull(signature, "signUkey2Binding must return bytes when an identity exists")
+
+    assertTrue(
+      bob.verifyUkey2Binding(aliceId, verificationString, signature),
+      "Peer's binding signature must verify against the stored ECDSA key",
+    )
+    // A different verification string must not verify (no replay across sessions).
+    assertFalse(bob.verifyUkey2Binding(aliceId, ByteArray(32) { (it + 1).toByte() }, signature))
+    // Unknown peer (no stored key) returns false rather than throwing.
+    assertFalse(bob.verifyUkey2Binding("nobody00", verificationString, signature))
+  }
+
+  @Test
   fun secondInitializeReusesExistingKeypair() = runTest {
     val storage = InMemoryTrustStorage()
     val (manager1, _) = newManager(aliceId, storage)

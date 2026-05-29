@@ -40,6 +40,13 @@ class ConnectionMessenger internal constructor(
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
   private val messageSerializer: MessageSerializer? = null,
   /**
+   * Per-frame transport cipher. [FrameCipher.Plain] for cleartext links (BLE, or before a secure
+   * channel is established); a [FrameCipher.Encrypted] wrapping the connection's UKEY2 context for
+   * encrypted TCP links. Threaded into every read/write so PING/PONG, ACKs, TEXT, FILE headers and
+   * FILE chunks are all uniformly encrypted/decrypted.
+   */
+  private val cipher: FrameCipher = FrameCipher.Plain,
+  /**
    * True if WE opened this connection (we were the TCP/BLE client), false if the peer dialed us
    * (we were the server). [ConnectionsPool] uses this to deterministically resolve simultaneous
    * opens — both peers keep the connection initiated by the device with the smaller id.
@@ -116,6 +123,7 @@ class ConnectionMessenger internal constructor(
             handlePongMessage(pong)
           },
           writeLock = writeLock,
+          cipher = cipher,
         )
       }.onFailure {
         log("ConnectionMessenger: Exception in acceptIncomingMessages loop for ${connection.deviceId}: ${it::class.simpleName}: ${it.message}")
@@ -170,7 +178,7 @@ class ConnectionMessenger internal constructor(
       pongMutex.withLock { pendingPongs[pingId] = pongChannel }
 
       val writeOk = runCatching {
-        writeChannel.sendMessage(PingMessage(id = pingId), serializer)
+        writeChannel.sendMessage(PingMessage(id = pingId), serializer, cipher)
         true
       }.getOrElse {
         log("ConnectionMessenger: Heartbeat write failed for ${connection.deviceId}: ${it.message}")
@@ -370,11 +378,11 @@ class ConnectionMessenger internal constructor(
             )
           }
           messagesRouter.onSendingMessage(
-            connection.deviceId, sendRequest, writeChannel, readChannel, flow, awaitReady, writeLock,
+            connection.deviceId, sendRequest, writeChannel, readChannel, flow, awaitReady, writeLock, cipher,
           )
         } else {
           messagesRouter.onSendingMessage(
-            connection.deviceId, sendRequest, writeChannel, readChannel, flow, writeLock = writeLock,
+            connection.deviceId, sendRequest, writeChannel, readChannel, flow, writeLock = writeLock, cipher = cipher,
           )
         }
 
