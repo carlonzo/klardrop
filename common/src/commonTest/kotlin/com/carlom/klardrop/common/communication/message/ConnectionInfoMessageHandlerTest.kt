@@ -157,7 +157,7 @@ class ConnectionInfoMessageHandlerTest {
     val channel = ByteChannel(autoFlush = true)
     val progress = MutableSharedFlow<com.carlom.klardrop.common.communication.MessengerSendProgress>()
 
-    handler.handleOutgoing("peer-01", SimpleSendMessageRequest(message), channel, progress)
+    handler.handleOutgoing("peer-01", SimpleSendMessageRequest(message), channel, progress, com.carlom.klardrop.common.communication.FrameCipher.Plain)
     channel.flushAndClose()
 
     val allBytes = channel.readRemaining().readByteArray()

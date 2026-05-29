@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.communication.message
 
+import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.sendMessage
@@ -35,11 +36,12 @@ class ConnectionInfoMessageHandler(
     toDeviceId: String,
     request: SimpleSendMessageRequest,
     writeChannel: ByteWriteChannel,
-    progressFlow: MutableSharedFlow<MessengerSendProgress>
+    progressFlow: MutableSharedFlow<MessengerSendProgress>,
+    cipher: FrameCipher,
   ) {
     val connectionInfo = request.message as ConnectionInfoMessage
     log(TAG, "Sending connection info for SSID '${connectionInfo.ssid}' to $toDeviceId")
-    writeChannel.sendMessage(connectionInfo, serializer)
+    writeChannel.sendMessage(connectionInfo, serializer, cipher)
   }
 
   private companion object {

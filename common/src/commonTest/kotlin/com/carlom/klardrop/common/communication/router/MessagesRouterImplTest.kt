@@ -140,7 +140,8 @@ class MessagesRouterImplTest {
       toDeviceId: String,
       request: R,
       writeChannel: ByteWriteChannel,
-      progressFlow: MutableSharedFlow<MessengerSendProgress>
+      progressFlow: MutableSharedFlow<MessengerSendProgress>,
+      cipher: com.carlom.klardrop.common.communication.FrameCipher,
     ) {
       outgoingRequestHandled = request
     }

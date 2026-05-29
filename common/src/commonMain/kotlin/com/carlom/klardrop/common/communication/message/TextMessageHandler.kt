@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.communication.message
 
+import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.sendMessage
@@ -50,7 +51,8 @@ class TextMessageHandler(
     toDeviceId: String,
     request: SimpleSendMessageRequest,
     writeChannel: ByteWriteChannel,
-    progressFlow: MutableSharedFlow<MessengerSendProgress>
+    progressFlow: MutableSharedFlow<MessengerSendProgress>,
+    cipher: FrameCipher,
   ) {
     val textMessage = request.message as TextMessage
     log("TextMessageHandler", "Sending text message: ${textMessage.text}")
@@ -66,6 +68,6 @@ class TextMessageHandler(
     )
 
     // Send the message directly since it has no payload
-    writeChannel.sendMessage(textMessage, serializer)
+    writeChannel.sendMessage(textMessage, serializer, cipher)
   }
 }

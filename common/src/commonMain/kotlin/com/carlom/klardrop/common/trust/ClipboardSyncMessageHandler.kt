@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.trust
 
+import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.ClipboardSyncMessage
@@ -72,14 +73,15 @@ class ClipboardSyncMessageHandler(
         toDeviceId: String,
         request: SimpleSendMessageRequest,
         writeChannel: ByteWriteChannel,
-        progressFlow: MutableSharedFlow<MessengerSendProgress>
+        progressFlow: MutableSharedFlow<MessengerSendProgress>,
+        cipher: FrameCipher,
     ) {
         val message = request.message as ClipboardSyncMessage
         log("ClipboardSyncMessageHandler", "Sending clipboard sync message to $toDeviceId")
-        
+
         try {
             // Send the clipboard sync message
-            writeChannel.sendMessage(message, serializer)
+            writeChannel.sendMessage(message, serializer, cipher)
             log("ClipboardSyncMessageHandler", "Clipboard sync message sent successfully")
         } catch (e: Exception) {
             log("ClipboardSyncMessageHandler", "Failed to send clipboard sync: ${e.message}")

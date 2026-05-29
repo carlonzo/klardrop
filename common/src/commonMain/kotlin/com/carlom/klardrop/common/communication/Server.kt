@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
 import com.carlom.klardrop.common.receiver.MessageReceiver
+import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import com.carlom.klardrop.common.utils.log
@@ -84,6 +85,7 @@ class Server(
   private val visibleDevices: VisibleDevices,
   private val messageReceiver: MessageReceiver,
   private val protoBuf: ProtoBuf,
+  private val trustManager: TrustManager,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
 ) {
@@ -204,44 +206,65 @@ class Server(
 
     log("Server", "Klardrop connection request from: $remoteAddress - ${request.deviceId}")
 
-    if (isAcceptedSender(request.deviceId, remoteAddress)) {
-      val writeChannel = socket.openWriteChannel(autoFlush = true)
-      val connection = Connection.Tcp(socket, request.deviceId)
-      val connectionMessenger = ConnectionMessenger(
-        coroutines = coroutines,
-        connection = connection,
-        messagesRouter = messagesRouter,
-        readChannel = readChannel,
-        writeChannel = writeChannel,
-        ackTimeoutConfig = ackTimeoutConfig,
-        heartbeatConfig = heartbeatConfig,
-        messageSerializer = serializer,
-      )
-
-      connectionsPool.updateConnection(request.deviceId, connectionMessenger)
-
-      // Send back introduction
-      val self = currentDeviceProvider.get()
-      val intro = HandshakeMessage(
-        deviceId = self.shortDeviceId,
-        deviceName = self.deviceName,
-        osType = self.osType,
-        deviceType = self.deviceType,
-      )
-      log("Server", "Sending Klardrop greetings back to ${request.deviceId} on $remoteAddress")
-
-      writeChannel.sendMessage(intro, serializer)
-
-      log("Server", "Klardrop connection accepted from: $remoteAddress")
-
-      // Start listening for incoming messages in a separate coroutine
-      // This prevents blocking the connection establishment
-      serverScope.launch {
-        connectionMessenger.acceptIncomingMessages()
-      }
-    } else {
+    if (!isAcceptedSender(request.deviceId, remoteAddress)) {
       log("Server", "Klardrop connection rejected from: $remoteAddress")
       socket.close()
+      return
+    }
+
+    // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
+    // than silently falling back to cleartext.
+    if (!request.supportsEncryption) {
+      log("Server", "Peer ${request.deviceId} does not support encrypted transport; refusing (encryption required)")
+      socket.close()
+      return
+    }
+
+    val writeChannel = socket.openWriteChannel(autoFlush = true)
+
+    // Send back introduction (cleartext, like the request) advertising encryption support.
+    val self = currentDeviceProvider.get()
+    val intro = HandshakeMessage(
+      deviceId = self.shortDeviceId,
+      deviceName = self.deviceName,
+      osType = self.osType,
+      deviceType = self.deviceType,
+      supportsEncryption = true,
+    )
+    log("Server", "Sending Klardrop greetings back to ${request.deviceId} on $remoteAddress")
+    writeChannel.sendMessage(intro, serializer)
+
+    // Run the UKEY2 handshake (responder role) and bind it to the peer's device identity before
+    // any ConnectionMessenger exists, so every subsequent frame is encrypted.
+    val cipher = KlardropEncryptedTransport.runResponderHandshake(
+      readChannel = readChannel,
+      writeChannel = writeChannel,
+      selfDeviceId = self.shortDeviceId,
+      peerDeviceId = request.deviceId,
+      trustManager = trustManager,
+    )
+
+    val connection = Connection.Tcp(socket, request.deviceId)
+    val connectionMessenger = ConnectionMessenger(
+      coroutines = coroutines,
+      connection = connection,
+      messagesRouter = messagesRouter,
+      readChannel = readChannel,
+      writeChannel = writeChannel,
+      ackTimeoutConfig = ackTimeoutConfig,
+      heartbeatConfig = heartbeatConfig,
+      messageSerializer = serializer,
+      cipher = cipher,
+    )
+
+    connectionsPool.updateConnection(request.deviceId, connectionMessenger)
+
+    log("Server", "Klardrop connection accepted from: $remoteAddress")
+
+    // Start listening for incoming messages in a separate coroutine
+    // This prevents blocking the connection establishment
+    serverScope.launch {
+      connectionMessenger.acceptIncomingMessages()
     }
   }
 
@@ -292,7 +315,13 @@ class Server(
   }
 }
 
-internal suspend fun ByteReadChannel.readByteArrayMessage(): ByteArray {
+/**
+ * Reads one length-prefixed frame and returns the (decrypted) payload bytes. With
+ * [FrameCipher.Plain] this is the cleartext payload; with [FrameCipher.Encrypted] the on-wire
+ * bytes are the ciphertext and [FrameCipher.decode] recovers the original payload. Called only
+ * from the single read loop, so the cipher's receive sequence stays ordered.
+ */
+internal suspend fun ByteReadChannel.readByteArrayMessage(cipher: FrameCipher = FrameCipher.Plain): ByteArray {
   // Read message length first (4 bytes)
   val lengthBytes = ByteArray(4)
   readFully(lengthBytes)
@@ -302,32 +331,40 @@ internal suspend fun ByteReadChannel.readByteArrayMessage(): ByteArray {
       (lengthBytes[2].toInt() and 0xFF shl 8) or
       (lengthBytes[3].toInt() and 0xFF)
 
-  // Read the actual message
-  val messageBytes = ByteArray(messageLength)
-  readFully(messageBytes)
+  // Read the actual (possibly encrypted) frame
+  val wireBytes = ByteArray(messageLength)
+  readFully(wireBytes)
 
-  return messageBytes
+  return cipher.decode(wireBytes)
 }
 
-internal suspend fun ByteReadChannel.readMessage(serializer: MessageSerializer): Message {
-  val messageBytes = readByteArrayMessage()
+internal suspend fun ByteReadChannel.readMessage(serializer: MessageSerializer, cipher: FrameCipher = FrameCipher.Plain): Message {
+  val messageBytes = readByteArrayMessage(cipher)
   com.carlom.klardrop.common.utils.log("ByteReadChannel", "[DEBUG] Read message: ${messageBytes.size} bytes")
-  
+
   val message = serializer.deserialize(messageBytes)
   com.carlom.klardrop.common.utils.log("ByteReadChannel", "[DEBUG] Deserialized message: type=${message.type}, id=${message.id}, class=${message::class.simpleName}")
   return message
 }
 
-internal suspend fun ByteWriteChannel.sendMessage(message: Message, serializer: MessageSerializer) {
+/**
+ * Serializes [message] to the `[1-byte type][protobuf]` payload, applies [cipher] (identity for
+ * cleartext, AES-GCM for an encrypted link), and writes it length-prefixed.
+ *
+ * THREADING: with [FrameCipher.Encrypted] the encode step advances the context's send sequence
+ * number, so this call MUST happen under the connection's write mutex together with the write —
+ * callers already hold [ConnectionMessenger.writeLock] on every write path.
+ */
+internal suspend fun ByteWriteChannel.sendMessage(message: Message, serializer: MessageSerializer, cipher: FrameCipher = FrameCipher.Plain) {
   com.carlom.klardrop.common.utils.log("ByteWriteChannel", "[DEBUG] Sending message: type=${message.type}, id=${message.id}, class=${message::class.simpleName}")
-  val introBytes = serializer.serialize(message)
+  val wireBytes = cipher.encode(serializer.serialize(message))
   val introLengthBytes = ByteArray(4)
-  introLengthBytes[0] = (introBytes.size shr 24).toByte()
-  introLengthBytes[1] = (introBytes.size shr 16).toByte()
-  introLengthBytes[2] = (introBytes.size shr 8).toByte()
-  introLengthBytes[3] = introBytes.size.toByte()
+  introLengthBytes[0] = (wireBytes.size shr 24).toByte()
+  introLengthBytes[1] = (wireBytes.size shr 16).toByte()
+  introLengthBytes[2] = (wireBytes.size shr 8).toByte()
+  introLengthBytes[3] = wireBytes.size.toByte()
 
   writeByteArray(introLengthBytes)
-  writeByteArray(introBytes)
-  com.carlom.klardrop.common.utils.log("ByteWriteChannel", "[DEBUG] Message sent successfully: ${introBytes.size} bytes")
+  writeByteArray(wireBytes)
+  com.carlom.klardrop.common.utils.log("ByteWriteChannel", "[DEBUG] Message sent successfully: ${wireBytes.size} bytes")
 }

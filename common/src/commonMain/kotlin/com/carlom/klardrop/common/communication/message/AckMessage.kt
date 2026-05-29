@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.communication.message
 
+import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.log
@@ -23,7 +24,8 @@ class AckMessageHandler : MessageHandler<MessageAcknowledgment, SimpleSendMessag
     toDeviceId: String,
     request: SimpleSendMessageRequest,
     writeChannel: ByteWriteChannel,
-    progressFlow: MutableSharedFlow<MessengerSendProgress>
+    progressFlow: MutableSharedFlow<MessengerSendProgress>,
+    cipher: FrameCipher,
   ) {
     log("AckMessageHandler", "Sending ACK: ${(request.message as MessageAcknowledgment).ackType} for message ${request.message.id}")
     // ACKs are sent directly, no additional handling needed

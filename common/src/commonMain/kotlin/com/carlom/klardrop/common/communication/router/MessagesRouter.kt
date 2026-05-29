@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.communication.router
 
+import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.AckType
@@ -48,6 +49,7 @@ interface MessagesRouter {
     ackCallback: (suspend (MessageAcknowledgment) -> Unit),
     pongCallback: (suspend (PongMessage) -> Unit) = {},
     writeLock: Mutex = Mutex(),
+    cipher: FrameCipher = FrameCipher.Plain,
   )
 
   /**
@@ -73,6 +75,7 @@ interface MessagesRouter {
     progress: MutableSharedFlow<MessengerSendProgress>,
     awaitReadyAck: suspend () -> Unit = {},
     writeLock: Mutex = Mutex(),
+    cipher: FrameCipher = FrameCipher.Plain,
   )
 }
 
@@ -121,21 +124,28 @@ internal class MessagesRouterImpl(
     deviceId: String,
     message: Message,
     writeChannel: ByteWriteChannel,
+    cipher: FrameCipher,
   ) {
-    if (trustManager.isTrusted(deviceId)) {
+    // On an authenticated-encrypted link the transport already provides confidentiality AND
+    // peer authenticity (the channel is bound to the peer's device ECDSA key during the UKEY2
+    // handshake), so the per-message TrustedMessage ECDSA wrapper is redundant — skip it. The
+    // decision is driven by our OWN confirmed channel state ([FrameCipher.authenticated]), never
+    // by a peer-supplied flag, so an attacker can't induce a downgrade. Cleartext / unauthenticated
+    // links (BLE, opportunistic) keep signing for trusted peers.
+    if (!cipher.authenticated && trustManager.isTrusted(deviceId)) {
       // Preserve the inner message id on the wire frame so the sender (which registers
       // pending-ACKs under message.id) can match the receiver's ack reply (which echoes
       // rawMessage.id from the wire). Without this, the wire-frame id is random and
       // every ack falls into the "Unexpected ACK ... no matching pending request" bucket.
       val trustedMessage = trustManager.signMessage(messageSerializer.serialize(message), id = message.id)
       if (trustedMessage != null) {
-        writeChannel.sendMessage(trustedMessage, messageSerializer)
+        writeChannel.sendMessage(trustedMessage, messageSerializer, cipher)
       } else {
         log("MessagesRouter", "Failed to sign message for trusted device $deviceId")
-        writeChannel.sendMessage(message, messageSerializer)
+        writeChannel.sendMessage(message, messageSerializer, cipher)
       }
     } else {
-      writeChannel.sendMessage(message, messageSerializer)
+      writeChannel.sendMessage(message, messageSerializer, cipher)
     }
   }
 
@@ -146,9 +156,10 @@ internal class MessagesRouterImpl(
     ackCallback: (suspend (MessageAcknowledgment) -> Unit),
     pongCallback: (suspend (PongMessage) -> Unit),
     writeLock: Mutex,
+    cipher: FrameCipher,
   ) = coroutines.ioDispatcher {
 
-    val rawMessage = readChannel.readMessage(messageSerializer)
+    val rawMessage = readChannel.readMessage(messageSerializer, cipher)
     log(
       "MessagesRouter",
       "[DEBUG] Raw message received from $fromDeviceId: type=${rawMessage.type}, id=${rawMessage.id}, hasPayload=${rawMessage.hasPayload}"
@@ -183,7 +194,7 @@ internal class MessagesRouterImpl(
             )
             if (revocation != null) {
               writeLock.withLock {
-                writeChannel.sendMessage(revocation, messageSerializer)
+                writeChannel.sendMessage(revocation, messageSerializer, cipher)
               }
             } else {
               log("MessagesRouter", "Failed to build revocation reply for ${rawMessage.senderId}")
@@ -222,7 +233,12 @@ internal class MessagesRouterImpl(
             rawMessage is PongMessage ||
             rawMessage is MessageAcknowledgment ||
             rawMessage is FileChunkMessage
-        if (isTrustedDevice && !isPairingMessage && !isControlPlane) {
+        // On an authenticated-encrypted link the sender deliberately skips the TrustedMessage
+        // wrapper (the channel already authenticates the peer), so unsigned application messages
+        // from a trusted peer are EXPECTED — don't reject them. On cleartext/unauthenticated links
+        // a trusted peer's application message must still be signed. Gate is driven by our own
+        // channel state, so a downgrade can't slip an unsigned message past us.
+        if (isTrustedDevice && !isPairingMessage && !isControlPlane && !cipher.authenticated) {
           log("MessagesRouter", "SECURITY: unsigned message from trusted device $fromDeviceId - rejecting")
           return@ioDispatcher
         }
@@ -237,7 +253,7 @@ internal class MessagesRouterImpl(
 
     if (message is PingMessage) {
       writeLock.withLock {
-        sendMessageToDevice(fromDeviceId, PongMessage(pingId = message.id), writeChannel)
+        sendMessageToDevice(fromDeviceId, PongMessage(pingId = message.id), writeChannel, cipher)
       }
       return@ioDispatcher
     }
@@ -255,12 +271,12 @@ internal class MessagesRouterImpl(
       // sender doesn't push chunks until ACK_READY, so reordering with subsequent chunks
       // for the same header isn't possible.
       authorizationScope.launch {
-        handleFileHeader(message, ackId, fromDeviceId, writeChannel, writeLock)
+        handleFileHeader(message, ackId, fromDeviceId, writeChannel, writeLock, cipher)
       }
       return@ioDispatcher
     }
     if (message is FileChunkMessage) {
-      handleFileChunk(message, fromDeviceId, writeChannel, writeLock)
+      handleFileChunk(message, fromDeviceId, writeChannel, writeLock, cipher)
       return@ioDispatcher
     }
     // ===== end FILE special-case =====
@@ -292,14 +308,14 @@ internal class MessagesRouterImpl(
           notifyAwaitingUser = {
             val ackAwaiting = MessageAcknowledgment(AckType.AWAITING_USER, ackId)
             writeLock.withLock {
-              sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel)
+              sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel, cipher)
             }
           },
         )
         if (!authorized) {
           val ackRejected = MessageAcknowledgment(AckType.REJECTED, ackId)
           writeLock.withLock {
-            sendMessageToDevice(fromDeviceId, ackRejected, writeChannel)
+            sendMessageToDevice(fromDeviceId, ackRejected, writeChannel, cipher)
           }
           return@launch
         }
@@ -310,7 +326,7 @@ internal class MessagesRouterImpl(
         messageHandler.handleIncoming(message, readChannel, receiveFlow)
         val ackReceived = MessageAcknowledgment(AckType.RECEIVED, ackId)
         writeLock.withLock {
-          sendMessageToDevice(fromDeviceId, ackReceived, writeChannel)
+          sendMessageToDevice(fromDeviceId, ackReceived, writeChannel, cipher)
         }
       }
       return@ioDispatcher
@@ -320,7 +336,7 @@ internal class MessagesRouterImpl(
       if (!isAckMessage) {
         val ackReady = MessageAcknowledgment(AckType.READY, ackId)
         writeLock.withLock {
-          sendMessageToDevice(fromDeviceId, ackReady, writeChannel)
+          sendMessageToDevice(fromDeviceId, ackReady, writeChannel, cipher)
         }
       }
 
@@ -341,7 +357,7 @@ internal class MessagesRouterImpl(
     if (!isAckMessage) {
       val ackReceived = MessageAcknowledgment(AckType.RECEIVED, ackId)
       writeLock.withLock {
-        sendMessageToDevice(fromDeviceId, ackReceived, writeChannel)
+        sendMessageToDevice(fromDeviceId, ackReceived, writeChannel, cipher)
       }
     }
   }
@@ -363,6 +379,7 @@ internal class MessagesRouterImpl(
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
     writeLock: Mutex,
+    cipher: FrameCipher,
   ) {
     val receiveFlow = messengeReceiver.onReceiveMessage(fromDeviceId)
 
@@ -378,24 +395,26 @@ internal class MessagesRouterImpl(
       notifyAwaitingUser = {
         val ackAwaiting = MessageAcknowledgment(AckType.AWAITING_USER, ackId)
         writeLock.withLock {
-          sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel)
+          sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel, cipher)
         }
       },
     )
     if (!authorized) {
       val ackRejected = MessageAcknowledgment(AckType.REJECTED, ackId)
       writeLock.withLock {
-        sendMessageToDevice(fromDeviceId, ackRejected, writeChannel)
+        sendMessageToDevice(fromDeviceId, ackRejected, writeChannel, cipher)
       }
       return
     }
 
-    // If we have a shared secret with this peer (paired post-secret-persistence), we
-    // expect every chunk to carry an HMAC tag — anti-downgrade is enforced locally:
-    // the receiver checks based on its own knowledge of the trust state, so an attacker
-    // can't strip the field to bypass verification.
+    // On an authenticated-encrypted link every chunk frame is already AEAD-authenticated by the
+    // transport, so the per-chunk HMAC is redundant — skip requiring it. On cleartext/
+    // unauthenticated links, if we have a shared secret with this peer (paired
+    // post-secret-persistence) we expect every chunk to carry an HMAC tag — anti-downgrade is
+    // enforced locally: the receiver checks based on its own knowledge of the trust + channel
+    // state, so an attacker can't strip the field to bypass verification.
     val verifyChunkMac: (suspend (chunk: FileChunkMessage) -> Boolean)? =
-      if (trustManager.macKeyFor(fromDeviceId) != null) {
+      if (!cipher.authenticated && trustManager.macKeyFor(fromDeviceId) != null) {
         { chunk ->
           val tag = chunk.mac
           if (tag == null) false
@@ -431,7 +450,7 @@ internal class MessagesRouterImpl(
     // escape uncaught (it crashed a dispatcher worker) and don't leak the registered pipeline — the
     // sender never got ACK_READY so it won't stream chunks; fail the transfer and drop the pipeline.
     val ackReady = MessageAcknowledgment(AckType.READY, ackId)
-    val ackSent = runCatching { writeLock.withLock { sendMessageToDevice(fromDeviceId, ackReady, writeChannel) } }
+    val ackSent = runCatching { writeLock.withLock { sendMessageToDevice(fromDeviceId, ackReady, writeChannel, cipher) } }
     if (ackSent.isFailure) {
       val error = ackSent.exceptionOrNull() ?: IllegalStateException("ACK_READY send failed")
       log("MessagesRouter", "Failed to send ACK_READY for ${header.fileName} to $fromDeviceId (connection dropped?); failing transfer", error)
@@ -453,6 +472,7 @@ internal class MessagesRouterImpl(
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,
     writeLock: Mutex,
+    cipher: FrameCipher,
   ) {
     val pipeline = receiveMutex.withLock { receivePipelines[chunk.fileMessageId] }
     if (pipeline == null) {
@@ -471,7 +491,7 @@ internal class MessagesRouterImpl(
         pipeline.complete()
         val ackReceived = MessageAcknowledgment(AckType.RECEIVED, chunk.fileMessageId)
         writeLock.withLock {
-          sendMessageToDevice(fromDeviceId, ackReceived, writeChannel)
+          sendMessageToDevice(fromDeviceId, ackReceived, writeChannel, cipher)
         }
       }
     }
@@ -485,13 +505,14 @@ internal class MessagesRouterImpl(
     progress: MutableSharedFlow<MessengerSendProgress>,
     awaitReadyAck: suspend () -> Unit,
     writeLock: Mutex,
+    cipher: FrameCipher,
   ) {
     coroutines.ioDispatcher {
       val message = sendMessageRequest.message
 
       if (message is TrustedMessage) {
         writeLock.withLock {
-          writeChannel.sendMessage(message, messageSerializer)
+          writeChannel.sendMessage(message, messageSerializer, cipher)
         }
         return@ioDispatcher
       }
@@ -518,24 +539,32 @@ internal class MessagesRouterImpl(
             // contentHash inside the header); send chunks as raw frames. The receiver
             // accepts unsigned FileChunkMessage from trusted peers because the security
             // gate exempts them — see onMessageIncoming's `isControlPlane`-style check.
+            // On an authenticated-encrypted link sendMessageToDevice skips the signature
+            // (the channel already authenticates the peer) but still encrypts the frame.
             if (framedMessage is FileMessage) {
-              sendMessageToDevice(toDeviceId, framedMessage, writeChannel)
+              sendMessageToDevice(toDeviceId, framedMessage, writeChannel, cipher)
             } else {
-              writeChannel.sendMessage(framedMessage, messageSerializer)
+              writeChannel.sendMessage(framedMessage, messageSerializer, cipher)
             }
           }
         }
-        // Compute per-chunk HMAC tags via the per-pair key derived from the ECDH shared
-        // secret. Returns null if no shared secret on file — handler then falls back to
-        // the option-2 SHA-256 binding inside the (signed) header.
+        // Per-chunk HMAC tags via the per-pair key derived from the ECDH shared secret. On an
+        // authenticated-encrypted link the AEAD transport already authenticates every chunk
+        // frame, so we skip the redundant HMAC (a throughput win); cleartext/unauthenticated
+        // links keep it. Returns null when skipped or when no shared secret is on file — the
+        // handler then relies on the SHA-256 binding inside the (signed) header.
         val chunkMacFn: suspend (FileChunkMessage) -> ByteArray? = { chunk ->
-          trustManager.computeChunkMac(
-            deviceId = toDeviceId,
-            fileMessageId = chunk.fileMessageId,
-            seq = chunk.seq,
-            isLast = chunk.isLast,
-            data = chunk.data,
-          )
+          if (cipher.authenticated) {
+            null
+          } else {
+            trustManager.computeChunkMac(
+              deviceId = toDeviceId,
+              fileMessageId = chunk.fileMessageId,
+              seq = chunk.seq,
+              isLast = chunk.isLast,
+              data = chunk.data,
+            )
+          }
         }
         fileMessageHandler.handleOutgoingChunked(
           toDeviceId = toDeviceId,
@@ -556,9 +585,9 @@ internal class MessagesRouterImpl(
 
       writeLock.withLock {
         if (message.hasPayload) {
-          messageHandler.handleOutgoingWithReadyAck(toDeviceId, sendMessageRequest, writeChannel, progress, awaitReadyAck)
+          messageHandler.handleOutgoingWithReadyAck(toDeviceId, sendMessageRequest, writeChannel, progress, awaitReadyAck, cipher)
         } else {
-          messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress)
+          messageHandler.handleOutgoing(toDeviceId, sendMessageRequest, writeChannel, progress, cipher)
         }
       }
     }

@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.trust
 
+import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.Message
@@ -61,13 +62,14 @@ class TrustPairingRequestHandler(
         toDeviceId: String,
         request: SimpleSendMessageRequest,
         writeChannel: ByteWriteChannel,
-        progressFlow: MutableSharedFlow<MessengerSendProgress>
+        progressFlow: MutableSharedFlow<MessengerSendProgress>,
+        cipher: FrameCipher,
     ) {
         val message = request.message as TrustPairingRequest
         log("TrustPairingRequestHandler", "Sending pairing request to ${message.deviceName}")
         
         // Send the message
-        writeChannel.sendMessage(message, serializer)
+        writeChannel.sendMessage(message, serializer, cipher)
     }
 }
 
@@ -103,13 +105,14 @@ class TrustPairingResponseHandler(
         toDeviceId: String,
         request: SimpleSendMessageRequest,
         writeChannel: ByteWriteChannel,
-        progressFlow: MutableSharedFlow<MessengerSendProgress>
+        progressFlow: MutableSharedFlow<MessengerSendProgress>,
+        cipher: FrameCipher,
     ) {
         val message = request.message as TrustPairingResponse
         log("TrustPairingResponseHandler", "Sending pairing response to ${message.deviceName}")
         
         // Send the message
-        writeChannel.sendMessage(message, serializer)
+        writeChannel.sendMessage(message, serializer, cipher)
     }
 }
 
@@ -151,11 +154,12 @@ class TrustRevocationMessageHandler(
         toDeviceId: String,
         request: SimpleSendMessageRequest,
         writeChannel: ByteWriteChannel,
-        progressFlow: MutableSharedFlow<MessengerSendProgress>
+        progressFlow: MutableSharedFlow<MessengerSendProgress>,
+        cipher: FrameCipher,
     ) {
         val message = request.message as TrustRevocationMessage
         log("TrustRevocationMessageHandler", "Sending revocation to $toDeviceId")
-        writeChannel.sendMessage(message, serializer)
+        writeChannel.sendMessage(message, serializer, cipher)
     }
 }
 
@@ -224,13 +228,14 @@ class TrustedMessageHandler(
         toDeviceId: String,
         request: SimpleSendMessageRequest,
         writeChannel: ByteWriteChannel,
-        progressFlow: MutableSharedFlow<MessengerSendProgress>
+        progressFlow: MutableSharedFlow<MessengerSendProgress>,
+        cipher: FrameCipher,
     ) {
         val message = request.message as TrustedMessage
         log("TrustedMessageHandler", "Sending trusted message to $toDeviceId")
         
         // Send the signed message
-        writeChannel.sendMessage(message, serializer)
+        writeChannel.sendMessage(message, serializer, cipher)
     }
 }
 

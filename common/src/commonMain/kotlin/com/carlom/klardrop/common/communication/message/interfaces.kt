@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.communication.message
 
+import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import io.ktor.utils.io.*
@@ -167,7 +168,13 @@ class TransferRejectedException(val messageId: Int) :
 interface MessageHandler<E : Message, R : SendMessageRequest> {
 
   suspend fun handleIncoming(message: E, readChannel: ByteReadChannel, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>)
-  suspend fun handleOutgoing(toDeviceId: String, request: R, writeChannel: ByteWriteChannel, progressFlow: MutableSharedFlow<MessengerSendProgress>)
+
+  /**
+   * Sends [request]. [cipher] is the connection's transport cipher — handlers MUST pass it to
+   * every `writeChannel.sendMessage(...)` call so the frame is encrypted on an encrypted link
+   * ([FrameCipher.Plain] is a no-op for cleartext links).
+   */
+  suspend fun handleOutgoing(toDeviceId: String, request: R, writeChannel: ByteWriteChannel, progressFlow: MutableSharedFlow<MessengerSendProgress>, cipher: FrameCipher)
 
   /**
    * Variant for messages that have a payload. The handler MUST send the
@@ -184,7 +191,8 @@ interface MessageHandler<E : Message, R : SendMessageRequest> {
     writeChannel: ByteWriteChannel,
     progressFlow: MutableSharedFlow<MessengerSendProgress>,
     awaitReady: suspend () -> Unit,
+    cipher: FrameCipher,
   ) {
-    handleOutgoing(toDeviceId, request, writeChannel, progressFlow)
+    handleOutgoing(toDeviceId, request, writeChannel, progressFlow, cipher)
   }
 }

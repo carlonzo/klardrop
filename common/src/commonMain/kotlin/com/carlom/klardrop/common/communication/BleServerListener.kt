@@ -9,6 +9,7 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +32,7 @@ class BleServerListener(
   private val messagesRouter: MessagesRouter,
   private val connectionsPool: ConnectionsPool,
   private val visibleDevices: VisibleDevices,
+  private val trustManager: TrustManager,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
 ) {
@@ -81,6 +83,37 @@ class BleServerListener(
         }
       }
 
+      // Encryption is required: refuse centrals (e.g. older builds) that don't advertise it.
+      if (!clientHandshake.supportsEncryption) {
+        log(TAG, "BLE central ${clientHandshake.deviceId} does not support encrypted transport; refusing")
+        bridge.close()
+        return
+      }
+
+      // Reply with our handshake (advertising encryption support) so the central side can
+      // unblock its read, then run the UKEY2 handshake before creating the messenger.
+      val self = currentDeviceProvider.get()
+      bridge.writeChannel.sendMessage(
+        HandshakeMessage(
+          deviceId = self.shortDeviceId,
+          deviceName = self.deviceName,
+          osType = self.osType,
+          deviceType = self.deviceType,
+          supportsEncryption = true,
+        ),
+        serializer,
+      )
+
+      // The central spoke first on the wire, so it is the UKEY2 initiator and we are the
+      // responder — same role mapping as the TCP server.
+      val cipher = KlardropEncryptedTransport.runResponderHandshake(
+        readChannel = bridge.readChannel,
+        writeChannel = bridge.writeChannel,
+        selfDeviceId = self.shortDeviceId,
+        peerDeviceId = clientHandshake.deviceId,
+        trustManager = trustManager,
+      )
+
       val connection = Connection.Ble(session, clientHandshake.deviceId)
       val connectionMessenger = ConnectionMessenger(
         coroutines = coroutines,
@@ -91,20 +124,9 @@ class BleServerListener(
         ackTimeoutConfig = ackTimeoutConfig,
         heartbeatConfig = heartbeatConfig,
         messageSerializer = serializer,
+        cipher = cipher,
       )
       connectionsPool.updateConnection(clientHandshake.deviceId, connectionMessenger)
-
-      // Reply with our handshake so the central side can unblock its read.
-      val self = currentDeviceProvider.get()
-      bridge.writeChannel.sendMessage(
-        HandshakeMessage(
-          deviceId = self.shortDeviceId,
-          deviceName = self.deviceName,
-          osType = self.osType,
-          deviceType = self.deviceType,
-        ),
-        serializer,
-      )
 
       scope.launch { connectionMessenger.acceptIncomingMessages() }
     } catch (t: Throwable) {
