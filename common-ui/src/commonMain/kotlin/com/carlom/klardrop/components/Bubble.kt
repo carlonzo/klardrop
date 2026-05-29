@@ -28,6 +28,16 @@ enum class KdBubbleDirection { In, Out }
 enum class KdDeliveryState { Sending, Sent, Delivered, Failed }
 
 /**
+ * Shared cap on how tall a bubble's content may grow before it's clipped.
+ *
+ * Used by image previews and long text alike so every bubble tops out at the
+ * same height — a single, very long message no longer dominates the thread.
+ * When text exceeds this, the chat surfaces an "Expand" quick action that opens
+ * the full message in a sheet/dialog.
+ */
+val KdBubbleMaxContentHeight = 200.dp
+
+/**
  * Chat message bubble with asymmetric corner radius.
  *
  * Corner spec:

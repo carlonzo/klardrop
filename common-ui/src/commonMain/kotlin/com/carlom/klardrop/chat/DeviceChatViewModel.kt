@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.database.Messages
+import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
@@ -42,6 +43,7 @@ class DeviceChatViewModel(
   private val coroutines: Coroutines,
   private val fileManager: FileManager,
   private val platformFileSystem: PlatformFileSystem,
+  private val clipboardManager: ClipboardManager,
   reachabilitySource: StateFlow<Map<String, Reachability>>,
 ) {
 
@@ -125,6 +127,12 @@ class DeviceChatViewModel(
     }
   }
 
+  fun copyText(text: String) {
+    if (text.isEmpty()) return
+    clipboardManager.write(text)
+    _uiState.update { it.copy(notice = "Copied to clipboard") }
+  }
+
   fun openUrlClicked(url: String) {
     viewModelScope.launch {
       try {
@@ -182,6 +190,10 @@ class DeviceChatViewModel(
     _uiState.value = _uiState.value.copy(error = null)
   }
 
+  fun clearNotice() {
+    _uiState.update { it.copy(notice = null) }
+  }
+
   fun retryFileTransfer(failedFileTransferId: Long) {
     viewModelScope.launch {
       val row = messageRepository.getFileTransferById(failedFileTransferId).first() ?: run {
@@ -221,5 +233,6 @@ class DeviceChatViewModel(
 }
 
 internal data class ChatUiState(
-  val error: String? = null
+  val error: String? = null,
+  val notice: String? = null,
 )
