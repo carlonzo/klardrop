@@ -16,6 +16,20 @@ version = "1.0-SNAPSHOT"
 val klardropVersionName: String = providers.gradleProperty("klardrop.version").getOrElse("1.0-SNAPSHOT")
 val klardropVersionCode: Int = providers.gradleProperty("klardrop.versionCode").map { it.toInt() }.getOrElse(1)
 
+// Release signing: keystore + credentials come from env vars (CI) or gradle
+// properties (local, e.g. ~/.gradle/gradle.properties or -P). When absent we fall
+// back to debug signing so plain dev builds and secret-less CI still work. The
+// keystore itself is never committed.
+fun signingValue(env: String, prop: String): String? =
+  providers.environmentVariable(env).orNull ?: providers.gradleProperty(prop).orNull
+
+val releaseStoreFilePath = signingValue("KLARDROP_KEYSTORE_FILE", "klardrop.keystoreFile")
+val releaseStorePassword = signingValue("KLARDROP_KEYSTORE_PASSWORD", "klardrop.keystorePassword")
+val releaseKeyAlias = signingValue("KLARDROP_KEY_ALIAS", "klardrop.keyAlias")
+val releaseKeyPassword = signingValue("KLARDROP_KEY_PASSWORD", "klardrop.keyPassword") ?: releaseStorePassword
+val hasReleaseSigning =
+  releaseStoreFilePath != null && releaseStorePassword != null && releaseKeyAlias != null
+
 repositories {
   mavenCentral()
 }
@@ -46,11 +60,28 @@ android {
     proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
   }
 
+  signingConfigs {
+    if (hasReleaseSigning) {
+      create("release") {
+        storeFile = file(releaseStoreFilePath!!)
+        storePassword = releaseStorePassword
+        keyAlias = releaseKeyAlias
+        keyPassword = releaseKeyPassword
+      }
+    }
+  }
+
   buildTypes {
 
     getByName("release") {
-      isMinifyEnabled = false
-      signingConfig = signingConfigs.getByName("debug")
+      isMinifyEnabled = true
+      // Real signing key when configured (CI / local with creds); otherwise debug
+      // so the release variant still builds and installs for development.
+      signingConfig = if (hasReleaseSigning) {
+        signingConfigs.getByName("release")
+      } else {
+        signingConfigs.getByName("debug")
+      }
     }
 
     getByName("debug") {
