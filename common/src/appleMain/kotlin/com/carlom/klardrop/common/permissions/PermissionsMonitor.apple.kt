@@ -1,7 +1,10 @@
 package com.carlom.klardrop.common.permissions
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import platform.CoreBluetooth.CBCentralManager
 import platform.CoreBluetooth.CBManagerAuthorizationAllowedAlways
 import platform.CoreBluetooth.CBManagerAuthorizationDenied
@@ -21,7 +24,23 @@ import platform.CoreBluetooth.CBManagerAuthorizationRestricted
  */
 actual class PermissionsMonitor {
 
-  actual fun observe(): Flow<PermissionsState> {
+  // See the Android impl: the system Bluetooth prompt only pauses the app, so
+  // [refresh] pings this to force a re-read of CBCentralManager.authorization.
+  private val refreshTrigger = MutableSharedFlow<Unit>(
+    extraBufferCapacity = 1,
+    onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+  )
+
+  actual fun observe(): Flow<PermissionsState> = refreshTrigger
+    .map { snapshot() }
+    .onStart { emit(snapshot()) }
+    .distinctUntilChanged()
+
+  actual fun refresh() {
+    refreshTrigger.tryEmit(Unit)
+  }
+
+  private fun snapshot(): PermissionsState {
     val capabilities = mutableMapOf<Capability, CapabilityStatus>()
     capabilities[Capability.BLUETOOTH] = bluetoothStatus()
     capabilities[Capability.LOCAL_NETWORK] = CapabilityStatus.NotApplicable
@@ -29,7 +48,7 @@ actual class PermissionsMonitor {
     capabilities[Capability.LOCATION] = CapabilityStatus.NotApplicable
     capabilities[Capability.NEARBY_WIFI_DEVICES] = CapabilityStatus.NotApplicable
 
-    return flowOf(PermissionsState(capabilities = capabilities))
+    return PermissionsState(capabilities = capabilities)
   }
 
   private fun bluetoothStatus(): CapabilityStatus {

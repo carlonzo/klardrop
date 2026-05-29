@@ -8,10 +8,12 @@ import com.carlom.klardrop.common.notifications.ForegroundState
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 
 actual class PermissionsMonitor(
@@ -19,19 +21,33 @@ actual class PermissionsMonitor(
   private val foregroundState: ForegroundState,
 ) {
 
+  // Pinged by [refresh] to force a re-snapshot without a foreground transition.
+  // Buffered + drop-oldest so emitting from a non-suspending caller never blocks
+  // and a fresh request always supersedes a stale pending one.
+  private val refreshTrigger = MutableSharedFlow<Unit>(
+    extraBufferCapacity = 1,
+    onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
+  )
+
   /**
-   * The only way runtime permissions change while the process is alive is via
-   * system Settings, which requires leaving the app — so re-snapshotting on
-   * each foreground transition is sufficient, and avoids the log spam of a
-   * periodic poll. The initial emission comes from the StateFlow's replay of
-   * its current value the first time the activity is started.
+   * Runtime permissions change either via system Settings (which leaves the
+   * app, so a foreground transition re-snapshots) or via the in-app runtime
+   * prompt (which only pauses the Activity, producing no transition — that path
+   * is covered by [refresh]). The initial emission comes from [onStart]; the
+   * [distinctUntilChanged] keeps redundant snapshots from churning the UI.
    */
-  actual fun observe(): Flow<PermissionsState> = foregroundState.isForeground
-    .filter { it }
+  actual fun observe(): Flow<PermissionsState> = merge(
+    foregroundState.isForeground.filter { it }.map { },
+    refreshTrigger,
+  )
     .map { snapshot() }
     .onStart { emit(snapshot()) }
     .distinctUntilChanged()
     .flowOn(Dispatchers.Default)
+
+  actual fun refresh() {
+    refreshTrigger.tryEmit(Unit)
+  }
 
   private fun snapshot(): PermissionsState {
     val capabilities = mutableMapOf<Capability, CapabilityStatus>()
