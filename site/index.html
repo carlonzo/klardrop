@@ -584,10 +584,10 @@
           <span class="os"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.6c-2.1 0-3.4 1.7-3.4 3.9 0 1 .2 1.7.2 2.6 0 .9-.7 1.6-1.4 2.8-.8 1.3-2 2.9-2 4.8 0 .6.2 1.1.6 1.4-.1.5 0 1 .4 1.3.5.4 1.3.4 2.1.5.7.1 1.3.5 2 .6.3.4.8.6 1.5.6s1.2-.2 1.5-.6c.7-.1 1.3-.5 2-.6.8-.1 1.6-.1 2.1-.5.4-.3.5-.8.4-1.3.4-.3.6-.8.6-1.4 0-1.9-1.2-3.5-2-4.8-.7-1.2-1.4-1.9-1.4-2.8 0-.9.2-1.6.2-2.6 0-2.2-1.3-3.9-3.4-3.9Z"/></svg></span><span class="t"><small>Download for</small><b>Linux</b></span>
         </button>
         <button class="dl" type="button" data-platform="android">
-          <span class="os"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 9h12v8a1 1 0 0 1-1 1h-1v2.5a1.5 1.5 0 0 1-3 0V18h-2v2.5a1.5 1.5 0 0 1-3 0V18H7a1 1 0 0 1-1-1V9Zm-2 .5a1.5 1.5 0 0 1 3 0v5a1.5 1.5 0 0 1-3 0v-5Zm13 0a1.5 1.5 0 0 1 3 0v5a1.5 1.5 0 0 1-3 0v-5ZM8.2 8C8.5 5.6 10 4 12 4s3.5 1.6 3.8 4H8.2Z"/></svg></span><span class="t"><small>Get the</small><b>Android APK</b></span>
+          <span class="os"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 9h12v8a1 1 0 0 1-1 1h-1v2.5a1.5 1.5 0 0 1-3 0V18h-2v2.5a1.5 1.5 0 0 1-3 0V18H7a1 1 0 0 1-1-1V9Zm-2 .5a1.5 1.5 0 0 1 3 0v5a1.5 1.5 0 0 1-3 0v-5Zm13 0a1.5 1.5 0 0 1 3 0v5a1.5 1.5 0 0 1-3 0v-5ZM8.2 8C8.5 5.6 10 4 12 4s3.5 1.6 3.8 4H8.2Z"/></svg></span><span class="t"><small>Get it on</small><b>Google Play</b></span>
         </button>
-        <button class="dl" type="button" data-platform="ios" disabled>
-          <span class="os"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.2 1.8-3.3 1.9-3.3-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.6.8-3.3.8-.7 0-1.7-.8-2.8-.8-1.5 0-2.8.8-3.5 2.2-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.6.7 2.8.7c1.1 0 1.9-1 2.6-2.1.8-1.2 1.2-2.3 1.2-2.4-.1 0-2.3-.9-2.3-3.4Zm-2.3-6.3c.6-.7 1-1.7.9-2.7-.9 0-1.9.6-2.5 1.3-.5.6-1 1.6-.9 2.6 1 .1 2-.5 2.5-1.2Z"/></svg></span><span class="t"><small>iOS / iPadOS</small><b>Coming soon</b></span>
+        <button class="dl" type="button" data-platform="ios">
+          <span class="os"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.4 12.6c0-2.2 1.8-3.3 1.9-3.3-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.6.8-3.3.8-.7 0-1.7-.8-2.8-.8-1.5 0-2.8.8-3.5 2.2-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.1 1.1 0 1.5-.7 2.8-.7s1.6.7 2.8.7c1.1 0 1.9-1 2.6-2.1.8-1.2 1.2-2.3 1.2-2.4-.1 0-2.3-.9-2.3-3.4Zm-2.3-6.3c.6-.7 1-1.7.9-2.7-.9 0-1.9.6-2.5 1.3-.5.6-1 1.6-.9 2.6 1 .1 2-.5 2.5-1.2Z"/></svg></span><span class="t"><small>Download on the</small><b>App Store</b></span>
         </button>
       </div>
       <p class="dl-foot">Looking for checksums or older builds? <a href="https://github.com/carlonzo/klardrop/releases/latest" target="_blank" rel="noopener">Browse all releases on GitHub →</a></p>
@@ -665,10 +665,13 @@
     const LATEST_JSON   = `https://github.com/${REPO}/releases/latest/download/latest.json`;
     const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
     const LINUX_TARBALL = `https://github.com/${REPO}/releases/latest/download/klardrop-linux-x64.tar.gz`;
-    // PLACEHOLDER — Carlo will provide the real install script. Hosted on this same Pages site.
-    const INSTALL_SH    = "https://carlonzo.github.io/klardrop/install.sh";
-    const BREW_CMD      = "brew install carlonzo/tap/klardrop"; // custom tap; edit if the tap path differs
+    // Install script lives in the repo; the raw URL resolves once packaging/install.sh is on main.
+    const INSTALL_SH    = `https://raw.githubusercontent.com/${REPO}/main/packaging/install.sh`;
+    const BREW_CMD      = "brew install --cask carlonzo/klardrop/klardrop";
     const CURL_CMD      = `curl -fsSL ${INSTALL_SH} | bash`;
+    // Mobile stores — replace the placeholder IDs to light these buttons up (greyed out until then).
+    const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=<your.android.app.id>";
+    const APP_STORE_URL  = "https://apps.apple.com/app/id<APPSTORE_ID>";
 
     // SVG icons reused from the page
     const ICONS = {
@@ -712,22 +715,18 @@
     function bodyFor(platform){
       switch(platform){
         case "macos":
-          return primaryDownload("Download .dmg" + sizeFor("macos"), urlFor("macos"), "Universal build · macOS 12+")
+          return primaryDownload("Download .dmg" + sizeFor("macos"), urlFor("macos"), "macOS 12+ · unsigned build — right-click the app and choose <b>Open</b> the first time.")
             + `<div class="modal-or">or install with Homebrew</div>`
             + `<div><div class="opt-label">Homebrew</div>${codeBlock(BREW_CMD)}</div>`;
         case "windows":
           return primaryDownload("Download .msi" + sizeFor("windows"), urlFor("windows"), "Windows 10 and 11 (x64)");
         case "linux":
           return `<div><div class="opt-label">Install with one command</div>${codeBlock(CURL_CMD)}`
-            + `<p class="dl-note" style="text-align:left">Downloads the latest tarball, installs to <code>~/.local</code>, and links the <code>klardrop</code> binary.</p></div>`
-            + `<div class="modal-or">or download directly</div>`
+            + `<p class="dl-note" style="text-align:left">Downloads the latest tarball, installs to <code>~/.local</code>, and links the <code>klardrop</code> binary. Uninstall later with the same command plus <code>-s -- --uninstall</code>.</p></div>`
+            + `<div class="modal-or">or download the tarball</div>`
             + `<div class="sub-links">`
-            + `<a href="${esc(urlFor("linux-deb", RELEASES_PAGE))}" rel="noopener"><small>Debian / Ubuntu</small>.deb${sizeFor("linux-deb")}</a>`
-            + `<a href="${esc(LINUX_TARBALL)}" rel="noopener"><small>Any distro</small>.tar.gz</a>`
+            + `<a href="${esc(urlFor("linux-tarball", LINUX_TARBALL))}" rel="noopener"><small>Any distro · x64</small>.tar.gz${sizeFor("linux-tarball")}</a>`
             + `</div>`;
-        case "android":
-          return primaryDownload("Download .apk" + sizeFor("android"), urlFor("android"), "Sideload · Android 8.0+")
-            + `<p class="dl-note">You may need to allow installs from unknown sources.</p>`;
         default:
           return `<p class="dl-note">Not available yet.</p>`;
       }
@@ -759,10 +758,21 @@
       if(lastFocus) lastFocus.focus();
     }
 
+    const DESKTOP = new Set(['macos','windows','linux']);
     document.querySelectorAll('.dl[data-platform]').forEach(btn => {
-      if(btn.disabled) return;
-      btn.addEventListener('click', () => openModal(btn.dataset.platform));
+      if(DESKTOP.has(btn.dataset.platform)){
+        btn.addEventListener('click', () => openModal(btn.dataset.platform));
+      }
     });
+    // Mobile store buttons: live only once a real store URL is filled in (greyed out otherwise).
+    function wireStore(platform, url){
+      const btn = document.querySelector(`.dl[data-platform="${platform}"]`);
+      if(!btn) return;
+      if(!url || url.includes('<')){ btn.disabled = true; return; }
+      btn.addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+    }
+    wireStore('android', PLAY_STORE_URL);
+    wireStore('ios', APP_STORE_URL);
     document.getElementById('dlClose').addEventListener('click', closeModal);
     back.addEventListener('click', e => { if(e.target === back) closeModal(); });
     addEventListener('keydown', e => { if(e.key === 'Escape' && back.classList.contains('open')) closeModal(); });
