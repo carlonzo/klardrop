@@ -117,7 +117,11 @@ internal class PlatformFileSystemImpl(
     } else {
       withContext(coroutines.ioDispatcher) {
         val storagePath = platformDependencies.getDownloadStoragePath()
-        val destinationPath = Path(storagePath, path.name)
+        // Resolve collisions against the *destination* dir, not the temp cache the file was
+        // staged in. The staging dir can be empty (fresh/cleared cache) while Downloads already
+        // holds a file with this name — without this check the move below would overwrite it,
+        // which is exactly how three same-named files clobbered each other.
+        val destinationPath = getAvailableFilePath(storagePath, path.name, SystemFileSystem)
 
         // Try atomicMove first — same-filesystem (rename) is fastest. On Android the temp
         // file lives in app cache (`/data/data/...`) and the destination is the user's

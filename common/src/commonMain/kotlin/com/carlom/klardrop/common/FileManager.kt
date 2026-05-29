@@ -22,34 +22,26 @@ interface FileTransfer {
 
 fun getAvailableFilePath(parentPath: Path, requestedFileName: String, fileSystem: FileSystem): Path {
   val resolvedParent = fileSystem.resolve(parentPath)
-  var destinationPath = Path(resolvedParent, requestedFileName)
+  val firstChoice = Path(resolvedParent, requestedFileName)
 
-  while (fileSystem.exists(destinationPath)) {
-    destinationPath = generateNewFilePath(resolvedParent, destinationPath.name)
-    log("FileManagerImpl", "File already exists, generated new path: $destinationPath")
+  if (!fileSystem.exists(firstChoice)) {
+    return firstChoice
   }
 
-  return destinationPath
-}
-
-private fun generateNewFilePath(parentPath: Path, requestedFileName: String): Path {
-
-  val regex = ".+\\((\\d+)\\)".toRegex() // "file (1).txt"
+  // Split "dog.jpeg" into base "dog" and extension ".jpeg" so the counter goes before the
+  // extension: dog-1.jpeg, dog-2.jpeg, … rather than dog.jpeg-1.
   val extension = requestedFileName.substringAfterLast(".", "").let {
     if (it.isEmpty()) "" else ".$it"
   }
-  val fileName = requestedFileName.substring(0, requestedFileName.length - extension.length)
+  val baseName = requestedFileName.substring(0, requestedFileName.length - extension.length)
 
-  val match = regex.find(fileName)
-
-  return if (match == null) {
-    Path(parentPath, "$fileName (1)$extension")
-  } else {
-    match.groups[1]?.value?.toInt()?.let {
-      val newNumber = it + 1
-      val newFileName = fileName.replace("($it)", "($newNumber)")
-      Path(parentPath, "$newFileName$extension")
-    } ?: Path(parentPath, "$fileName (1)$extension")
+  var counter = 1
+  var destinationPath = Path(resolvedParent, "$baseName-$counter$extension")
+  while (fileSystem.exists(destinationPath)) {
+    counter++
+    destinationPath = Path(resolvedParent, "$baseName-$counter$extension")
   }
 
+  log("FileManagerImpl", "File '$requestedFileName' already exists, saving as: ${destinationPath.name}")
+  return destinationPath
 }
