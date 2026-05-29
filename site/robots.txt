@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://carlonzo.github.io/klardrop/sitemap.xml
