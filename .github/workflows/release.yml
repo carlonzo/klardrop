@@ -355,10 +355,10 @@ jobs:
           git commit -m "klardrop ${VERSION}" || { echo "no cask change"; exit 0; }
           git push
 
-  # Self-hosted apt + flatpak repos and the landing page, all served from the
-  # gh-pages branch. apt/flatpak need the GPG signing key (skipped without it);
-  # the landing page always publishes. A single job owns gh-pages so there's no
-  # concurrent-write race between the repos.
+  # Self-hosted apt + flatpak repos, served from the gh-pages branch. They need
+  # the GPG signing key (skipped without it). The landing page is NOT generated
+  # here — it's maintained separately and points at releases/latest URLs. A single
+  # job owns gh-pages so there's no concurrent-write race between the repos.
   pages:
     needs: [version, publish]
     runs-on: ubuntu-latest
@@ -379,7 +379,7 @@ jobs:
           if [ -n "${{ secrets.APT_GPG_PRIVATE_KEY }}" ] && [ -n "${{ secrets.APT_GPG_PASSPHRASE }}" ]; then
             echo "gpg=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No APT_GPG_* secrets — apt/flatpak repos will be skipped (landing page still publishes)."
+            echo "No APT_GPG_* secrets — apt/flatpak repos will be skipped."
             echo "gpg=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -461,50 +461,10 @@ jobs:
             echo "GPGKey=$(base64 -w0 ghp/flatpak/klardrop.gpg)"
           } > ghp/klardrop.flatpakrepo
 
-      - name: Write landing page
-        if: steps.guard.outputs.ok == 'true'
-        shell: bash
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          cat > ghp/index.html <<HTML
-          <!doctype html>
-          <html lang="en"><head><meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Klardrop — install</title>
-          <style>
-            body{font-family:system-ui,sans-serif;max-width:46rem;margin:3rem auto;padding:0 1rem;line-height:1.5;color:#1b1f24}
-            h1{margin-bottom:.2rem} .v{color:#667} code,pre{background:#f4f5f7;border-radius:6px}
-            pre{padding:.8rem 1rem;overflow:auto} code{padding:.1rem .3rem}
-            section{margin:1.6rem 0} a{color:#2563eb}
-          </style></head><body>
-          <h1>Klardrop</h1>
-          <p class="v">Latest release: <strong>${VERSION}</strong> · <a href="https://github.com/carlonzo/klardrop/releases/latest">all downloads</a></p>
-          <p>AirDrop-style nearby file &amp; clipboard sharing over your local network.</p>
-
-          <section><h2>macOS (Homebrew)</h2>
-          <pre>brew install --cask carlonzo/klardrop/klardrop</pre></section>
-
-          <section><h2>Arch (AUR)</h2>
-          <pre>yay -S klardrop-bin</pre></section>
-
-          <section><h2>Debian / Ubuntu (apt)</h2>
-          <pre>sudo install -d -m 0755 /etc/apt/keyrings
-          sudo curl -fsSL -o /etc/apt/keyrings/klardrop-archive-keyring.gpg \\
-            https://carlonzo.github.io/klardrop/apt/klardrop-archive-keyring.gpg
-          echo "deb [signed-by=/etc/apt/keyrings/klardrop-archive-keyring.gpg] https://carlonzo.github.io/klardrop/apt stable main" \\
-            | sudo tee /etc/apt/sources.list.d/klardrop.list
-          sudo apt update &amp;&amp; sudo apt install klardrop</pre></section>
-
-          <section><h2>Any Linux (Flatpak)</h2>
-          <pre>flatpak remote-add --if-not-exists klardrop https://carlonzo.github.io/klardrop/klardrop.flatpakrepo
-          flatpak install klardrop com.carlom.Klardrop</pre></section>
-
-          <section><h2>Windows</h2>
-          <p>Download the <code>.msi</code> from the <a href="https://github.com/carlonzo/klardrop/releases/latest">latest release</a>.</p></section>
-          </body></html>
-          HTML
+      # The landing page is maintained separately (outside this workflow) so it can
+      # point at the stable releases/latest/download/... URLs without ever being
+      # overwritten on release. This job only publishes the apt/flatpak repo trees
+      # to gh-pages and leaves any existing index.html untouched.
 
       - name: Commit + push gh-pages
         if: steps.guard.outputs.ok == 'true'
@@ -516,5 +476,5 @@ jobs:
           cd ghp
           git add -A
           git -c user.name=klardrop-ci -c user.email=carlo.marinangeli@gmail.com \
-            commit -m "Publish ${VERSION} (pages/apt/flatpak)" || { echo "nothing to commit"; exit 0; }
+            commit -m "Publish ${VERSION} (apt/flatpak)" || { echo "nothing to commit"; exit 0; }
           git push origin HEAD:gh-pages
