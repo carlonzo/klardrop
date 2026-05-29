@@ -80,11 +80,18 @@ actual class InternalPlatformDependencies(private val context: Context, private 
       // regular filesystem path (for everything else). Content URIs go straight into the
       // intent; filesystem paths are wrapped via FileProvider so the receiving app gets
       // a grantable URI it can read.
-      val uri: Uri = if (filePath.startsWith("content://")) {
-        Uri.parse(filePath)
-      } else {
-        val file = File(filePath)
-        FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+      val uri: Uri = when {
+        filePath.startsWith("content://") -> Uri.parse(filePath)
+        // MediaStore URIs are persisted by round-tripping through kotlinx.io Path, which on
+        // Android is backed by java.io.File. File collapses the "//" in "content://" to a
+        // single slash, so the stored value comes back as "content:/media/...". Restore the
+        // scheme separator before parsing instead of treating it as a filesystem path.
+        filePath.startsWith("content:/") ->
+          Uri.parse("content://" + filePath.removePrefix("content:/"))
+        else -> {
+          val file = File(filePath)
+          FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        }
       }
 
       val mime = context.contentResolver.getType(uri) ?: "*/*"
