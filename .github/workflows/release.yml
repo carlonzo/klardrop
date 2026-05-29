@@ -143,6 +143,10 @@ jobs:
             mkdir -p "$STAGE/icons/${s}x${s}"
             cp "brand/klardrop-icon-${s}.png" "$STAGE/icons/${s}x${s}/klardrop.png"
           done
+          # Scalable SVG (the source the PNGs are rendered from): the icon theme
+          # prefers it at any size, with the sized PNGs as fallback.
+          mkdir -p "$STAGE/icons/scalable"
+          cp brand/klardrop-icon.svg "$STAGE/icons/scalable/klardrop.svg"
 
           mkdir -p dist
           tar -czf dist/klardrop-linux-x64.tar.gz -C stage klardrop-linux-x64

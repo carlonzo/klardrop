@@ -71,7 +71,12 @@ klardrop-linux-x64/
   klardrop.desktop
   com.carlom.Klardrop.metainfo.xml
   icons/<size>/klardrop.png             # 32, 64, 128, 256, 512
+  icons/scalable/klardrop.svg           # scalable source (theme prefers it)
 ```
+
+The `.desktop` uses `Icon=klardrop` — a theme *name*, not a path — so it resolves
+to whichever `klardrop.*` the installer dropped into `hicolor` (the SVG at any size,
+PNGs as fallback). It works the same for a `/opt` or a `~/.local` install.
 
 ## In-app updates
 

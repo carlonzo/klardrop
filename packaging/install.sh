@@ -48,6 +48,7 @@ uninstall() {
   for s in 32 64 128 256 512; do
     rm -f "$ICON_DIR/${s}x${s}/apps/klardrop.png"
   done
+  rm -f "$ICON_DIR/scalable/apps/klardrop.svg"
   command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
   say "Done."
   exit 0
@@ -102,6 +103,10 @@ for s in 32 64 128 256 512; do
     cp "$src/icons/${s}x${s}/klardrop.png" "$ICON_DIR/${s}x${s}/apps/klardrop.png"
   fi
 done
+if [ -f "$src/icons/scalable/klardrop.svg" ]; then
+  mkdir -p "$ICON_DIR/scalable/apps"
+  cp "$src/icons/scalable/klardrop.svg" "$ICON_DIR/scalable/apps/klardrop.svg"
+fi
 
 # Refresh caches (best effort).
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
