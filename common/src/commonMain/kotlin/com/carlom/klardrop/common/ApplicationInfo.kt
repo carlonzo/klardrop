@@ -10,5 +10,5 @@ data class ApplicationInfo(
 
   val enableNearbyServer: Boolean = true,
 
-  val appVersion: String = "1.0.0"
+  val appVersion: String = KlardropVersion.VERSION
 )

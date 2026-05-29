@@ -1,9 +1,13 @@
 package com.carlom.klardrop.common.di
 
 import com.carlom.klardrop.common.ApplicationInfo
+import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileManagerImpl
 import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.update.UpdateChecker
+import com.carlom.klardrop.common.update.createUpdateManifestFetcher
+import com.carlom.klardrop.common.update.detectInstallChannel
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
@@ -87,6 +91,16 @@ class CommonComponent(
     TrustAwareDiscoveryUtils(communicationModule.trustManager())
   }
 
+  private val updateChecker: UpdateChecker by lazy {
+    UpdateChecker(
+      currentVersion = applicationInfo.appVersion,
+      osType = CommonPlatformDependencies.osType(),
+      fetcher = createUpdateManifestFetcher(),
+      detectChannel = ::detectInstallChannel,
+      coroutines = coroutines,
+    )
+  }
+
   fun discoveryNetwork() = discoveryModule.discoveryNetwork()
   fun server() = communicationModule.server()
   fun bleServerListener() = communicationModule.bleServerListener()
@@ -127,5 +141,10 @@ class CommonComponent(
   fun notifier() = internalPlatformDependency.notifier()
 
   fun foregroundState() = internalPlatformDependency.foregroundState()
+
+  fun updateChecker() = updateChecker
+
+  /** Hand a URL to the system handler (browser, etc.). Used by the update banner. */
+  suspend fun openUrl(url: String) = internalPlatformDependency.openUrl(url)
 
 }

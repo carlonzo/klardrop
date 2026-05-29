@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.carlom.Klardrop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+
+  <name>Klardrop</name>
+  <summary>Share files and clipboard with nearby devices</summary>
+
+  <description>
+    <p>
+      Klardrop is a cross-platform, AirDrop-style tool for sharing files and
+      clipboard content with nearby devices on the same local network. Devices
+      are discovered automatically over mDNS, and transfers run directly over a
+      raw TCP connection — no account, no cloud, no internet required.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Automatic discovery of nearby devices over the local network</li>
+      <li>Fast, direct file transfers with progress tracking</li>
+      <li>Share clipboard text between devices</li>
+      <li>Works across Android, desktop, and macOS</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">klardrop.desktop</launchable>
+
+  <url type="homepage">https://github.com/carlonzo/klardrop</url>
+  <url type="bugtracker">https://github.com/carlonzo/klardrop/issues</url>
+
+  <developer id="com.carlom">
+    <name>Carlo Marinangeli</name>
+  </developer>
+
+  <content_rating type="oars-1.1" />
+
+  <categories>
+    <category>Network</category>
+    <category>FileTransfer</category>
+  </categories>
+</component>

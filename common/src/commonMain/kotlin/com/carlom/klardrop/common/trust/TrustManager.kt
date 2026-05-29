@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
 import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.TrustedMessage
+import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.log
@@ -122,7 +123,7 @@ class TrustManager(
         ecdsaPublicKey = ecdsaPublicKeyBytes,
         timestamp = clock.currentTimeMillis(),
         deviceType = currentDevice.deviceType.name,
-        appVersion = "1.0.0" // TODO: Get from build config
+        appVersion = KlardropVersion.VERSION
       )
       log("🔐 TrustManager", " Created TrustPairingRequest: ${request.deviceId} -> $targetDeviceId")
 

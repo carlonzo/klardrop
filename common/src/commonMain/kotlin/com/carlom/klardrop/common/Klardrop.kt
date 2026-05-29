@@ -78,6 +78,9 @@ class Klardrop(
     // implies "reachable" — without this the user only finds out at send time
     // that the cached mDNS address is dead.
     commonComponent.eagerReachabilityConnector()?.start()
+
+    // Check for a newer release (desktop only; a no-op where unsupported).
+    commonComponent.updateChecker().checkNow()
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()

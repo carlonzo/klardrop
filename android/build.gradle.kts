@@ -9,6 +9,13 @@ plugins {
 group = "com.carlom.klardrop"
 version = "1.0-SNAPSHOT"
 
+// Version single source of truth: driven by the `vX.Y.Z` git tag via CI.
+// versionName comes straight from `klardrop.version`; versionCode is computed
+// in CI as major*10000 + minor*100 + patch and passed as `klardrop.versionCode`.
+// Local builds fall back to dev values.
+val klardropVersionName: String = providers.gradleProperty("klardrop.version").getOrElse("1.0-SNAPSHOT")
+val klardropVersionCode: Int = providers.gradleProperty("klardrop.versionCode").map { it.toInt() }.getOrElse(1)
+
 repositories {
   mavenCentral()
 }
@@ -34,8 +41,8 @@ android {
     applicationId = "com.carlom.klardrop.android"
     minSdk = 24
     targetSdk = 35
-    versionCode = 1
-    versionName = "1.0-SNAPSHOT"
+    versionCode = klardropVersionCode
+    versionName = klardropVersionName
     proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
   }
 

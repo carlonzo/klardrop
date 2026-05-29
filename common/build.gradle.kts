@@ -129,3 +129,35 @@ sqldelight {
     }
   }
 }
+
+// Single source of truth for the app version. The git tag drives everything:
+// CI passes `-Pklardrop.version=X.Y.Z` (derived from the `vX.Y.Z` tag); local
+// builds fall back to a sentinel so a dev build never masquerades as a release.
+// The value is baked into a generated KlardropVersion.kt visible to all targets.
+val klardropVersion: String = providers.gradleProperty("klardrop.version").getOrElse("0.0.0-dev")
+
+val generateKlardropVersion by tasks.registering {
+  val outputDir = layout.buildDirectory.dir("generated/version")
+  outputs.dir(outputDir)
+  // Captured as a local so the task action stays configuration-cache safe.
+  val versionValue = klardropVersion
+  inputs.property("version", versionValue)
+  doLast {
+    val pkgDir = outputDir.get().asFile.resolve("com/carlom/klardrop/common")
+    pkgDir.mkdirs()
+    pkgDir.resolve("KlardropVersion.kt").writeText(
+      """
+      package com.carlom.klardrop.common
+
+      /** Generated from the `klardrop.version` Gradle property — do not edit. */
+      object KlardropVersion {
+        const val VERSION: String = "$versionValue"
+      }
+      """.trimIndent() + "\n"
+    )
+  }
+}
+
+kotlin.sourceSets.commonMain {
+  kotlin.srcDir(generateKlardropVersion)
+}
