@@ -14,6 +14,8 @@ class UiDependencies(private val commonComponent: CommonComponent) {
         return DiscoveryController(commonComponent)
     }
 
+    fun updateBannerController(): UpdateBannerController = UpdateBannerController(commonComponent)
+
     fun deviceChatViewModelFactory(deviceId: String): DeviceChatViewModel {
         return DeviceChatViewModel(
             deviceId = deviceId,

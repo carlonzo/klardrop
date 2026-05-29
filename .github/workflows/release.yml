@@ -13,7 +13,41 @@ permissions:
   contents: write
 
 jobs:
+  # Resolve the version once. The git tag `vX.Y.Z` is the single source of truth;
+  # everything downstream consumes these outputs (no version is committed anywhere).
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version:     ${{ steps.v.outputs.version }}
+      tag:         ${{ steps.v.outputs.tag }}
+      versionCode: ${{ steps.v.outputs.versionCode }}
+      stable:      ${{ steps.v.outputs.stable }}
+    steps:
+      - id: v
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          TAG="v$VERSION"
+          # versionCode = major*10000 + minor*100 + patch (pre-release suffix stripped).
+          CORE="${VERSION%%-*}"
+          IFS='.' read -r MA MI PA <<< "$CORE"
+          CODE=$(( ${MA:-0} * 10000 + ${MI:-0} * 100 + ${PA:-0} ))
+          # A "stable" release is bare X.Y.Z (no pre-release suffix). Package-manager
+          # bumps only run for stable versions.
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then STABLE=true; else STABLE=false; fi
+          echo "version=$VERSION"        >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"                >> "$GITHUB_OUTPUT"
+          echo "versionCode=$CODE"       >> "$GITHUB_OUTPUT"
+          echo "stable=$STABLE"          >> "$GITHUB_OUTPUT"
+          echo "Resolved version=$VERSION tag=$TAG versionCode=$CODE stable=$STABLE"
+
   build:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -27,6 +61,12 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    env:
+      # Threaded into every gradle invocation so the build version matches the tag.
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.version.outputs.version }}
+        -Pklardrop.versionCode=${{ needs.version.outputs.versionCode }}
+
     steps:
       - uses: actions/checkout@v6
 
@@ -39,15 +79,75 @@ jobs:
 
       - name: Build macOS DMG
         if: matrix.target == 'macos'
-        run: ./gradlew :desktop:packageReleaseDmg
+        run: ./gradlew :desktop:packageReleaseDmg $GRADLE_VERSION_ARGS
 
       - name: Build Windows MSI
         if: matrix.target == 'windows'
-        run: ./gradlew :desktop:packageReleaseMsi
+        run: ./gradlew :desktop:packageReleaseMsi $GRADLE_VERSION_ARGS
 
-      - name: Build Linux DEB + Android APK
+      - name: Build Linux DEB + app-image + Android APK
         if: matrix.target == 'linux-android'
-        run: ./gradlew :desktop:packageReleaseDeb :android:assembleRelease
+        run: >-
+          ./gradlew
+          :desktop:packageReleaseDeb
+          :desktop:createReleaseDistributable
+          :android:assembleRelease
+          $GRADLE_VERSION_ARGS
+
+      # ProGuard gate: boot the *minified* app-image and fail the release if a
+      # reflection/serialization path was stripped. debug builds can't catch this
+      # because they aren't minified — only the release artifact exercises rules.pro.
+      - name: Smoke-test minified release (ProGuard gate)
+        if: matrix.target == 'linux-android'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y xvfb
+          APP=desktop/build/compose/binaries/main-release/app/klardrop/bin/klardrop
+          LOG="$(mktemp)"
+          # The app runs servers + a window forever, so time-box it; we only need
+          # the startup window where serialization/Wire/SQLite/jmDNS init runs.
+          set +e
+          timeout --preserve-status 35 xvfb-run -a "$APP" >"$LOG" 2>&1
+          set -e
+          echo "----- minified app log -----"; cat "$LOG"; echo "----------------------------"
+          # Any of these means ProGuard broke the minified build. VerifyError +
+          # "Exception in thread" are essential: both an optimizer-induced VerifyError
+          # and the coroutines/Compose crashes log "Starting Klardrop" *before* dying,
+          # so the boot check alone would miss them.
+          if grep -Eiq "VerifyError|Exception in thread|ServiceConfigurationError|ClassNotFoundException|NoClassDefFoundError|SerializationException|Serializer for class .* is not found|MissingFieldException|kotlinx\.serialization\.[A-Za-z]*Exception|ExceptionInInitializerError" "$LOG"; then
+            echo "::error::Minified release hit a reflection/serialization/verifier failure — fix desktop/rules.pro (keep rule or -dontoptimize) or the jpackage module set."
+            exit 1
+          fi
+          # Confirm it actually reached startup (logged very early, before the window).
+          grep -q "Starting Klardrop" "$LOG" || { echo "::error::Minified app did not reach startup"; exit 1; }
+          echo "Minified release booted cleanly."
+
+      - name: Stage Linux universal tarball
+        if: matrix.target == 'linux-android'
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          APPDIR=desktop/build/compose/binaries/main-release/app
+          STAGE=stage/klardrop-linux-x64
+          rm -rf stage && mkdir -p "$STAGE/icons"
+
+          # Self-contained bundle: app-image (with bundled JRE) + launcher integration.
+          # Consumed by AUR now, flatpak/apt later, and manual installs.
+          cp -r "$APPDIR/klardrop" "$STAGE/klardrop"
+          cp packaging/linux/klardrop.desktop "$STAGE/"
+          cp packaging/linux/com.carlom.Klardrop.metainfo.xml "$STAGE/"
+          for s in 32 64 128 256 512; do
+            mkdir -p "$STAGE/icons/${s}x${s}"
+            cp "brand/klardrop-icon-${s}.png" "$STAGE/icons/${s}x${s}/klardrop.png"
+          done
+
+          mkdir -p dist
+          tar -czf dist/klardrop-linux-x64.tar.gz -C stage klardrop-linux-x64
+          rm -rf stage
+          ls -la dist/
 
       - name: Stage artifacts
         shell: bash
@@ -72,7 +172,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -82,27 +182,12 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Resolve version
-        id: version
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
-            TAG="v$VERSION"
-          else
-            TAG="${GITHUB_REF_NAME}"
-            VERSION="${TAG#v}"
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG"        >> "$GITHUB_OUTPUT"
-
       - name: Generate checksums + latest.json
         shell: bash
         env:
-          REPO: ${{ github.repository }}
-          VERSION: ${{ steps.version.outputs.version }}
-          TAG:     ${{ steps.version.outputs.tag }}
+          REPO:    ${{ github.repository }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG:     ${{ needs.version.outputs.tag }}
         run: |
           set -euo pipefail
           cd artifacts
@@ -121,11 +206,12 @@ jobs:
           MSI=$(pick "*.msi")
           DEB=$(pick "*.deb")
           APK=$(pick "*.apk")
+          TGZ=$(pick "*.tar.gz")
 
           export BASE="https://github.com/${REPO}/releases/download/${TAG}"
-          python3 - "$DMG" "$MSI" "$DEB" "$APK" <<'PY' > latest.json
+          python3 - "$DMG" "$MSI" "$DEB" "$APK" "$TGZ" <<'PY' > latest.json
           import json, os, sys, datetime, pathlib
-          dmg, msi, deb, apk = sys.argv[1:5]
+          dmg, msi, deb, apk, tgz = sys.argv[1:6]
           base = os.environ["BASE"]
           def entry(name):
               if not name: return None
@@ -133,10 +219,11 @@ jobs:
               size   = pathlib.Path(name).stat().st_size
               return {"url": f"{base}/{name}", "sha256": digest, "size": size}
           platforms = {}
-          if dmg: platforms["macos"]     = entry(dmg)
-          if msi: platforms["windows"]   = entry(msi)
-          if deb: platforms["linux-deb"] = entry(deb)
-          if apk: platforms["android"]   = entry(apk)
+          if dmg: platforms["macos"]         = entry(dmg)
+          if msi: platforms["windows"]       = entry(msi)
+          if deb: platforms["linux-deb"]     = entry(deb)
+          if tgz: platforms["linux-tarball"] = entry(tgz)
+          if apk: platforms["android"]       = entry(apk)
           out = {
             "version":     os.environ["VERSION"],
             "tag":         os.environ["TAG"],
@@ -150,9 +237,284 @@ jobs:
 
       - uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name:     Klardrop ${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.version.outputs.tag }}
+          name:     Klardrop ${{ needs.version.outputs.version }}
           files:    artifacts/*
           draft: false
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  # Bump the AUR `klardrop-bin` package to the new release. Gated on the AUR SSH key
+  # existing and the version being stable — a partially-configured setup skips
+  # cleanly instead of failing the release.
+  aur:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Guard (secret present + stable version)
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          OK=true
+          if [ -z "${{ secrets.AUR_SSH_PRIVATE_KEY }}" ]; then
+            echo "AUR_SSH_PRIVATE_KEY not set — skipping AUR publish."; OK=false
+          fi
+          if [ "${{ needs.version.outputs.stable }}" != "true" ]; then
+            echo "Version is a pre-release — skipping AUR publish."; OK=false
+          fi
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+
+      - name: Render PKGBUILD
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        env:
+          REPO:    ${{ github.repository }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG:     ${{ needs.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          URL="https://github.com/${REPO}/releases/download/${TAG}/klardrop-linux-x64.tar.gz"
+          # Pull the just-published tarball and pin its checksum into the PKGBUILD.
+          curl -fsSL --retry 5 --retry-all-errors -o tarball.tar.gz "$URL"
+          SHA=$(sha256sum tarball.tar.gz | awk '{print $1}')
+          mkdir -p aur-pkg
+          sed -e "s/@PKGVER@/${VERSION}/g" -e "s/@SHA256@/${SHA}/g" \
+            packaging/aur/PKGBUILD > aur-pkg/PKGBUILD
+          echo "--- rendered PKGBUILD ---"; cat aur-pkg/PKGBUILD
+
+      - name: Publish to AUR
+        if: steps.guard.outputs.ok == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@v4
+        with:
+          pkgname: klardrop-bin
+          pkgbuild: aur-pkg/PKGBUILD
+          commit_username: ${{ github.actor }}
+          commit_email: carlo.marinangeli@gmail.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ needs.version.outputs.version }}"
+          updpkgsums: false
+
+  # Bump the Homebrew cask in the carlonzo/homebrew-klardrop tap. Gated on the
+  # tap token + a stable version.
+  homebrew:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Guard (token present + stable version)
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          OK=true
+          if [ -z "${{ secrets.HOMEBREW_TAP_TOKEN }}" ]; then
+            echo "HOMEBREW_TAP_TOKEN not set — skipping Homebrew publish."; OK=false
+          fi
+          if [ "${{ needs.version.outputs.stable }}" != "true" ]; then
+            echo "Version is a pre-release — skipping Homebrew publish."; OK=false
+          fi
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+
+      - name: Render cask
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG:      ${{ needs.version.outputs.tag }}
+          VERSION:  ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Hash the exact published DMG so the cask checksum matches what users download.
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern '*.dmg' --dir dmg
+          DMG="$(ls dmg/*.dmg | head -n1)"
+          SHA="$(sha256sum "$DMG" | awk '{print $1}')"
+          mkdir -p cask
+          sed -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA}/g" \
+            packaging/homebrew/klardrop.rb > cask/klardrop.rb
+          echo "--- rendered cask ---"; cat cask/klardrop.rb
+
+      - name: Push to tap
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION:   ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/carlonzo/homebrew-klardrop.git" tap
+          mkdir -p tap/Casks
+          cp cask/klardrop.rb tap/Casks/klardrop.rb   # casks MUST live under Casks/
+          cd tap
+          git config user.name "klardrop-ci"
+          git config user.email "carlo.marinangeli@gmail.com"
+          git add Casks/klardrop.rb
+          git commit -m "klardrop ${VERSION}" || { echo "no cask change"; exit 0; }
+          git push
+
+  # Self-hosted apt + flatpak repos and the landing page, all served from the
+  # gh-pages branch. apt/flatpak need the GPG signing key (skipped without it);
+  # the landing page always publishes. A single job owns gh-pages so there's no
+  # concurrent-write race between the repos.
+  pages:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Guard
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.version.outputs.stable }}" = "true" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Pre-release — skipping Pages/apt/flatpak."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "${{ secrets.APT_GPG_PRIVATE_KEY }}" ] && [ -n "${{ secrets.APT_GPG_PASSPHRASE }}" ]; then
+            echo "gpg=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No APT_GPG_* secrets — apt/flatpak repos will be skipped (landing page still publishes)."
+            echo "gpg=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out gh-pages working copy (create if missing)
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          if git clone --branch gh-pages --depth 1 "$REMOTE" ghp 2>/dev/null; then
+            echo "Cloned existing gh-pages."
+          else
+            echo "gh-pages missing — creating an orphan branch."
+            git clone --depth 1 "$REMOTE" ghp
+            ( cd ghp && git checkout --orphan gh-pages && git rm -rfq . || true )
+          fi
+          touch ghp/.nojekyll   # stop Pages running Jekyll over the repo trees
+
+      - name: Publish to apt repo
+        if: steps.guard.outputs.ok == 'true' && steps.guard.outputs.gpg == 'true'
+        shell: bash
+        env:
+          GH_TOKEN:            ${{ github.token }}
+          TAG:                 ${{ needs.version.outputs.tag }}
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE:  ${{ secrets.APT_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y reprepro gnupg
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern '*.deb' --dir deb
+          DEB="$(ls deb/*.deb | head -n1)"
+          mkdir -p ghp/apt/conf
+          cp packaging/apt/conf/distributions ghp/apt/conf/distributions
+          packaging/apt/publish.sh "$DEB" ghp/apt
+
+      - name: Publish to flatpak repo
+        if: steps.guard.outputs.ok == 'true' && steps.guard.outputs.gpg == 'true'
+        shell: bash
+        env:
+          TAG:                 ${{ needs.version.outputs.tag }}
+          VERSION:             ${{ needs.version.outputs.version }}
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE:  ${{ secrets.APT_GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+          # Render the manifest with the published tarball's checksum.
+          SHA="$(curl -fsSL "https://github.com/${{ github.repository }}/releases/download/${TAG}/klardrop-linux-x64.tar.gz" | sha256sum | awk '{print $1}')"
+          sed -i -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA}/g" \
+            packaging/flatpak/com.carlom.Klardrop.yml
+
+          # Headless GPG: import the key into an isolated, loopback-enabled GNUPGHOME.
+          export GNUPGHOME="$(mktemp -d)"; chmod 700 "$GNUPGHOME"
+          printf 'allow-loopback-pinentry\ndefault-cache-ttl 3600\nmax-cache-ttl 3600\n' > "$GNUPGHOME/gpg-agent.conf"
+          printf 'pinentry-mode loopback\n' > "$GNUPGHOME/gpg.conf"
+          gpgconf --kill gpg-agent || true
+          printf '%s' "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')"
+          # Prime the agent so flatpak's gpg calls sign without a prompt.
+          echo prime | gpg --batch --yes --pinentry-mode loopback --passphrase "$APT_GPG_PASSPHRASE" \
+            --local-user "$KEY" --detach-sign -o /dev/null -
+
+          flatpak-builder --user --force-clean --install-deps-from=flathub \
+            --repo=ghp/flatpak --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" \
+            build-dir packaging/flatpak/com.carlom.Klardrop.yml
+          flatpak build-update-repo --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" ghp/flatpak
+
+          # Public key + .flatpakrepo so users can add the remote.
+          gpg --batch --yes --export "$KEY" > ghp/flatpak/klardrop.gpg
+          {
+            echo "[Flatpak Repo]"
+            echo "Title=Klardrop"
+            echo "Url=https://carlonzo.github.io/klardrop/flatpak/"
+            echo "Homepage=https://github.com/carlonzo/klardrop"
+            echo "Comment=AirDrop-style nearby file sharing"
+            echo "Description=Klardrop Flatpak repository"
+            echo "GPGKey=$(base64 -w0 ghp/flatpak/klardrop.gpg)"
+          } > ghp/klardrop.flatpakrepo
+
+      - name: Write landing page
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cat > ghp/index.html <<HTML
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Klardrop — install</title>
+          <style>
+            body{font-family:system-ui,sans-serif;max-width:46rem;margin:3rem auto;padding:0 1rem;line-height:1.5;color:#1b1f24}
+            h1{margin-bottom:.2rem} .v{color:#667} code,pre{background:#f4f5f7;border-radius:6px}
+            pre{padding:.8rem 1rem;overflow:auto} code{padding:.1rem .3rem}
+            section{margin:1.6rem 0} a{color:#2563eb}
+          </style></head><body>
+          <h1>Klardrop</h1>
+          <p class="v">Latest release: <strong>${VERSION}</strong> · <a href="https://github.com/carlonzo/klardrop/releases/latest">all downloads</a></p>
+          <p>AirDrop-style nearby file &amp; clipboard sharing over your local network.</p>
+
+          <section><h2>macOS (Homebrew)</h2>
+          <pre>brew install --cask carlonzo/klardrop/klardrop</pre></section>
+
+          <section><h2>Arch (AUR)</h2>
+          <pre>yay -S klardrop-bin</pre></section>
+
+          <section><h2>Debian / Ubuntu (apt)</h2>
+          <pre>sudo install -d -m 0755 /etc/apt/keyrings
+          sudo curl -fsSL -o /etc/apt/keyrings/klardrop-archive-keyring.gpg \\
+            https://carlonzo.github.io/klardrop/apt/klardrop-archive-keyring.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/klardrop-archive-keyring.gpg] https://carlonzo.github.io/klardrop/apt stable main" \\
+            | sudo tee /etc/apt/sources.list.d/klardrop.list
+          sudo apt update &amp;&amp; sudo apt install klardrop</pre></section>
+
+          <section><h2>Any Linux (Flatpak)</h2>
+          <pre>flatpak remote-add --if-not-exists klardrop https://carlonzo.github.io/klardrop/klardrop.flatpakrepo
+          flatpak install klardrop com.carlom.Klardrop</pre></section>
+
+          <section><h2>Windows</h2>
+          <p>Download the <code>.msi</code> from the <a href="https://github.com/carlonzo/klardrop/releases/latest">latest release</a>.</p></section>
+          </body></html>
+          HTML
+
+      - name: Commit + push gh-pages
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd ghp
+          git add -A
+          git -c user.name=klardrop-ci -c user.email=carlo.marinangeli@gmail.com \
+            commit -m "Publish ${VERSION} (pages/apt/flatpak)" || { echo "nothing to commit"; exit 0; }
+          git push origin HEAD:gh-pages

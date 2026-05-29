@@ -44,9 +44,14 @@ compose.desktop {
     nativeDistributions {
       targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
       packageName = "klardrop"
-      packageVersion = "1.0.0"
+      // jpackage requires a strictly numeric x.y.z; CI always passes a clean one
+      // derived from the git tag. Local builds fall back to 1.0.0.
+      packageVersion = providers.gradleProperty("klardrop.version").getOrElse("1.0.0")
       modules("jdk.unsupported")
       modules("java.sql")
+      // The in-app update checker uses java.net.http.HttpClient; jlink omits this
+      // module from the bundled runtime unless we ask for it (NoClassDefFoundError otherwise).
+      modules("java.net.http")
 
       // Per-platform icons. Compose Desktop's bundler requires the native
       // icon format for each target: .icns on macOS, .ico on Windows, .png
@@ -65,6 +70,10 @@ compose.desktop {
       }
       linux {
         iconFile.set(file("icons/Klardrop.png"))
+        // Register an application-menu launcher in the generated .deb.
+        shortcut = true
+        menuGroup = "Network"
+        appCategory = "Network"
       }
     }
     buildTypes.release.proguard {

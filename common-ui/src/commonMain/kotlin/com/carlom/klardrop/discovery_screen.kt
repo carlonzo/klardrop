@@ -73,6 +73,7 @@ import com.carlom.klardrop.components.KdStatus
 import com.carlom.klardrop.components.SectionHead
 import com.carlom.klardrop.components.ShareSheet
 import com.carlom.klardrop.components.Banner
+import com.carlom.klardrop.components.UpdateBanner
 import com.carlom.klardrop.theme.KdEaseOut
 import com.carlom.klardrop.theme.KdTheme
 import io.github.vinceglb.filekit.dialogs.FileKitMode
@@ -93,6 +94,9 @@ fun DiscoveryScreen(
     val discoveryState by discoveryController.screenStateFlow.collectAsState()
     val permissionsState by discoveryController.permissionsState.collectAsState()
     val backgroundDiscoveryEnabled by discoveryController.backgroundDiscoveryEnabled.collectAsState()
+
+    val updateBannerController = remember(uiDependencies) { uiDependencies.updateBannerController() }
+    val updateStatus by updateBannerController.status.collectAsState()
 
     var deviceUiForShare by remember { mutableStateOf<DeviceUi?>(null) }
     var showShareSheet by remember { mutableStateOf(false) }
@@ -137,6 +141,12 @@ fun DiscoveryScreen(
         onDeviceRename = { newName -> discoveryController.saveCustomDeviceName(newName) },
         onRequestCapability = onRequestCapability,
         onSettingsClick = { showSettings = true },
+        updateBanner = {
+            UpdateBanner(
+                status = updateStatus,
+                onAction = updateBannerController::onAction,
+            )
+        },
     )
 
     if (showSettings) {
@@ -203,6 +213,7 @@ private fun DiscoveryDashboard(
     onDeviceRename: (String) -> Unit,
     onRequestCapability: (Capability) -> Unit,
     onSettingsClick: () -> Unit = {},
+    updateBanner: @Composable () -> Unit = {},
 ) {
     var showRenameSheet by remember { mutableStateOf(false) }
     var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
@@ -244,6 +255,9 @@ private fun DiscoveryDashboard(
                     .verticalScroll(rememberScrollState()),
             ) {
                 val spacing = KdTheme.spacing
+
+                // Update-available banner (desktop only; renders nothing otherwise).
+                updateBanner()
 
                 val motion = KdTheme.motion
                 AnimatedVisibility(

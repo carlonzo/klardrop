@@ -1,0 +1,29 @@
+# reprepro distribution config for the Klardrop APT repository.
+#
+# This file lives at <basedir>/conf/distributions where <basedir> is the apt
+# tree root (the `apt/` subdir of the gh-pages checkout). reprepro reads it to
+# know which suites/components/architectures exist and how to sign the metadata.
+#
+# Served from GitHub Pages at https://carlonzo.github.io/klardrop/apt/ and added
+# by users with:
+#   deb [signed-by=/etc/apt/keyrings/klardrop-archive-keyring.gpg] \
+#       https://carlonzo.github.io/klardrop/apt stable main
+#
+# SignWith: tells reprepro to sign Release (-> InRelease / Release.gpg) with GPG.
+#   - "yes"/"default" uses the default secret key in the keyring.
+#   - A key id / fingerprint pins a specific key.
+# CI imports exactly one key (from the APT_GPG_PRIVATE_KEY secret) into a clean
+# keyring, so "yes" reliably selects that key without hardcoding a fingerprint
+# that would have to change whenever the signing key is rotated. publish.sh sets
+# `ask-passphrase` is NOT used; instead the passphrase is supplied via a gpg
+# loopback pinentry agent configured in publish.sh, so signing stays
+# non-interactive in CI.
+
+Origin: Klardrop
+Label: Klardrop
+Codename: stable
+Suite: stable
+Architectures: amd64
+Components: main
+Description: Klardrop desktop releases - share files and clipboard with nearby devices (AirDrop-style)
+SignWith: yes

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Klardrop
+GenericName=Nearby File Sharing
+Comment=Share files and clipboard with nearby devices over the local network
+Exec=klardrop %F
+Icon=klardrop
+Terminal=false
+Categories=Network;FileTransfer;
+Keywords=share;airdrop;nearby;files;transfer;
+StartupWMClass=klardrop
