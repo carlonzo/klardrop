@@ -8,12 +8,9 @@ import kotlinx.serialization.Serializable
  * [UNKNOWN] on mobile (those platforms update through their app stores).
  */
 enum class InstallChannel {
-  AUR,       // Arch: yay -S klardrop-bin
-  APT,       // Debian/Ubuntu: apt upgrade
-  FLATPAK,   // flatpak update com.carlom.Klardrop
   BREW,      // macOS Homebrew cask
   DMG,       // macOS: downloaded .dmg by hand
-  TARBALL,   // Linux: extracted the universal tarball under /opt by hand
+  TARBALL,   // Linux: installed via the install.sh script (self-updatable in place)
   MANUAL,    // installed some other way
   UNKNOWN,   // couldn't tell / not a desktop build
 }
@@ -66,4 +63,24 @@ sealed interface UpdateAction {
 
   /** A URL to open in the browser (download page / specific asset). */
   data class OpenUrl(val url: String) : UpdateAction
+}
+
+/**
+ * Progress of an in-app self-update (download + verify + stage), for channels
+ * that can replace their own files (the Linux script install). The checker drives
+ * this through [UpdateChecker.install]; the banner renders it. Channels that can't
+ * self-install never leave [Idle] and fall back to the [UpdateAction].
+ */
+sealed interface InstallProgress {
+  /** No self-update in flight (or the channel can't self-install). */
+  data object Idle : InstallProgress
+
+  /** Downloading the new build. [fraction] is 0..1, or null when indeterminate (e.g. extracting). */
+  data class Downloading(val fraction: Float?) : InstallProgress
+
+  /** Downloaded, verified and staged — a restart applies it. */
+  data object Ready : InstallProgress
+
+  /** The self-update failed; the banner falls back to the [UpdateAction]. */
+  data class Failed(val message: String) : InstallProgress
 }

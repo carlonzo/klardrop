@@ -17,6 +17,8 @@ import kotlinx.coroutines.launch
  * @param osType used to pick the right download asset for the open-URL fallback.
  * @param fetcher platform manifest fetcher, or null where unsupported.
  * @param detectChannel resolves the install channel (runs subprocesses; called off-main).
+ * @param installerFactory builds the in-app self-updater for a channel, or returns
+ *   null when self-install isn't possible (then the UI uses the [UpdateAction]).
  * @param manifestUrl the `latest.json` URL; defaults to the stable "latest release" link.
  */
 class UpdateChecker(
@@ -25,6 +27,7 @@ class UpdateChecker(
   private val fetcher: UpdateManifestFetcher?,
   private val detectChannel: () -> InstallChannel,
   coroutines: Coroutines,
+  private val installerFactory: (InstallChannel) -> UpdateInstaller? = ::createUpdateInstaller,
   private val manifestUrl: String = DEFAULT_MANIFEST_URL,
 ) {
 
@@ -32,6 +35,13 @@ class UpdateChecker(
 
   private val _status = MutableStateFlow<UpdateStatus>(UpdateStatus.Unknown)
   val status: StateFlow<UpdateStatus> = _status.asStateFlow()
+
+  private val _install = MutableStateFlow<InstallProgress>(InstallProgress.Idle)
+  /** Progress of the in-app self-update, when one is possible. See [InstallProgress]. */
+  val install: StateFlow<InstallProgress> = _install.asStateFlow()
+
+  /** The staged self-updater, kept so [applyUpdate] can swap + relaunch. */
+  private var installer: UpdateInstaller? = null
 
   /** Fetch the manifest and update [status]. No-op on platforms without a fetcher. */
   fun checkNow() {
@@ -53,16 +63,51 @@ class UpdateChecker(
         channel = channel,
         action = actionFor(channel, manifest),
       )
+      maybeSelfInstall(channel, manifest)
     }
   }
 
+  /**
+   * If this channel can self-install and the manifest has a matching asset, start
+   * downloading + staging it in the background, reflecting progress in [install].
+   * On failure the banner falls back to the channel's [UpdateAction].
+   */
+  private suspend fun maybeSelfInstall(channel: InstallChannel, manifest: LatestManifest) {
+    if (_install.value is InstallProgress.Downloading) return
+    val inst = runCatching { installerFactory(channel) }.getOrNull() ?: return
+    val asset = manifest.platforms["linux-tarball"] ?: return
+    installer = inst
+    _install.value = InstallProgress.Downloading(null)
+    runCatching {
+      inst.downloadAndStage(asset) { fraction ->
+        _install.value = InstallProgress.Downloading(fraction)
+      }
+    }.onSuccess {
+      log("UpdateChecker", "update staged; ready to restart")
+      _install.value = InstallProgress.Ready
+    }.onFailure {
+      log("UpdateChecker", "self-install failed", it)
+      installer = null
+      _install.value = InstallProgress.Failed(it.message ?: "update download failed")
+    }
+  }
+
+  /** Swap in the staged update and relaunch. No-op unless [install] is [InstallProgress.Ready]. */
+  fun applyUpdate() {
+    if (_install.value != InstallProgress.Ready) return
+    installer?.applyAndRestart()
+  }
+
+  /**
+   * Fallback action when the in-app self-updater isn't available (see [install]).
+   * For a script (TARBALL) install that can't write its own files, re-running the
+   * one-line installer upgrades in place; Homebrew has its own upgrade command;
+   * everything else opens the download.
+   */
   private fun actionFor(channel: InstallChannel, manifest: LatestManifest): UpdateAction = when (channel) {
-    InstallChannel.AUR -> UpdateAction.RunCommand("yay -S klardrop-bin")
-    InstallChannel.APT -> UpdateAction.RunCommand("sudo apt update && sudo apt install --only-upgrade klardrop")
-    InstallChannel.FLATPAK -> UpdateAction.RunCommand("flatpak update com.carlom.Klardrop")
     InstallChannel.BREW -> UpdateAction.RunCommand("brew upgrade --cask klardrop")
+    InstallChannel.TARBALL -> UpdateAction.RunCommand("curl -fsSL $INSTALL_SCRIPT_URL | bash")
     InstallChannel.DMG,
-    InstallChannel.TARBALL,
     InstallChannel.MANUAL,
     InstallChannel.UNKNOWN -> UpdateAction.OpenUrl(downloadUrl(manifest))
   }
@@ -83,5 +128,9 @@ class UpdateChecker(
     const val DEFAULT_MANIFEST_URL =
       "https://github.com/carlonzo/klardrop/releases/latest/download/latest.json"
     const val RELEASES_PAGE = "https://github.com/carlonzo/klardrop/releases/latest"
+
+    /** One-line Linux installer; re-running it upgrades in place. */
+    const val INSTALL_SCRIPT_URL =
+      "https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh"
   }
 }

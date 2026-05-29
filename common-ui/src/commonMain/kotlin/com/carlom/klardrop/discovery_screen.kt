@@ -97,6 +97,7 @@ fun DiscoveryScreen(
 
     val updateBannerController = remember(uiDependencies) { uiDependencies.updateBannerController() }
     val updateStatus by updateBannerController.status.collectAsState()
+    val updateInstallProgress by updateBannerController.installProgress.collectAsState()
 
     var deviceUiForShare by remember { mutableStateOf<DeviceUi?>(null) }
     var showShareSheet by remember { mutableStateOf(false) }
@@ -144,7 +145,9 @@ fun DiscoveryScreen(
         updateBanner = {
             UpdateBanner(
                 status = updateStatus,
+                installProgress = updateInstallProgress,
                 onAction = updateBannerController::onAction,
+                onRestart = updateBannerController::onRestart,
             )
         },
     )

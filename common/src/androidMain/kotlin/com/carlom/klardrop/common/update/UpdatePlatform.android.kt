@@ -4,3 +4,5 @@ package com.carlom.klardrop.common.update
 actual fun detectInstallChannel(): InstallChannel = InstallChannel.UNKNOWN
 
 actual fun createUpdateManifestFetcher(): UpdateManifestFetcher? = null
+
+actual fun createUpdateInstaller(channel: InstallChannel): UpdateInstaller? = null

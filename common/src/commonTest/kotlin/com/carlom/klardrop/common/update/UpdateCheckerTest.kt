@@ -36,35 +36,56 @@ class UpdateCheckerTest {
     dispatcher: CoroutineDispatcher,
     current: String = "0.1.0",
     fetched: LatestManifest? = manifest("0.2.0"),
-    channel: InstallChannel = InstallChannel.AUR,
+    channel: InstallChannel = InstallChannel.TARBALL,
     osType: OsType = OsType.LINUX,
     fetcher: UpdateManifestFetcher? = UpdateManifestFetcher { fetched },
+    // Default to "no self-installer" so the fallback action is exercised and tests
+    // stay hermetic (no real download on the test JVM).
+    installerFactory: (InstallChannel) -> UpdateInstaller? = { null },
   ) = UpdateChecker(
     currentVersion = current,
     osType = osType,
     fetcher = fetcher,
     detectChannel = { channel },
     coroutines = TestCoroutines(dispatcher),
+    installerFactory = installerFactory,
   )
 
   @Test
-  fun aurChannelYieldsCopyableCommand() = runTest {
+  fun brewChannelYieldsCopyableCommand() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
-    val checker = checker(dispatcher, channel = InstallChannel.AUR)
+    val checker = checker(dispatcher, channel = InstallChannel.BREW)
     checker.checkNow()
     advanceUntilIdle()
 
     val status = checker.status.value
     assertIs<UpdateStatus.Available>(status)
     assertEquals("0.2.0", status.version)
-    assertEquals(InstallChannel.AUR, status.channel)
-    assertEquals(UpdateAction.RunCommand("yay -S klardrop-bin"), status.action)
+    assertEquals(InstallChannel.BREW, status.channel)
+    assertEquals(UpdateAction.RunCommand("brew upgrade --cask klardrop"), status.action)
+  }
+
+  @Test
+  fun tarballChannelWithoutSelfInstallerFallsBackToReinstall() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val checker = checker(dispatcher, channel = InstallChannel.TARBALL, osType = OsType.LINUX)
+    checker.checkNow()
+    advanceUntilIdle()
+
+    val status = checker.status.value
+    assertIs<UpdateStatus.Available>(status)
+    assertEquals(
+      UpdateAction.RunCommand("curl -fsSL ${UpdateChecker.INSTALL_SCRIPT_URL} | bash"),
+      status.action,
+    )
+    // No installer -> no self-update in flight.
+    assertEquals(InstallProgress.Idle, checker.install.value)
   }
 
   @Test
   fun manualChannelOpensPlatformAsset() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
-    val checker = checker(dispatcher, channel = InstallChannel.TARBALL, osType = OsType.LINUX)
+    val checker = checker(dispatcher, channel = InstallChannel.MANUAL, osType = OsType.LINUX)
     checker.checkNow()
     advanceUntilIdle()
 
@@ -74,6 +95,31 @@ class UpdateCheckerTest {
       UpdateAction.OpenUrl("https://example/klardrop-linux-x64.tar.gz"),
       status.action,
     )
+  }
+
+  @Test
+  fun selfInstallerDownloadsAndBecomesReady() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val fake = object : UpdateInstaller {
+      var staged = false
+      override suspend fun downloadAndStage(asset: ReleaseAsset, onProgress: (Float?) -> Unit) {
+        onProgress(0.5f)
+        onProgress(1f)
+        staged = true
+      }
+      override fun applyAndRestart() = error("not called in test")
+    }
+    val checker = checker(
+      dispatcher,
+      channel = InstallChannel.TARBALL,
+      installerFactory = { fake },
+    )
+    checker.checkNow()
+    advanceUntilIdle()
+
+    assertIs<UpdateStatus.Available>(checker.status.value)
+    assertTrue(fake.staged)
+    assertEquals(InstallProgress.Ready, checker.install.value)
   }
 
   @Test

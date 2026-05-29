@@ -1,126 +1,104 @@
 # Packaging & distribution
 
-This directory holds everything needed to distribute the Klardrop **desktop** app
-through package managers. The version is driven entirely by the git tag: pushing
-`vX.Y.Z` (or running the `Release` workflow with a version) builds the artifacts,
-publishes the GitHub Release, and bumps each package channel.
+This directory holds everything needed to distribute the Klardrop **desktop** app.
+The version is driven entirely by the git tag: pushing `vX.Y.Z` (or running the
+`Release` workflow with a version) builds the artifacts and publishes the GitHub
+Release. Every download channel points at that release.
 
 ## Layout
 
 ```
 packaging/
+  install.sh                            # Linux installer (curl | bash) + in-app self-update source
   linux/
-    klardrop.desktop                    # application-menu entry
-    com.carlom.Klardrop.metainfo.xml    # AppStream metadata (software centers / flatpak)
-  aur/
-    PKGBUILD                            # klardrop-bin template (@PKGVER@ / @SHA256@ rendered by CI)
+    klardrop.desktop                    # application-menu entry (Exec rewritten at install time)
+    com.carlom.Klardrop.metainfo.xml    # AppStream metadata
   homebrew/
-    klardrop.rb                         # macOS cask template (@VERSION@ / @SHA256@)
-  flatpak/
-    com.carlom.Klardrop.yml             # flatpak-builder manifest (@VERSION@ / @SHA256@)
-  apt/
-    conf/distributions                  # reprepro repo config
-    publish.sh                          # CI helper: GPG-sign + includedeb into the gh-pages apt tree
-    README.md                           # apt user/maintainer instructions
+    klardrop.rb                         # macOS cask template (@VERSION@ / @SHA256@ rendered by CI)
   README.md
 ```
+
+## Channels
+
+### Linux — `install.sh` (primary)
+
+A single script, run straight from the terminal:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash
+```
+
+It downloads the latest universal tarball, verifies its sha256, and installs the
+app-image plus a launcher, menu entry and icons. **Scope is auto-detected:** run as
+your user it installs under `~/.local` (no sudo); run as root (`sudo … | bash`) it
+installs system-wide under `/opt`. Re-running upgrades in place. Uninstall:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash -s -- --uninstall
+```
+
+Install locations (kept in sync with the app's self-updater — see below):
+
+| Scope | App-image | Launcher | Desktop entry | Icons |
+|-------|-----------|----------|---------------|-------|
+| user (default) | `~/.local/share/klardrop` | `~/.local/bin/klardrop` | `~/.local/share/applications` | `~/.local/share/icons/hicolor` |
+| root (`sudo`)  | `/opt/klardrop` | `/usr/local/bin/klardrop` | `/usr/share/applications` | `/usr/share/icons/hicolor` |
+
+### macOS — Homebrew cask
+
+`homebrew/klardrop.rb` is a cask template. On a stable release CI renders the
+version + DMG checksum and pushes it to the `carlonzo/homebrew-klardrop` tap as
+`Casks/klardrop.rb`. The DMG is unsigned, so the cask strips the quarantine flag on
+install (see "macOS signing").
+
+```sh
+brew install --cask carlonzo/klardrop/klardrop
+```
+
+### Windows — MSI
+
+Download the `.msi` from the [latest release](https://github.com/carlonzo/klardrop/releases/latest).
 
 ## The universal Linux tarball
 
 The release workflow builds a self-contained tarball, `klardrop-linux-x64.tar.gz`,
-that every Linux channel consumes (AUR, flatpak, manual installs). It bundles its
-own JRE (jpackage app-image), so it has no Java dependency. Internal layout:
+consumed by both the install script and the in-app self-updater. It bundles its own
+JRE (jpackage app-image), so it has no Java dependency. Internal layout:
 
 ```
 klardrop-linux-x64/
   klardrop/                             # app-image: bin/klardrop launcher + lib/ (jars + runtime/)
   klardrop.desktop
   com.carlom.Klardrop.metainfo.xml
-  icons/<size>/klardrop.png             # 32x32, 64x64, 128x128, 256x256, 512x512
+  icons/<size>/klardrop.png             # 32, 64, 128, 256, 512
 ```
 
-Install convention: the app-image goes to `/opt/klardrop`, the launcher is symlinked
-to `/usr/bin/klardrop`, and the desktop entry + icons register a menu launcher.
+## In-app updates
 
-## Channels
+On launch the desktop app fetches `releases/latest/download/latest.json` and
+compares its semver to the running build. When a newer version exists:
 
-### AUR (`klardrop-bin`) — live
+- **Linux user install** — the app downloads the new tarball, verifies its sha256,
+  stages it, and shows a **Restart** button. Restarting swaps the app-image in place
+  (a detached helper waits for exit, replaces `…/klardrop`, and relaunches) — no
+  terminal, no sudo.
+- **Linux root (`/opt`) install** — not self-writable, so the banner offers the
+  one-line `curl … | bash` reinstall instead.
+- **macOS Homebrew** — offers `brew upgrade --cask klardrop`.
+- **Unsigned DMG / Windows MSI / unknown** — offers a Download button to the asset.
 
-`packaging/aur/PKGBUILD` is a template. On release, CI renders `@PKGVER@` and
-`@SHA256@` (the tarball checksum), regenerates `.SRCINFO`, and pushes to the AUR.
-
-End users:
-
-```sh
-yay -S klardrop-bin        # or: paru -S klardrop-bin
-```
-
-Test the PKGBUILD locally on an Arch box (after a release exists):
-
-```sh
-cd packaging/aur
-# replace @PKGVER@ / @SHA256@ by hand, or makepkg against a local tarball
-makepkg -si
-klardrop                   # launches; also appears in the app menu
-```
-
-### Homebrew cask (macOS) — wired, needs tap
-
-`packaging/homebrew/klardrop.rb` is a cask template. On release CI renders the
-version + DMG checksum and pushes it to `carlonzo/homebrew-klardrop` as
-`Casks/klardrop.rb`. The DMG is unsigned, so the cask strips the quarantine flag
-on install (see "macOS signing" below).
-
-```sh
-brew install --cask carlonzo/klardrop/klardrop
-```
-
-### Debian / Ubuntu (self-hosted apt repo) — wired, needs GPG + Pages
-
-`packaging/apt/` holds the reprepro config and `publish.sh`. On release CI signs
-and `includedeb`s the `.deb` into a `gh-pages` apt tree served at
-`https://carlonzo.github.io/klardrop/apt`. User install instructions are in
-[`apt/README.md`](apt/README.md).
-
-### Any Linux (self-hosted flatpak repo) — wired, needs GPG + Pages
-
-`packaging/flatpak/com.carlom.Klardrop.yml` builds from the universal tarball
-(no compile step — bundled JRE). On release CI builds, GPG-signs, and exports it
-to a `gh-pages` flatpak repo, publishing `klardrop.flatpakrepo`.
-
-```sh
-flatpak remote-add --if-not-exists klardrop https://carlonzo.github.io/klardrop/klardrop.flatpakrepo
-flatpak install klardrop com.carlom.Klardrop
-```
-
-All three (plus AUR) only act once their secret/repo exists — see below.
-
-The install **landing page** is maintained separately (not generated by the release
-workflow) so it survives releases. It points at the stable
-`releases/latest/download/...` URLs — including `latest.json`, which carries the
-current download URL for every platform — so it never needs a per-release edit.
+The keep rules in `desktop/rules.pro` ensure `latest.json` still parses in the
+minified release build; the release workflow boots the minified app-image as a gate.
 
 ## One-time setup required (maintainer)
 
-These cannot be created from this repo and must be done once before the matching
-CI job does anything (each bump job is gated on its secret, so an unconfigured
-channel is skipped, never failed):
-
 | Channel  | Setup | CI secret |
 |----------|-------|-----------|
-| AUR      | Create an AUR account, add an SSH key, and do the first manual `klardrop-bin` push. CI maintains it afterward. | `AUR_SSH_PRIVATE_KEY` |
-| Homebrew | Create the `carlonzo/homebrew-klardrop` tap repo. | `HOMEBREW_TAP_TOKEN` |
-| apt/flatpak | Enable GitHub Pages (`gh-pages` branch); generate a GPG signing key. | `APT_GPG_PRIVATE_KEY`, `APT_GPG_PASSPHRASE` |
+| Homebrew | Create the `carlonzo/homebrew-klardrop` tap repo, and a token that can push to it. | `HOMEBREW_TAP_TOKEN` |
+| install.sh | None — served from `raw.githubusercontent.com` once on `main`. | — |
 
-## In-app update checker
-
-The desktop app checks `releases/latest/download/latest.json` on launch and, when
-a newer version exists, shows a banner on the discovery screen. It detects how it
-was installed (`InstallChannelDetector`) and shows the matching upgrade step — e.g.
-`yay -S klardrop-bin` for AUR, `flatpak update com.carlom.Klardrop` for flatpak, or
-a Download button for a hand-installed DMG/tarball. Mobile builds never show it.
-The keep rules in `desktop/rules.pro` ensure `latest.json` still parses in the
-minified release build; the release workflow boots the minified app-image as a gate.
+The Homebrew bump job is gated on its token, so an unconfigured tap is skipped, not
+failed.
 
 ## macOS signing
 
