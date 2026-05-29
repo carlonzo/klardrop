@@ -63,3 +63,7 @@ iosApp/Pods/Pods.xcodeproj/xcuserdata/carlo.xcuserdatad/xcschemes/xcschememanage
 ### Pods ###
 iosApp/Podfile.lock
 iosApp/Pods/
+# Android signing keystores — never commit
+*.jks
+*.keystore
+keystore.properties

@@ -672,6 +672,7 @@
     const LATEST_JSON   = `https://github.com/${REPO}/releases/latest/download/latest.json`;
     const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
     const LINUX_TARBALL = `https://github.com/${REPO}/releases/latest/download/klardrop-linux-x64.tar.gz`;
+    const ANDROID_APK   = `https://github.com/${REPO}/releases/latest/download/android-release.apk`;
     // Install script lives in the repo; the raw URL resolves once packaging/install.sh is on main.
     const INSTALL_SH    = `https://raw.githubusercontent.com/${REPO}/main/packaging/install.sh`;
     const BREW_CMD      = "brew install --cask carlonzo/klardrop/klardrop";
@@ -734,6 +735,16 @@
             + `<div class="sub-links">`
             + `<a href="${esc(urlFor("linux-tarball", LINUX_TARBALL))}" rel="noopener"><small>Any distro · x64</small>.tar.gz${sizeFor("linux-tarball")}</a>`
             + `</div>`;
+        case "android": {
+          const playReady = PLAY_STORE_URL && !PLAY_STORE_URL.includes('<');
+          const playRow = playReady
+            ? `<div class="modal-or">or get it on Google Play</div>`
+              + `<div class="sub-links"><a href="${esc(PLAY_STORE_URL)}" target="_blank" rel="noopener"><small>Recommended</small>Google Play →</a></div>`
+            : `<div class="modal-or">Google Play — coming soon</div>`;
+          return primaryDownload("Download .apk" + sizeFor("android"), urlFor("android", ANDROID_APK),
+              "Android 7.0+ · sideload the APK (you may need to allow installs from your browser).")
+            + playRow;
+        }
         default:
           return `<p class="dl-note">Not available yet.</p>`;
       }
@@ -765,9 +776,11 @@
       if(lastFocus) lastFocus.focus();
     }
 
-    const DESKTOP = new Set(['macos','windows','linux']);
+    // Platforms with a real download open the modal. Android offers the APK now
+    // (plus Play once published); iOS is store-only and stays a store button.
+    const MODAL = new Set(['macos','windows','linux','android']);
     document.querySelectorAll('.dl[data-platform]').forEach(btn => {
-      if(DESKTOP.has(btn.dataset.platform)){
+      if(MODAL.has(btn.dataset.platform)){
         btn.addEventListener('click', () => openModal(btn.dataset.platform));
       }
     });
@@ -778,7 +791,6 @@
       if(!url || url.includes('<')){ btn.disabled = true; return; }
       btn.addEventListener('click', () => window.open(url, '_blank', 'noopener'));
     }
-    wireStore('android', PLAY_STORE_URL);
     wireStore('ios', APP_STORE_URL);
     document.getElementById('dlClose').addEventListener('click', closeModal);
     back.addEventListener('click', e => { if(e.target === back) closeModal(); });

@@ -85,13 +85,38 @@ jobs:
         if: matrix.target == 'windows'
         run: ./gradlew :desktop:packageReleaseMsi $GRADLE_VERSION_ARGS
 
-      - name: Build Linux DEB + app-image + Android APK
+      # Decode the release keystore so the APK/AAB are signed with the real upload
+      # key. Without the secret (e.g. a fork) the build falls back to debug signing.
+      - name: Configure Android signing
+        if: matrix.target == 'linux-android'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "No ANDROID_KEYSTORE_BASE64 — release APK/AAB will be debug-signed."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/klardrop-upload.jks"
+          {
+            echo "KLARDROP_KEYSTORE_FILE=$RUNNER_TEMP/klardrop-upload.jks"
+            echo "KLARDROP_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
+            echo "KLARDROP_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            echo "KLARDROP_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Build Linux DEB + app-image + Android APK & AAB
         if: matrix.target == 'linux-android'
         run: >-
           ./gradlew
           :desktop:packageReleaseDeb
           :desktop:createReleaseDistributable
           :android:assembleRelease
+          :android:bundleRelease
           $GRADLE_VERSION_ARGS
 
       # ProGuard gate: boot the *minified* app-image and fail the release if a
@@ -173,6 +198,17 @@ jobs:
         with:
           name: klardrop-${{ matrix.target }}
           path: dist/*
+          if-no-files-found: error
+
+      # The AAB is for Play Store upload, not public download — keep it as a
+      # separate workflow artifact rather than a GitHub Release asset. (A future
+      # Play-publish job consumes this.)
+      - name: Upload Android App Bundle (AAB)
+        if: matrix.target == 'linux-android'
+        uses: actions/upload-artifact@v7
+        with:
+          name: klardrop-aab
+          path: android/build/outputs/bundle/release/*.aab
           if-no-files-found: error
 
   publish:
