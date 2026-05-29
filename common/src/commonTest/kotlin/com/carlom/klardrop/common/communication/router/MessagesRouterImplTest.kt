@@ -185,6 +185,7 @@ class MessagesRouterImplTest {
         com.carlom.klardrop.common.persistence.KlardropProperties("test-device", "Test Device")
       override suspend fun save(properties: com.carlom.klardrop.common.persistence.KlardropProperties) {}
       override suspend fun saveCustomDeviceName(customDeviceName: String?) {}
+      override suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean) {}
     }
     val currentDeviceProvider = com.carlom.klardrop.common.discovery.CurrentDeviceProvider(localPropsRepo)
     
@@ -341,6 +342,7 @@ class MessagesRouterImplTest {
         com.carlom.klardrop.common.persistence.KlardropProperties("self-id", "Self")
       override suspend fun save(properties: com.carlom.klardrop.common.persistence.KlardropProperties) {}
       override suspend fun saveCustomDeviceName(customDeviceName: String?) {}
+      override suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean) {}
     }
     val trustManager = com.carlom.klardrop.common.trust.TrustManager(
       crypto = crypto,
@@ -478,6 +480,7 @@ class MessagesRouterImplTest {
         com.carlom.klardrop.common.persistence.KlardropProperties(deviceId, deviceId)
       override suspend fun save(properties: com.carlom.klardrop.common.persistence.KlardropProperties) {}
       override suspend fun saveCustomDeviceName(customDeviceName: String?) {}
+      override suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean) {}
     }
 
     val senderStorage = com.carlom.klardrop.common.trust.InMemoryTrustStorage()
@@ -668,6 +671,7 @@ class MessagesRouterImplTest {
         com.carlom.klardrop.common.persistence.KlardropProperties(deviceId, deviceId)
       override suspend fun save(properties: com.carlom.klardrop.common.persistence.KlardropProperties) {}
       override suspend fun saveCustomDeviceName(customDeviceName: String?) {}
+      override suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean) {}
     }
 
     val senderStorage = com.carlom.klardrop.common.trust.InMemoryTrustStorage()

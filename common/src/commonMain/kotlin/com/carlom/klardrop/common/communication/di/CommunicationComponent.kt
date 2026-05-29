@@ -113,7 +113,7 @@ class CommunicationModule(
     MessageHandlersImpl(handlers)
   }
 
-  private val connectionsPool by lazy { ConnectionsPoolImpl(coroutines, networkLifecycleMonitor) }
+  private val connectionsPool by lazy { ConnectionsPoolImpl(coroutines, networkLifecycleMonitor, currentDeviceProvider) }
 
   /**
    * Single shared authorizer instance — process-scoped first-contact set must be the same

@@ -147,6 +147,7 @@ class ClientImpl(
           ackTimeoutConfig = ackTimeoutConfig,
           heartbeatConfig = heartbeatConfig,
           messageSerializer = serializer,
+          initiatedByUs = true,
         )
         
         // Store the connection in the client's pool keyed by the server's device ID
@@ -225,6 +226,7 @@ class ClientImpl(
       ackTimeoutConfig = ackTimeoutConfig,
       heartbeatConfig = heartbeatConfig,
       messageSerializer = serializer,
+      initiatedByUs = true,
     )
     connectionsPool.updateConnection(deviceId, connectionMessenger)
     clientScope.launch { connectionMessenger.acceptIncomingMessages() }

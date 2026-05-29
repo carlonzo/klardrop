@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.TransferRejectedException
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
 import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
@@ -18,10 +19,13 @@ import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.pow
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -224,30 +228,19 @@ class MessengerImpl(
       log("Messenger", "[DEBUG] Attempt $attempt/$maxRetries for $deviceId, message: ${messageRequest.message.id}")
 
       val result = runCatching {
-        // Get or establish connection
+        // Get or establish connection. This keeps the send PENDING and waits for a connection
+        // from EITHER direction (our outbound dial, or — when this peer can only be reached by
+        // dialing in, e.g. the receiver sits behind a default-deny-inbound firewall — the peer's
+        // inbound connection landing in the pool). The desktop's EagerReachabilityConnector dials
+        // discovered-but-unconnected peers promptly, so a send issued before any connection exists
+        // simply waits here until that connection appears, instead of failing fast.
         log("Messenger", "[DEBUG] Getting or establishing connection to $deviceId (attempt $attempt, preferBle=$preferBle)")
-        val connectionMessenger = getOrEstablishConnection(deviceId, preferBle = preferBle)
+        val connectionMessenger = awaitOrEstablishConnection(deviceId, preferBle, CONNECTION_WAIT_TIMEOUT)
 
         if (connectionMessenger == null) {
-          log("Messenger", "[DEBUG] Failed to establish connection to $deviceId (attempt $attempt)")
-          if (attempt <= maxRetries) {
-            // Back off before re-trying. Without this delay, connection
-            // failures (host unreachable / refused) burn through every retry
-            // attempt in milliseconds and the user sees an "all retries
-            // failed" toast that feels instant. The wait gives the eager
-            // reachability probe + mDNS re-resolution time to recover the
-            // peer's endpoint before we redial.
-            val delay = (1.seconds * config.retryBackoffMultiplier.pow(attempt - 1))
-            log("Messenger", "[DEBUG] Connection failed; waiting ${delay.inWholeMilliseconds}ms before retry $attempt")
-            withContext(coroutines.mainDispatcher) {
-              kotlinx.coroutines.delay(delay)
-            }
-            return@runCatching false
-          } else {
-            log("Messenger", "[DEBUG] All connection attempts exhausted for $deviceId")
-            flow.emit(Error("Failed to establish connection after $maxRetries attempts"))
-            return false
-          }
+          log("Messenger", "[DEBUG] No connection to $deviceId within ${CONNECTION_WAIT_TIMEOUT}; giving up (attempt $attempt)")
+          flow.emit(Error("Could not connect to $deviceId"))
+          return false
         }
 
         log(
@@ -260,6 +253,13 @@ class MessengerImpl(
         log("Messenger", "[DEBUG] Successfully sent message ${messageRequest.message.id} to $deviceId (attempt $attempt)")
         true
       }.getOrElse { exception ->
+        // A declined transfer is a terminal user decision, not a transport failure: don't retry
+        // (that would re-prompt the recipient), and leave the connection healthy for other sends.
+        if (exception is TransferRejectedException) {
+          log("Messenger", "[DEBUG] Transfer to $deviceId was declined by the recipient; not retrying")
+          flow.emit(Error("Recipient declined the transfer"))
+          return false
+        }
         log(
           "Messenger",
           "[DEBUG] Error in Klardrop transfer to $deviceId (attempt $attempt): ${exception::class.simpleName}: ${exception.message}"
@@ -311,6 +311,36 @@ class MessengerImpl(
     return false
   }
 
+
+  /**
+   * Returns a usable connection to [deviceId], staying PENDING up to [timeout] for one to appear
+   * from EITHER direction:
+   *  - our own outbound dial (succeeds when the peer accepts inbound), and
+   *  - a connection the PEER opens to us, which lands in the pool — the only path that can succeed
+   *    when the peer can't be dialed (behind a default-deny-inbound firewall). That side can't be
+   *    reached by us, so it dials out (its [EagerReachabilityConnector] dials discovered peers) and
+   *    we ride the socket it opened.
+   *
+   * Each loop re-dials (fast on success; ~connect-timeout then null when the peer is firewalled),
+   * then re-checks the pool for an inbound connection. So a send issued before any connection
+   * exists waits here until one appears, rather than failing after a couple of quick dials.
+   * Returns null only if nothing connects within [timeout].
+   */
+  private suspend fun awaitOrEstablishConnection(
+    deviceId: String,
+    preferBle: Boolean,
+    timeout: Duration,
+  ): ConnectionMessenger? = withTimeoutOrNull(timeout) {
+    var connection: ConnectionMessenger? = null
+    while (connection == null) {
+      connection = getOrEstablishConnection(deviceId, preferBle)
+      if (connection != null) break
+      // Give the peer's inbound dial a moment to land, then re-check before re-dialing.
+      kotlinx.coroutines.delay(RECONNECT_PROBE_INTERVAL)
+      connection = connectionsPool.getConnection(deviceId)
+    }
+    connection
+  }
 
   private suspend fun getOrEstablishConnection(
     deviceId: String,
@@ -402,6 +432,18 @@ private fun transportPreferenceFor(request: SendMessageRequest): List<TransportC
     listOf(TransportChoice.KLARDROP_TCP, TransportChoice.KLARDROP_BLE, TransportChoice.NEARBY)
   }
 }
+
+/**
+ * How long a send stays pending while waiting for a connection to appear (from our re-dial or the
+ * peer dialing in). The real reconnection fix is the eager connector's short cooldown + clear-on-
+ * reappear; this window just needs to cover a couple of discovery→dial→handshake cycles so a send
+ * fired in the gap doesn't fail instantly. Past this we give up — a long retry is pointless: if
+ * nothing connected in ~15s the peer is genuinely unreachable.
+ */
+private val CONNECTION_WAIT_TIMEOUT = 15.seconds
+
+/** How often, while waiting, we re-check the pool for an inbound connection before re-dialing. */
+private val RECONNECT_PROBE_INTERVAL = 1.5.seconds
 
 fun Flow<MessengerSendProgress>.untilCompleted(): Flow<MessengerSendProgress> {
   return this

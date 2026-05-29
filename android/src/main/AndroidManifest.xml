@@ -3,6 +3,17 @@
 
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- Large outgoing file transfers run in a foreground service so they survive the share
+         sheet closing and aren't killed mid-transfer; POST_NOTIFICATIONS lets it show progress. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- WifiLock during a file transfer keeps WiFi at full power so power-save doesn't drop it. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- Opt-in "stay discoverable" foreground service keeps the app reachable in the background. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+    <!-- MulticastLock so mDNS discovery/announcements keep flowing while backgrounded. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
 
     <application
             android:name=".KlarDropApplication"
@@ -35,6 +46,16 @@
                 <data android:mimeType="*/*"/>
             </intent-filter>
         </activity>
+
+        <service
+                android:name=".share.FileSendService"
+                android:exported="false"
+                android:foregroundServiceType="dataSync"/>
+
+        <service
+                android:name=".service.DiscoveryForegroundService"
+                android:exported="false"
+                android:foregroundServiceType="connectedDevice"/>
 
         <!-- FileProvider used by InternalPlatformDependencies.openFile to hand non-content
              URIs (regular files saved to Downloads / cache / files) to viewer apps. Image

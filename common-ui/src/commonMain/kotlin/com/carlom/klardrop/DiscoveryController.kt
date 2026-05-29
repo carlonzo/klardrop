@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
@@ -85,6 +86,21 @@ class DiscoveryController(
 
   val permissionsState: StateFlow<PermissionsState> = permissionsMonitor.observe()
     .stateIn(controllerScope, SharingStarted.Eagerly, PermissionsState.EMPTY)
+
+  /** Whether "stay discoverable in background" is enabled (persisted). The Android app observes
+   *  this same pref to start/stop its discovery foreground service. */
+  val backgroundDiscoveryEnabled: StateFlow<Boolean> = localPropertiesRepository.properties
+    .map { it.backgroundDiscoveryEnabled }
+    .stateIn(controllerScope, SharingStarted.Eagerly, false)
+
+  /** Background discoverability is backed by a foreground service — Android-only for now. The
+   *  Settings UI hides the toggle on platforms where it has no effect. */
+  val supportsBackgroundDiscovery: Boolean =
+    com.carlom.klardrop.common.CommonPlatformDependencies.osType() == com.carlom.klardrop.common.utils.OsType.ANDROID
+
+  fun setBackgroundDiscoveryEnabled(enabled: Boolean) {
+    controllerScope.launch { localPropertiesRepository.saveBackgroundDiscoveryEnabled(enabled) }
+  }
 
   // Live pairing requests keyed by deviceId so a notification action delivered
   // out-of-band (the user tapping Accept on a backgrounded notification) can

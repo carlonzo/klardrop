@@ -54,6 +54,7 @@ class IncomingAuthorizerTest {
         com.carlom.klardrop.common.persistence.KlardropProperties("self-id", "Self")
       override suspend fun save(properties: com.carlom.klardrop.common.persistence.KlardropProperties) {}
       override suspend fun saveCustomDeviceName(customDeviceName: String?) {}
+      override suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean) {}
     }
     return TrustManager(
       crypto = TrustCrypto(),

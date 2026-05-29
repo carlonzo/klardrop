@@ -1,11 +1,14 @@
 package com.carlom.klardrop.android.share
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -16,10 +19,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.carlom.klardrop.ActivityState
 import com.carlom.klardrop.DeviceUi
-import com.carlom.klardrop.OnDataToSend
 import com.carlom.klardrop.TrustStatus
 import com.carlom.klardrop.android.applicationComponent
 import com.carlom.klardrop.common.Klardrop
@@ -33,11 +35,8 @@ import com.carlom.klardrop.components.ShareSheet
 import com.carlom.klardrop.theme.AppTheme
 import com.carlom.klardrop.theme.KdTheme
 import io.github.vinceglb.filekit.PlatformFile
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 class ShareToDeviceActivity : AppCompatActivity() {
@@ -47,12 +46,23 @@ class ShareToDeviceActivity : AppCompatActivity() {
 
   private lateinit var shareToDeviceController: ShareToDeviceController
 
+  // What this share invocation carries; populated from the launch intent. Exactly one is non-empty.
+  private var pendingText: String? = null
+  private var pendingUris: List<Uri> = emptyList()
+
+  private val requestNotificationPermission =
+    registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* best-effort; FGS runs regardless */ }
+
   @OptIn(ExperimentalMaterial3Api::class)
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     applicationComponent().inject(this)
 
-    shareToDeviceController = ShareToDeviceController(klardrop.commonComponent)
+    shareToDeviceController = ShareToDeviceController(klardrop.commonComponent, applicationContext)
+
+    parseIntent()
+    // Large transfers post a progress notification from FileSendService; ask up-front so it can show.
+    maybeRequestNotificationPermission()
 
     setContent {
       AppTheme {
@@ -89,28 +99,41 @@ class ShareToDeviceActivity : AppCompatActivity() {
             onSelectDevice = { selectedId = it.id },
             onSend = { share ->
               val target = share?.id?.let(byId::get) ?: return@ShareSheet
-              shareDevice(target)
-              dismissed = true
+              // Keep the Activity (and its content:// read grant) alive until the payload is safely
+              // handed off — bytes copied to cache for small files, or the grant forwarded to
+              // FileSendService for big ones — then dismiss. dispatch() does not wait for the whole
+              // network transfer, so sharing still feels instant.
+              lifecycleScope.launch {
+                try {
+                  dispatch(target.deviceId)
+                } catch (e: Throwable) {
+                  log("ShareToDeviceActivity", "Failed to dispatch share to ${target.deviceId}", e)
+                } finally {
+                  dismissed = true
+                }
+              }
             },
           )
         }
       }
     }
+  }
 
+  private fun parseIntent() {
     when (intent?.action) {
       Intent.ACTION_SEND -> {
         if ("text/plain" == intent.type) {
           log("ShareToDeviceActivity", "Handling text $intent")
-          handleSendText(intent)
+          pendingText = intent.getStringExtra(Intent.EXTRA_TEXT)
         } else {
           log("ShareToDeviceActivity", "Handling file $intent")
-          handleSendFile(intent)
+          extractUri(intent)?.let { pendingUris = listOf(it) }
         }
       }
 
       Intent.ACTION_SEND_MULTIPLE -> {
         log("ShareToDeviceActivity", "Handling multiple files $intent")
-        handleSendMultipleFiles(intent)
+        pendingUris = extractUris(intent)
       }
 
       else -> {
@@ -119,57 +142,77 @@ class ShareToDeviceActivity : AppCompatActivity() {
     }
   }
 
-  private fun shareDevice(deviceUi: DeviceUi) {
-    shareToDeviceController.onDeviceClick(deviceUi)
+  /**
+   * Hand the shared payload to the right path while we still hold the read grant. Suspends only
+   * for the small-file copy; returns before the network transfer finishes so the share sheet can
+   * dismiss promptly.
+   */
+  private suspend fun dispatch(deviceId: String) {
+    pendingText?.let {
+      shareToDeviceController.sendText(deviceId, it)
+      return
+    }
+    if (pendingUris.isEmpty()) return
 
-    lifecycleScope.launch {
-      shareToDeviceController.devicesFlow
-        .mapNotNull {
-          it.firstOrNull { candidate -> candidate.deviceId == deviceUi.deviceId }
-        }
-        .filter { it.activityState is ActivityState.SentCompleted }
-        .onEach { log("ShareToDeviceActivity", "filtered $it") }
-        .firstOrNull()
+    val fileSystem = klardrop.commonComponent.platformFileSystem()
+    val ioDispatcher = klardrop.commonComponent.coroutines().ioDispatcher
 
-      log("ShareToDeviceActivity", "Received sent completed, finishing activity")
-      finish()
+    // Resolve name/size/mime now, while the grant is valid, and split big vs small.
+    val resolved = withContext(ioDispatcher) {
+      pendingUris.map { uri -> uri to fileSystem.getResolvedFileData(PlatformFile(uri)) }
+    }
+
+    val bigFiles = resolved
+      .filter { it.second.fileSize > BIG_FILE_THRESHOLD_BYTES }
+      .map { (uri, data) -> FileSendService.BigFile(uri, data.fileName, data.fileSize, data.mimeType) }
+    val smallFiles = resolved
+      .filter { it.second.fileSize <= BIG_FILE_THRESHOLD_BYTES }
+      .map { PlatformFile(it.first) }
+
+    if (bigFiles.isNotEmpty()) {
+      // Forwards the grant into the service; safe to finish the Activity right after.
+      FileSendService.start(this, deviceId, bigFiles)
+    }
+    if (smallFiles.isNotEmpty()) {
+      // Suspends until the bytes are cached; only then is it safe to drop the grant.
+      shareToDeviceController.prepareAndSendSmallFiles(deviceId, smallFiles)
     }
   }
 
-  private fun handleSendText(intent: Intent) {
-    intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
-      shareToDeviceController.initializeItemToShare(OnDataToSend.Text(it))
-    }
+  private fun maybeRequestNotificationPermission() {
+    // Only file shares can spin up FileSendService (and its progress notification). A text share
+    // never does, so don't pester the user with a permission prompt for one.
+    if (pendingUris.isEmpty()) return
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+      PackageManager.PERMISSION_GRANTED
+    if (!granted) requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
   }
 
-  private fun handleSendFile(intent: Intent) {
-    val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+  private fun extractUri(intent: Intent): Uri? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
     } else {
       @Suppress("DEPRECATION")
       intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri
     }
-    uri?.let {
-      shareToDeviceController.initializeItemToShare(OnDataToSend.FilesList(listOf(PlatformFile(it))))
-    }
-  }
 
-  private fun handleSendMultipleFiles(intent: Intent) {
-    val list = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+  private fun extractUris(intent: Intent): List<Uri> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
     } else {
-      @Suppress("DEPRECATION", "UNCHECKED_CAST")
-      intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM)
-        ?.let { it as ArrayList<Uri> }
-    }
-    list?.let {
-      shareToDeviceController.initializeItemToShare(OnDataToSend.FilesList(it.map { uri -> PlatformFile(uri) }))
-    }
-  }
+      @Suppress("DEPRECATION")
+      intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM)?.filterIsInstance<Uri>()
+    }.orEmpty()
 
   override fun onDestroy() {
     shareToDeviceController.dispose()
     super.onDestroy()
+  }
+
+  private companion object {
+    /** Files larger than this stream from a foreground service; smaller ones copy to cache. */
+    const val BIG_FILE_THRESHOLD_BYTES = 5L * 1024 * 1024
   }
 }
 

@@ -39,12 +39,28 @@ internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
       if (networkInterface.isLoopback) return@forEach
       if (!networkInterface.isUp) return@forEach
       networkInterface.inetAddresses.iterator().forEach { inetAddress ->
-        if (!inetAddress.isLoopbackAddress && inetAddress is Inet4Address) {
-          addresses.add(inetAddress)
+        if (inetAddress.isLoopbackAddress) return@forEach
+        if (inetAddress !is Inet4Address) return@forEach
+        // Skip Tailscale / CGNAT (100.64.0.0/10). That address is only reachable over the tailnet,
+        // never on the LAN — binding jmDNS to it and advertising it makes peers waste connect
+        // attempts on an unreachable address and adds an asymmetric-routing path on multi-homed
+        // hosts. LAN sharing should only ever announce real LAN interfaces.
+        if (isCgnat(inetAddress)) {
+          log("JmDnsMdns", "Skipping CGNAT/Tailscale address ${inetAddress.hostAddress} for mDNS")
+          return@forEach
         }
+        addresses.add(inetAddress)
       }
     }
     return addresses
+  }
+
+  /** True for the 100.64.0.0/10 carrier-grade-NAT range that Tailscale (and CGNAT) use. */
+  private fun isCgnat(address: Inet4Address): Boolean {
+    val bytes = address.address
+    val first = bytes[0].toInt() and 0xFF
+    val second = bytes[1].toInt() and 0xFF
+    return first == 100 && second in 64..127
   }
 
   override fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
