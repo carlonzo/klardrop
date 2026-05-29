@@ -623,24 +623,36 @@ private fun FileMessageBubble(
     // see it immediately (file already exists locally); receivers see it once
     // the transfer is Completed. The preview is capped to 200 dp tall and to
     // the bubble's natural max-width (78% of the chat pane).
-    val previewablePath: String? = filePath?.takeIf { path ->
-        val ready = if (isSender) true else currentStatus == FileTransferStatus.COMPLETED.name
-        ready && FileTypeUtils.isImageMimeType(
-            FileTypeUtils.getMimeTypeFromExtension(path.substringAfterLast('.', "").lowercase())
-        )
+    //
+    // Prefer the stored mime_type over guessing from the extension: received media is
+    // persisted as a MediaStore content URI (e.g. content://media/...), which has no file
+    // extension, so extension-based detection would never recognise it as an image.
+    val isImage = run {
+        val mime = fileTransferState?.mime_type
+        if (!mime.isNullOrBlank() && mime != "application/octet-stream") {
+            FileTypeUtils.isImageMimeType(mime)
+        } else {
+            FileTypeUtils.isImageMimeType(
+                FileTypeUtils.getMimeTypeFromExtension(filePath?.substringAfterLast('.', "")?.lowercase())
+            )
+        }
     }
+    val previewModel: String? = filePath?.takeIf {
+        val ready = if (isSender) true else currentStatus == FileTransferStatus.COMPLETED.name
+        ready && isImage
+    }?.let(::toImageModel)
 
     Column {
         Bubble(
             direction = direction,
             timestamp = timestamp,
             content = {
-                if (previewablePath != null) {
+                if (previewModel != null) {
                     val openClick = if (openablePath != null) {
                         Modifier.combinedClickable(onClick = { onOpenFileRequest(openablePath) })
                     } else Modifier
                     AsyncImage(
-                        model = "file://$previewablePath",
+                        model = previewModel,
                         contentDescription = fileName,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
@@ -701,6 +713,16 @@ private fun UnknownMessageBubble(
             )
         },
     )
+}
+
+// Turn a persisted file location into a model Coil can load. Filesystem paths get a
+// file:// scheme; content URIs are passed through as-is. MediaStore URIs round-tripped
+// through kotlinx.io Path come back with their "content://" separator collapsed to a
+// single slash ("content:/media/..."), so restore it before handing the URI to Coil.
+private fun toImageModel(path: String): String = when {
+    path.startsWith("content://") -> path
+    path.startsWith("content:/") -> "content://" + path.removePrefix("content:/")
+    else -> "file://$path"
 }
 
 private fun formatBytes(bytes: Long): String {
