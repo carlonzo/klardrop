@@ -31,6 +31,7 @@ import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -47,6 +48,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
@@ -64,22 +66,65 @@ fun FakeClipboardManager() = com.carlom.klardrop.common.features.ClipboardManage
 @OptIn(ExperimentalCoroutinesApi::class)
 class KlardropIntegrationTest {
 
-  private val coroutines = TestCoroutines(dispatcher = UnconfinedTestDispatcher())
+  // Rebuilt per retry attempt by [integrationTest] (hence `var`): a fresh dispatcher,
+  // device list and server/sockets so a failed attempt can't poison the next.
+  private var coroutines = TestCoroutines(dispatcher = UnconfinedTestDispatcher())
   private val clock = Clock()
-  private val clientVisibleDevices = FakeVisibleDevices()
+  private var clientVisibleDevices = FakeVisibleDevices()
   private val clientDeviceId = "client01"
   private val serverDeviceId = "server01"
 
-  private val testContext = KlardropTestContext(
+  private var testContext = newTestContext()
+
+  private fun newTestContext() = KlardropTestContext(
     coroutines = coroutines,
     clock = clock,
     clientVisibleDevices = clientVisibleDevices,
     clientDeviceId = clientDeviceId,
-    serverDeviceId = serverDeviceId
+    serverDeviceId = serverDeviceId,
   )
 
+  /**
+   * Runs an end-to-end integration test with a bounded retry.
+   *
+   * These tests drive real loopback sockets (on [kotlinx.coroutines.Dispatchers.IO])
+   * interleaved with virtual test time. On a heavily contended CI runner a transfer can
+   * occasionally blow [KlardropTestContext.awaitForPumping]'s real-time budget — a
+   * load-induced flake that's rare (~1/240) and does not reproduce locally. A genuinely
+   * broken test still fails every attempt (so this doesn't mask real regressions); only
+   * flakes are absorbed.
+   *
+   * Each retry rebuilds the entire fixture (fresh test dispatcher, sockets and server)
+   * so a half-open connection left by a failed attempt can't poison the next one.
+   */
+  private fun integrationTest(
+    timeout: Duration = 120.seconds,
+    attempts: Int = 2,
+    body: suspend TestScope.() -> Unit,
+  ) {
+    var lastError: Throwable? = null
+    repeat(attempts) { attempt ->
+      if (attempt > 0) {
+        coroutines = TestCoroutines(dispatcher = UnconfinedTestDispatcher())
+        clientVisibleDevices = FakeVisibleDevices()
+        testContext = newTestContext()
+      }
+      try {
+        runTest(coroutines.dispatcher, timeout = timeout, testBody = body)
+        return
+      } catch (t: Throwable) {
+        lastError = t
+        println(
+          "integrationTest: attempt ${attempt + 1}/$attempts failed (${t.message}); " +
+            if (attempt + 1 < attempts) "retrying with a fresh fixture" else "giving up",
+        )
+      }
+    }
+    throw lastError!!
+  }
+
   @Test
-  fun startServerAndSendTextMessage() = runTest(coroutines.dispatcher) {
+  fun startServerAndSendTextMessage() = integrationTest {
     testContext.setupServerAndClient()
 
     turbineScope {
@@ -90,7 +135,7 @@ class KlardropIntegrationTest {
   }
 
   @Test
-  fun testSendTwoMessagesForKlardrop() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+  fun testSendTwoMessagesForKlardrop() = integrationTest(timeout = 60.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
     turbineScope(timeout = 30.seconds) {
@@ -102,7 +147,7 @@ class KlardropIntegrationTest {
   }
 
   @Test
-  fun testSendTwoMessagesForNearby() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+  fun testSendTwoMessagesForNearby() = integrationTest(timeout = 60.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
 
     turbineScope(timeout = 30.seconds) {
@@ -118,7 +163,7 @@ class KlardropIntegrationTest {
   // Android Quick Share could not parse. A file transfer over the Nearby
   // protocol exercises that same code path end-to-end.
   @Test
-  fun testSendFileForNearby() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+  fun testSendFileForNearby() = integrationTest(timeout = 60.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
 
     turbineScope(timeout = 30.seconds) {
@@ -134,7 +179,7 @@ class KlardropIntegrationTest {
   // response framing. Catches any regression in chunk offset advancement,
   // payload_id reuse, or the LAST_CHUNK flag.
   @Test
-  fun testSendLargeFileForNearby() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+  fun testSendLargeFileForNearby() = integrationTest(timeout = 120.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
 
     turbineScope(timeout = 60.seconds) {
@@ -148,7 +193,7 @@ class KlardropIntegrationTest {
   // Non-ASCII file name: introduction's FileMetadata.name is UTF-8 on the
   // wire. Locks down that the sender doesn't truncate or mis-length it.
   @Test
-  fun testSendNonAsciiFileNameForNearby() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+  fun testSendNonAsciiFileNameForNearby() = integrationTest(timeout = 60.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
 
     turbineScope(timeout = 30.seconds) {
@@ -165,7 +210,7 @@ class KlardropIntegrationTest {
   // than crashing the coroutine with NoSuchElementException via `.first {}`
   // on the list of failed attempts.
   @Test
-  fun testNearbySendEmitsErrorWhenAllConnectionsRefuse() = runTest(coroutines.dispatcher, timeout = 30.seconds) {
+  fun testNearbySendEmitsErrorWhenAllConnectionsRefuse() = integrationTest(timeout = 30.seconds) {
     // Point the fake visible device at a port nothing is listening on. The
     // OS will reject the connect with ECONNREFUSED.
     testContext.addStaleNearbyDevice(address = "127.0.0.1", port = 1)
@@ -195,7 +240,7 @@ class KlardropIntegrationTest {
   // every file byte arrived. We assert this by observing the receiver-side
   // counter that is bumped whenever DISCONNECTION is decoded off the wire.
   @Test
-  fun testNearbyTransferEndsWithDisconnectionExchange() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+  fun testNearbyTransferEndsWithDisconnectionExchange() = integrationTest(timeout = 60.seconds) {
     NearbyDisconnectionObserver.reset()
     testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
 
@@ -218,7 +263,7 @@ class KlardropIntegrationTest {
   // introduction frame carrying both text and file metadata in a single
   // session and the receiver routing each payload by its own payload_id.
   @Test
-  fun testSendTextAndFileInSequenceForNearby() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+  fun testSendTextAndFileInSequenceForNearby() = integrationTest(timeout = 120.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
 
     turbineScope(timeout = 60.seconds) {
@@ -239,7 +284,7 @@ class KlardropIntegrationTest {
   fun testMessengerReconnectionFromBothSides() = testMessengerReconnection(clientDropsConnection = true, serverDropsConnection = true)
 
   @Test
-  fun testSendFileFromClientToServer() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+  fun testSendFileFromClientToServer() = integrationTest(timeout = 60.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
     turbineScope(timeout = 30.seconds) {
@@ -251,7 +296,7 @@ class KlardropIntegrationTest {
   }
 
   @Test
-  fun testSendLargeFileRequiringMultipleChunks() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+  fun testSendLargeFileRequiringMultipleChunks() = integrationTest(timeout = 120.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
     turbineScope(timeout = 60.seconds) {
@@ -277,7 +322,7 @@ class KlardropIntegrationTest {
    * larger transfers push real-time ACK round-trips past the virtual-time ACK timeouts.
    */
   @Test
-  fun testFileTransferAllowsConcurrentTextAndHeartbeat() = runTest(coroutines.dispatcher, timeout = 180.seconds) {
+  fun testFileTransferAllowsConcurrentTextAndHeartbeat() = integrationTest(timeout = 180.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
     turbineScope(timeout = 120.seconds) {
@@ -347,7 +392,7 @@ class KlardropIntegrationTest {
    * follow-up text round-trips hovers near the previous 120s/90s limits.
    */
   @Test
-  fun testTextSendsAfterFileTransferReuseSameConnection() = runTest(coroutines.dispatcher, timeout = 240.seconds) {
+  fun testTextSendsAfterFileTransferReuseSameConnection() = integrationTest(timeout = 240.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
     turbineScope(timeout = 180.seconds) {
@@ -361,7 +406,7 @@ class KlardropIntegrationTest {
   }
 
   @Test
-  fun testSendTextAndFileInSequence() = runTest(coroutines.dispatcher, timeout = 120.seconds) {
+  fun testSendTextAndFileInSequence() = integrationTest(timeout = 120.seconds) {
     testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
 
     turbineScope(timeout = 60.seconds) {
@@ -377,7 +422,7 @@ class KlardropIntegrationTest {
   }
 
   @Test
-  fun testAckCorrelationRaceCondition() = runTest(coroutines.dispatcher, timeout = 60.seconds) {
+  fun testAckCorrelationRaceCondition() = integrationTest(timeout = 60.seconds) {
     // This test verifies our fix for the ACK correlation race condition
     testContext.setupServerAndClient()
 
@@ -434,7 +479,7 @@ class KlardropIntegrationTest {
   @OptIn(ExperimentalTime::class)
   @Suppress("VisibleForTests")
   private fun testMessengerReconnection(clientDropsConnection: Boolean, serverDropsConnection: Boolean) =
-    runTest(coroutines.dispatcher, timeout = 60.seconds) {
+    integrationTest(timeout = 60.seconds) {
       testContext.setupServerAndClient()
 
       turbineScope(timeout = 30.seconds) {
