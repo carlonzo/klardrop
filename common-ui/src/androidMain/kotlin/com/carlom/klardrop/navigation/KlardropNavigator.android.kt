@@ -84,6 +84,10 @@ actual fun KlardropNavigator(
         val permsLauncher = rememberLauncherForActivityResult(
           ActivityResultContracts.RequestMultiplePermissions()
         ) { results ->
+          // The runtime prompt only pauses the Activity, so the permissions
+          // monitor sees no foreground transition — poke it explicitly so a
+          // freshly-granted permission dismisses its banner right away.
+          discoveryController.refreshPermissions()
           val activity = context.findActivity()
           val anyPermanentlyDenied = activity != null && results.any { (perm, granted) ->
             !granted && !ActivityCompat.shouldShowRequestPermissionRationale(activity, perm)

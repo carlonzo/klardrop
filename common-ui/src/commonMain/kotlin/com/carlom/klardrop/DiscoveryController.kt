@@ -57,7 +57,7 @@ class DiscoveryController(
   private val localPropertiesRepository: com.carlom.klardrop.common.persistence.LocalPropertiesRepository,
   private val connectionInfoJoiner: ConnectionInfoJoiner,
   reachability: StateFlow<Map<String, Reachability>>,
-  permissionsMonitor: PermissionsMonitor,
+  private val permissionsMonitor: PermissionsMonitor,
   private val notifier: Notifier,
   private val foregroundState: ForegroundState,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
@@ -86,6 +86,16 @@ class DiscoveryController(
 
   val permissionsState: StateFlow<PermissionsState> = permissionsMonitor.observe()
     .stateIn(controllerScope, SharingStarted.Eagerly, PermissionsState.EMPTY)
+
+  /**
+   * Re-read permission state on demand. Called by the platform app right after
+   * an in-app permission prompt returns: that prompt only pauses the host
+   * Activity, so [permissionsState] would otherwise stay stale (showing the
+   * banner for an already-granted permission) until the next foreground cycle.
+   */
+  fun refreshPermissions() {
+    permissionsMonitor.refresh()
+  }
 
   /** Whether "stay discoverable in background" is enabled (persisted). The Android app observes
    *  this same pref to start/stop its discovery foreground service. */

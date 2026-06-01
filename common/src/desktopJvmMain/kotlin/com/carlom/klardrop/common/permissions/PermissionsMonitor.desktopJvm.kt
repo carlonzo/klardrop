@@ -39,4 +39,8 @@ actual class PermissionsMonitor {
 
     return flowOf(state)
   }
+
+  // Desktop permission state is static (educational notes only, no runtime
+  // grants to re-read), so there is nothing to refresh.
+  actual fun refresh() = Unit
 }

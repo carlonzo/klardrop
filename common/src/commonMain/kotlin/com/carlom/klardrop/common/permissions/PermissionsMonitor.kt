@@ -17,6 +17,16 @@ import kotlinx.coroutines.flow.Flow
  */
 expect class PermissionsMonitor {
   fun observe(): Flow<PermissionsState>
+
+  /**
+   * Force a re-read of the current permission state. The OS prompt the platform
+   * app shows in-app (Android's runtime permission dialog) only *pauses* the
+   * host Activity — it never stops it — so granting a permission produces no
+   * foreground transition for [observe] to react to. The app calls this right
+   * after such a prompt returns so the panel reflects the new grant immediately
+   * instead of going stale until the next background→foreground round-trip.
+   */
+  fun refresh()
 }
 
 data class PermissionsState(
