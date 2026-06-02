@@ -92,10 +92,9 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
   }
 
   actual suspend fun openFile(filePath: String): Boolean {
-    // macOS file opening requires NSWorkspace
-    // This is a simplified implementation that always returns false
-    // A proper implementation would need platform-specific integration
-    return false
+    // Open the file in the user's default app for its type.
+    val fileUrl = NSURL.fileURLWithPath(filePath)
+    return NSWorkspace.sharedWorkspace.openURL(fileUrl)
   }
 
   actual suspend fun openUrl(url: String): Boolean {

@@ -1,5 +1,9 @@
 import SwiftUI
 import presentation
+#if os(iOS)
+import UIKit
+import QuickLook
+#endif
 
 // ---------------------------------------------------------------------------
 // MessageRowView
@@ -165,6 +169,12 @@ private struct FileMessageBubble: View {
     /// SKIE wraps Flow<File_transfers?> as SkieSwiftOptionalFlow which is AsyncSequence.
     @State private var fileTransfer: File_transfers? = nil
 
+    #if os(iOS)
+    /// Drives the native QuickLook preview for a received file (iOS can't open
+    /// arbitrary files from the KMP layer; QuickLook is the native presenter).
+    @State private var previewURL: URL? = nil
+    #endif
+
     private var isSender: Bool { message.is_sender != 0 }
 
     private var fileState: KdFileState {
@@ -223,6 +233,16 @@ private struct FileMessageBubble: View {
         return toImageUrl(path: path)
     }
 
+    /// Open a received file natively: QuickLook preview on iOS, open-in-default-app
+    /// (NSWorkspace via the KMP layer) on macOS.
+    private func open(_ path: String) {
+        #if os(iOS)
+        previewURL = toImageUrl(path: path)
+        #else
+        model.openFile(path)
+        #endif
+    }
+
     var body: some View {
         VStack(alignment: direction == .outgoing ? .trailing : .leading, spacing: 0) {
             BubbleView(direction: direction, timestamp: timestamp) {
@@ -238,7 +258,7 @@ private struct FileMessageBubble: View {
                                     .clipped()
                                     .clipShape(RoundedRectangle(cornerRadius: KdRadii.sm, style: .continuous))
                                     .onTapGesture {
-                                        if let p = openablePath { model.openFile(p) }
+                                        if let p = openablePath { open(p) }
                                     }
                             }
                         }
@@ -254,7 +274,7 @@ private struct FileMessageBubble: View {
                         }
                     )
                     .onTapGesture {
-                        if let p = openablePath { model.openFile(p) }
+                        if let p = openablePath { open(p) }
                     }
                 }
             }
@@ -266,7 +286,7 @@ private struct FileMessageBubble: View {
                         systemImage: "arrow.up.forward.square",
                         accessibility: "Open file"
                     ) {
-                        model.openFile(path)
+                        open(path)
                     }
                 }
             }
@@ -285,8 +305,46 @@ private struct FileMessageBubble: View {
                 } catch {}
             }
         }
+        #if os(iOS)
+        .sheet(isPresented: Binding(
+            get: { previewURL != nil },
+            set: { if !$0 { previewURL = nil } }
+        )) {
+            if let url = previewURL {
+                QuickLookPreview(url: url).ignoresSafeArea()
+            }
+        }
+        #endif
     }
 }
+
+#if os(iOS)
+// MARK: - QuickLookPreview (native file preview)
+
+/// Wraps QLPreviewController so received files open in the system previewer.
+private struct QuickLookPreview: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UINavigationController {
+        let controller = QLPreviewController()
+        controller.dataSource = context.coordinator
+        return UINavigationController(rootViewController: controller)
+    }
+
+    func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(url: url) }
+
+    final class Coordinator: NSObject, QLPreviewControllerDataSource {
+        let url: URL
+        init(url: URL) { self.url = url }
+        func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+        func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+            url as NSURL
+        }
+    }
+}
+#endif
 
 // MARK: - UnknownMessageBubble
 

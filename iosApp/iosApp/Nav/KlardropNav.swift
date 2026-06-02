@@ -12,7 +12,7 @@ import presentation
 //
 // REGULAR (iPad / WideLayout parity):
 //   NavigationSplitView { sidebar } detail: { chat or WideEmptyPaneView }.
-//   Sidebar reuses SidebarView from the device-list cluster.
+//   The sidebar content is built inline (iPadSidebar) using DeviceRowView.
 //   Selecting a row sets model.selectedChat and calls setActiveChatDeviceId.
 //   Detail is id-keyed on route.deviceId so ChatModel recreates on change.
 //
@@ -135,11 +135,10 @@ struct KlardropNav: View {
 
     // MARK: - iPad sidebar content
     //
-    // Uses SidebarView's yoursSection/nearbySection closures directly so that
-    // the system NavigationSplitView handles the column chrome while SidebarView
-    // provides the scrollable device rows and local-device footer.
-    // The SidebarView's fixed `width:` frame is omitted here by calling it
-    // without a width so it fills the sidebar column.
+    // Built inline: the system NavigationSplitView provides the column chrome,
+    // and this view supplies the scrollable My-devices / Nearby sections (via
+    // DeviceRowView) plus the local-device footer. (The standalone SidebarView
+    // component is unused here — candidate for removal.)
 
     @ViewBuilder
     private var iPadSidebar: some View {
