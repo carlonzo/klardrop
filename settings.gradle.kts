@@ -23,7 +23,7 @@ include(":common")
 include(":protos")
 include(":presentation")
 include(":compose-ui")
-include(":android", ":desktop", ":macos", ":cli")
+include(":android", ":desktop", ":cli")
 
 // to workaround https://youtrack.jetbrains.com/issue/KT-66568/w-KLIB-resolver-The-same-uniquename...-found-in-more-than-one-library
 project(":common").name = "klardrop-common"

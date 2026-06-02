@@ -52,8 +52,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            target: macos
           - os: ubuntu-latest
             target: linux-android
           - os: windows-latest
@@ -76,10 +74,6 @@ jobs:
           distribution: 'zulu'
 
       - uses: gradle/actions/setup-gradle@v6
-
-      - name: Build macOS DMG
-        if: matrix.target == 'macos'
-        run: ./gradlew :desktop:packageReleaseDmg $GRADLE_VERSION_ARGS
 
       - name: Build Windows MSI
         if: matrix.target == 'windows'
@@ -211,8 +205,127 @@ jobs:
           path: android/build/outputs/bundle/release/*.aab
           if-no-files-found: error
 
+  # Build + sign + notarize the native KlardropMac (Swift/SKIE) macOS app.
+  # When Apple signing secrets are absent (forks / community PRs) the job still
+  # builds an UNSIGNED .app/.dmg and uploads it as a CI artifact, but it does NOT
+  # write macos-verified.txt and is therefore NOT published to the GitHub Release
+  # as a verified download channel, and NOT consumed by the Homebrew cask.
+  build-macos-native:
+    needs: version
+    runs-on: macos-latest
+    env:
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.version.outputs.version }}
+        -Pklardrop.versionCode=${{ needs.version.outputs.versionCode }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # JDK 21 is REQUIRED — the Kotlin pod syncFramework script phase (invoked by
+      # xcodebuild during the pod build phase) is pinned to JDK 21.
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # Build the Bugsnag synthetic CocoaPod framework for macOS (both Debug and
+      # Release variants). This must run BEFORE xcodebuild because FRAMEWORK_SEARCH_PATHS
+      # in the pbxproj points at common/build/cocoapods/synthetic/macos/build/{Debug,Release}/Bugsnag.
+      # Only the Debug variant exists locally after local dev; CI must produce the Release variant
+      # explicitly here.
+      - name: Build Kotlin macOS frameworks (Bugsnag synthetic + dummy)
+        run: ./gradlew :klardrop-common:podBuildBugsnagMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
+
+      - name: pod install
+        run: pod install --project-directory=iosApp
+
+      - name: Detect Apple signing secrets
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}" ] || [ -z "${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}" ]; then
+            echo "Apple signing/notarization secrets absent — building UNSIGNED .app/.dmg."
+            echo "This is a CI-only artifact and will NOT be published as a verified download."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import Developer ID cert (signed builds only)
+        if: steps.signing.outputs.signed == 'true'
+        env:
+          P12: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          P12_PW: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/build.keychain"
+          KCPW="$(openssl rand -hex 16)"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          echo "$P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$P12_PW" -T /usr/bin/codesign
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPW" "$KC"
+
+      - name: Archive KlardropMac
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            SIGN_ARGS="CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=Developer ID Application DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}"
+          else
+            SIGN_ARGS="CODE_SIGNING_ALLOWED=NO"
+          fi
+          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" archive $SIGN_ARGS
+
+      - name: Stage .app + build DMG
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist stage
+          cp -R "$RUNNER_TEMP/KlardropMac.xcarchive/Products/Applications/Klardrop.app" stage/
+          ln -s /Applications stage/Applications
+          hdiutil create -volname Klardrop -srcfolder stage -ov -format UDZO \
+            "dist/klardrop-${VERSION}.dmg"
+
+      - name: Notarize + staple (signed builds only)
+        if: steps.signing.outputs.signed == 'true'
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}
+          VERSION:    ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey.p8"
+          xcrun notarytool submit "dist/klardrop-${VERSION}.dmg" \
+            --key "$RUNNER_TEMP/keys/AuthKey.p8" \
+            --key-id "$API_KEY_ID" \
+            --issuer "$API_ISSUER" \
+            --wait
+          xcrun stapler staple "dist/klardrop-${VERSION}.dmg"
+          # Marker file: its presence in the release indicates a notarized build.
+          # latest.json and the Homebrew job both gate on this file existing.
+          echo "verified" > dist/macos-verified.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: klardrop-macos
+          # Always upload the DMG (for debugging even unsigned builds).
+          # macos-verified.txt is only present when notarization succeeded.
+          path: dist/*
+          if-no-files-found: error
+
   publish:
-    needs: [version, build]
+    needs: [version, build, build-macos-native]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -259,7 +372,11 @@ jobs:
               size   = pathlib.Path(name).stat().st_size
               return {"url": f"{base}/{name}", "sha256": digest, "size": size}
           platforms = {}
-          if dmg: platforms["macos"]         = entry(dmg)
+          # macOS is only advertised in latest.json when a notarized native DMG is
+          # present (macos-verified.txt written by the notarize step). Without it
+          # the native .dmg is uploaded as a raw CI artifact but is NOT listed as a
+          # verified download channel (unsigned build — not suitable for public distribution).
+          if dmg and os.path.exists("macos-verified.txt"): platforms["macos"] = entry(dmg)
           if msi: platforms["windows"]       = entry(msi)
           if deb: platforms["linux-deb"]     = entry(deb)
           if tgz: platforms["linux-tarball"] = entry(tgz)
@@ -292,9 +409,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Guard (token present + stable version)
+      - name: Guard (token present + stable version + verified native DMG)
         id: guard
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG:      ${{ needs.version.outputs.tag }}
         run: |
           set -euo pipefail
           OK=true
@@ -303,6 +423,14 @@ jobs:
           fi
           if [ "${{ needs.version.outputs.stable }}" != "true" ]; then
             echo "Version is a pre-release — skipping Homebrew publish."; OK=false
+          fi
+          # Require a verified (signed + notarized) native macOS DMG in the release.
+          # The build-macos-native job writes macos-verified.txt only when notarization
+          # succeeds. Without Apple signing secrets the unsigned .dmg is NOT published
+          # as a verified Homebrew channel.
+          if ! gh release view "$TAG" --repo "${{ github.repository }}" \
+               --json assets --jq '.assets[].name' 2>/dev/null | grep -q 'macos-verified.txt'; then
+            echo "No verified (notarized) macOS DMG in release — skipping Homebrew."; OK=false
           fi
           echo "ok=$OK" >> "$GITHUB_OUTPUT"
 

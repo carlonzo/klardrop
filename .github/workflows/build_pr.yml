@@ -59,15 +59,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
 
       - name: Run macOS + iOS native tests
-        # iOS Simulator covers the shared multiplatform modules (klardrop-common,
-        # common-ui, protos). macosArm64Test only exists on :macos (the standalone
-        # native macOS app); the other modules don't declare a macosArm64 target.
+        # iOS Simulator + macOS native cover the shared KMP modules that Linux
+        # cannot build (klardrop-common, presentation, protos). :compose-ui has
+        # only android + desktopJvm targets now, so it has no Apple test task and
+        # is fully covered by the Linux job. The old :common-ui (renamed :compose-ui)
+        # and :macos (vestigial KN stub removed in SwiftUI migration) tasks are gone.
         run: |
           ./gradlew \
             :klardrop-common:iosSimulatorArm64Test \
-            :common-ui:iosSimulatorArm64Test \
+            :presentation:iosSimulatorArm64Test \
             :protos:iosSimulatorArm64Test \
-            :macos:macosArm64Test
+            :klardrop-common:macosArm64Test \
+            :presentation:macosArm64Test \
+            :protos:macosArm64Test
 
       - name: Publish Test Report
         uses: dorny/test-reporter@v3

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>bugsnag</key>
+	<dict>
+		<key>apiKey</key>
+		<string>3e6d40359747c7552a4dd9bdd45ddf16</string>
+	</dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHumanReadableCopyright</key>
+	<string></string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Klardrop discovers and connects to nearby devices on your local network.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_klardrop._tcp.</string>
+		<string>_FC9F5ED42C8A._tcp.</string>
+	</array>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Used to discover and connect to nearby Klardrop devices over Bluetooth.</string>
+</dict>
+</plist>

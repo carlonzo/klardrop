@@ -155,6 +155,7 @@
 		7555FF7B242A565900829871 /* Klardrop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Klardrop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7555FF8C242A565B00829871 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7619154102E69A08B9FA4A20 /* DeviceChatScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceChatScreen.swift; sourceTree = "<group>"; };
+		7EB6210D64D956E0F14FB9F9 /* MacInfo.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = MacInfo.plist; sourceTree = "<group>"; };
 		81A6B3B9F6E62D30973F9798 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
 		82B73B7F2DC511088F596B4D /* Color+Hex.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Color+Hex.swift"; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		8320B3CCB3CAA291C7EBDB0F /* MacApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MacApp.swift; sourceTree = "<group>"; };
@@ -181,6 +182,7 @@
 		D1D6B7FC122907F1322FD677 /* sqlite3_macos_stubs.c */ = {isa = PBXFileReference; includeInIndex = 1; path = sqlite3_macos_stubs.c; sourceTree = "<group>"; };
 		DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdType.swift; path = KdType.swift; sourceTree = "<group>"; };
 		E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StatusDotView.swift; path = StatusDotView.swift; sourceTree = "<group>"; };
+		E9F55DCA6FC30682D610A0A3 /* KlardropMac.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = KlardropMac.entitlements; sourceTree = "<group>"; };
 		EF30C1BD0565A0DA4667C725 /* IncomingTransferCardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IncomingTransferCardView.swift; sourceTree = "<group>"; };
 		EF406F852D741B670D0B3EDD /* DeviceAvatarView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceAvatarView.swift; sourceTree = "<group>"; };
 		EF9586097D5E0ABD36716A68 /* VisibilityPillView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VisibilityPillView.swift; sourceTree = "<group>"; };
@@ -322,6 +324,8 @@
 				CE11576F07F0BC3EA5C7B8BB /* Views */,
 				7C98936DBD98E0832C0CCEA9 /* Nav */,
 				01FEDE7B3AD5E7B4A497195B /* Stubs */,
+				E9F55DCA6FC30682D610A0A3 /* KlardropMac.entitlements */,
+				7EB6210D64D956E0F14FB9F9 /* MacInfo.plist */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -905,6 +909,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = iosApp/KlardropMac.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -917,9 +922,8 @@
 					"$(inherited)",
 					/Users/carlo/Projects/klardrop/common/build/cocoapods/synthetic/macos/build/Debug/Bugsnag,
 				);
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = iosApp/MacInfo.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -948,6 +952,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = iosApp/KlardropMac.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -959,9 +964,8 @@
 					"$(inherited)",
 					/Users/carlo/Projects/klardrop/common/build/cocoapods/synthetic/macos/build/Release/Bugsnag,
 				);
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = iosApp/MacInfo.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
