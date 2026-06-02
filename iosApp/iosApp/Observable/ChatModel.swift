@@ -27,16 +27,22 @@ final class ChatModel {
     // MARK: - Observable state
 
     private(set) var messages: [Messages] = []
-    private(set) var uiState: ChatUiState
+    private(set) var uiState: ChatUiState = ChatUiState(error: nil, notice: nil)
     private(set) var pendingAuth: ReceiveMessageUpdate? = nil
-    private(set) var reachability: Reachability
+    private(set) var reachability: Reachability = ReachabilityUnknown()
 
     /// Draft text owned here so MessageInputView binds via @Bindable.
     var draft: String = ""
 
-    // MARK: - Kotlin VM handle (used by MessageRowView for per-file-transfer flows)
+    // MARK: - Kotlin VM handle (created lazily in start(); used by MessageRowView)
 
-    let viewModel: DeviceChatViewModel
+    private let deviceId: String
+    private let bootstrap: KlardropBootstrap
+    private var vmStorage: DeviceChatViewModel?
+
+    /// The Kotlin view-model. Valid after start(); only accessed by the live
+    /// screen (post-`.task`) for intents and per-row file-transfer flows.
+    var viewModel: DeviceChatViewModel { vmStorage! }
 
     // MARK: - Tasks
 
@@ -44,25 +50,35 @@ final class ChatModel {
 
     // MARK: - Init
 
+    // IMPORTANT: init is side-effect free and does NOT create the Kotlin
+    // DeviceChatViewModel. SwiftUI rebuilds the navigationDestination / split
+    // detail closure on every parent (KlardropNav) re-render, which re-evaluates
+    // `ChatModel(...)`. Creating the VM here would run DeviceChatViewModel.init
+    // (which launches markMessagesAsRead -> a DB write -> SQLDelight re-emit ->
+    // screenStateFlow update -> another KlardropNav re-render) on EVERY render —
+    // a self-sustaining feedback loop that pegs the CPU while a chat is open.
+    // The VM is created exactly once in start(), driven by the live screen's `.task`.
     init(deviceId: String, bootstrap: KlardropBootstrap) {
-        let vm = bootstrap.deviceChatViewModel(deviceId: deviceId)
-        self.viewModel = vm
-
-        // Seed synchronously from current StateFlow values.
-        self.uiState = vm.uiState.value as? ChatUiState ?? ChatUiState(error: nil, notice: nil)
-        self.reachability = vm.reachability.value as? Reachability ?? ReachabilityUnknown()
-        self.pendingAuth = vm.pendingAuth.value as? ReceiveMessageUpdate
-        if let list = vm.messages.value as? [Messages] {
-            self.messages = list
-        } else if let arr = vm.messages.value as? NSArray {
-            self.messages = arr.compactMap { $0 as? Messages }
-        }
+        self.deviceId = deviceId
+        self.bootstrap = bootstrap
     }
 
     // MARK: - Lifecycle
 
     func start() {
-        guard tasks.isEmpty else { return }
+        guard vmStorage == nil else { return }
+        let vm = bootstrap.deviceChatViewModel(deviceId: deviceId)
+        vmStorage = vm
+
+        // Seed from current StateFlow values now that the VM exists (one-time).
+        uiState = vm.uiState.value as? ChatUiState ?? ChatUiState(error: nil, notice: nil)
+        reachability = vm.reachability.value as? Reachability ?? ReachabilityUnknown()
+        pendingAuth = vm.pendingAuth.value as? ReceiveMessageUpdate
+        if let list = vm.messages.value as? [Messages] {
+            messages = list
+        } else if let arr = vm.messages.value as? NSArray {
+            messages = arr.compactMap { $0 as? Messages }
+        }
 
         tasks = [
             // messages: StateFlow<List<Messages>> — emits Kotlin List, bridged as NSArray
@@ -108,7 +124,8 @@ final class ChatModel {
     func stop() {
         tasks.forEach { $0.cancel() }
         tasks = []
-        viewModel.onDispose()
+        vmStorage?.onDispose()
+        vmStorage = nil
     }
 
     // MARK: - Intent pass-throughs
