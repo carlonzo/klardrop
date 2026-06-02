@@ -6,7 +6,6 @@ plugins {
   alias(deps.plugins.compose.compiler)
   alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
-  kotlin("native.cocoapods")
 }
 
 kotlin {
@@ -22,62 +21,6 @@ kotlin {
     }
   }
 //  macosArm64()
-
-  // The :klardrop-common module declares pod("Bugsnag") and its synthetic
-  // build produces Bugsnag.framework. :common-ui's pod-framework link task
-  // inherits the `-framework Bugsnag` linker option from the cinterop klib
-  // but not the framework-search-path the cocoapods plugin scoped to
-  // :klardrop-common. Forward both Debug and Release search paths for
-  // device + simulator so the iOS link step can resolve Bugsnag.
-  val bugsnagSyntheticBuild =
-    rootProject.file("common/build/cocoapods/synthetic/ios/build")
-  val deviceBugsnagPaths = listOf("Debug-iphoneos", "Release-iphoneos")
-    .map { File(bugsnagSyntheticBuild, "$it/Bugsnag").absolutePath }
-  val simBugsnagPaths = listOf("Debug-iphonesimulator", "Release-iphonesimulator")
-    .map { File(bugsnagSyntheticBuild, "$it/Bugsnag").absolutePath }
-
-  cocoapods {
-    version = rootProject.version.toString()
-
-    homepage = "https://github.com/carlonzo/klardrop"
-    summary = "Shared Module for Klardrop"
-    ios.deploymentTarget = "14.1"
-    podfile = project.file("../iosApp/Podfile")
-
-    framework {
-      baseName = "common_ui"
-    }
-  }
-
-  // Xcode 16+'s iOS SDK auto-links UIUtilities (a SubFramework) from headers
-  // that some pods compile against. The SubFrameworks directory isn't on the
-  // default kotlinc-native framework search path, so add it explicitly per
-  // target so `-framework UIUtilities` resolves.
-  // xcode-select only exists on macOS hosts; iOS targets can't link off macOS,
-  // so resolve the SDK path lazily and skip the lookup on Linux/Windows CI.
-  val isMacOsHost = org.gradle.internal.os.OperatingSystem.current().isMacOsX
-  val xcodeDeveloper = if (isMacOsHost) {
-    providers.exec {
-      commandLine("xcode-select", "-p")
-    }.standardOutput.asText.get().trim()
-  } else {
-    ""
-  }
-  val deviceSdkSubFrameworks =
-    "$xcodeDeveloper/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/System/Library/SubFrameworks"
-  val simSdkSubFrameworks =
-    "$xcodeDeveloper/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk/System/Library/SubFrameworks"
-
-  iosArm64().binaries.all {
-    deviceBugsnagPaths.forEach { linkerOpts("-F", it) }
-    if (isMacOsHost) linkerOpts("-F", deviceSdkSubFrameworks)
-    linkerOpts("-lsqlite3")
-  }
-  iosSimulatorArm64().binaries.all {
-    simBugsnagPaths.forEach { linkerOpts("-F", it) }
-    if (isMacOsHost) linkerOpts("-F", simSdkSubFrameworks)
-    linkerOpts("-lsqlite3")
-  }
 
   sourceSets {
 

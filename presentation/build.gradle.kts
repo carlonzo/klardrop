@@ -4,6 +4,8 @@ plugins {
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
+  kotlin("native.cocoapods")
+  id("co.touchlab.skie") version "0.10.12"
 }
 
 kotlin {
@@ -18,9 +20,32 @@ kotlin {
       jvmTarget = JvmTarget.JVM_21
     }
   }
-  iosArm64()
-  iosSimulatorArm64()
+  iosArm64 {
+    binaries.framework {
+      baseName = "presentation"
+      export(project(":klardrop-common"))
+    }
+  }
+  iosSimulatorArm64 {
+    binaries.framework {
+      baseName = "presentation"
+      export(project(":klardrop-common"))
+    }
+  }
   applyDefaultHierarchyTemplate()
+
+  cocoapods {
+    version = rootProject.version.toString()
+    homepage = "https://github.com/carlonzo/klardrop"
+    summary = "Presentation (business + UI-state) module for Klardrop"
+    ios.deploymentTarget = "14.1"
+    podfile = project.file("../iosApp/Podfile")
+    framework {
+      baseName = "presentation"
+      isStatic = true
+      export(project(":klardrop-common"))
+    }
+  }
 
   // :presentation depends on :klardrop-common which declares pod("Bugsnag");
   // the iOS klib inherits the `-framework Bugsnag` linker option from the
