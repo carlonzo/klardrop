@@ -21,30 +21,33 @@ struct IncomingBannerStackView: View {
     // MARK: - Filtered updates
 
     private var filteredUpdates: [(key: Int32, value: ReceiveMessageUpdate)] {
-        state.receivingMessages.compactMap { (id, update) -> (key: Int32, value: ReceiveMessageUpdate)? in
-            // receivingMessages is NSDictionary<KotlinInt,ReceiveMessageUpdate>.
-            // KotlinInt bridges as NSNumber in Swift — use int32Value.
-            guard let nsNum = id as? NSNumber else { return nil }
-            let id32 = nsNum.int32Value
+        // receivingMessages is a Kotlin Map<Int, ReceiveMessageUpdate> exposed as
+        // NSDictionary<PresentationInt*, PresentationReceiveMessageUpdate*>. Iterating
+        // it as a *typed* Swift dictionary makes Swift lazily force-bridge each element
+        // from Obj-C, which aborts at runtime (swift_dynamicCastFailure). Enumerate the
+        // raw NSDictionary and cast each entry defensively with `as?` instead.
+        var result: [(key: Int32, value: ReceiveMessageUpdate)] = []
+        for (rawKey, rawValue) in (state.receivingMessages as NSDictionary) {
+            guard let key = rawKey as? NSNumber,
+                  let update = rawValue as? ReceiveMessageUpdate else { continue }
 
             let hasRealHeader = update.messages.contains { msg in
                 msg is TextMessage || msg is FileMessage
             }
             let hasConnectionInfo = update.messages.contains { $0 is ConnectionInfoMessage }
 
-            let isPendingWithHeader: Bool = {
-                switch onEnum(of: update.status) {
-                case .pendingAuthorization:
-                    return hasRealHeader
-                default:
-                    return false
-                }
-            }()
+            let isPendingWithHeader: Bool
+            switch onEnum(of: update.status) {
+            case .pendingAuthorization:
+                isPendingWithHeader = hasRealHeader
+            default:
+                isPendingWithHeader = false
+            }
 
-            guard isPendingWithHeader || hasConnectionInfo else { return nil }
-            return (key: id32, value: update)
+            guard isPendingWithHeader || hasConnectionInfo else { continue }
+            result.append((key: key.int32Value, value: update))
         }
-        .sorted { $0.key < $1.key }
+        return result.sorted { $0.key < $1.key }
     }
 
     private var filteredNotifications: [UiNotification] {
