@@ -17,7 +17,7 @@ import kotlinx.io.files.SystemFileSystem
 import platform.AppKit.NSWorkspace
 import platform.Foundation.*
 
-actual class InternalPlatformDependencies {
+actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
   private val documentsDirectory: Path by lazy {
     val directory = NSFileManager.defaultManager.URLForDirectory(

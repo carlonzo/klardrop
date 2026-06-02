@@ -32,6 +32,12 @@ kotlin {
       export(project(":klardrop-common"))
     }
   }
+  macosArm64 {
+    binaries.framework {
+      baseName = "presentation"
+      export(project(":klardrop-common"))
+    }
+  }
   applyDefaultHierarchyTemplate()
 
   cocoapods {
@@ -88,6 +94,21 @@ kotlin {
   iosSimulatorArm64().binaries.all {
     simBugsnagPaths.forEach { linkerOpts("-F", it) }
     if (isMacOsHost) linkerOpts("-F", simSdkSubFrameworks)
+    linkerOpts("-lsqlite3")
+  }
+
+  // macOS inherits the same `-framework Bugsnag` linker option from the
+  // :klardrop-common Bugsnag cinterop klib (the cocoapods plugin applies the
+  // Bugsnag pod to every native target). Forward the macOS synthetic Bugsnag
+  // framework-search-path so the macOS framework link resolves it, plus the
+  // sqlite3 hack mirroring iOS. The synthetic macOS build emits to a plain
+  // `Debug`/`Release` dir (no `-macosx` SDK suffix like iOS).
+  val macosBugsnagSyntheticBuild =
+    rootProject.file("common/build/cocoapods/synthetic/macos/build")
+  val macosBugsnagPaths = listOf("Debug", "Release")
+    .map { File(macosBugsnagSyntheticBuild, "$it/Bugsnag").absolutePath }
+  macosArm64().binaries.all {
+    macosBugsnagPaths.forEach { linkerOpts("-F", it) }
     linkerOpts("-lsqlite3")
   }
 
