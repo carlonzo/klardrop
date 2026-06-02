@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(iOS)
 import PhotosUI
+#endif
 import presentation
 
 // ---------------------------------------------------------------------------
@@ -31,7 +33,9 @@ struct DeviceChatScreen: View {
 
     // File picking state
     @State private var showFilePicker = false
+    #if os(iOS)
     @State private var photoItems: [PhotosPickerItem] = []
+    #endif
     @State private var showToast: String? = nil
 
     // Reachability-derived flags
@@ -73,6 +77,21 @@ struct DeviceChatScreen: View {
             kd.bg0.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                #if os(macOS)
+                // On macOS, render the chat header inline since we don't use .toolbar
+                ChatHeaderView(
+                    deviceName: deviceName,
+                    subText: headerSubText,
+                    kind: .unknown,
+                    avatarStyle: headerAvatarStyle,
+                    status: headerStatus,
+                    isReachable: !isOffline,
+                    avatarSize: 28
+                )
+                .padding(.horizontal, KdSpacing.s3)
+                .padding(.vertical, KdSpacing.s2)
+                Divider()
+                #endif
                 // Pending auth banner
                 if let auth = model.pendingAuth {
                     IncomingAuthBannerView(update: auth)
@@ -127,6 +146,7 @@ struct DeviceChatScreen: View {
             }
         }
         // Navigation bar (iPhone): principal toolbar item with compact ChatHeaderView
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -143,6 +163,7 @@ struct DeviceChatScreen: View {
                 .overlay(alignment: .bottom) { Color.clear.frame(height: 0) }
             }
         }
+        #endif
         // Lifecycle
         .task {
             model.start()
@@ -171,10 +192,12 @@ struct DeviceChatScreen: View {
         ) { result in
             handleFileImportResult(result)
         }
+        #if os(iOS)
         // Photo picker (not used directly here; the empty state chip uses its own)
         .onChange(of: photoItems) { _, items in
             Task { await handlePhotoItems(items) }
         }
+        #endif
         // Toast overlay
         .overlay(alignment: .top) {
             if let toast = showToast {
@@ -218,6 +241,7 @@ struct DeviceChatScreen: View {
         }
     }
 
+    #if os(iOS)
     private func handlePhotoItems(_ items: [PhotosPickerItem]) async {
         var platformFiles: [Filekit_corePlatformFile] = []
         for item in items {
@@ -235,6 +259,7 @@ struct DeviceChatScreen: View {
             model.sendFiles(platformFiles)
         }
     }
+    #endif
 }
 
 // MARK: - IncomingAuthBannerView (private to chat screen)
@@ -283,7 +308,9 @@ private struct ChatEmptyStateView: View {
     let onPickPhotos: () -> Void
 
     @Environment(\.kdColors) private var kd
+    #if os(iOS)
     @State private var photoItems: [PhotosPickerItem] = []
+    #endif
 
     var body: some View {
         VStack(spacing: KdSpacing.gap) {
@@ -308,7 +335,8 @@ private struct ChatEmptyStateView: View {
             HStack(spacing: KdSpacing.s2) {
                 ChipButton(label: "Files", action: onPickFiles)
 
-                // Photos chip drives a PhotosPicker
+                #if os(iOS)
+                // Photos chip drives a PhotosPicker (iOS only)
                 PhotosPicker(
                     selection: $photoItems,
                     maxSelectionCount: 0,
@@ -326,6 +354,10 @@ private struct ChatEmptyStateView: View {
                         onPickPhotos()
                     }
                 }
+                #else
+                // On macOS, Photos chip falls back to fileImporter for images
+                ChipButton(label: "Photos", action: onPickFiles)
+                #endif
 
                 ChipButton(label: "Text", action: {})
             }

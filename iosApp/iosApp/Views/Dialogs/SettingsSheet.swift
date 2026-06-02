@@ -40,10 +40,15 @@ struct SettingsSheet: View {
             Spacer(minLength: KdSpacing.s6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        #if os(iOS)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(KdRadii.sheet)
         .presentationBackground(kd.bg1)
+        #else
+        .frame(minWidth: 420, minHeight: 280)
+        .background(kd.bg1)
+        #endif
     }
 
     // MARK: - Background-discovery toggle row (Android only; hidden on iOS)

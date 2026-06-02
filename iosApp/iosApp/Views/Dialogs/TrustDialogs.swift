@@ -24,7 +24,9 @@ struct LinkDeviceConfirmDialog: View {
     let onDismiss: () -> Void
 
     @Environment(\.kdColors) private var kd
+    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     var body: some View {
         PairingDialogView(
@@ -35,8 +37,12 @@ struct LinkDeviceConfirmDialog: View {
             onCancel: onDismiss,
             onConfirm: onConfirm
         )
+        #if os(iOS)
         .padding(sizeClass == .compact ? KdSpacing.s4 : KdSpacing.s2)
-        .sheetPresentation(in: sizeClass)
+        #else
+        .padding(KdSpacing.s2)
+        #endif
+        .sheetPresentation()
     }
 }
 
@@ -51,7 +57,9 @@ struct ForgetDeviceConfirmDialog: View {
     let onDismiss: () -> Void
 
     @Environment(\.kdColors) private var kd
+    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     var body: some View {
         PairingDialogView(
@@ -62,8 +70,12 @@ struct ForgetDeviceConfirmDialog: View {
             onCancel: onDismiss,
             onConfirm: onConfirm
         )
+        #if os(iOS)
         .padding(sizeClass == .compact ? KdSpacing.s4 : KdSpacing.s2)
-        .sheetPresentation(in: sizeClass)
+        #else
+        .padding(KdSpacing.s2)
+        #endif
+        .sheetPresentation()
     }
 }
 
@@ -71,11 +83,16 @@ struct ForgetDeviceConfirmDialog: View {
 
 private extension View {
     /// Applies native sheet presentation tokens for dialogs.
-    func sheetPresentation(in sizeClass: UserInterfaceSizeClass?) -> some View {
+    func sheetPresentation() -> some View {
+        #if os(iOS)
         self
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(KdRadii.sheet)
+        #else
+        self
+            .frame(minWidth: 420, minHeight: 320)
+        #endif
     }
 }
 

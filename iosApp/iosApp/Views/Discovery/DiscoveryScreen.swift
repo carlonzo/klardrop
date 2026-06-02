@@ -57,6 +57,14 @@ struct DiscoveryScreen: View {
 
             ScrollView {
                 VStack(spacing: 0) {
+                    #if os(macOS)
+                    // On macOS the toolbar isn't used; render header inline at the top of content
+                    DiscoveryHeaderView(
+                        currentDeviceName: currentDeviceName,
+                        onEditIdentity: { showRenameSheet = true },
+                        onSettings: { showSettings = true }
+                    )
+                    #endif
                     // Update banner (renders nothing on iOS unless Available)
                     UpdateBannerView(
                         status: model.updateStatus,
@@ -97,6 +105,7 @@ struct DiscoveryScreen: View {
             }
         }
         .navigationTitle("")
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -107,6 +116,7 @@ struct DiscoveryScreen: View {
                 )
             }
         }
+        #endif
         // Auto-dismiss add-device picker when a device becomes trusted
         .onChange(of: trustedDevices.count) { _, count in
             if count > 0 { showAddDevicePicker = false }

@@ -131,9 +131,11 @@ private struct TextMessageBubble: View {
                 onCopy: { model.copyText(message.content) },
                 onDismiss: { showViewer = false }
             )
+            #if os(iOS)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(KdRadii.sheet)
+            #endif
         }
     }
 }

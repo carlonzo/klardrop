@@ -7,54 +7,104 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01DB2466CC64623D6CF125FC /* StatusDotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */; };
+		022C5C2618A19D3CC0088FD3 /* IncomingBannerStackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A985EB45486147EFEEC0083A /* IncomingBannerStackView.swift */; };
+		03ACDFC7638A4E76C64A2173 /* AddDevicePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34E4F67BD5762736F3B412C /* AddDevicePickerSheet.swift */; };
+		050A1E17A5532A25C637F1C5 /* KdRadii.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CB52301BD5AE4C16FDF6255 /* KdRadii.swift */; };
 		058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557BA273AAA24004C7B11 /* Assets.xcassets */; };
 		058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */; };
+		0E638F6AF8C7F62B12CF8C98 /* FileCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DEE486D88CA987250E3748F /* FileCardView.swift */; };
+		0EDD3237A4CB6E60005B9919 /* DateChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3329AA02CA5C53FD205CD6F /* DateChipView.swift */; };
+		0EF8F9E454325CA6AA2A0B78 /* DiscoveryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90204E2C20EA390FEFAC5EE3 /* DiscoveryModel.swift */; };
 		0FAC658C2DB3BBD6E87645EF /* UpdateBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1313E8598603FA619FB910F /* UpdateBannerView.swift */; };
 		0FB5C3372B4184DA5FA7C424 /* FileCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DEE486D88CA987250E3748F /* FileCardView.swift */; };
 		13A789129AC62378BFA92D51 /* DeviceChatScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7619154102E69A08B9FA4A20 /* DeviceChatScreen.swift */; };
+		1452367E9EA786EA6020901A /* TextMessageViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B1E9EF5F99DBB03856B8D4 /* TextMessageViewerView.swift */; };
 		1940F391E2C19CC3621CEF71 /* KdSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */; };
+		1E9CB7CE348B5FD6CDACBF1F /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0C2857366865997CD52F57 /* RootView.swift */; };
+		1EB4D638862E6AF6AABDA495 /* DeviceAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF406F852D741B670D0B3EDD /* DeviceAvatarView.swift */; };
 		227FC59E976D5DCE6BE59518 /* FilePicking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BBAF324273D25F8CE8733D1 /* FilePicking.swift */; };
 		25854FF09AB48EEE3DA5A4C9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0C2857366865997CD52F57 /* RootView.swift */; };
+		27A7AB2CD0896FAC834242EC /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 967BB6CB99DA93EC43589E22 /* Cocoa.framework */; };
+		28186C32A7557C837AF09C0E /* DeviceRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8813B25ABD1B26F3CD5C38 /* DeviceRowView.swift */; };
+		294106DDC943066EDA033EB6 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 237CEC83090715744E3FEC35 /* DiscoveryView.swift */; };
+		2C44E80F11C6909AF0F922F2 /* MessageRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FF9C58AD2000465E2ED481 /* MessageRowView.swift */; };
+		2E5932D82393C1DE43290B51 /* KlardropNav.swift in Sources */ = {isa = PBXBuildFile; fileRef = 685D4A396535152D088D7EE2 /* KlardropNav.swift */; };
 		35FDFE34399CE4F261DCD881 /* TrustDialogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C82CF44F0D12B62B630D44 /* TrustDialogs.swift */; };
+		38D003ABB2E8CC8DA5A0AAF8 /* PermissionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DC0BE7BE710B657C2261F5 /* PermissionsPanelView.swift */; };
+		3AD3C308D75670BBF796FA01 /* DeviceUiHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1535C70BA72B5D678B510F57 /* DeviceUiHelpers.swift */; };
+		3D16F3D44B73496029497E3D /* MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8320B3CCB3CAA291C7EBDB0F /* MacApp.swift */; };
+		40747B651B47CFF1D327A875 /* UpdateBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1313E8598603FA619FB910F /* UpdateBannerView.swift */; };
+		41D2E3C7FEA21371263CFCA1 /* FilePicking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BBAF324273D25F8CE8733D1 /* FilePicking.swift */; };
 		473614437D583A133AC2FD13 /* PermissionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DC0BE7BE710B657C2261F5 /* PermissionsPanelView.swift */; };
 		47A984A5312E051FB2FBE4D9 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 237CEC83090715744E3FEC35 /* DiscoveryView.swift */; };
 		4FF0B829D380FDE5570AF630 /* SectionHeadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB495E57B6219ABCC27832DD /* SectionHeadView.swift */; };
 		51918C9838997A36C6937320 /* StatusDotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */; };
+		57DDBFC25CBDBEBAC6C6E527 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B73B7F2DC511088F596B4D /* Color+Hex.swift */; };
+		58809A4CCD1D59DD22EBEA5D /* IncomingTransferCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF30C1BD0565A0DA4667C725 /* IncomingTransferCardView.swift */; };
 		58924C794ACEFCDD81298129 /* BubbleQuickActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E5EC17F934803879681F780 /* BubbleQuickActionsView.swift */; };
 		58B876B7EC9CF9A8BE11EBF3 /* MessageInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 374C118F971889B9DC26AE84 /* MessageInputView.swift */; };
 		5B58F437AFA1716CA1C6259B /* DeviceRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8813B25ABD1B26F3CD5C38 /* DeviceRowView.swift */; };
 		62EB207CD640CD5344C55570 /* IncomingTransferCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF30C1BD0565A0DA4667C725 /* IncomingTransferCardView.swift */; };
 		64A84DBDE16C41C56C64AE0F /* AddDevicePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34E4F67BD5762736F3B412C /* AddDevicePickerSheet.swift */; };
+		6757F345354B8AF8235F3DD1 /* BannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63BAADE3561E108884D3C79D /* BannerView.swift */; };
 		694E96FC36D262A75D275BE8 /* BubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46809ECE42F4D435E5EF2CB5 /* BubbleView.swift */; };
 		6A9C750E3F909E9FE38DB1EC /* VisibilityPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF9586097D5E0ABD36716A68 /* VisibilityPillView.swift */; };
+		6E2D5B1DDCE04A219CA7141A /* VisibilityPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF9586097D5E0ABD36716A68 /* VisibilityPillView.swift */; };
 		6F6C4986F51576522C05ADDE /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2175ED977EC2D04318EAD200 /* ChatModel.swift */; };
+		707C06B6CD6F242699FEB877 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C26119D3D7CE22CF06A5F2E /* SettingsSheet.swift */; };
 		71EAEC70F408DF748899A011 /* DiscoveryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90204E2C20EA390FEFAC5EE3 /* DiscoveryModel.swift */; };
 		7B43F1BAA9D1998DCBA210F8 /* PairingApprovalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11146602E1139C67C03F1B8F /* PairingApprovalSheet.swift */; };
 		7F042BC099FC9C73683E237C /* DeviceUiMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60A548AA3ECC229B28CA439 /* DeviceUiMapping.swift */; };
+		809A55F2A7A42EF8E5B29587 /* ShareSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B893524BEA113EBDCBBE3C6 /* ShareSheetView.swift */; };
+		838E3968CF374A72DF942BAB /* NavRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA74CDA387605E6B2A63703 /* NavRoutes.swift */; };
+		859698F08FA202224C3746AE /* DeviceChatScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7619154102E69A08B9FA4A20 /* DeviceChatScreen.swift */; };
+		868F35965A77ADD07624C37C /* PermissionsChecklistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8F32CDC8B365315F430B2F /* PermissionsChecklistView.swift */; };
+		88DBDE3DAED3C0C8E663E71C /* BubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46809ECE42F4D435E5EF2CB5 /* BubbleView.swift */; };
+		8D4C32A6F4165C87135E4F5D /* KdSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */; };
+		9061825CC3B2DA54D08D2EDF /* SectionHeadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB495E57B6219ABCC27832DD /* SectionHeadView.swift */; };
 		93FDC5A0AAD0440BC4E5AB62 /* RenameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F0D09AD1C96FCD6D5940A15 /* RenameSheet.swift */; };
+		94D7A85618B45D9B203BC158 /* Pods_KlardropMac.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D0AB44E8D4F3EA79ACC09244 /* Pods_KlardropMac.framework */; };
+		94FDCBC57C7A4C4BD352DDC4 /* RenameSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F0D09AD1C96FCD6D5940A15 /* RenameSheet.swift */; };
+		96972AF43A557DDE6D1D1B3D /* KdColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88E5A453CA492BB4D6E32AB /* KdColors.swift */; };
+		9A848A1EEF4106C24B6BB123 /* KdMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62ABA6F429B4D01F34B3E772 /* KdMotion.swift */; };
 		9ED9E50A8BC4311ECF440521 /* ShareSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B893524BEA113EBDCBBE3C6 /* ShareSheetView.swift */; };
 		A05EA39FF290FDECDF588E46 /* PairingDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC56B4EA9CDB5D8456404160 /* PairingDialogView.swift */; };
 		A170E396EEAB80EE824723D6 /* ChatTimeFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F0B700418BBDFDC584CBF6 /* ChatTimeFormat.swift */; };
+		A3693F3DB4128766295595D0 /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2175ED977EC2D04318EAD200 /* ChatModel.swift */; };
 		A95B328A12318AC0903110C3 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C26119D3D7CE22CF06A5F2E /* SettingsSheet.swift */; };
 		A9A387E4176ACEA76838753E /* KdRadii.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CB52301BD5AE4C16FDF6255 /* KdRadii.swift */; };
 		A9BDD2EF1B189519390E67AA /* TextMessageViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69B1E9EF5F99DBB03856B8D4 /* TextMessageViewerView.swift */; };
+		B001FB4824FDCD88E4A0A732 /* SystemNotificationCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06887C53DA33681456E20E84 /* SystemNotificationCardView.swift */; };
+		B3F78FAA389DE36A44C481A6 /* DeviceUiMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60A548AA3ECC229B28CA439 /* DeviceUiMapping.swift */; };
 		B5921390730A173CCE79E2F1 /* DateChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3329AA02CA5C53FD205CD6F /* DateChipView.swift */; };
 		B82D07B26BD6C82B5BAD218C /* DeviceAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF406F852D741B670D0B3EDD /* DeviceAvatarView.swift */; };
 		BB3898649DCACF2E256E5C32 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B73B7F2DC511088F596B4D /* Color+Hex.swift */; };
+		BCB574CCDE6BFDA130AE238E /* DiscoveryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4040D930AF0024012D065844 /* DiscoveryScreen.swift */; };
 		C5D4DC65F6E3B14AE90B7A09 /* KdColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88E5A453CA492BB4D6E32AB /* KdColors.swift */; };
 		CA7C13DED79CDE1DF0476BD5 /* DiscoveryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4040D930AF0024012D065844 /* DiscoveryScreen.swift */; };
 		CC12F1A2B4DB88DF6F2F1378 /* BannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63BAADE3561E108884D3C79D /* BannerView.swift */; };
+		CD7E681412A9DD51C02755DD /* ChatTimeFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F0B700418BBDFDC584CBF6 /* ChatTimeFormat.swift */; };
 		CFDB58B53BB94DE262B13C24 /* Pods_iosApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6B1049432C0C2B312090ABF6 /* Pods_iosApp.framework */; };
+		D2CF4853B387C1094985A58A /* ChatHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F185C59B6B0ACD3A15285E9 /* ChatHeaderView.swift */; };
+		D7314AAB3EFD20A821391CEA /* KdType.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */; };
 		DDFCE403CC505E5D64D40F09 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */; };
 		DF0C151B8A80CF8C41AA9880 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0E5908AF635BAECCE52473 /* SidebarView.swift */; };
+		E0313E6D241A1D2D5CAC64E8 /* PairingApprovalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11146602E1139C67C03F1B8F /* PairingApprovalSheet.swift */; };
+		E0EE131EF91B81E3E466BE3D /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0E5908AF635BAECCE52473 /* SidebarView.swift */; };
 		E20429D1E7986E5A02167E66 /* SystemNotificationCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06887C53DA33681456E20E84 /* SystemNotificationCardView.swift */; };
 		E2C8E1DEBCDFBE30BE3BC09E /* KdType.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */; };
+		E628430F7E6272E57C5BAC05 /* MessageInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 374C118F971889B9DC26AE84 /* MessageInputView.swift */; };
 		E637A0221FBAB56A81BE21D4 /* MessageRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FF9C58AD2000465E2ED481 /* MessageRowView.swift */; };
+		E686B212535EE6B298B95671 /* sqlite3_macos_stubs.c in Sources */ = {isa = PBXBuildFile; fileRef = D1D6B7FC122907F1322FD677 /* sqlite3_macos_stubs.c */; };
 		EB4288D8B0576E363F863694 /* PermissionsChecklistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8F32CDC8B365315F430B2F /* PermissionsChecklistView.swift */; };
 		EBA7F5EE24B6C02F50FFE1F3 /* NavRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA74CDA387605E6B2A63703 /* NavRoutes.swift */; };
+		EBA9A4C7F9B7CFC7F7A36EC1 /* PairingDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC56B4EA9CDB5D8456404160 /* PairingDialogView.swift */; };
 		EFD8BD80B3528E6CA9A8495F /* DeviceUiHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1535C70BA72B5D678B510F57 /* DeviceUiHelpers.swift */; };
+		F0E363D8CE70ED86F4CB15B2 /* TrustDialogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C82CF44F0D12B62B630D44 /* TrustDialogs.swift */; };
 		F4B509EDB6DA3BBED8710D14 /* ChatHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F185C59B6B0ACD3A15285E9 /* ChatHeaderView.swift */; };
 		F523EDBBB4D8CDE7E053EC23 /* KlardropNav.swift in Sources */ = {isa = PBXBuildFile; fileRef = 685D4A396535152D088D7EE2 /* KlardropNav.swift */; };
+		F76AB7A4C0DA93CE790E9DEA /* BubbleQuickActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E5EC17F934803879681F780 /* BubbleQuickActionsView.swift */; };
 		F847C8B30D70FD9535EFC2C2 /* IncomingBannerStackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A985EB45486147EFEEC0083A /* IncomingBannerStackView.swift */; };
 		FF1768002FCE0F7B45CE10E7 /* KdMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62ABA6F429B4D01F34B3E772 /* KdMotion.swift */; };
 /* End PBXBuildFile section */
@@ -85,6 +135,7 @@
 		236550772A75989700412ADF /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		236550792A75989700412ADF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		237CEC83090715744E3FEC35 /* DiscoveryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DiscoveryView.swift; path = DiscoveryView.swift; sourceTree = "<group>"; };
+		2405ADA8D7EA482D702EEB81 /* KlardropMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KlardropMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B0C2857366865997CD52F57 /* RootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RootView.swift; path = RootView.swift; sourceTree = "<group>"; };
 		2F0E5908AF635BAECCE52473 /* SidebarView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		374C118F971889B9DC26AE84 /* MessageInputView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageInputView.swift; sourceTree = "<group>"; };
@@ -106,9 +157,11 @@
 		7619154102E69A08B9FA4A20 /* DeviceChatScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceChatScreen.swift; sourceTree = "<group>"; };
 		81A6B3B9F6E62D30973F9798 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
 		82B73B7F2DC511088F596B4D /* Color+Hex.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Color+Hex.swift"; path = "Color+Hex.swift"; sourceTree = "<group>"; };
+		8320B3CCB3CAA291C7EBDB0F /* MacApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MacApp.swift; sourceTree = "<group>"; };
 		84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdSpacing.swift; path = KdSpacing.swift; sourceTree = "<group>"; };
 		90204E2C20EA390FEFAC5EE3 /* DiscoveryModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DiscoveryModel.swift; path = DiscoveryModel.swift; sourceTree = "<group>"; };
 		94F0B700418BBDFDC584CBF6 /* ChatTimeFormat.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatTimeFormat.swift; sourceTree = "<group>"; };
+		967BB6CB99DA93EC43589E22 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		9B893524BEA113EBDCBBE3C6 /* ShareSheetView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareSheetView.swift; sourceTree = "<group>"; };
 		9F0D09AD1C96FCD6D5940A15 /* RenameSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenameSheet.swift; sourceTree = "<group>"; };
 		A1313E8598603FA619FB910F /* UpdateBannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UpdateBannerView.swift; sourceTree = "<group>"; };
@@ -121,7 +174,11 @@
 		AB8813B25ABD1B26F3CD5C38 /* DeviceRowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceRowView.swift; sourceTree = "<group>"; };
 		B8DC0BE7BE710B657C2261F5 /* PermissionsPanelView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PermissionsPanelView.swift; sourceTree = "<group>"; };
 		C0C82CF44F0D12B62B630D44 /* TrustDialogs.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TrustDialogs.swift; sourceTree = "<group>"; };
+		C3217BFA754E720DD0C80774 /* Pods-KlardropMac.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-KlardropMac.debug.xcconfig"; path = "Target Support Files/Pods-KlardropMac/Pods-KlardropMac.debug.xcconfig"; sourceTree = "<group>"; };
 		C34E4F67BD5762736F3B412C /* AddDevicePickerSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AddDevicePickerSheet.swift; sourceTree = "<group>"; };
+		D0AB44E8D4F3EA79ACC09244 /* Pods_KlardropMac.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_KlardropMac.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D119C94B2B5700FAB79C0A91 /* Pods-KlardropMac.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-KlardropMac.release.xcconfig"; path = "Target Support Files/Pods-KlardropMac/Pods-KlardropMac.release.xcconfig"; sourceTree = "<group>"; };
+		D1D6B7FC122907F1322FD677 /* sqlite3_macos_stubs.c */ = {isa = PBXFileReference; includeInIndex = 1; path = sqlite3_macos_stubs.c; sourceTree = "<group>"; };
 		DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdType.swift; path = KdType.swift; sourceTree = "<group>"; };
 		E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StatusDotView.swift; path = StatusDotView.swift; sourceTree = "<group>"; };
 		EF30C1BD0565A0DA4667C725 /* IncomingTransferCardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IncomingTransferCardView.swift; sourceTree = "<group>"; };
@@ -134,6 +191,15 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		D7AF88CEB6EB27E2335C78E6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				27A7AB2CD0896FAC834242EC /* Cocoa.framework in Frameworks */,
+				94D7A85618B45D9B203BC158 /* Pods_KlardropMac.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F85CB1118929364A9C6EFABC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -145,6 +211,15 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		01FEDE7B3AD5E7B4A497195B /* Stubs */ = {
+			isa = PBXGroup;
+			children = (
+				D1D6B7FC122907F1322FD677 /* sqlite3_macos_stubs.c */,
+			);
+			name = Stubs;
+			path = Stubs;
+			sourceTree = "<group>";
+		};
 		058557D7273AAEEB004C7B11 /* Preview Content */ = {
 			isa = PBXGroup;
 			children = (
@@ -182,6 +257,7 @@
 			children = (
 				2B0C2857366865997CD52F57 /* RootView.swift */,
 				FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */,
+				8320B3CCB3CAA291C7EBDB0F /* MacApp.swift */,
 			);
 			name = App;
 			path = App;
@@ -207,6 +283,8 @@
 			isa = PBXGroup;
 			children = (
 				6B1049432C0C2B312090ABF6 /* Pods_iosApp.framework */,
+				B24C7C7DC18D2590A9E7154A /* OS X */,
+				D0AB44E8D4F3EA79ACC09244 /* Pods_KlardropMac.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -227,6 +305,7 @@
 			isa = PBXGroup;
 			children = (
 				7555FF7B242A565900829871 /* Klardrop.app */,
+				2405ADA8D7EA482D702EEB81 /* KlardropMac.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -242,6 +321,7 @@
 				B5A22DDEBED91045487EEA4E /* Observable */,
 				CE11576F07F0BC3EA5C7B8BB /* Views */,
 				7C98936DBD98E0832C0CCEA9 /* Nav */,
+				01FEDE7B3AD5E7B4A497195B /* Stubs */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -278,6 +358,14 @@
 				AB3632DC29227652001CCB65 /* Config.xcconfig */,
 			);
 			path = Configuration;
+			sourceTree = "<group>";
+		};
+		B24C7C7DC18D2590A9E7154A /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				967BB6CB99DA93EC43589E22 /* Cocoa.framework */,
+			);
+			name = "OS X";
 			sourceTree = "<group>";
 		};
 		B5A22DDEBED91045487EEA4E /* Observable */ = {
@@ -327,6 +415,8 @@
 			children = (
 				81A6B3B9F6E62D30973F9798 /* Pods-iosApp.debug.xcconfig */,
 				01920DE25B5CA9C51BD3C36F /* Pods-iosApp.release.xcconfig */,
+				D119C94B2B5700FAB79C0A91 /* Pods-KlardropMac.release.xcconfig */,
+				C3217BFA754E720DD0C80774 /* Pods-KlardropMac.debug.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -369,6 +459,24 @@
 			productReference = 7555FF7B242A565900829871 /* Klardrop.app */;
 			productType = "com.apple.product-type.application";
 		};
+		9A05A395CCACE91E4CB5B743 /* KlardropMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5EB8B112248B2F6687B94024 /* Build configuration list for PBXNativeTarget "KlardropMac" */;
+			buildPhases = (
+				AE05D4E9F424C426251889A2 /* [CP] Check Pods Manifest.lock */,
+				8460261B60B84BAE40BB050A /* Sources */,
+				D7AF88CEB6EB27E2335C78E6 /* Frameworks */,
+				907DEAE8D1CCA7247E53FB65 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KlardropMac;
+			productName = KlardropMac;
+			productReference = 2405ADA8D7EA482D702EEB81 /* KlardropMac.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -399,6 +507,7 @@
 			projectRoot = "";
 			targets = (
 				7555FF7A242A565900829871 /* iosApp */,
+				9A05A395CCACE91E4CB5B743 /* KlardropMac */,
 			);
 		};
 /* End PBXProject section */
@@ -410,6 +519,13 @@
 			files = (
 				058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */,
 				058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		907DEAE8D1CCA7247E53FB65 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -449,6 +565,28 @@
 			);
 			outputPaths = (
 				"$(DERIVED_FILE_DIR)/Pods-iosApp-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		AE05D4E9F424C426251889A2 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-KlardropMac-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -509,6 +647,61 @@
 				DF0C151B8A80CF8C41AA9880 /* SidebarView.swift in Sources */,
 				E20429D1E7986E5A02167E66 /* SystemNotificationCardView.swift in Sources */,
 				0FAC658C2DB3BBD6E87645EF /* UpdateBannerView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8460261B60B84BAE40BB050A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1E9CB7CE348B5FD6CDACBF1F /* RootView.swift in Sources */,
+				57DDBFC25CBDBEBAC6C6E527 /* Color+Hex.swift in Sources */,
+				96972AF43A557DDE6D1D1B3D /* KdColors.swift in Sources */,
+				9A848A1EEF4106C24B6BB123 /* KdMotion.swift in Sources */,
+				050A1E17A5532A25C637F1C5 /* KdRadii.swift in Sources */,
+				8D4C32A6F4165C87135E4F5D /* KdSpacing.swift in Sources */,
+				D7314AAB3EFD20A821391CEA /* KdType.swift in Sources */,
+				41D2E3C7FEA21371263CFCA1 /* FilePicking.swift in Sources */,
+				2E5932D82393C1DE43290B51 /* KlardropNav.swift in Sources */,
+				838E3968CF374A72DF942BAB /* NavRoutes.swift in Sources */,
+				A3693F3DB4128766295595D0 /* ChatModel.swift in Sources */,
+				0EF8F9E454325CA6AA2A0B78 /* DiscoveryModel.swift in Sources */,
+				D2CF4853B387C1094985A58A /* ChatHeaderView.swift in Sources */,
+				CD7E681412A9DD51C02755DD /* ChatTimeFormat.swift in Sources */,
+				859698F08FA202224C3746AE /* DeviceChatScreen.swift in Sources */,
+				0E638F6AF8C7F62B12CF8C98 /* FileCardView.swift in Sources */,
+				E628430F7E6272E57C5BAC05 /* MessageInputView.swift in Sources */,
+				2C44E80F11C6909AF0F922F2 /* MessageRowView.swift in Sources */,
+				1452367E9EA786EA6020901A /* TextMessageViewerView.swift in Sources */,
+				6757F345354B8AF8235F3DD1 /* BannerView.swift in Sources */,
+				F76AB7A4C0DA93CE790E9DEA /* BubbleQuickActionsView.swift in Sources */,
+				88DBDE3DAED3C0C8E663E71C /* BubbleView.swift in Sources */,
+				0EDD3237A4CB6E60005B9919 /* DateChipView.swift in Sources */,
+				1EB4D638862E6AF6AABDA495 /* DeviceAvatarView.swift in Sources */,
+				9061825CC3B2DA54D08D2EDF /* SectionHeadView.swift in Sources */,
+				6E2D5B1DDCE04A219CA7141A /* VisibilityPillView.swift in Sources */,
+				3AD3C308D75670BBF796FA01 /* DeviceUiHelpers.swift in Sources */,
+				03ACDFC7638A4E76C64A2173 /* AddDevicePickerSheet.swift in Sources */,
+				E0313E6D241A1D2D5CAC64E8 /* PairingApprovalSheet.swift in Sources */,
+				EBA9A4C7F9B7CFC7F7A36EC1 /* PairingDialogView.swift in Sources */,
+				868F35965A77ADD07624C37C /* PermissionsChecklistView.swift in Sources */,
+				94FDCBC57C7A4C4BD352DDC4 /* RenameSheet.swift in Sources */,
+				707C06B6CD6F242699FEB877 /* SettingsSheet.swift in Sources */,
+				809A55F2A7A42EF8E5B29587 /* ShareSheetView.swift in Sources */,
+				F0E363D8CE70ED86F4CB15B2 /* TrustDialogs.swift in Sources */,
+				28186C32A7557C837AF09C0E /* DeviceRowView.swift in Sources */,
+				B3F78FAA389DE36A44C481A6 /* DeviceUiMapping.swift in Sources */,
+				BCB574CCDE6BFDA130AE238E /* DiscoveryScreen.swift in Sources */,
+				022C5C2618A19D3CC0088FD3 /* IncomingBannerStackView.swift in Sources */,
+				58809A4CCD1D59DD22EBEA5D /* IncomingTransferCardView.swift in Sources */,
+				38D003ABB2E8CC8DA5A0AAF8 /* PermissionsPanelView.swift in Sources */,
+				E0EE131EF91B81E3E466BE3D /* SidebarView.swift in Sources */,
+				B001FB4824FDCD88E4A0A732 /* SystemNotificationCardView.swift in Sources */,
+				40747B651B47CFF1D327A875 /* UpdateBannerView.swift in Sources */,
+				294106DDC943066EDA033EB6 /* DiscoveryView.swift in Sources */,
+				01DB2466CC64623D6CF125FC /* StatusDotView.swift in Sources */,
+				3D16F3D44B73496029497E3D /* MacApp.swift in Sources */,
+				E686B212535EE6B298B95671 /* sqlite3_macos_stubs.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -706,9 +899,102 @@
 			};
 			name = Release;
 		};
+		C22EE8F7FD6330E26EEDCD18 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C3217BFA754E720DD0C80774 /* Pods-KlardropMac.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = D7T5425WSW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					/Users/carlo/Projects/klardrop/common/build/cocoapods/synthetic/macos/build/Debug/Bugsnag,
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.carlom.Klardrop;
+				PRODUCT_NAME = Klardrop;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		FAA58A40DC4419C23C17B026 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D119C94B2B5700FAB79C0A91 /* Pods-KlardropMac.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = D7T5425WSW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					/Users/carlo/Projects/klardrop/common/build/cocoapods/synthetic/macos/build/Release/Bugsnag,
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.carlom.Klardrop;
+				PRODUCT_NAME = Klardrop;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5EB8B112248B2F6687B94024 /* Build configuration list for PBXNativeTarget "KlardropMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FAA58A40DC4419C23C17B026 /* Release */,
+				C22EE8F7FD6330E26EEDCD18 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		7555FF76242A565900829871 /* Build configuration list for PBXProject "iosApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

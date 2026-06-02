@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(iOS)
 import PhotosUI
+#endif
 import UniformTypeIdentifiers
 import presentation
 
@@ -33,10 +35,12 @@ import presentation
 final class FilePickerState {
 
     var showFilePicker = false
+    #if os(iOS)
     var showPhotosPicker = false
 
     /// Items selected by PHPicker (bridged lazily).
     var photosPickerItems: [PhotosPickerItem] = []
+    #endif
 
     var onPicked: (([Filekit_corePlatformFile]) -> Void)?
 
@@ -45,10 +49,12 @@ final class FilePickerState {
         showFilePicker = true
     }
 
+    #if os(iOS)
     func presentPhotosPicker(onPicked: @escaping ([Filekit_corePlatformFile]) -> Void) {
         self.onPicked = onPicked
         showPhotosPicker = true
     }
+    #endif
 }
 
 // MARK: - View modifiers
@@ -76,6 +82,7 @@ extension View {
         }
     }
 
+    #if os(iOS)
     /// Attaches the Photos picker sheet and handles the resolution flow.
     /// Named `photosImporterPicker` to avoid collision with the system
     /// `.photosPicker` modifier introduced in PhotosUI / iOS 16.
@@ -105,6 +112,7 @@ extension View {
                 }
             }
     }
+    #endif
 }
 
 // MARK: - Resolution helpers (private)
@@ -129,6 +137,7 @@ private func resolveFileImporterResult(_ result: Result<[URL], Error>) async -> 
     return platformFiles
 }
 
+#if os(iOS)
 /// Resolve PhotosPickerItems by loading their Data and writing to a temp file.
 private func resolvePhotosPickerItems(_ items: [PhotosPickerItem]) async -> [Filekit_corePlatformFile] {
     var platformFiles: [Filekit_corePlatformFile] = []
@@ -157,6 +166,7 @@ private func resolvePhotosPickerItems(_ items: [PhotosPickerItem]) async -> [Fil
 
     return platformFiles
 }
+#endif
 
 /// Copy a security-scoped (or plain) URL into a unique temp-sandbox directory.
 /// Returns the destination URL, or nil on failure.

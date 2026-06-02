@@ -83,9 +83,11 @@ struct TextMessageViewerView: View {
                 onCopy: {},
                 onDismiss: {}
             )
+            #if os(iOS)
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(KdRadii.sheet)
+            #endif
         }
         .kdColorsEnvironment()
 }

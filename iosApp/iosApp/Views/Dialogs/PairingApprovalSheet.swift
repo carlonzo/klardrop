@@ -17,7 +17,9 @@ struct PairingApprovalSheet: View {
     let onDismiss: () -> Void
 
     @Environment(\.kdColors) private var kd
+    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     var body: some View {
         Group {
@@ -33,11 +35,17 @@ struct PairingApprovalSheet: View {
                 )
             }
         }
+        #if os(iOS)
         .padding(sizeClass == .compact ? 0 : KdSpacing.s2)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(KdRadii.sheet)
         .presentationBackground(kd.bg1)
+        #else
+        .padding(KdSpacing.s2)
+        .frame(minWidth: 420, minHeight: 320)
+        .background(kd.bg1)
+        #endif
     }
 
     // MARK: - Error card

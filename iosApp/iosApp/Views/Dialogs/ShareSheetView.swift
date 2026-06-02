@@ -110,10 +110,15 @@ struct ShareSheetView: View {
 
             Spacer().frame(height: KdSpacing.s7)
         }
+        #if os(iOS)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.hidden) // hand-drawn above
         .presentationCornerRadius(KdRadii.sheet)
         .presentationBackground(kd.bg1)
+        #else
+        .frame(minWidth: 420, minHeight: 360)
+        .background(kd.bg1)
+        #endif
     }
 }
 

@@ -26,16 +26,22 @@ struct KlardropNav: View {
 
     let model: DiscoveryAppModel
 
+    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
     @Environment(\.kdColors) private var kd
 
     var body: some View {
         Group {
+            #if os(iOS)
             if sizeClass == .compact {
                 compactLayout
             } else {
                 regularLayout
             }
+            #else
+            regularLayout
+            #endif
         }
         // Global pairing sheet — survives push/selection changes.
         .sheet(item: Binding(
@@ -89,7 +95,9 @@ struct KlardropNav: View {
         ) {
             iPadSidebar
                 .navigationTitle("Klardrop")
+                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                #endif
         } detail: {
             if let route = model.selectedChat {
                 let isOwned = isDeviceTrusted(deviceId: route.deviceId)

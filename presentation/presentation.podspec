@@ -9,6 +9,7 @@ Pod::Spec.new do |spec|
     spec.vendored_frameworks      = 'build/cocoapods/framework/presentation.framework'
     spec.libraries                = 'c++'
     spec.ios.deployment_target    = '17.0'
+    spec.osx.deployment_target    = '14.0'
     if !Dir.exist?('build/cocoapods/framework/presentation.framework') || Dir.empty?('build/cocoapods/framework/presentation.framework')
         raise "
         Kotlin framework 'presentation' doesn't exist yet, so a proper Xcode project can't be generated.

@@ -15,7 +15,6 @@ struct RenameSheet: View {
     let onSave: (String) -> Void
 
     @Environment(\.kdColors) private var kd
-    @Environment(\.horizontalSizeClass) private var sizeClass
 
     @State private var newName: String = ""
     @FocusState private var fieldFocused: Bool
@@ -74,10 +73,15 @@ struct RenameSheet: View {
                 fieldFocused = true
             }
         }
+        #if os(iOS)
         .presentationDetents([.height(280)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(KdRadii.sheet)
         .presentationBackground(kd.bg1)
+        #else
+        .frame(minWidth: 420, minHeight: 220)
+        .background(kd.bg1)
+        #endif
     }
 
     private func handleSave() {

@@ -3,5 +3,11 @@ target 'iosApp' do
   platform :ios, '17.0'
   pod 'presentation', :path => '../presentation'
   pod 'Bugsnag', '~> 6.0'
-  
+
+end
+
+target 'KlardropMac' do
+  use_frameworks!
+  platform :osx, '14.0'
+  pod 'presentation', :path => '../presentation'
 end

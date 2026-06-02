@@ -22,7 +22,6 @@ struct AddDevicePickerSheet: View {
     let onPick: (DeviceUi) -> Void
 
     @Environment(\.kdColors) private var kd
-    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         AddDevicePickerContent(
@@ -30,10 +29,15 @@ struct AddDevicePickerSheet: View {
             onDismiss: onDismiss,
             onPick: onPick
         )
+        #if os(iOS)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(KdRadii.sheet)
         .presentationBackground(kd.bg1)
+        #else
+        .frame(minWidth: 420, minHeight: 360)
+        .background(kd.bg1)
+        #endif
     }
 }
 
@@ -140,11 +144,18 @@ struct AddDevicePlaceholderSurface: View {
     let onClick: () -> Void
 
     @Environment(\.kdColors) private var kd
+    #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     var body: some View {
         Button(action: onClick) {
-            if sizeClass != .compact {
+            #if os(iOS)
+            let showHorizontal = sizeClass != .compact
+            #else
+            let showHorizontal = true
+            #endif
+            if showHorizontal {
                 // Sidebar / regular: horizontal layout
                 HStack(spacing: KdSpacing.s3) {
                     DeviceAvatarView(kind: .unknown, style: .neutral, size: KdSpacing.s7)
