@@ -27,7 +27,6 @@
 		25854FF09AB48EEE3DA5A4C9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0C2857366865997CD52F57 /* RootView.swift */; };
 		27A7AB2CD0896FAC834242EC /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 967BB6CB99DA93EC43589E22 /* Cocoa.framework */; };
 		28186C32A7557C837AF09C0E /* DeviceRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8813B25ABD1B26F3CD5C38 /* DeviceRowView.swift */; };
-		294106DDC943066EDA033EB6 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 237CEC83090715744E3FEC35 /* DiscoveryView.swift */; };
 		2C44E80F11C6909AF0F922F2 /* MessageRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38FF9C58AD2000465E2ED481 /* MessageRowView.swift */; };
 		2E5932D82393C1DE43290B51 /* KlardropNav.swift in Sources */ = {isa = PBXBuildFile; fileRef = 685D4A396535152D088D7EE2 /* KlardropNav.swift */; };
 		35FDFE34399CE4F261DCD881 /* TrustDialogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C82CF44F0D12B62B630D44 /* TrustDialogs.swift */; };
@@ -37,7 +36,6 @@
 		40747B651B47CFF1D327A875 /* UpdateBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1313E8598603FA619FB910F /* UpdateBannerView.swift */; };
 		41D2E3C7FEA21371263CFCA1 /* FilePicking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BBAF324273D25F8CE8733D1 /* FilePicking.swift */; };
 		473614437D583A133AC2FD13 /* PermissionsPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DC0BE7BE710B657C2261F5 /* PermissionsPanelView.swift */; };
-		47A984A5312E051FB2FBE4D9 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 237CEC83090715744E3FEC35 /* DiscoveryView.swift */; };
 		4FF0B829D380FDE5570AF630 /* SectionHeadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB495E57B6219ABCC27832DD /* SectionHeadView.swift */; };
 		51918C9838997A36C6937320 /* StatusDotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */; };
 		57DDBFC25CBDBEBAC6C6E527 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B73B7F2DC511088F596B4D /* Color+Hex.swift */; };
@@ -134,7 +132,6 @@
 		236550742A75989700412ADF /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		236550772A75989700412ADF /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		236550792A75989700412ADF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		237CEC83090715744E3FEC35 /* DiscoveryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DiscoveryView.swift; path = DiscoveryView.swift; sourceTree = "<group>"; };
 		2405ADA8D7EA482D702EEB81 /* KlardropMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KlardropMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B0C2857366865997CD52F57 /* RootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RootView.swift; path = RootView.swift; sourceTree = "<group>"; };
 		2F0E5908AF635BAECCE52473 /* SidebarView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
@@ -403,7 +400,6 @@
 			isa = PBXGroup;
 			children = (
 				1535C70BA72B5D678B510F57 /* DeviceUiHelpers.swift */,
-				237CEC83090715744E3FEC35 /* DiscoveryView.swift */,
 				E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */,
 				FF971C5870C20DDD10B01E6D /* Chat */,
 				975B18F6BF6662C12AF26B10 /* Components */,
@@ -614,7 +610,6 @@
 				E2C8E1DEBCDFBE30BE3BC09E /* KdType.swift in Sources */,
 				71EAEC70F408DF748899A011 /* DiscoveryModel.swift in Sources */,
 				EFD8BD80B3528E6CA9A8495F /* DeviceUiHelpers.swift in Sources */,
-				47A984A5312E051FB2FBE4D9 /* DiscoveryView.swift in Sources */,
 				51918C9838997A36C6937320 /* StatusDotView.swift in Sources */,
 				EBA7F5EE24B6C02F50FFE1F3 /* NavRoutes.swift in Sources */,
 				F523EDBBB4D8CDE7E053EC23 /* KlardropNav.swift in Sources */,
@@ -702,7 +697,6 @@
 				E0EE131EF91B81E3E466BE3D /* SidebarView.swift in Sources */,
 				B001FB4824FDCD88E4A0A732 /* SystemNotificationCardView.swift in Sources */,
 				40747B651B47CFF1D327A875 /* UpdateBannerView.swift in Sources */,
-				294106DDC943066EDA033EB6 /* DiscoveryView.swift in Sources */,
 				01DB2466CC64623D6CF125FC /* StatusDotView.swift in Sources */,
 				3D16F3D44B73496029497E3D /* MacApp.swift in Sources */,
 				E686B212535EE6B298B95671 /* sqlite3_macos_stubs.c in Sources */,

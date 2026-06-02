@@ -31,6 +31,9 @@ struct KlardropNav: View {
     #endif
     @Environment(\.kdColors) private var kd
 
+    /// Drives the rename sheet presented from the iPad sidebar footer button.
+    @State private var showRenameSheet = false
+
     var body: some View {
         Group {
             #if os(iOS)
@@ -51,6 +54,22 @@ struct KlardropNav: View {
             PairingApprovalSheet(
                 state: wrapper.state,
                 onDismiss: { model.dismissPairing() }
+            )
+        }
+        // Global rename sheet — presented from the iPad sidebar footer or any
+        // other entry point that sets showRenameSheet = true.
+        .sheet(isPresented: $showRenameSheet) {
+            let currentName = {
+                if let n = model.state.currentDeviceName, !n.isEmpty { return n }
+                return model.state.systemDeviceName ?? ""
+            }()
+            RenameSheet(
+                currentName: currentName,
+                onDismiss: { showRenameSheet = false },
+                onSave: { newName in
+                    model.saveCustomDeviceName(newName.isEmpty ? nil : newName)
+                    showRenameSheet = false
+                }
             )
         }
     }
@@ -177,8 +196,7 @@ struct KlardropNav: View {
 
             // Local device footer (tap to rename)
             Button {
-                // Rename is surfaced via DiscoveryScreen header on compact.
-                // On iPad this footer is a secondary affordance; no-op for now.
+                showRenameSheet = true
             } label: {
                 HStack(spacing: KdSpacing.s3) {
                     DeviceAvatarView(kind: .mac, style: .tinted, status: .ok, size: 40)

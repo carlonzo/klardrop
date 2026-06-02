@@ -1,5 +1,11 @@
 import SwiftUI
 import Observation
+import UserNotifications
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 import presentation
 
 // ---------------------------------------------------------------------------
@@ -181,8 +187,76 @@ final class DiscoveryAppModel {
     }
 
     func onRequestCapability(_ capability: Capability) {
-        // TODO: wire through when DiscoveryController exposes onRequestCapability
+        // On iOS/macOS the KMP layer already handles permission prompts at init
+        // (Bonjour starts the Local Network prompt; CoreBluetooth triggers the
+        // Bluetooth prompt on first use). The "Allow >" button is therefore a
+        // Settings deep-link for capabilities where re-requesting via API is not
+        // possible (or already done by KMP), so the user can manually re-enable
+        // them after a denial.
+        //
+        // Capability mapping:
+        //   .bluetooth       → iOS: open Settings (CBCentralManager init triggers the
+        //                            first-time prompt; Settings is the only recourse
+        //                            after denial)
+        //                      macOS: open System Settings (same rationale)
+        //   .localNetwork    → iOS: open Settings (system triggers the prompt when
+        //                            NWBrowser / Bonjour first runs; no direct API)
+        //   .notifications   → iOS: request via UNUserNotificationCenter (first-time)
+        //                            or open Settings if already denied
+        //   .nearbyWifiDevices / .location → Android-only; NotApplicable on Apple;
+        //                            open Settings as a safe fallback
+        switch capability {
+        case .notifications:
+            // For notifications on iOS we can request authorization once. After
+            // denial the only path is Settings.
+            #if os(iOS)
+            let center = UNUserNotificationCenter.current()
+            center.getNotificationSettings { settings in
+                DispatchQueue.main.async {
+                    if settings.authorizationStatus == .notDetermined {
+                        center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+                    } else {
+                        // Already denied or restricted — send user to Settings.
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                }
+            }
+            #else
+            openSystemSettings()
+            #endif
+
+        case .bluetooth, .localNetwork, .nearbyWifiDevices, .location:
+            // No direct request API on Apple for these; open the settings page so
+            // the user can grant access manually.
+            #if os(iOS)
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+            #else
+            openSystemSettings()
+            #endif
+
+        default:
+            // Unknown future capabilities — best-effort settings deep-link.
+            #if os(iOS)
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+            #else
+            openSystemSettings()
+            #endif
+        }
     }
+
+    #if os(macOS)
+    private func openSystemSettings() {
+        if let url = URL(string: "x-apple.systempreferences:") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+    #endif
 
     func updateAction(_ action: UpdateAction) -> Bool {
         return updateController.onAction(action: action)
