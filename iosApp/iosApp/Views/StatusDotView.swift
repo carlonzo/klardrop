@@ -19,6 +19,9 @@ enum KdStatus {
 struct StatusDotView: View {
     let status: KdStatus
     var dotSize: CGFloat = 8
+    /// Optional outline ring drawn between the dot and its surface (e.g. avatar fill).
+    /// Pass the avatar's fill color to visually separate the dot from the background.
+    var outlineColor: Color? = nil
 
     @Environment(\.kdColors) private var kd
     @State private var pulsing = false
@@ -37,6 +40,12 @@ struct StatusDotView: View {
             Circle()
                 .fill(dotColor.opacity(0.18))
                 .frame(width: dotSize * 2, height: dotSize * 2)
+            // Optional outline ring — separates dot from avatar fill color
+            if let outline = outlineColor {
+                Circle()
+                    .fill(outline)
+                    .frame(width: dotSize + 4, height: dotSize + 4)
+            }
             // Filled core dot
             Circle()
                 .fill(dotColor)

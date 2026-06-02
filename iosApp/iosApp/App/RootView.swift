@@ -2,15 +2,14 @@ import SwiftUI
 import presentation
 
 // ---------------------------------------------------------------------------
-// RootView — SwiftUI root (Phase 1B-1; replaces Compose ContentView bridge).
+// RootView — App root — Phase 1B-2.
 //
-// For 1B-1 this is a thin wrapper that hosts DiscoveryView inside a
-// KdColors.bg0 full-bleed background. In 1B-2 it grows to be size-class
-// aware: compact (iPhone) uses NavigationStack, regular (iPad) uses
-// NavigationSplitView with Sidebar.
+// Creates the single DiscoveryAppModel (via @State so it is created once per
+// view lifetime and survives re-renders), applies the kd.bg0 background, and
+// drives model.start()/.stop() via .task (auto-cancels on disappear).
 //
-// The bootstrap is passed by reference so all descendant screens share the
-// same Klardrop graph and DiscoveryController instance.
+// KlardropNav is the size-class router inside; RootView is just the lifecycle
+// and environment wrapper.
 // ---------------------------------------------------------------------------
 
 struct RootView: View {
@@ -18,8 +17,27 @@ struct RootView: View {
     let bootstrap: KlardropBootstrap
     @Environment(\.kdColors) private var kd
 
+    // @State on an @Observable class: created exactly once per view lifetime.
+    // @MainActor init is called synchronously on the main thread.
+    @State private var model: DiscoveryAppModel
+
+    init(bootstrap: KlardropBootstrap) {
+        self.bootstrap = bootstrap
+        // Initialize @State with a DiscoveryAppModel seeded from bootstrap.
+        // This is safe: @State stores are initialized before `body` is first called.
+        _model = State(initialValue: DiscoveryAppModel(bootstrap: bootstrap))
+    }
+
     var body: some View {
-        DiscoveryView(bootstrap: bootstrap)
+        KlardropNav(model: model)
             .background(kd.bg0.ignoresSafeArea())
+            // .task auto-cancels on disappear, so stop() must also call onDispose
+            // semantics. model.start() is idempotent (guards stateTasks.isEmpty).
+            .task {
+                model.start()
+            }
+            .onDisappear {
+                model.stop()
+            }
     }
 }

@@ -2,18 +2,10 @@ import SwiftUI
 
 // ---------------------------------------------------------------------------
 // KdType — Typography roles (SwiftUI translation of compose-ui KdTypography.kt)
-// iOS 14.1+ compatible.
+// iOS 17+ — .kerning() and .tracking() are unconditionally available.
 //
 // Manrope (design spec) -> SF (system sans-serif, .default design)
 // JetBrains Mono        -> system monospaced (.monospaced design)
-//
-// NOTE: .kerning() and .tracking() are both iOS 16+.
-// For iOS 14/15 we omit custom kerning (the difference is imperceptible
-// on device rows and captions; only display/overline have >±1pt adjustments).
-// On iOS 16+ kerning is applied via a conditional ViewModifier.
-//
-// lineHeight: SwiftUI has no direct lineHeight; approximate via .lineSpacing
-// for multi-line contexts. Single-line labels are unaffected.
 // ---------------------------------------------------------------------------
 
 enum KdTypeRole {
@@ -46,8 +38,7 @@ extension KdTypeRole {
         }
     }
 
-    /// Letter-spacing in points. Applied via kerning on iOS 16+, omitted below.
-    /// Values: display -0.02em*28pt, title -0.01em*20pt, overline +0.10em*11pt.
+    /// Letter-spacing in points applied via .kerning().
     var kerningValue: CGFloat {
         switch self {
         case .display:   return -0.56
@@ -58,7 +49,6 @@ extension KdTypeRole {
     }
 
     /// Additional line spacing in points (lineHeight - fontSize) for multi-line text.
-    /// Pass to .lineSpacing() only when the view may wrap.
     var lineSpacing: CGFloat {
         switch self {
         case .display:   return 32 - 28  //  4pt
@@ -75,12 +65,12 @@ extension KdTypeRole {
 // MARK: - View / Text modifiers
 
 extension View {
-    /// Apply KdType font + foregroundColor + kerning (iOS 16+) in one call.
+    /// Apply KdType font + foregroundColor + kerning in one call.
     /// Use the `multiline` parameter when the view may wrap to get correct line height.
     func kdStyle(_ role: KdTypeRole, color: Color? = nil, multiline: Bool = false) -> some View {
         self
             .font(role.font)
-            .kdKerning(role.kerningValue)
+            .kerning(role.kerningValue)
             .lineSpacing(multiline ? role.lineSpacing : 0)
             .modify { view in
                 if let color {
@@ -89,16 +79,6 @@ extension View {
                     view
                 }
             }
-    }
-
-    /// Apply kerning only on iOS 16+; silently ignored on earlier versions.
-    @ViewBuilder
-    func kdKerning(_ value: CGFloat) -> some View {
-        if #available(iOS 16.0, *) {
-            self.kerning(value)
-        } else {
-            self
-        }
     }
 }
 

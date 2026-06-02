@@ -24,7 +24,7 @@ kotlin {
 
   cocoapods {
     version = rootProject.version.toString()
-    ios.deploymentTarget = "14.1"
+    ios.deploymentTarget = "17.0"
     pod("Bugsnag", "~> 6.0")
   }
 

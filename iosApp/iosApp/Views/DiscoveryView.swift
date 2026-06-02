@@ -2,50 +2,38 @@ import SwiftUI
 import presentation
 
 // ---------------------------------------------------------------------------
-// DiscoveryView — Vertical slice (Phase 1B-1).
+// DiscoveryView — Compact (iPhone) discovery screen — Phase 1B-2.
 //
-// Observes the real DiscoveryController.screenStateFlow via DiscoveryModel
-// (live data, no mocks). Renders an empty state or a plain device list.
+// Modernized idioms (iOS 17):
+//   - @Observable DiscoveryAppModel (no ObservableObject / @StateObject)
+//   - NavigationStack instead of NavigationView
+//   - .scrollContentBackground(.hidden) instead of UITableView.appearance()
+//   - .listRowBackground(Color.clear) + .listRowSeparator(.hidden)
+//   - .task {} for lifecycle (auto-cancels on disappear; model.start is idempotent)
 //
-// iOS 14.1+ compatible:
-//   - NavigationView instead of NavigationStack (iOS 16+)
-//   - .onAppear Task instead of .task (iOS 15+)
-//   - No .toolbarBackground (iOS 16+) — bg tinted via navigationViewStyle
-//   - No .scrollContentBackground (iOS 16+) — workaround via UITableView
-//   - No .listRowSeparatorTint (iOS 15+) — separator color set via appearance
-//
-// Intentionally minimal — full DeviceRow / chat / sheets come in 1B-2.
+// The model is received as a plain `let` parameter — @Observable tracks reads
+// automatically; no @ObservedObject / @Bindable needed for read-only access.
 // ---------------------------------------------------------------------------
 
 struct DiscoveryView: View {
 
-    @StateObject private var model: DiscoveryModel
+    let model: DiscoveryAppModel
+    let onNavigateToChat: (_ deviceId: String, _ deviceName: String) -> Void
+
     @Environment(\.kdColors) private var kd
 
-    init(bootstrap: KlardropBootstrap) {
-        // StateObject wraps the model so it is created once per view lifetime.
-        _model = StateObject(wrappedValue: DiscoveryModel(bootstrap: bootstrap))
-    }
-
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Full-bleed background fills behind the list / empty state
-                kd.bg0.ignoresSafeArea()
+        ZStack {
+            // Full-bleed background fills behind the list and safe areas.
+            kd.bg0.ignoresSafeArea()
 
-                if model.state.devices.isEmpty {
-                    emptyState
-                } else {
-                    deviceList
-                }
+            if model.state.devices.isEmpty {
+                emptyState
+            } else {
+                deviceList
             }
-            .navigationTitle("Klardrop")
         }
-        .navigationViewStyle(.stack)
-        // Lifecycle: start Kotlin StateFlow collection on appear, cancel on disappear.
-        // .task{} is iOS 15+; use .onAppear with an explicit async Task instead.
-        .onAppear { model.start() }
-        .onDisappear { model.stop() }
+        .navigationTitle("Klardrop")
     }
 
     // MARK: - Empty state
@@ -73,25 +61,23 @@ struct DiscoveryView: View {
             ForEach(model.state.devices, id: \.deviceId) { device in
                 deviceRow(device)
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain)
-        // iOS 16+ .scrollContentBackground(.hidden) not available; instead
-        // suppress the default white UITableView background via appearance API
-        // called once when this view first appears.
-        .onAppear { configureListBackground() }
+        // iOS 16+ native replacement for the UITableView.appearance() hack.
+        .scrollContentBackground(.hidden)
     }
 
     private func deviceRow(_ device: DeviceUi) -> some View {
         Button {
             model.onDeviceTap(device)
+            onNavigateToChat(device.deviceId, device.deviceName)
         } label: {
             HStack(spacing: KdSpacing.s3) {
-                // Status dot (optional — shown only when meaningful)
                 if let status = device.kdStatus {
                     StatusDotView(status: status)
                 } else {
-                    // Invisible placeholder to maintain leading alignment
                     Circle()
                         .fill(Color.clear)
                         .frame(width: 16, height: 16)
@@ -108,12 +94,4 @@ struct DiscoveryView: View {
         }
         .buttonStyle(.plain)
     }
-}
-
-// MARK: - iOS 14 List background workaround
-
-/// On iOS 14/15, List has a hardcoded white background. Clear it via UITableView appearance.
-private func configureListBackground() {
-    UITableView.appearance().backgroundColor = .clear
-    UITableViewCell.appearance().backgroundColor = .clear
 }

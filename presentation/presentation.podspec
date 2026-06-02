@@ -8,7 +8,7 @@ Pod::Spec.new do |spec|
     spec.summary                  = 'Presentation (business + UI-state) module for Klardrop'
     spec.vendored_frameworks      = 'build/cocoapods/framework/presentation.framework'
     spec.libraries                = 'c++'
-    spec.ios.deployment_target    = '14.1'
+    spec.ios.deployment_target    = '17.0'
     if !Dir.exist?('build/cocoapods/framework/presentation.framework') || Dir.empty?('build/cocoapods/framework/presentation.framework')
         raise "
         Kotlin framework 'presentation' doesn't exist yet, so a proper Xcode project can't be generated.

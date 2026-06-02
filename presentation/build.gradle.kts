@@ -38,7 +38,7 @@ kotlin {
     version = rootProject.version.toString()
     homepage = "https://github.com/carlonzo/klardrop"
     summary = "Presentation (business + UI-state) module for Klardrop"
-    ios.deploymentTarget = "14.1"
+    ios.deploymentTarget = "17.0"
     podfile = project.file("../iosApp/Podfile")
     framework {
       baseName = "presentation"
