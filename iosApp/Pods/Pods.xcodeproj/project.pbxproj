@@ -7,16 +7,15 @@
 	objects = {
 
 /* Begin PBXAggregateTarget section */
-		CCD3EB11340DAF95520DDC25A3B22EF0 /* common_ui */ = {
+		CA23A621E427291AD7AAC241FE14977E /* presentation */ = {
 			isa = PBXAggregateTarget;
-			buildConfigurationList = 70DEEFB3CD449DD6FB8A15EC15D4C91D /* Build configuration list for PBXAggregateTarget "common_ui" */;
+			buildConfigurationList = EEE745D7418816178D6685E522BA4080 /* Build configuration list for PBXAggregateTarget "presentation" */;
 			buildPhases = (
-				B98CB4DE44D24DB9C5850CA623FCD99C /* [CP-User] Build common_ui */,
-				B47EBEF1038132C14A6838A46265EB36 /* [CP] Copy dSYMs */,
+				39D765560DE5E0805ED9A3D99B1C31B3 /* [CP-User] Build presentation */,
 			);
 			dependencies = (
 			);
-			name = common_ui;
+			name = presentation;
 		};
 /* End PBXAggregateTarget section */
 
@@ -60,13 +59,14 @@
 		26A0901C997D5DD678AC56B310AC9F02 /* BSG_KSCrashC.h in Headers */ = {isa = PBXBuildFile; fileRef = 15646FB37D54540AD7C42F081BC9871B /* BSG_KSCrashC.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		277E6E6A9AA7C1562B095AEFEAF9B328 /* BugsnagApp+Private.h in Headers */ = {isa = PBXBuildFile; fileRef = C50757E0DB18E0115599C691968D070B /* BugsnagApp+Private.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		27B2D3F91A7C95CEE6EA606B36C044F3 /* BugsnagBreadcrumbs.h in Headers */ = {isa = PBXBuildFile; fileRef = B9D13D25CC4450E1BB3980BF607A3B6D /* BugsnagBreadcrumbs.h */; settings = {ATTRIBUTES = (Project, ); }; };
+		2920B781FBE244B4B352653AF31D90CC /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D79AF8C070BD39A2D39D1204E88B135 /* Foundation.framework */; };
 		2F90ABC1B82B7F38507E9FEB4422EA9A /* BugsnagAppWithState.m in Sources */ = {isa = PBXBuildFile; fileRef = 283144483439A7E5C5BE5A33D5F8450F /* BugsnagAppWithState.m */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
 		319DDD6445FA3040EB757D3C5157F0F2 /* BugsnagLastRunInfo+Private.h in Headers */ = {isa = PBXBuildFile; fileRef = 79ED78A3CF7FBD73777195846D70394C /* BugsnagLastRunInfo+Private.h */; settings = {ATTRIBUTES = (Project, ); }; };
-		321C96D652699F66E02BFEA725EF0DAB /* Pods-iosApp-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = E6DB2A5F5DADA1DDE45F36B1A2D6AC16 /* Pods-iosApp-dummy.m */; };
 		331CBC9A63CBE2F96D8CFEE63514D9B3 /* BugsnagMetadata+Private.h in Headers */ = {isa = PBXBuildFile; fileRef = C085BEDEAF9F4665267AC85EEFC91CC1 /* BugsnagMetadata+Private.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		33ADA0FFF64A9018CEDA340DADF76239 /* BugsnagFeatureFlag.h in Headers */ = {isa = PBXBuildFile; fileRef = E3D04C0E66D2EB15DB05D2BC77F56532 /* BugsnagFeatureFlag.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3518E47CF2A27A9F44C93878B1FCE15E /* BugsnagErrorTypes.h in Headers */ = {isa = PBXBuildFile; fileRef = 868F86699F8FD460DBE79285CCC2D8AF /* BugsnagErrorTypes.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		36F4889A0410CDCDB1BAD66CE6E019C4 /* BSG_KSFileUtils.c in Sources */ = {isa = PBXBuildFile; fileRef = B5ABE30DC1415BD4906A34C72854C310 /* BSG_KSFileUtils.c */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
+		37B0F9CA1BE1B25C785CD31395721150 /* Pods-iosApp-umbrella.h in Headers */ = {isa = PBXBuildFile; fileRef = F87A626222A8D9B26448A9FEB04FD0DF /* Pods-iosApp-umbrella.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		3A2FB2F7C986E0E3D741205805E0E107 /* BugsnagHandledState.h in Headers */ = {isa = PBXBuildFile; fileRef = BF353CE54EF4A36BFFC5F3BC9B919470 /* BugsnagHandledState.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		3B9BFF41DC7BD7C93E2809D1A6D3790D /* BSGSessionUploader.h in Headers */ = {isa = PBXBuildFile; fileRef = EC8954BAC0CBAD6BF753598020D7670F /* BSGSessionUploader.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		3C94496646295A8F7759E405DF4CF777 /* BugsnagUser+Private.h in Headers */ = {isa = PBXBuildFile; fileRef = 56076ECC019D987977C232B989A4B140 /* BugsnagUser+Private.h */; settings = {ATTRIBUTES = (Project, ); }; };
@@ -135,7 +135,6 @@
 		824900A1222EEFE457B257F3D5CC6342 /* BSGGlobals.h in Headers */ = {isa = PBXBuildFile; fileRef = 21CADEE2922DF3458AE299EFEC77E333 /* BSGGlobals.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		849FC4914A662CF8A0CA4616DE51F25A /* BSGWatchKit.h in Headers */ = {isa = PBXBuildFile; fileRef = AB8D302301D862E2A23C5DCB29201DE0 /* BSGWatchKit.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		85A0DF1682E71337D0B465E3F2F7904C /* BSG_KSJSONCodec.h in Headers */ = {isa = PBXBuildFile; fileRef = D6A287AD6B8A42F5380F00C176785056 /* BSG_KSJSONCodec.h */; settings = {ATTRIBUTES = (Project, ); }; };
-		869EE4A749DA57A0E7AA39F2681BE423 /* Pods-iosApp-umbrella.h in Headers */ = {isa = PBXBuildFile; fileRef = 015E0D7EA7331961AB63E5AFECA86BB5 /* Pods-iosApp-umbrella.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		87010B8354A88387738E2851951E73D1 /* BugsnagStackframe+Private.h in Headers */ = {isa = PBXBuildFile; fileRef = 5DC1529985277B79223A5B0B49E6DBBC /* BugsnagStackframe+Private.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		871065E17B13EA0213727885841793FC /* BSG_KSCrashDoctor.m in Sources */ = {isa = PBXBuildFile; fileRef = D543C38E84F3090BF49A4D0EDFC8B2F7 /* BSG_KSCrashDoctor.m */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
 		882AC5986CE5C4DAC12E9EA3AAD08B2A /* BugsnagDeviceWithState+Private.h in Headers */ = {isa = PBXBuildFile; fileRef = 10ED701C3691A00A453569E3DB52B329 /* BugsnagDeviceWithState+Private.h */; settings = {ATTRIBUTES = (Project, ); }; };
@@ -143,13 +142,13 @@
 		89216412EFD8ECAF6D07E9E6A9BE65D8 /* BSGEventUploadOperation.h in Headers */ = {isa = PBXBuildFile; fileRef = 460C3377AA71E20036F6621E99278A63 /* BSGEventUploadOperation.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		89374F65D721551DEE019CF8B56B9D5C /* BSG_KSCrashNames.h in Headers */ = {isa = PBXBuildFile; fileRef = C4ADA3CC35256B43CFEEC816C2AF0136 /* BSG_KSCrashNames.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		89BEC482251E02A9101570E205782A1E /* BSG_KSCrashReport.h in Headers */ = {isa = PBXBuildFile; fileRef = B6D52FDF8A50F8D2A23C3C4E39EDEEBA /* BSG_KSCrashReport.h */; settings = {ATTRIBUTES = (Project, ); }; };
+		8BE7132D4F7AD713868AA1593E46777F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 466E167479A9430DE7F3E87FBF8E7652 /* PrivacyInfo.xcprivacy */; };
 		8C52F0EB0F037E5D546541EA2B446B34 /* Bugsnag-Bugsnag in Resources */ = {isa = PBXBuildFile; fileRef = 5179642E911381F25A791F87A121561A /* Bugsnag-Bugsnag */; };
 		8D7B51CE6ACCF657FE8C7664B8C64AD7 /* BugsnagDevice+Private.h in Headers */ = {isa = PBXBuildFile; fileRef = F675A37E92F8D3698F5DA3673519CDB2 /* BugsnagDevice+Private.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		9182E11D8B4BDA0494A52E0084A372D3 /* BugsnagSession.m in Sources */ = {isa = PBXBuildFile; fileRef = E4C6E14E50F286CA1EFD879AF240D983 /* BugsnagSession.m */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
 		92AE49C685731AD467C568CFA9A781D2 /* BSG_KSCrashReportFields.h in Headers */ = {isa = PBXBuildFile; fileRef = 757235B3E19672FCA9F7DD3B4AE096B0 /* BSG_KSCrashReportFields.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		93C02D8F484C67043E20DC5493009FFF /* BSG_KSMach.c in Sources */ = {isa = PBXBuildFile; fileRef = 097E4C6E9A4F8AA604858170AE8DE596 /* BSG_KSMach.c */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
 		94FB6CFE65AC903BDB319922BD443927 /* BSGJSONSerialization.h in Headers */ = {isa = PBXBuildFile; fileRef = 96AB7D8EA7B0717303432A338DEA5510 /* BSGJSONSerialization.h */; settings = {ATTRIBUTES = (Project, ); }; };
-		96A1CBC652F0518460F370A83BF70201 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D79AF8C070BD39A2D39D1204E88B135 /* Foundation.framework */; };
 		98271DEAD180BD5A0C90CA2D601C757D /* BugsnagThread+Private.h in Headers */ = {isa = PBXBuildFile; fileRef = 91DFBD76C12DA00C03DD51B5DA668951 /* BugsnagThread+Private.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		98C7AADAB763FA181FA029958F4D7F66 /* BugsnagCorrelation.m in Sources */ = {isa = PBXBuildFile; fileRef = E5E29E79C1AE16ED304DA212A21C7EBE /* BugsnagCorrelation.m */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
 		9C033052206C04D6AC455F216C2D4283 /* BSG_KSMachHeaders.c in Sources */ = {isa = PBXBuildFile; fileRef = 39A9D9D7073CE54181B25E49AD868092 /* BSG_KSMachHeaders.c */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
@@ -162,6 +161,7 @@
 		A1ED9E32345424E57BFFAC304CF47DBF /* BugsnagClient.h in Headers */ = {isa = PBXBuildFile; fileRef = E1931D66910C0CF35B98FFF94D7407D2 /* BugsnagClient.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		A3A119EAC4BC54BCB210FDE210EE3AFB /* BugsnagLastRunInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 110752C1A061A0A33230B6C7385C9B3C /* BugsnagLastRunInfo.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		A455486C5D5223C443DC72F77462E106 /* BSGSerialization.m in Sources */ = {isa = PBXBuildFile; fileRef = F945A46D71827E78C6ED9F548AE30B90 /* BSGSerialization.m */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
+		A4648DA5EF67B9D91FA06E0BE65235F8 /* Pods-iosApp-dummy.m in Sources */ = {isa = PBXBuildFile; fileRef = 54DC7F9924F99FEE67A9AD3BEE09A10C /* Pods-iosApp-dummy.m */; };
 		A8A293CBC5423B7543288538B2777A5C /* BSGEventUploadKSCrashReportOperation.m in Sources */ = {isa = PBXBuildFile; fileRef = 1A96304B44EEED8B45D8AE1E73A71C57 /* BSGEventUploadKSCrashReportOperation.m */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
 		A8CF80995E633306FE2A196492997C25 /* BSGHardware.h in Headers */ = {isa = PBXBuildFile; fileRef = 72A8D71C46192B35EB09B5DC2478701B /* BSGHardware.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		AD24CFE6D73157099FA7F357CB27E0C2 /* BugsnagNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = E41A1A31CFA8F26A2ED5EF86F9C48F1B /* BugsnagNotifier.m */; settings = {COMPILER_FLAGS = "-fvisibility=hidden"; }; };
@@ -196,7 +196,6 @@
 		C8D384BF5AF17D8EBE13176E6492103C /* BugsnagNotifier.h in Headers */ = {isa = PBXBuildFile; fileRef = C9C14F9CEDC7DD986F9F0E5F1800DBF0 /* BugsnagNotifier.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		CC77FB375C2B8F332F1A51F8CACB3276 /* BugsnagInternals.h in Headers */ = {isa = PBXBuildFile; fileRef = 887417558455F465B39A6DC1C92490E2 /* BugsnagInternals.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		CDE05E598782C514AB67750598575DA1 /* BSGSerialization.h in Headers */ = {isa = PBXBuildFile; fileRef = 4A2ECB70BFF1F2D5C5688C8AFDA36476 /* BSGSerialization.h */; settings = {ATTRIBUTES = (Project, ); }; };
-		CF7A127EA5BBC33882A2285643AC58E1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 466E167479A9430DE7F3E87FBF8E7652 /* PrivacyInfo.xcprivacy */; };
 		CFC144FAD2B4254361576E8813402DF9 /* BSG_KSCrashContext.h in Headers */ = {isa = PBXBuildFile; fileRef = B034774D20BA7985044C37408EE363A2 /* BSG_KSCrashContext.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		D12945EB72BE5669D84749AB04DA3C49 /* BSG_KSString.h in Headers */ = {isa = PBXBuildFile; fileRef = 163839C8D54F427488A36FEDF6CE343F /* BSG_KSString.h */; settings = {ATTRIBUTES = (Project, ); }; };
 		D186C63D5B0D2B26E17AD1CFD76ACD77 /* BugsnagApp.h in Headers */ = {isa = PBXBuildFile; fileRef = DDB1D05AFACC48C98649B40236E32965 /* BugsnagApp.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -247,21 +246,21 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		1A8BE66CE739AC599AB9EC3765466426 /* PBXContainerItemProxy */ = {
+		3388265F2B908C62E76B23F8FEBFADA5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = CCD3EB11340DAF95520DDC25A3B22EF0;
-			remoteInfo = common_ui;
+			remoteGlobalIDString = CA23A621E427291AD7AAC241FE14977E;
+			remoteInfo = presentation;
 		};
-		6B3A09880C2F12D39A4AEFA26116B3BB /* PBXContainerItemProxy */ = {
+		B1CD78C3B327A65CF9752E717BE5CDF5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 1EBBC43866F50928B98CBB88A085CFE7;
 			remoteInfo = "Bugsnag-Bugsnag";
 		};
-		EB311FFC1ED2329749CA546A83A222B3 /* PBXContainerItemProxy */ = {
+		F515171D9AFE25862AFC7F8393079A91 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BFDFE7DC352907FC980B868725387E98 /* Project object */;
 			proxyType = 1;
@@ -272,11 +271,11 @@
 
 /* Begin PBXFileReference section */
 		00459266345112F6331C93D369C9FD33 /* BSG_KSCrashSentry_Signal.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSCrashSentry_Signal.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Sentry/BSG_KSCrashSentry_Signal.h; sourceTree = "<group>"; };
-		015E0D7EA7331961AB63E5AFECA86BB5 /* Pods-iosApp-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Pods-iosApp-umbrella.h"; sourceTree = "<group>"; };
+		0187F135D5F61750CD24C3E04B6E8B64 /* Pods-iosApp-frameworks.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-iosApp-frameworks.sh"; sourceTree = "<group>"; };
 		01D2F3C52E5ED3376B01C9649B07E780 /* BSG_KSMachHeaders.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSMachHeaders.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSMachHeaders.h; sourceTree = "<group>"; };
 		0255A552CC3AC8425AC4631AB8D42830 /* BugsnagThread.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagThread.h; path = Bugsnag/include/Bugsnag/BugsnagThread.h; sourceTree = "<group>"; };
 		0349CD77990ED972788C4D030CEED413 /* BSG_KSMach_Arm.c */ = {isa = PBXFileReference; includeInIndex = 1; name = BSG_KSMach_Arm.c; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSMach_Arm.c; sourceTree = "<group>"; };
-		05ABCE2FC884085EAE4773E3555D5395 /* common_ui.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = common_ui.debug.xcconfig; sourceTree = "<group>"; };
+		05B70354031CF2FDEB1364659B463641 /* presentation.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = presentation.release.xcconfig; sourceTree = "<group>"; };
 		06AB09914992BBED9436E3B92390EB3C /* BSG_KSLogger.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSLogger.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSLogger.h; sourceTree = "<group>"; };
 		07DDFCB59DB3C56CD6D31C8FD1F1785D /* BSG_KSCrashReportWriter.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSCrashReportWriter.h; path = Bugsnag/include/Bugsnag/BSG_KSCrashReportWriter.h; sourceTree = "<group>"; };
 		097E4C6E9A4F8AA604858170AE8DE596 /* BSG_KSMach.c */ = {isa = PBXFileReference; includeInIndex = 1; name = BSG_KSMach.c; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSMach.c; sourceTree = "<group>"; };
@@ -290,7 +289,6 @@
 		110752C1A061A0A33230B6C7385C9B3C /* BugsnagLastRunInfo.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagLastRunInfo.h; path = Bugsnag/include/Bugsnag/BugsnagLastRunInfo.h; sourceTree = "<group>"; };
 		1181A45B930C2AEC590B784A00D3613B /* BugsnagCollections.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagCollections.m; path = Bugsnag/Helpers/BugsnagCollections.m; sourceTree = "<group>"; };
 		11B3A35BCB5F204BBF83B18A6A0EC239 /* BugsnagError+Private.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "BugsnagError+Private.h"; path = "Bugsnag/Payload/BugsnagError+Private.h"; sourceTree = "<group>"; };
-		11C9B998CE0869936AE6BE69270DAAC9 /* Pods-iosApp.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "Pods-iosApp.modulemap"; sourceTree = "<group>"; };
 		12E4D609ECE26FFB8163D4DFCFA50812 /* BugsnagClient.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagClient.m; path = Bugsnag/Client/BugsnagClient.m; sourceTree = "<group>"; };
 		154275715B11ABDE3A6C76D6D362999E /* BugsnagConfiguration.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagConfiguration.h; path = Bugsnag/include/Bugsnag/BugsnagConfiguration.h; sourceTree = "<group>"; };
 		15646FB37D54540AD7C42F081BC9871B /* BSG_KSCrashC.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSCrashC.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSCrashC.h; sourceTree = "<group>"; };
@@ -303,7 +301,6 @@
 		21CADEE2922DF3458AE299EFEC77E333 /* BSGGlobals.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGGlobals.h; path = Bugsnag/Helpers/BSGGlobals.h; sourceTree = "<group>"; };
 		2408A9A3FCBB160F37BE325F34E5AD11 /* Bugsnag.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = Bugsnag.release.xcconfig; sourceTree = "<group>"; };
 		244AB9D9D74771AB2F1C9E25D46A31F9 /* BSG_KSCrash.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSG_KSCrash.m; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSCrash.m; sourceTree = "<group>"; };
-		244FC2DAA936A0B07ACEFDC74E2D54B8 /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
 		245C332364DEFF56FD07791A872AC754 /* BSGAtomicFeatureFlagStore.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGAtomicFeatureFlagStore.h; path = Bugsnag/FeatureFlags/BSGAtomicFeatureFlagStore.h; sourceTree = "<group>"; };
 		2510B4788BAA5082EEE9708114B1060E /* BSGEventUploadObjectOperation.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGEventUploadObjectOperation.h; path = Bugsnag/Delivery/BSGEventUploadObjectOperation.h; sourceTree = "<group>"; };
 		2534DE2474187E8EBA3E0B51853C030F /* BSG_KSBacktrace_Private.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSBacktrace_Private.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSBacktrace_Private.h; sourceTree = "<group>"; };
@@ -320,6 +317,7 @@
 		30F69C2EC2017EBBCBDFCA1C56D62E48 /* BSG_Symbolicate.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_Symbolicate.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_Symbolicate.h; sourceTree = "<group>"; };
 		332E5AFF811DD30D692DDE0DBEC8477F /* BSGConfigurationBuilder.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGConfigurationBuilder.m; path = Bugsnag/Configuration/BSGConfigurationBuilder.m; sourceTree = "<group>"; };
 		3549B2C6C3176E91D934BACBE58A26FD /* BugsnagAppWithState+Private.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "BugsnagAppWithState+Private.h"; path = "Bugsnag/Payload/BugsnagAppWithState+Private.h"; sourceTree = "<group>"; };
+		355E9D32177410AC7A8B11C6C841EEFC /* presentation.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = presentation.debug.xcconfig; sourceTree = "<group>"; };
 		36B5314E19E0E5E0771D80F92E72F5AB /* BSGFileLocations.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGFileLocations.m; path = Bugsnag/Storage/BSGFileLocations.m; sourceTree = "<group>"; };
 		37E4FE5DA37B16FCC34F301C86D5DE9F /* BSG_Jailbreak.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_Jailbreak.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_Jailbreak.h; sourceTree = "<group>"; };
 		38750095874F155F2C48CDADE370DF83 /* BugsnagBreadcrumb+Private.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "BugsnagBreadcrumb+Private.h"; path = "Bugsnag/Payload/BugsnagBreadcrumb+Private.h"; sourceTree = "<group>"; };
@@ -330,8 +328,8 @@
 		3B427DD61027CE69A4CD85B06DF3E950 /* BSGFilesystem.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGFilesystem.h; path = Bugsnag/Helpers/BSGFilesystem.h; sourceTree = "<group>"; };
 		3CE00C318DEA9BD732288D9C169631C9 /* BugsnagConfiguration.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagConfiguration.m; path = Bugsnag/Configuration/BugsnagConfiguration.m; sourceTree = "<group>"; };
 		3DC33444535CFB0B3D895C95A529A23C /* BSGUIKit.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGUIKit.h; path = Bugsnag/Helpers/BSGUIKit.h; sourceTree = "<group>"; };
-		3F38EA791663EDF2BF2713B6C3E3F163 /* common_ui.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = common_ui.framework; path = build/cocoapods/framework/common_ui.framework; sourceTree = "<group>"; };
 		3F44BDE24E945BE35318504CA4E5F3DE /* BSG_KSCrash.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSCrash.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSCrash.h; sourceTree = "<group>"; };
+		3F64BADB16C311E9D09DAD0116F684F4 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
 		402489D158F3E848EDE8EF5CD20A286E /* BugsnagCollections.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagCollections.h; path = Bugsnag/Helpers/BugsnagCollections.h; sourceTree = "<group>"; };
 		40B78C4602F282AF52BB841217A7FFC1 /* BSGEventUploader.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGEventUploader.h; path = Bugsnag/Delivery/BSGEventUploader.h; sourceTree = "<group>"; };
 		4112164DB85E3AB9CB4906EEE1F53754 /* BugsnagSystemState.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagSystemState.m; path = Bugsnag/BugsnagSystemState.m; sourceTree = "<group>"; };
@@ -358,9 +356,10 @@
 		537BCC92D321F16B7D17877681906D42 /* BSGCrashSentry.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGCrashSentry.m; path = Bugsnag/BSGCrashSentry.m; sourceTree = "<group>"; };
 		547C86C5F2AB6F7FE7E0727E053D287F /* BugsnagError.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagError.m; path = Bugsnag/Payload/BugsnagError.m; sourceTree = "<group>"; };
 		54D7CDDEBA299BC11030CF1A88F91073 /* BugsnagSessionTracker.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagSessionTracker.h; path = Bugsnag/BugsnagSessionTracker.h; sourceTree = "<group>"; };
-		55ABB06C8A1800962A74E007E7733796 /* Pods-iosApp-frameworks.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-iosApp-frameworks.sh"; sourceTree = "<group>"; };
+		54DC7F9924F99FEE67A9AD3BEE09A10C /* Pods-iosApp-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "Pods-iosApp-dummy.m"; sourceTree = "<group>"; };
 		56076ECC019D987977C232B989A4B140 /* BugsnagUser+Private.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "BugsnagUser+Private.h"; path = "Bugsnag/Payload/BugsnagUser+Private.h"; sourceTree = "<group>"; };
 		57F2C178E431184F4AE597C6A0C4192F /* BSG_RFC3339DateTool.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSG_RFC3339DateTool.m; path = Bugsnag/Helpers/BSG_RFC3339DateTool.m; sourceTree = "<group>"; };
+		5AC974169B09D4545F741E9A2147610E /* Pods-iosApp-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-iosApp-Info.plist"; sourceTree = "<group>"; };
 		5DC1529985277B79223A5B0B49E6DBBC /* BugsnagStackframe+Private.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "BugsnagStackframe+Private.h"; path = "Bugsnag/Payload/BugsnagStackframe+Private.h"; sourceTree = "<group>"; };
 		610F6B57E9D8A301920A539F8EBB27EB /* BSGUtils.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGUtils.h; path = Bugsnag/Helpers/BSGUtils.h; sourceTree = "<group>"; };
 		653A24EF1E07A374179B999B8C0C1014 /* BSG_KSFile.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSFile.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSFile.h; sourceTree = "<group>"; };
@@ -372,9 +371,8 @@
 		6B9E27FD8C08FFF0C0769FEC74837854 /* BSGNotificationBreadcrumbs.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGNotificationBreadcrumbs.m; path = Bugsnag/Breadcrumbs/BSGNotificationBreadcrumbs.m; sourceTree = "<group>"; };
 		6BF4A99473BA9638B9E80606CA0FC8A3 /* BSG_KSCrashSentry_CPPException.mm */ = {isa = PBXFileReference; includeInIndex = 1; name = BSG_KSCrashSentry_CPPException.mm; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Sentry/BSG_KSCrashSentry_CPPException.mm; sourceTree = "<group>"; };
 		6D867A6CBB2AAFC1685559E26D2E1EC8 /* BugsnagThread.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagThread.m; path = Bugsnag/Payload/BugsnagThread.m; sourceTree = "<group>"; };
-		6E6066C9D1B44CD5F6C9B9D66EE5ECB5 /* common_ui.podspec */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; path = common_ui.podspec; sourceTree = "<group>"; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		6DD03E8047D0EBD6130874E8AAF74162 /* presentation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = presentation.framework; path = build/cocoapods/framework/presentation.framework; sourceTree = "<group>"; };
 		6ED9ED1DC022478740711D0F27F57E90 /* BugsnagCocoaPerformanceFromBugsnagCocoa.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagCocoaPerformanceFromBugsnagCocoa.m; path = Bugsnag/Helpers/BugsnagCocoaPerformanceFromBugsnagCocoa.m; sourceTree = "<group>"; };
-		6F3B5FED07117E377CFAC3D49B490F17 /* Pods-iosApp-resources.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "Pods-iosApp-resources.sh"; sourceTree = "<group>"; };
 		6FA2E2BE7E8B46616C1C8AFC9169E1D7 /* BSG_KSCrashSentry_MachException.c */ = {isa = PBXFileReference; includeInIndex = 1; name = BSG_KSCrashSentry_MachException.c; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Sentry/BSG_KSCrashSentry_MachException.c; sourceTree = "<group>"; };
 		6FB3CAF0432A168C73648BC72389FD82 /* BugsnagStackframe.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagStackframe.m; path = Bugsnag/Payload/BugsnagStackframe.m; sourceTree = "<group>"; };
 		701F4114A2BC32F71EF5EB785DC0B6F4 /* BSG_KSSignalInfo.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSSignalInfo.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSSignalInfo.h; sourceTree = "<group>"; };
@@ -384,9 +382,7 @@
 		727260014F8179C2DE675E2A3066D1BB /* BugsnagFeatureFlag.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagFeatureFlag.m; path = Bugsnag/BugsnagFeatureFlag.m; sourceTree = "<group>"; };
 		72A8D71C46192B35EB09B5DC2478701B /* BSGHardware.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGHardware.h; path = Bugsnag/Helpers/BSGHardware.h; sourceTree = "<group>"; };
 		757235B3E19672FCA9F7DD3B4AE096B0 /* BSG_KSCrashReportFields.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSCrashReportFields.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSCrashReportFields.h; sourceTree = "<group>"; };
-		76A263267985B0185D85E24D40FCEE9A /* Pods-iosApp-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-iosApp-Info.plist"; sourceTree = "<group>"; };
 		76CB807C91B3D7E18F844249DE5439E4 /* BSG_KSSysCtl.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSSysCtl.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSSysCtl.h; sourceTree = "<group>"; };
-		76D28488EA8CF5C697DFF07967A9960E /* Pods-iosApp-acknowledgements.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-iosApp-acknowledgements.plist"; sourceTree = "<group>"; };
 		78AB697B5FECDA90C3A5BCBA6998106D /* BugsnagCorrelation.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagCorrelation.h; path = Bugsnag/Payload/BugsnagCorrelation.h; sourceTree = "<group>"; };
 		78ECDA106F44345FB487321B828C8E8E /* BSGOnErrorSentBlock.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGOnErrorSentBlock.h; path = Bugsnag/KSCrash/Source/KSCrash/Reporting/Filters/BSGOnErrorSentBlock.h; sourceTree = "<group>"; };
 		79ED78A3CF7FBD73777195846D70394C /* BugsnagLastRunInfo+Private.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "BugsnagLastRunInfo+Private.h"; path = "Bugsnag/BugsnagLastRunInfo+Private.h"; sourceTree = "<group>"; };
@@ -398,6 +394,7 @@
 		868F86699F8FD460DBE79285CCC2D8AF /* BugsnagErrorTypes.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagErrorTypes.h; path = Bugsnag/include/Bugsnag/BugsnagErrorTypes.h; sourceTree = "<group>"; };
 		887417558455F465B39A6DC1C92490E2 /* BugsnagInternals.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagInternals.h; path = Bugsnag/BugsnagInternals.h; sourceTree = "<group>"; };
 		8A54D8A66B290C3708C8F4A8D18D6F63 /* BSG_KSSignalInfo.c */ = {isa = PBXFileReference; includeInIndex = 1; name = BSG_KSSignalInfo.c; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSSignalInfo.c; sourceTree = "<group>"; };
+		8B524AABE529FB8A2D151B05321336E0 /* Pods-iosApp.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = "Pods-iosApp.modulemap"; sourceTree = "<group>"; };
 		8BC79354C522A6077EFF4542A3FF8027 /* BugsnagUser.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagUser.h; path = Bugsnag/include/Bugsnag/BugsnagUser.h; sourceTree = "<group>"; };
 		8BFC6C254131D25A2563DB1F1BEEB541 /* BugsnagErrorTypes.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagErrorTypes.m; path = Bugsnag/Configuration/BugsnagErrorTypes.m; sourceTree = "<group>"; };
 		8CFE00E614C5D19ACCDDA5725A165155 /* BSGStorageMigratorV0V1.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGStorageMigratorV0V1.m; path = Bugsnag/Storage/BSGStorageMigratorV0V1.m; sourceTree = "<group>"; };
@@ -417,11 +414,15 @@
 		9AA2485EAC1B7A2206E5307B4C9EA2E7 /* BugsnagEndpointConfiguration.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagEndpointConfiguration.m; path = Bugsnag/Configuration/BugsnagEndpointConfiguration.m; sourceTree = "<group>"; };
 		9B04A16BEBF5B08571EA71CC0C9C2FDE /* Bugsnag.modulemap */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.module; path = Bugsnag.modulemap; sourceTree = "<group>"; };
 		9B04C2ADC5321AB05965818C6CC29FAD /* BSG_KSCrashSentry_MachException.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSCrashSentry_MachException.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Sentry/BSG_KSCrashSentry_MachException.h; sourceTree = "<group>"; };
+		9B55AEE5AC5D613C8E9611C3FD469FA8 /* presentation.podspec */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; path = presentation.podspec; sourceTree = "<group>"; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		9BB0B8B698D4C35D4F9A07EF70910170 /* Pods-iosApp-acknowledgements.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = "Pods-iosApp-acknowledgements.plist"; sourceTree = "<group>"; };
 		9C598DE7755087BBE3F29D627A16A7C6 /* BSGEventUploadKSCrashReportOperation.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGEventUploadKSCrashReportOperation.h; path = Bugsnag/Delivery/BSGEventUploadKSCrashReportOperation.h; sourceTree = "<group>"; };
 		9D5FA653DD2B8D098D3E92F0E2678707 /* BSGJSONSerialization.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGJSONSerialization.m; path = Bugsnag/Helpers/BSGJSONSerialization.m; sourceTree = "<group>"; };
 		9D940727FF8FB9C785EB98E56350EF41 /* Podfile */ = {isa = PBXFileReference; explicitFileType = text.script.ruby; includeInIndex = 1; indentWidth = 2; lastKnownFileType = text; name = Podfile; path = ../Podfile; sourceTree = SOURCE_ROOT; tabWidth = 2; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
+		9F1FFC8B10F4D7D4F37606E8959B3F29 /* Pods-iosApp-acknowledgements.markdown */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "Pods-iosApp-acknowledgements.markdown"; sourceTree = "<group>"; };
 		9F31C6AEB67FBFE71F37672517B30EF1 /* BSG_KSMach_x86_64.c */ = {isa = PBXFileReference; includeInIndex = 1; name = BSG_KSMach_x86_64.c; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSMach_x86_64.c; sourceTree = "<group>"; };
 		9F5A2129AD7A10FB6CCF3F5DD99B0F65 /* BSG_KSSystemInfo.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSSystemInfo.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSSystemInfo.h; sourceTree = "<group>"; };
+		9FECCB5AFF87D121F15BA01E683C7932 /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
 		A2DCDADB51DD36237514F5E45BD6B3A7 /* BSGFilesystem.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGFilesystem.m; path = Bugsnag/Helpers/BSGFilesystem.m; sourceTree = "<group>"; };
 		A2E51E2A708FFBCAD65BDAE3116E9A5E /* BSG_KSCrashSentry_NSException.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSG_KSCrashSentry_NSException.m; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Sentry/BSG_KSCrashSentry_NSException.m; sourceTree = "<group>"; };
 		A302BC641D82E31EED1958F8F6E47B05 /* BSGDefines.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGDefines.h; path = Bugsnag/Helpers/BSGDefines.h; sourceTree = "<group>"; };
@@ -470,14 +471,12 @@
 		D022426E536D3E5707743628ED711169 /* BSG_KSMachApple.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSMachApple.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSMachApple.h; sourceTree = "<group>"; };
 		D037FABE3B626A683CA8BF91F7FFF80B /* BSG_KSCrashState.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSG_KSCrashState.m; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSCrashState.m; sourceTree = "<group>"; };
 		D201E9A536F9F5C5E7B1A92FE848CAA5 /* BSG_KSCrashIdentifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSG_KSCrashIdentifier.m; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSCrashIdentifier.m; sourceTree = "<group>"; };
-		D203405B4D8AAC77CE782BB4CA260269 /* common_ui-copy-dsyms.sh */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.script.sh; path = "common_ui-copy-dsyms.sh"; sourceTree = "<group>"; };
 		D543C38E84F3090BF49A4D0EDFC8B2F7 /* BSG_KSCrashDoctor.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSG_KSCrashDoctor.m; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSCrashDoctor.m; sourceTree = "<group>"; };
 		D6A287AD6B8A42F5380F00C176785056 /* BSG_KSJSONCodec.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSJSONCodec.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSJSONCodec.h; sourceTree = "<group>"; };
 		D87A2301E5834AF617A387040C5FD6F0 /* Bugsnag-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "Bugsnag-dummy.m"; sourceTree = "<group>"; };
 		D9802C198B317FF22FB094CF6DFDC574 /* BugsnagConfiguration+Private.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "BugsnagConfiguration+Private.h"; path = "Bugsnag/Configuration/BugsnagConfiguration+Private.h"; sourceTree = "<group>"; };
 		D9AAD3CE39AE2D2AA04853593AD1350C /* BSGKeys.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGKeys.h; path = Bugsnag/Helpers/BSGKeys.h; sourceTree = "<group>"; };
 		DA184A17388EA052AABF703AACD19394 /* BugsnagApp.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagApp.m; path = Bugsnag/Payload/BugsnagApp.m; sourceTree = "<group>"; };
-		DB1F9AA1425C285476E6167B7733B1E8 /* compose-resources */ = {isa = PBXFileReference; includeInIndex = 1; name = "compose-resources"; path = "build/compose/cocoapods/compose-resources"; sourceTree = "<group>"; };
 		DBB362B21D6880D5B207913615A49C20 /* Bugsnag-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Bugsnag-umbrella.h"; sourceTree = "<group>"; };
 		DBEF51A46D88EE08AC934A91B8667A7C /* BugsnagApiClient.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagApiClient.h; path = Bugsnag/Delivery/BugsnagApiClient.h; sourceTree = "<group>"; };
 		DC09C136627FC1CB5431CB18FFDEAC24 /* BSG_KSCrashSentry_CPPException.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSG_KSCrashSentry_CPPException.h; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Sentry/BSG_KSCrashSentry_CPPException.h; sourceTree = "<group>"; };
@@ -488,24 +487,21 @@
 		E1931D66910C0CF35B98FFF94D7407D2 /* BugsnagClient.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagClient.h; path = Bugsnag/include/Bugsnag/BugsnagClient.h; sourceTree = "<group>"; };
 		E3D04C0E66D2EB15DB05D2BC77F56532 /* BugsnagFeatureFlag.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagFeatureFlag.h; path = Bugsnag/include/Bugsnag/BugsnagFeatureFlag.h; sourceTree = "<group>"; };
 		E41A1A31CFA8F26A2ED5EF86F9C48F1B /* BugsnagNotifier.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagNotifier.m; path = Bugsnag/Payload/BugsnagNotifier.m; sourceTree = "<group>"; };
-		E462E23B3674BF94EAB1504D506F2803 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
 		E4C6E14E50F286CA1EFD879AF240D983 /* BugsnagSession.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagSession.m; path = Bugsnag/Payload/BugsnagSession.m; sourceTree = "<group>"; };
-		E4C923318724794E3CC670804C2D6A6B /* Pods-iosApp-acknowledgements.markdown */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; path = "Pods-iosApp-acknowledgements.markdown"; sourceTree = "<group>"; };
 		E5530CD0A127D283DB6BFCB5D89D1643 /* BugsnagStackframe.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagStackframe.h; path = Bugsnag/include/Bugsnag/BugsnagStackframe.h; sourceTree = "<group>"; };
 		E5E29E79C1AE16ED304DA212A21C7EBE /* BugsnagCorrelation.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BugsnagCorrelation.m; path = Bugsnag/Payload/BugsnagCorrelation.m; sourceTree = "<group>"; };
 		E62BC5D88AF9FAEFF134C5F073E1B50B /* BSGNotificationBreadcrumbs.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGNotificationBreadcrumbs.h; path = Bugsnag/Breadcrumbs/BSGNotificationBreadcrumbs.h; sourceTree = "<group>"; };
-		E6DB2A5F5DADA1DDE45F36B1A2D6AC16 /* Pods-iosApp-dummy.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = "Pods-iosApp-dummy.m"; sourceTree = "<group>"; };
 		E70DB7892F683B4677619A41024F9AD0 /* BSG_KSJSONCodec.c */ = {isa = PBXFileReference; includeInIndex = 1; name = BSG_KSJSONCodec.c; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_KSJSONCodec.c; sourceTree = "<group>"; };
 		E751202565F15D20F7AE10970CDD510B /* BugsnagError.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BugsnagError.h; path = Bugsnag/include/Bugsnag/BugsnagError.h; sourceTree = "<group>"; };
 		E866C199650356492BCBD7297CEFE105 /* BSG_KSCrashNames.c */ = {isa = PBXFileReference; includeInIndex = 1; name = BSG_KSCrashNames.c; path = Bugsnag/KSCrash/Source/KSCrash/Recording/BSG_KSCrashNames.c; sourceTree = "<group>"; };
 		E8D41C0820FD71E468D4F80B65E6E659 /* BSGEventUploadFileOperation.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGEventUploadFileOperation.m; path = Bugsnag/Delivery/BSGEventUploadFileOperation.m; sourceTree = "<group>"; };
 		E8E405CBF525C76B129070245B79E21E /* BSG_Symbolicate.c */ = {isa = PBXFileReference; includeInIndex = 1; name = BSG_Symbolicate.c; path = Bugsnag/KSCrash/Source/KSCrash/Recording/Tools/BSG_Symbolicate.c; sourceTree = "<group>"; };
 		EC8954BAC0CBAD6BF753598020D7670F /* BSGSessionUploader.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = BSGSessionUploader.h; path = Bugsnag/Delivery/BSGSessionUploader.h; sourceTree = "<group>"; };
-		EC9546B3D99631BE72D6354FE5A9F32A /* common_ui.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = common_ui.release.xcconfig; sourceTree = "<group>"; };
 		EE22629C93EB5F3766518BC8ECC48A8C /* BSGNetworkBreadcrumb.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGNetworkBreadcrumb.m; path = Bugsnag/Breadcrumbs/BSGNetworkBreadcrumb.m; sourceTree = "<group>"; };
 		F05698C0A42383585F50A22842BB635E /* BSGConnectivity.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGConnectivity.m; path = Bugsnag/Delivery/BSGConnectivity.m; sourceTree = "<group>"; };
 		F444B451FBC258AC3B34A25C1C114693 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Security.framework; sourceTree = DEVELOPER_DIR; };
 		F675A37E92F8D3698F5DA3673519CDB2 /* BugsnagDevice+Private.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = "BugsnagDevice+Private.h"; path = "Bugsnag/Payload/BugsnagDevice+Private.h"; sourceTree = "<group>"; };
+		F87A626222A8D9B26448A9FEB04FD0DF /* Pods-iosApp-umbrella.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; path = "Pods-iosApp-umbrella.h"; sourceTree = "<group>"; };
 		F8DD7FEE4625F146214C10B821251BDE /* BSGInternalErrorReporter.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGInternalErrorReporter.m; path = Bugsnag/Helpers/BSGInternalErrorReporter.m; sourceTree = "<group>"; };
 		F90E51488B71B2B468CD9AFEE8956325 /* BSGPersistentDeviceID.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGPersistentDeviceID.m; path = Bugsnag/Storage/BSGPersistentDeviceID.m; sourceTree = "<group>"; };
 		F945A46D71827E78C6ED9F548AE30B90 /* BSGSerialization.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = BSGSerialization.m; path = Bugsnag/Helpers/BSGSerialization.m; sourceTree = "<group>"; };
@@ -518,18 +514,18 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A4827DF27EBA7080C3D7D68536BEA900 /* Frameworks */ = {
+		62FEC0A703E111C9389C7139AC95AA77 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		DEEE18FB73F4044E51E323A36492628B /* Frameworks */ = {
+		9D78890EFE4FD9EAB384DDFD8694AF01 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				96A1CBC652F0518460F370A83BF70201 /* Foundation.framework in Frameworks */,
+				2920B781FBE244B4B352653AF31D90CC /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -577,43 +573,48 @@
 			path = "../Target Support Files/Bugsnag";
 			sourceTree = "<group>";
 		};
-		1FD8C8D7502FC817C2D867A880451F36 /* Development Pods */ = {
+		11C970DEAE48C6D0282DFE54684F53F1 /* Targets Support Files */ = {
 			isa = PBXGroup;
 			children = (
-				69283F7C83013D82E8EC2F136668FB32 /* common_ui */,
+				52A898E555C2DBD7D25A7E44754C3FC6 /* Pods-iosApp */,
 			);
-			name = "Development Pods";
+			name = "Targets Support Files";
 			sourceTree = "<group>";
 		};
-		2662C94DBB7D69BAB68BADAF7AD54023 /* Pod */ = {
+		3B64F2AF81A808AFD122FE6402133AD6 /* Pod */ = {
 			isa = PBXGroup;
 			children = (
-				6E6066C9D1B44CD5F6C9B9D66EE5ECB5 /* common_ui.podspec */,
+				9B55AEE5AC5D613C8E9611C3FD469FA8 /* presentation.podspec */,
 			);
 			name = Pod;
 			sourceTree = "<group>";
 		};
-		545C83FFDA40FD847D923460B943EBC5 /* Support Files */ = {
+		4A2B96EAD38D88BCE623C0589A50271A /* presentation */ = {
 			isa = PBXGroup;
 			children = (
-				D203405B4D8AAC77CE782BB4CA260269 /* common_ui-copy-dsyms.sh */,
-				05ABCE2FC884085EAE4773E3555D5395 /* common_ui.debug.xcconfig */,
-				EC9546B3D99631BE72D6354FE5A9F32A /* common_ui.release.xcconfig */,
+				82416B839D192D3561DA0F554A8B79E1 /* Frameworks */,
+				3B64F2AF81A808AFD122FE6402133AD6 /* Pod */,
+				BA7075553CFB7AA595EAA6BE52B20EBF /* Support Files */,
 			);
-			name = "Support Files";
-			path = "../iosApp/Pods/Target Support Files/common_ui";
+			name = presentation;
+			path = ../../presentation;
 			sourceTree = "<group>";
 		};
-		69283F7C83013D82E8EC2F136668FB32 /* common_ui */ = {
+		52A898E555C2DBD7D25A7E44754C3FC6 /* Pods-iosApp */ = {
 			isa = PBXGroup;
 			children = (
-				DB1F9AA1425C285476E6167B7733B1E8 /* compose-resources */,
-				BBE4C2B2893EC95891C46CD6F66A6DF5 /* Frameworks */,
-				2662C94DBB7D69BAB68BADAF7AD54023 /* Pod */,
-				545C83FFDA40FD847D923460B943EBC5 /* Support Files */,
+				8B524AABE529FB8A2D151B05321336E0 /* Pods-iosApp.modulemap */,
+				9F1FFC8B10F4D7D4F37606E8959B3F29 /* Pods-iosApp-acknowledgements.markdown */,
+				9BB0B8B698D4C35D4F9A07EF70910170 /* Pods-iosApp-acknowledgements.plist */,
+				54DC7F9924F99FEE67A9AD3BEE09A10C /* Pods-iosApp-dummy.m */,
+				0187F135D5F61750CD24C3E04B6E8B64 /* Pods-iosApp-frameworks.sh */,
+				5AC974169B09D4545F741E9A2147610E /* Pods-iosApp-Info.plist */,
+				F87A626222A8D9B26448A9FEB04FD0DF /* Pods-iosApp-umbrella.h */,
+				3F64BADB16C311E9D09DAD0116F684F4 /* Pods-iosApp.debug.xcconfig */,
+				9FECCB5AFF87D121F15BA01E683C7932 /* Pods-iosApp.release.xcconfig */,
 			);
-			name = common_ui;
-			path = "../../common-ui";
+			name = "Pods-iosApp";
+			path = "Target Support Files/Pods-iosApp";
 			sourceTree = "<group>";
 		};
 		722D09B849BB6BB77BE2B6121441FCF1 /* Resources */ = {
@@ -642,6 +643,22 @@
 				462C3F9DF5A48DC002CDCDE92DBFE9E6 /* SystemConfiguration.framework */,
 			);
 			name = iOS;
+			sourceTree = "<group>";
+		};
+		82416B839D192D3561DA0F554A8B79E1 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				6DD03E8047D0EBD6130874E8AAF74162 /* presentation.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		8951A264BD8BAADBA5F3B66FD040B980 /* Development Pods */ = {
+			isa = PBXGroup;
+			children = (
+				4A2B96EAD38D88BCE623C0589A50271A /* presentation */,
+			);
+			name = "Development Pods";
 			sourceTree = "<group>";
 		};
 		8CAABBA26FB703C06B7B5E0903B54B4B /* Bugsnag */ = {
@@ -867,55 +884,39 @@
 			path = Bugsnag;
 			sourceTree = "<group>";
 		};
-		BA6B7BC2729F657E9D3682E55CA6E980 /* Pods-iosApp */ = {
+		BA7075553CFB7AA595EAA6BE52B20EBF /* Support Files */ = {
 			isa = PBXGroup;
 			children = (
-				11C9B998CE0869936AE6BE69270DAAC9 /* Pods-iosApp.modulemap */,
-				E4C923318724794E3CC670804C2D6A6B /* Pods-iosApp-acknowledgements.markdown */,
-				76D28488EA8CF5C697DFF07967A9960E /* Pods-iosApp-acknowledgements.plist */,
-				E6DB2A5F5DADA1DDE45F36B1A2D6AC16 /* Pods-iosApp-dummy.m */,
-				55ABB06C8A1800962A74E007E7733796 /* Pods-iosApp-frameworks.sh */,
-				76A263267985B0185D85E24D40FCEE9A /* Pods-iosApp-Info.plist */,
-				6F3B5FED07117E377CFAC3D49B490F17 /* Pods-iosApp-resources.sh */,
-				015E0D7EA7331961AB63E5AFECA86BB5 /* Pods-iosApp-umbrella.h */,
-				E462E23B3674BF94EAB1504D506F2803 /* Pods-iosApp.debug.xcconfig */,
-				244FC2DAA936A0B07ACEFDC74E2D54B8 /* Pods-iosApp.release.xcconfig */,
+				355E9D32177410AC7A8B11C6C841EEFC /* presentation.debug.xcconfig */,
+				05B70354031CF2FDEB1364659B463641 /* presentation.release.xcconfig */,
 			);
-			name = "Pods-iosApp";
-			path = "Target Support Files/Pods-iosApp";
-			sourceTree = "<group>";
-		};
-		BBE4C2B2893EC95891C46CD6F66A6DF5 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				3F38EA791663EDF2BF2713B6C3E3F163 /* common_ui.framework */,
-			);
-			name = Frameworks;
+			name = "Support Files";
+			path = "../iosApp/Pods/Target Support Files/presentation";
 			sourceTree = "<group>";
 		};
 		CF1408CF629C7361332E53B88F7BD30C = {
 			isa = PBXGroup;
 			children = (
 				9D940727FF8FB9C785EB98E56350EF41 /* Podfile */,
-				1FD8C8D7502FC817C2D867A880451F36 /* Development Pods */,
+				8951A264BD8BAADBA5F3B66FD040B980 /* Development Pods */,
 				03C5C200A0787E300053CFA8F53CA094 /* Frameworks */,
 				063EB9A8542EF930F2D7E2A132BEBE6E /* Pods */,
 				76A95A25A2A14571B04EDBA1E8A8FAAB /* Products */,
-				D456857FB6E5BC3266BEC21401D60DB5 /* Targets Support Files */,
+				11C970DEAE48C6D0282DFE54684F53F1 /* Targets Support Files */,
 			);
-			sourceTree = "<group>";
-		};
-		D456857FB6E5BC3266BEC21401D60DB5 /* Targets Support Files */ = {
-			isa = PBXGroup;
-			children = (
-				BA6B7BC2729F657E9D3682E55CA6E980 /* Pods-iosApp */,
-			);
-			name = "Targets Support Files";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXHeadersBuildPhase section */
+		15B1067B340231DD136BF00C186B9F6F /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				37B0F9CA1BE1B25C785CD31395721150 /* Pods-iosApp-umbrella.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		615C19CB42FD68B374BD130E15D0D16C /* Headers */ = {
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
@@ -1049,24 +1050,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		931656A8FCB57015DF901CF340498B81 /* Headers */ = {
-			isa = PBXHeadersBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				869EE4A749DA57A0E7AA39F2681BE423 /* Pods-iosApp-umbrella.h in Headers */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
 		1EBBC43866F50928B98CBB88A085CFE7 /* Bugsnag-Bugsnag */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 2E7F5B85808F9B525F0AE5FD1CDDD13B /* Build configuration list for PBXNativeTarget "Bugsnag-Bugsnag" */;
+			buildConfigurationList = 2CB1B0A30E5F9E9A09FB5011973200ED /* Build configuration list for PBXNativeTarget "Bugsnag-Bugsnag" */;
 			buildPhases = (
-				6523A30AB682490A657757F35E49CAF9 /* Sources */,
-				A4827DF27EBA7080C3D7D68536BEA900 /* Frameworks */,
-				FE99AD9D691E5AA134664D5D7429568E /* Resources */,
+				C9F20C8524AB4C407A8BE2F59FEE15F6 /* Sources */,
+				62FEC0A703E111C9389C7139AC95AA77 /* Frameworks */,
+				408A9688D29D7A1F36D877DE4524B667 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -1089,7 +1082,7 @@
 			buildRules = (
 			);
 			dependencies = (
-				892153D3889195366D67C711800C5ABD /* PBXTargetDependency */,
+				3B1E8964725BA0252B5BB8E9219AA33C /* PBXTargetDependency */,
 			);
 			name = Bugsnag;
 			productName = Bugsnag;
@@ -1098,18 +1091,18 @@
 		};
 		ED39C638569286489CD697A6C8964146 /* Pods-iosApp */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4B5431FCFAB4B134245F0E1135B56196 /* Build configuration list for PBXNativeTarget "Pods-iosApp" */;
+			buildConfigurationList = AC009A2F9A124703CABC8BF2C1FA09ED /* Build configuration list for PBXNativeTarget "Pods-iosApp" */;
 			buildPhases = (
-				931656A8FCB57015DF901CF340498B81 /* Headers */,
-				31E4772C5B8BBDFC5E4D80B1BBB5723E /* Sources */,
-				DEEE18FB73F4044E51E323A36492628B /* Frameworks */,
-				5EA93FA23ADA3F14C713452A0D54FCBB /* Resources */,
+				15B1067B340231DD136BF00C186B9F6F /* Headers */,
+				F1EFB186A07537E3819402E1812DB063 /* Sources */,
+				9D78890EFE4FD9EAB384DDFD8694AF01 /* Frameworks */,
+				AF96E1E11B548AB3E75AC1481D90E798 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				C4BD81C582195E2681F3F4C75C772567 /* PBXTargetDependency */,
-				DB030541CC9DFD9EF824D3F516B3FAB9 /* PBXTargetDependency */,
+				BBC53FB36B4A5725B9F6E71D511DF1F9 /* PBXTargetDependency */,
+				E8236196FFB74623E47D74BCB9606F97 /* PBXTargetDependency */,
 			);
 			name = "Pods-iosApp";
 			productName = Pods_iosApp;
@@ -1142,17 +1135,18 @@
 			targets = (
 				BDC8B0769B39E03BE257939D6FD4D966 /* Bugsnag */,
 				1EBBC43866F50928B98CBB88A085CFE7 /* Bugsnag-Bugsnag */,
-				CCD3EB11340DAF95520DDC25A3B22EF0 /* common_ui */,
 				ED39C638569286489CD697A6C8964146 /* Pods-iosApp */,
+				CA23A621E427291AD7AAC241FE14977E /* presentation */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		5EA93FA23ADA3F14C713452A0D54FCBB /* Resources */ = {
+		408A9688D29D7A1F36D877DE4524B667 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8BE7132D4F7AD713868AA1593E46777F /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1164,55 +1158,29 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		FE99AD9D691E5AA134664D5D7429568E /* Resources */ = {
+		AF96E1E11B548AB3E75AC1481D90E798 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				CF7A127EA5BBC33882A2285643AC58E1 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		B47EBEF1038132C14A6838A46265EB36 /* [CP] Copy dSYMs */ = {
+		39D765560DE5E0805ED9A3D99B1C31B3 /* [CP-User] Build presentation */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/common_ui/common_ui-copy-dsyms-input-files.xcfilelist",
-			);
-			name = "[CP] Copy dSYMs";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/common_ui/common_ui-copy-dsyms-output-files.xcfilelist",
-			);
+			name = "[CP-User] Build presentation";
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/common_ui/common_ui-copy-dsyms.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		B98CB4DE44D24DB9C5850CA623FCD99C /* [CP-User] Build common_ui */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			name = "[CP-User] Build common_ui";
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "                if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n                  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \"YES\"\"\n                  exit 0\n                fi\n                set -ev\n                REPO_ROOT=\"$PODS_TARGET_SRCROOT\"\n                \"$REPO_ROOT/../gradlew\" -p \"$REPO_ROOT\" $KOTLIN_PROJECT_PATH:syncFramework                     -Pkotlin.native.cocoapods.platform=$PLATFORM_NAME                     -Pkotlin.native.cocoapods.archs=\"$ARCHS\"                     -Pkotlin.native.cocoapods.configuration=\"$CONFIGURATION\"\n";
+			shellScript = "                if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n                    echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \"YES\"\"\n                    exit 0\n                fi\n                set -ev\n                REPO_ROOT=\"$PODS_TARGET_SRCROOT\"\n                \"$REPO_ROOT/../gradlew\" -p \"$REPO_ROOT\" $KOTLIN_PROJECT_PATH:syncFramework                     -Pkotlin.native.cocoapods.platform=$PLATFORM_NAME                     -Pkotlin.native.cocoapods.archs=\"$ARCHS\"                     -Pkotlin.native.cocoapods.configuration=\"$CONFIGURATION\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		31E4772C5B8BBDFC5E4D80B1BBB5723E /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				321C96D652699F66E02BFEA725EF0DAB /* Pods-iosApp-dummy.m in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		56A0B6DA9ADB39A1D586D82C2FDB25C6 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1309,73 +1277,60 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6523A30AB682490A657757F35E49CAF9 /* Sources */ = {
+		C9F20C8524AB4C407A8BE2F59FEE15F6 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F1EFB186A07537E3819402E1812DB063 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A4648DA5EF67B9D91FA06E0BE65235F8 /* Pods-iosApp-dummy.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		892153D3889195366D67C711800C5ABD /* PBXTargetDependency */ = {
+		3B1E8964725BA0252B5BB8E9219AA33C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = "Bugsnag-Bugsnag";
 			target = 1EBBC43866F50928B98CBB88A085CFE7 /* Bugsnag-Bugsnag */;
-			targetProxy = 6B3A09880C2F12D39A4AEFA26116B3BB /* PBXContainerItemProxy */;
+			targetProxy = B1CD78C3B327A65CF9752E717BE5CDF5 /* PBXContainerItemProxy */;
 		};
-		C4BD81C582195E2681F3F4C75C772567 /* PBXTargetDependency */ = {
+		BBC53FB36B4A5725B9F6E71D511DF1F9 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = Bugsnag;
 			target = BDC8B0769B39E03BE257939D6FD4D966 /* Bugsnag */;
-			targetProxy = EB311FFC1ED2329749CA546A83A222B3 /* PBXContainerItemProxy */;
+			targetProxy = F515171D9AFE25862AFC7F8393079A91 /* PBXContainerItemProxy */;
 		};
-		DB030541CC9DFD9EF824D3F516B3FAB9 /* PBXTargetDependency */ = {
+		E8236196FFB74623E47D74BCB9606F97 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = common_ui;
-			target = CCD3EB11340DAF95520DDC25A3B22EF0 /* common_ui */;
-			targetProxy = 1A8BE66CE739AC599AB9EC3765466426 /* PBXContainerItemProxy */;
+			name = presentation;
+			target = CA23A621E427291AD7AAC241FE14977E /* presentation */;
+			targetProxy = 3388265F2B908C62E76B23F8FEBFADA5 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		01EE973380BBD55B5823648212FE8CD8 /* Debug */ = {
+		0458F421B90BCB553ADA0B048EEB65DC /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E462E23B3674BF94EAB1504D506F2803 /* Pods-iosApp.debug.xcconfig */;
+			baseConfigurationReference = 355E9D32177410AC7A8B11C6C841EEFC /* presentation.debug.xcconfig */;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
-				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
-				CURRENT_PROJECT_VERSION = 1;
-				DEFINES_MODULE = YES;
-				DYLIB_COMPATIBILITY_VERSION = 1;
-				DYLIB_CURRENT_VERSION = 1;
-				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_MODULE_VERIFIER = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				INFOPLIST_FILE = "Target Support Files/Pods-iosApp/Pods-iosApp-Info.plist";
-				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
 				IPHONEOS_DEPLOYMENT_TARGET = 14.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
 				);
-				MACH_O_TYPE = staticlib;
-				MODULEMAP_FILE = "Target Support Files/Pods-iosApp/Pods-iosApp.modulemap";
-				OTHER_LDFLAGS = "";
-				OTHER_LIBTOOLFLAGS = "";
-				PODS_ROOT = "$(SRCROOT)";
-				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
-				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
-				VERSION_INFO_PREFIX = "";
 			};
 			name = Debug;
 		};
@@ -1410,6 +1365,82 @@
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) ";
 				SWIFT_INSTALL_OBJC_HEADER = YES;
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
+		3A386F50063BA9F1102D66C15F22D17E /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 05B70354031CF2FDEB1364659B463641 /* presentation.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		3F7306734ABE412D6DF69425C20ED0B0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2641CABB50E12E703C1637451D3068CD /* Bugsnag.debug.xcconfig */;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Bugsnag";
+				IBSC_MODULE = Bugsnag;
+				INFOPLIST_FILE = "Target Support Files/Bugsnag/ResourceBundle-Bugsnag-Bugsnag-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				PRODUCT_NAME = Bugsnag;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				WRAPPER_EXTENSION = bundle;
+			};
+			name = Debug;
+		};
+		4C6C3C1F028B4304A2A0C14C36CB4E9D /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9FECCB5AFF87D121F15BA01E683C7932 /* Pods-iosApp.release.xcconfig */;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				"CODE_SIGN_IDENTITY[sdk=appletvos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "";
+				"CODE_SIGN_IDENTITY[sdk=watchos*]" = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				INFOPLIST_FILE = "Target Support Files/Pods-iosApp/Pods-iosApp-Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.1;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACH_O_TYPE = staticlib;
+				MODULEMAP_FILE = "Target Support Files/Pods-iosApp/Pods-iosApp.modulemap";
+				OTHER_LDFLAGS = "";
+				OTHER_LIBTOOLFLAGS = "";
+				PODS_ROOT = "$(SRCROOT)";
+				PRODUCT_BUNDLE_IDENTIFIER = "org.cocoapods.${PRODUCT_NAME:rfc1034identifier}";
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -1479,41 +1510,6 @@
 			};
 			name = Release;
 		};
-		6B9BE451A1956CEF7852A02F14486A8C /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 05ABCE2FC884085EAE4773E3555D5395 /* common_ui.debug.xcconfig */;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.1;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		832FD9285E69A9C7F2F42EA998D4133E /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 2641CABB50E12E703C1637451D3068CD /* Bugsnag.debug.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Bugsnag";
-				IBSC_MODULE = Bugsnag;
-				INFOPLIST_FILE = "Target Support Files/Bugsnag/ResourceBundle-Bugsnag-Bugsnag-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
-				PRODUCT_NAME = Bugsnag;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Debug;
-		};
 		A0374B8CF9A7D6A45F6D116D698D1C19 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1580,23 +1576,6 @@
 			};
 			name = Debug;
 		};
-		A9ABE0E8FBDC1D61DE569E2C12538242 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 2408A9A3FCBB160F37BE325F34E5AD11 /* Bugsnag.release.xcconfig */;
-			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
-				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Bugsnag";
-				IBSC_MODULE = Bugsnag;
-				INFOPLIST_FILE = "Target Support Files/Bugsnag/ResourceBundle-Bugsnag-Bugsnag-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
-				PRODUCT_NAME = Bugsnag;
-				SDKROOT = iphoneos;
-				SKIP_INSTALL = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				WRAPPER_EXTENSION = bundle;
-			};
-			name = Release;
-		};
 		AC87F18A315B5AEB3BA7254D964EF20D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 2641CABB50E12E703C1637451D3068CD /* Bugsnag.debug.xcconfig */;
@@ -1634,9 +1613,9 @@
 			};
 			name = Debug;
 		};
-		B58C5972E1DFA73F9B0F95E839C781D5 /* Release */ = {
+		C088D019830A4C11DFE1F2C7FE58C337 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 244FC2DAA936A0B07ACEFDC74E2D54B8 /* Pods-iosApp.release.xcconfig */;
+			baseConfigurationReference = 3F64BADB16C311E9D09DAD0116F684F4 /* Pods-iosApp.debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				CLANG_ENABLE_OBJC_WEAK = NO;
@@ -1668,39 +1647,36 @@
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
-			name = Release;
+			name = Debug;
 		};
-		D251F9D49B685CF4E55FC928BC314941 /* Release */ = {
+		E180A8418A0456A81510B83F43A7B736 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = EC9546B3D99631BE72D6354FE5A9F32A /* common_ui.release.xcconfig */;
+			baseConfigurationReference = 2408A9A3FCBB160F37BE325F34E5AD11 /* Bugsnag.release.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.1;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
+				CODE_SIGNING_ALLOWED = NO;
+				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)/Bugsnag";
+				IBSC_MODULE = Bugsnag;
+				INFOPLIST_FILE = "Target Support Files/Bugsnag/ResourceBundle-Bugsnag-Bugsnag-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				PRODUCT_NAME = Bugsnag;
 				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
+				WRAPPER_EXTENSION = bundle;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		2E7F5B85808F9B525F0AE5FD1CDDD13B /* Build configuration list for PBXNativeTarget "Bugsnag-Bugsnag" */ = {
+		2CB1B0A30E5F9E9A09FB5011973200ED /* Build configuration list for PBXNativeTarget "Bugsnag-Bugsnag" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				832FD9285E69A9C7F2F42EA998D4133E /* Debug */,
-				A9ABE0E8FBDC1D61DE569E2C12538242 /* Release */,
+				3F7306734ABE412D6DF69425C20ED0B0 /* Debug */,
+				E180A8418A0456A81510B83F43A7B736 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1714,20 +1690,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4B5431FCFAB4B134245F0E1135B56196 /* Build configuration list for PBXNativeTarget "Pods-iosApp" */ = {
+		AC009A2F9A124703CABC8BF2C1FA09ED /* Build configuration list for PBXNativeTarget "Pods-iosApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				01EE973380BBD55B5823648212FE8CD8 /* Debug */,
-				B58C5972E1DFA73F9B0F95E839C781D5 /* Release */,
+				C088D019830A4C11DFE1F2C7FE58C337 /* Debug */,
+				4C6C3C1F028B4304A2A0C14C36CB4E9D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		70DEEFB3CD449DD6FB8A15EC15D4C91D /* Build configuration list for PBXAggregateTarget "common_ui" */ = {
+		EEE745D7418816178D6685E522BA4080 /* Build configuration list for PBXAggregateTarget "presentation" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				6B9BE451A1956CEF7852A02F14486A8C /* Debug */,
-				D251F9D49B685CF4E55FC928BC314941 /* Release */,
+				0458F421B90BCB553ADA0B048EEB65DC /* Debug */,
+				3A386F50063BA9F1102D66C15F22D17E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

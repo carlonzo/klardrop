@@ -9,9 +9,19 @@
 /* Begin PBXBuildFile section */
 		058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557BA273AAA24004C7B11 /* Assets.xcassets */; };
 		058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */; };
-		2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2152FB032600AC8F00CF470E /* iOSApp.swift */; };
-		7555FF83242A565900829871 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7555FF82242A565900829871 /* ContentView.swift */; };
+		1940F391E2C19CC3621CEF71 /* KdSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */; };
+		25854FF09AB48EEE3DA5A4C9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0C2857366865997CD52F57 /* RootView.swift */; };
+		47A984A5312E051FB2FBE4D9 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 237CEC83090715744E3FEC35 /* DiscoveryView.swift */; };
+		51918C9838997A36C6937320 /* StatusDotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */; };
+		71EAEC70F408DF748899A011 /* DiscoveryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90204E2C20EA390FEFAC5EE3 /* DiscoveryModel.swift */; };
+		A9A387E4176ACEA76838753E /* KdRadii.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CB52301BD5AE4C16FDF6255 /* KdRadii.swift */; };
+		BB3898649DCACF2E256E5C32 /* Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B73B7F2DC511088F596B4D /* Color+Hex.swift */; };
+		C5D4DC65F6E3B14AE90B7A09 /* KdColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88E5A453CA492BB4D6E32AB /* KdColors.swift */; };
 		CFDB58B53BB94DE262B13C24 /* Pods_iosApp.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6B1049432C0C2B312090ABF6 /* Pods_iosApp.framework */; };
+		DDFCE403CC505E5D64D40F09 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */; };
+		E2C8E1DEBCDFBE30BE3BC09E /* KdType.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */; };
+		EFD8BD80B3528E6CA9A8495F /* DeviceUiHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1535C70BA72B5D678B510F57 /* DeviceUiHelpers.swift */; };
+		FF1768002FCE0F7B45CE10E7 /* KdMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62ABA6F429B4D01F34B3E772 /* KdMotion.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -31,16 +41,26 @@
 		01920DE25B5CA9C51BD3C36F /* Pods-iosApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release.xcconfig"; sourceTree = "<group>"; };
 		058557BA273AAA24004C7B11 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		2152FB032600AC8F00CF470E /* iOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
+		1535C70BA72B5D678B510F57 /* DeviceUiHelpers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DeviceUiHelpers.swift; path = DeviceUiHelpers.swift; sourceTree = "<group>"; };
 		236550742A75989700412ADF /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		236550772A75989700412ADF /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		236550792A75989700412ADF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		237CEC83090715744E3FEC35 /* DiscoveryView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DiscoveryView.swift; path = DiscoveryView.swift; sourceTree = "<group>"; };
+		2B0C2857366865997CD52F57 /* RootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RootView.swift; path = RootView.swift; sourceTree = "<group>"; };
+		62ABA6F429B4D01F34B3E772 /* KdMotion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdMotion.swift; path = KdMotion.swift; sourceTree = "<group>"; };
 		6B1049432C0C2B312090ABF6 /* Pods_iosApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_iosApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		6CB52301BD5AE4C16FDF6255 /* KdRadii.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdRadii.swift; path = KdRadii.swift; sourceTree = "<group>"; };
 		7555FF7B242A565900829871 /* Klardrop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Klardrop.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		7555FF82242A565900829871 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		7555FF8C242A565B00829871 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		81A6B3B9F6E62D30973F9798 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
+		82B73B7F2DC511088F596B4D /* Color+Hex.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Color+Hex.swift"; path = "Color+Hex.swift"; sourceTree = "<group>"; };
+		84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdSpacing.swift; path = KdSpacing.swift; sourceTree = "<group>"; };
+		90204E2C20EA390FEFAC5EE3 /* DiscoveryModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DiscoveryModel.swift; path = DiscoveryModel.swift; sourceTree = "<group>"; };
+		A88E5A453CA492BB4D6E32AB /* KdColors.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdColors.swift; path = KdColors.swift; sourceTree = "<group>"; };
 		AB3632DC29227652001CCB65 /* Config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdType.swift; path = KdType.swift; sourceTree = "<group>"; };
+		E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StatusDotView.swift; path = StatusDotView.swift; sourceTree = "<group>"; };
+		FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = iOSApp.swift; path = iOSApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -63,6 +83,20 @@
 			path = "Preview Content";
 			sourceTree = "<group>";
 		};
+		0B141675106CFB78C13753D5 /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				82B73B7F2DC511088F596B4D /* Color+Hex.swift */,
+				A88E5A453CA492BB4D6E32AB /* KdColors.swift */,
+				62ABA6F429B4D01F34B3E772 /* KdMotion.swift */,
+				6CB52301BD5AE4C16FDF6255 /* KdRadii.swift */,
+				84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */,
+				DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */,
+			);
+			name = Design;
+			path = Design;
+			sourceTree = "<group>";
+		};
 		236550732A75989700412ADF /* Klardrop Share */ = {
 			isa = PBXGroup;
 			children = (
@@ -71,6 +105,16 @@
 				236550792A75989700412ADF /* Info.plist */,
 			);
 			path = "Klardrop Share";
+			sourceTree = "<group>";
+		};
+		2634D83B0A732E3A56FF65F5 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				2B0C2857366865997CD52F57 /* RootView.swift */,
+				FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */,
+			);
+			name = App;
+			path = App;
 			sourceTree = "<group>";
 		};
 		42799AB246E5F90AF97AA0EF /* Frameworks */ = {
@@ -105,10 +149,12 @@
 			isa = PBXGroup;
 			children = (
 				058557BA273AAA24004C7B11 /* Assets.xcassets */,
-				7555FF82242A565900829871 /* ContentView.swift */,
 				7555FF8C242A565B00829871 /* Info.plist */,
-				2152FB032600AC8F00CF470E /* iOSApp.swift */,
 				058557D7273AAEEB004C7B11 /* Preview Content */,
+				2634D83B0A732E3A56FF65F5 /* App */,
+				0B141675106CFB78C13753D5 /* Design */,
+				B5A22DDEBED91045487EEA4E /* Observable */,
+				CE11576F07F0BC3EA5C7B8BB /* Views */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -119,6 +165,26 @@
 				AB3632DC29227652001CCB65 /* Config.xcconfig */,
 			);
 			path = Configuration;
+			sourceTree = "<group>";
+		};
+		B5A22DDEBED91045487EEA4E /* Observable */ = {
+			isa = PBXGroup;
+			children = (
+				90204E2C20EA390FEFAC5EE3 /* DiscoveryModel.swift */,
+			);
+			name = Observable;
+			path = Observable;
+			sourceTree = "<group>";
+		};
+		CE11576F07F0BC3EA5C7B8BB /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				1535C70BA72B5D678B510F57 /* DeviceUiHelpers.swift */,
+				237CEC83090715744E3FEC35 /* DiscoveryView.swift */,
+				E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */,
+			);
+			name = Views;
+			path = Views;
 			sourceTree = "<group>";
 		};
 		FEFF387C0A8D172AA4D59CAE /* Pods */ = {
@@ -142,7 +208,6 @@
 				7555FF79242A565900829871 /* Resources */,
 				F85CB1118929364A9C6EFABC /* Frameworks */,
 				2365507D2A75989700412ADF /* Embed Foundation Extensions */,
-				116E5F660554AA6B0F2F2609 /* [CP] Copy Pods Resources */,
 				6C0E86FEB7E03CB4383BBC58 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
@@ -201,23 +266,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		116E5F660554AA6B0F2F2609 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		6C0E86FEB7E03CB4383BBC58 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -264,8 +312,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2152FB042600AC8F00CF470E /* iOSApp.swift in Sources */,
-				7555FF83242A565900829871 /* ContentView.swift in Sources */,
+				25854FF09AB48EEE3DA5A4C9 /* RootView.swift in Sources */,
+				DDFCE403CC505E5D64D40F09 /* iOSApp.swift in Sources */,
+				BB3898649DCACF2E256E5C32 /* Color+Hex.swift in Sources */,
+				C5D4DC65F6E3B14AE90B7A09 /* KdColors.swift in Sources */,
+				FF1768002FCE0F7B45CE10E7 /* KdMotion.swift in Sources */,
+				A9A387E4176ACEA76838753E /* KdRadii.swift in Sources */,
+				1940F391E2C19CC3621CEF71 /* KdSpacing.swift in Sources */,
+				E2C8E1DEBCDFBE30BE3BC09E /* KdType.swift in Sources */,
+				71EAEC70F408DF748899A011 /* DiscoveryModel.swift in Sources */,
+				EFD8BD80B3528E6CA9A8495F /* DeviceUiHelpers.swift in Sources */,
+				47A984A5312E051FB2FBE4D9 /* DiscoveryView.swift in Sources */,
+				51918C9838997A36C6937320 /* StatusDotView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -421,6 +479,10 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "${BUNDLE_ID}${TEAM_ID}";
 				PRODUCT_NAME = "${APP_NAME}";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -446,6 +508,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "${BUNDLE_ID}${TEAM_ID}";
 				PRODUCT_NAME = "${APP_NAME}";
