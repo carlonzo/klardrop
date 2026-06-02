@@ -67,9 +67,9 @@ struct DeviceChatScreen: View {
 
     private var headerAvatarStyle: KdAvatarStyle { isOwned ? .tinted : .neutral }
 
-    // Sorted messages (newest first for reversed List, matches Kotlin sortedByDescending)
+    // Messages oldest-first — natural chat order (newest at the bottom).
     private var sortedMessages: [Messages] {
-        model.messages.sorted { $0.timestamp > $1.timestamp }
+        model.messages.sorted { $0.timestamp < $1.timestamp }
     }
 
     var body: some View {
@@ -385,9 +385,12 @@ private struct ChipButton: View {
 
 // MARK: - MessageListView
 
-/// Reversed-layout scrollable message list (newest at bottom).
+/// Scrollable message list — oldest at top, newest at the bottom (natural order).
+/// Uses iOS 17's .defaultScrollAnchor(.bottom) + scroll-to-last instead of the
+/// fragile double-rotation trick.
 private struct MessageListView: View {
 
+    /// Oldest-first.
     let messages: [Messages]
     let model: ChatModel
     let isOffline: Bool
@@ -398,35 +401,38 @@ private struct MessageListView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    // Reversed: we iterate from index 0 (newest) to end (oldest)
-                    // and display in reverse so newest appears at screen bottom.
                     ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                        let older = messages.indices.contains(index + 1) ? messages[index + 1] : nil
+                        // Previous (older) message is the one before this in oldest-first order.
+                        let older = index > 0 ? messages[index - 1] : nil
+
+                        let showDayDivider = older == nil
+                            || ChatTimeFormat.dayKey(older!.timestamp) != ChatTimeFormat.dayKey(message.timestamp)
 
                         let isFirstOfGroup = older == nil
                             || older!.is_sender != message.is_sender
                             || message.timestamp - older!.timestamp > groupGapMillis
 
-                        let showDayDivider = older == nil
-                            || ChatTimeFormat.dayKey(older!.timestamp) != ChatTimeFormat.dayKey(message.timestamp)
-
-                        MessageRowView(message: message, model: model, isFirstOfGroup: isFirstOfGroup)
-                            .padding(.horizontal, KdSpacing.s3)
-
+                        // Day divider sits above the first message of a new day.
                         if showDayDivider {
                             DateChipView(label: ChatTimeFormat.day(message.timestamp))
                                 .padding(.vertical, KdSpacing.s3)
                         }
+
+                        MessageRowView(message: message, model: model, isFirstOfGroup: isFirstOfGroup)
+                            .padding(.horizontal, KdSpacing.s3)
+                            .id(message.id)
                     }
                 }
                 .padding(.vertical, KdSpacing.s3)
-                // Rotate the VStack so the content appears bottom-up
-                .rotationEffect(.degrees(180))
             }
-            // Rotate the ScrollView so newest messages are at the bottom
-            .rotationEffect(.degrees(180))
             .scrollContentBackground(.hidden)
+            .defaultScrollAnchor(.bottom)
             .opacity(isOffline ? 0.7 : 1.0)
+            .onChange(of: messages.count) { _, _ in
+                if let lastId = messages.last?.id {
+                    withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
+                }
+            }
         }
     }
 }

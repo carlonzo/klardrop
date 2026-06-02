@@ -227,7 +227,7 @@ private struct FileMessageBubble: View {
     }
 
     private var previewImageUrl: URL? {
-        guard let path = fileTransfer?.file_path else { return nil }
+        guard let path = fileTransfer?.file_path, !path.isEmpty else { return nil }
         let isReady = isSender ? true : fileTransfer?.status == "COMPLETED"
         guard isReady && isImage else { return nil }
         return toImageUrl(path: path)
@@ -371,6 +371,7 @@ private struct UnknownMessageBubble: View {
 /// content:// -> passed through; content:/ (MediaStore collapsed) -> restored;
 /// plain path -> file:// URL.
 private func toImageUrl(path: String) -> URL? {
+    guard !path.isEmpty else { return nil }
     if path.hasPrefix("content://") {
         return URL(string: path)
     } else if path.hasPrefix("content:/") {
