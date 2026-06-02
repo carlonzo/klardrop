@@ -36,7 +36,8 @@ repositories {
 
 dependencies {
   implementation(project(":klardrop-common"))
-  implementation(project(":common-ui"))
+  implementation(project(":presentation"))
+  implementation(project(":compose-ui"))
   implementation(deps.androidx.activity.compose)
   implementation(deps.androidx.appcompat)
   implementation(deps.androidx.core)
@@ -96,7 +97,7 @@ android {
   namespace = "com.carlom.klardrop.android"
 }
 
-// Pull the compose multiplatform Android assets from :common-ui into this
+// Pull the compose multiplatform Android assets from :compose-ui into this
 // app's assets. The KMP Android library plugin's AAR pipeline silently
 // drops them, so we wire the producing directory in directly.
 val composeAndroidAssetsFromCommonUi by configurations.creating {
@@ -106,7 +107,7 @@ val composeAndroidAssetsFromCommonUi by configurations.creating {
 
 dependencies {
   composeAndroidAssetsFromCommonUi(
-    project(mapOf("path" to ":common-ui", "configuration" to "composeAndroidAssets"))
+    project(mapOf("path" to ":compose-ui", "configuration" to "composeAndroidAssets"))
   )
 }
 

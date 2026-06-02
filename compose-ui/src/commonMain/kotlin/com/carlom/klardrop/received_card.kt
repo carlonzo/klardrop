@@ -103,9 +103,3 @@ fun ReceiveNotification(
         }
     }
 }
-
-interface ReceiveNotificationsCallbacks {
-    fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate)
-    fun onCardDismissed(id: Int)
-    fun onConnectionInfoAccepted(message: ConnectionInfoMessage) {}
-}

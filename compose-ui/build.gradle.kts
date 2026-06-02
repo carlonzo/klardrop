@@ -97,6 +97,7 @@ kotlin {
         api(deps.coil3.compose)
         api(deps.coil3.network.ktor)
 
+        api(project(":presentation"))
         implementation(project(":klardrop-common"))
       }
     }

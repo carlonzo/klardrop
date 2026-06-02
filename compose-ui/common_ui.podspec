@@ -17,7 +17,7 @@ Pod::Spec.new do |spec|
         Kotlin framework 'common_ui' doesn't exist yet, so a proper Xcode project can't be generated.
         'pod install' should be executed after running ':generateDummyFramework' Gradle task:
 
-            ./gradlew :common-ui:generateDummyFramework
+            ./gradlew :compose-ui:generateDummyFramework
 
         Alternatively, proper pod installation is performed during Gradle sync in the IDE (if Podfile location is set)"
     end
@@ -27,7 +27,7 @@ Pod::Spec.new do |spec|
     }
                 
     spec.pod_target_xcconfig = {
-        'KOTLIN_PROJECT_PATH' => ':common-ui',
+        'KOTLIN_PROJECT_PATH' => ':compose-ui',
         'PRODUCT_MODULE_NAME' => 'common_ui',
     }
                 

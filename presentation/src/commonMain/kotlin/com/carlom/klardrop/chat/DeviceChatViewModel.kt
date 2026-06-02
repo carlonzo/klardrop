@@ -51,7 +51,7 @@ class DeviceChatViewModel(
   private val viewModelScope = CoroutineScope(coroutines.mainDispatcher + SupervisorJob())
 
   private val _uiState = MutableStateFlow(ChatUiState())
-  internal val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+  val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
   val reachability: StateFlow<Reachability> =
     reachabilitySource
@@ -234,7 +234,7 @@ class DeviceChatViewModel(
 
 }
 
-internal data class ChatUiState(
+data class ChatUiState(
   val error: String? = null,
   val notice: String? = null,
 )
