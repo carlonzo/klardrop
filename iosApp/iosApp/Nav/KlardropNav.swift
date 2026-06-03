@@ -93,7 +93,8 @@ struct KlardropNav: View {
                 DeviceChatScreen(
                     model: ChatModel(deviceId: route.deviceId, bootstrap: model.bootstrap),
                     deviceName: route.deviceName,
-                    isOwned: isOwned
+                    isOwned: isOwned,
+                    deviceKind: deviceKind(for: route.deviceId)
                 )
                 .id(route.deviceId)
                 .onDisappear {
@@ -123,7 +124,8 @@ struct KlardropNav: View {
                 DeviceChatScreen(
                     model: ChatModel(deviceId: route.deviceId, bootstrap: model.bootstrap),
                     deviceName: route.deviceName,
-                    isOwned: isOwned
+                    isOwned: isOwned,
+                    deviceKind: deviceKind(for: route.deviceId)
                 )
                 .id(route.deviceId)
             } else {
@@ -257,6 +259,12 @@ struct KlardropNav: View {
             return false
         }
         return isTrusted(device)
+    }
+
+    /// Avatar kind for the chat header — the discovered device's kind, or a generic
+    /// phone if it's no longer in the list (better than the "unknown" placeholder).
+    private func deviceKind(for deviceId: String) -> KdDeviceKind {
+        model.state.devices.first(where: { $0.deviceId == deviceId })?.deviceKind ?? .iphone
     }
 }
 

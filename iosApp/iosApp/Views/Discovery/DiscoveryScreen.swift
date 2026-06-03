@@ -17,7 +17,6 @@ struct DiscoveryScreen: View {
 
     // MARK: - Local sheet state
 
-    @State private var showSettings = false
     @State private var showRenameSheet = false
     @State private var showAddDevicePicker = false
     @State private var pendingLinkDevice: DeviceUi? = nil
@@ -57,14 +56,11 @@ struct DiscoveryScreen: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    #if os(macOS)
-                    // On macOS the toolbar isn't used; render header inline at the top of content
+                    // Device-identity header — left-aligned, inline at the top of content.
                     DiscoveryHeaderView(
                         currentDeviceName: currentDeviceName,
-                        onEditIdentity: { showRenameSheet = true },
-                        onSettings: { showSettings = true }
+                        onEditIdentity: { showRenameSheet = true }
                     )
-                    #endif
                     // Update banner (renders nothing on iOS unless Available)
                     UpdateBannerView(
                         status: model.updateStatus,
@@ -106,34 +102,15 @@ struct DiscoveryScreen: View {
         }
         .navigationTitle("")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                DiscoveryHeaderView(
-                    currentDeviceName: currentDeviceName,
-                    onEditIdentity: { showRenameSheet = true },
-                    onSettings: { showSettings = true }
-                )
-            }
-        }
+        // Header is rendered inline at the top of the content (left-aligned), so the
+        // system navigation bar is hidden on the discovery root.
+        .toolbar(.hidden, for: .navigationBar)
         #endif
         // Auto-dismiss add-device picker when a device becomes trusted
         .onChange(of: trustedDevices.count) { _, count in
             if count > 0 { showAddDevicePicker = false }
         }
         // Sheets
-        .sheet(isPresented: $showSettings) {
-            // SettingsSheet applies its own presentationDetents/cornerRadius internally.
-            SettingsSheet(
-                backgroundDiscoveryEnabled: Binding(
-                    get: { model.backgroundDiscoveryEnabled },
-                    set: { model.setBackgroundDiscoveryEnabled($0) }
-                ),
-                showBackgroundDiscoveryToggle: model.controller.supportsBackgroundDiscovery,
-                onBackgroundDiscoveryChange: { model.setBackgroundDiscoveryEnabled($0) },
-                onDismiss: { showSettings = false }
-            )
-        }
         .sheet(isPresented: $showRenameSheet) {
             // RenameSheet applies its own presentationDetents/cornerRadius internally.
             RenameSheet(
@@ -193,47 +170,32 @@ extension DeviceUi: @retroactive Identifiable {
 struct DiscoveryHeaderView: View {
     let currentDeviceName: String
     let onEditIdentity: () -> Void
-    let onSettings: () -> Void
 
     @Environment(\.kdColors) private var kd
 
     var body: some View {
         HStack(spacing: KdSpacing.s2) {
-            // Tappable title + device name (rename)
+            // Tappable title + device name (rename), pinned to the left.
             Button(action: onEditIdentity) {
-                HStack(spacing: KdSpacing.s2) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Klardrop")
-                            .kdStyle(.title, color: kd.text)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Klardrop")
+                        .kdStyle(.title, color: kd.text)
+                        .lineLimit(1)
+                    HStack(spacing: KdSpacing.s2) {
+                        Circle()
+                            .fill(kd.trust)
+                            .frame(width: KdSpacing.s2, height: KdSpacing.s2)
+                        Text(currentDeviceName.isEmpty ? "This device" : currentDeviceName)
+                            .kdStyle(.caption, color: kd.text2)
                             .lineLimit(1)
-                        HStack(spacing: KdSpacing.s2) {
-                            Circle()
-                                .fill(kd.trust)
-                                .frame(width: KdSpacing.s2, height: KdSpacing.s2)
-                            Text(currentDeviceName.isEmpty ? "This device" : currentDeviceName)
-                                .kdStyle(.caption, color: kd.text2)
-                                .lineLimit(1)
-                        }
                     }
                 }
             }
             .buttonStyle(.plain)
 
-            Spacer()
-
-            // Settings button
-            Button(action: onSettings) {
-                ZStack {
-                    Circle()
-                        .fill(kd.bg2)
-                        .frame(width: KdSpacing.s8, height: KdSpacing.s8)
-                    Image(systemName: "gearshape")
-                        .font(.system(size: KdSpacing.s5, weight: .regular))
-                        .foregroundColor(kd.text2)
-                }
-            }
-            .buttonStyle(.plain)
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, KdSpacing.s4)
         .padding(.vertical, KdSpacing.s3)
     }

@@ -17,27 +17,24 @@ struct PairingApprovalSheet: View {
     let onDismiss: () -> Void
 
     @Environment(\.kdColors) private var kd
-    #if os(iOS)
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    #endif
+    @State private var sheetHeight: CGFloat = 360
 
     var body: some View {
-        Group {
-            if state.isError {
-                errorContent
-            } else {
-                PairingDialogView(
-                    remoteDeviceName: state.deviceName,
-                    remoteKind: deviceKindFromString(state.deviceType),
-                    bodyText: "Accept this device into Your devices? You'll be able to send files and messages without prompting.",
-                    onCancel: onDismiss,
-                    onConfirm: state.onAccept
-                )
-            }
-        }
+        content
         #if os(iOS)
-        .padding(sizeClass == .compact ? 0 : KdSpacing.s2)
-        .presentationDetents([.medium])
+        // Padding around the card, and a presentation detent that wraps the measured
+        // content height (instead of the too-tall .medium).
+        .padding(.horizontal, KdSpacing.s4)
+        .padding(.vertical, KdSpacing.s3)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: PairingSheetHeightKey.self, value: proxy.size.height)
+            }
+        )
+        .onPreferenceChange(PairingSheetHeightKey.self) { h in
+            if h > 0 { sheetHeight = h }
+        }
+        .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(KdRadii.sheet)
         .presentationBackground(kd.bg1)
@@ -46,6 +43,21 @@ struct PairingApprovalSheet: View {
         .frame(minWidth: 420, minHeight: 320)
         .background(kd.bg1)
         #endif
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if state.isError {
+            errorContent
+        } else {
+            PairingDialogView(
+                remoteDeviceName: state.deviceName,
+                remoteKind: deviceKindFromString(state.deviceType),
+                bodyText: "Accept this device into Your devices? You'll be able to send files and messages without prompting.",
+                onCancel: onDismiss,
+                onConfirm: state.onAccept
+            )
+        }
     }
 
     // MARK: - Error card
@@ -92,5 +104,15 @@ private func deviceKindFromString(_ typeString: String) -> KdDeviceKind {
     case "MOBILE":  return .iphone
     case "DESKTOP": return .mac
     default:        return .unknown
+    }
+}
+
+// MARK: - Sheet height measurement
+
+/// Carries the pairing card's measured height up so the sheet detent can wrap it.
+private struct PairingSheetHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

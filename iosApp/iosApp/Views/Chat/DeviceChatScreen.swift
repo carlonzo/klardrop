@@ -27,6 +27,7 @@ struct DeviceChatScreen: View {
     @State var model: ChatModel
     let deviceName: String
     let isOwned: Bool
+    var deviceKind: KdDeviceKind = .unknown
 
     @Environment(\.kdColors) private var kd
     @Environment(\.dismiss) private var dismiss
@@ -82,7 +83,7 @@ struct DeviceChatScreen: View {
                 ChatHeaderView(
                     deviceName: deviceName,
                     subText: headerSubText,
-                    kind: .unknown,
+                    kind: deviceKind,
                     avatarStyle: headerAvatarStyle,
                     status: headerStatus,
                     isReachable: !isOffline,
@@ -145,22 +146,32 @@ struct DeviceChatScreen: View {
                 .padding(.bottom, KdSpacing.s1)
             }
         }
-        // Navigation bar (iPhone): principal toolbar item with compact ChatHeaderView
+        // Navigation bar (iPhone): compact device header pinned to the left, next to the
+        // system back button (the .principal slot centers its content).
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                ChatHeaderView(
-                    deviceName: deviceName,
-                    subText: headerSubText,
-                    kind: .unknown,
-                    avatarStyle: headerAvatarStyle,
-                    status: headerStatus,
-                    isReachable: !isOffline,
-                    avatarSize: 28
-                )
-                // Remove the divider from the toolbar variant — NavigationBar handles it
-                .overlay(alignment: .bottom) { Color.clear.frame(height: 0) }
+            ToolbarItem(placement: .topBarLeading) {
+                HStack(spacing: KdSpacing.s2) {
+                    DeviceAvatarView(
+                        kind: deviceKind,
+                        style: headerAvatarStyle,
+                        status: headerStatus,
+                        size: 30
+                    )
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(deviceName)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(kd.text)
+                            .lineLimit(1)
+                        if !headerSubText.isEmpty {
+                            Text(headerSubText)
+                                .font(.system(size: 12))
+                                .foregroundColor(isOffline ? kd.err : kd.trust)
+                                .lineLimit(1)
+                        }
+                    }
+                }
             }
         }
         #endif

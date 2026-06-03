@@ -1,8 +1,18 @@
 import SwiftUI
 import presentation
+import AVFoundation
+import ImageIO
 #if os(iOS)
 import UIKit
 import QuickLook
+#elseif os(macOS)
+import AppKit
+#endif
+
+#if os(iOS)
+private typealias KdPlatformImage = UIImage
+#elseif os(macOS)
+private typealias KdPlatformImage = NSImage
 #endif
 
 // ---------------------------------------------------------------------------
@@ -214,23 +224,35 @@ private struct FileMessageBubble: View {
         return ChatTimeFormat.bytesFormatted(total)
     }
 
+    private var fileExtension: String {
+        (fileTransfer?.file_path ?? "")
+            .split(separator: ".")
+            .last
+            .map(String.init)?.lowercased() ?? ""
+    }
+
     private var isImage: Bool {
         let mime = fileTransfer?.mime_type ?? ""
         if !mime.isEmpty && mime != "application/octet-stream" {
             return mime.hasPrefix("image/")
         }
-        let ext = (fileTransfer?.file_path ?? "")
-            .split(separator: ".")
-            .last
-            .map(String.init) ?? ""
-        return ["jpg","jpeg","png","gif","webp","heic","heif","bmp","tiff"].contains(ext.lowercased())
+        return ["jpg","jpeg","png","gif","webp","heic","heif","bmp","tiff"].contains(fileExtension)
     }
 
-    private var previewImageUrl: URL? {
+    private var isVideo: Bool {
+        let mime = fileTransfer?.mime_type ?? ""
+        if !mime.isEmpty && mime != "application/octet-stream" {
+            return mime.hasPrefix("video/")
+        }
+        return ["mp4","mov","m4v","webm","mkv","avi","3gp"].contains(fileExtension)
+    }
+
+    /// Local path to render a thumbnail for — only when the file is a ready image/video.
+    private var thumbnailPath: String? {
         guard let path = fileTransfer?.file_path, !path.isEmpty else { return nil }
         let isReady = isSender ? true : fileTransfer?.status == "COMPLETED"
-        guard isReady && isImage else { return nil }
-        return toImageUrl(path: path)
+        guard isReady && (isImage || isVideo) else { return nil }
+        return path
     }
 
     /// Open a received file natively: QuickLook preview on iOS, open-in-default-app
@@ -247,21 +269,10 @@ private struct FileMessageBubble: View {
         VStack(alignment: direction == .outgoing ? .trailing : .leading, spacing: 0) {
             BubbleView(direction: direction, timestamp: timestamp) {
                 VStack(alignment: .leading, spacing: KdSpacing.s1) {
-                    // Inline image preview
-                    if let imageUrl = previewImageUrl {
-                        AsyncImage(url: imageUrl) { phase in
-                            if case .success(let img) = phase {
-                                img
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(maxWidth: 320, maxHeight: KdBubbleMaxContentHeight)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: KdRadii.sm, style: .continuous))
-                                    .onTapGesture {
-                                        if let p = openablePath { open(p) }
-                                    }
-                            }
-                        }
+                    // Inline image / video thumbnail
+                    if let tpath = thumbnailPath {
+                        FileThumbnailView(path: tpath, isVideo: isVideo, maxHeight: KdBubbleMaxContentHeight)
+                            .onTapGesture { open(openablePath ?? tpath) }
                     }
 
                     // File card
@@ -380,4 +391,80 @@ private func toImageUrl(path: String) -> URL? {
     } else {
         return URL(fileURLWithPath: path)
     }
+}
+
+// MARK: - FileThumbnailView (inline image + video previews)
+
+/// Renders a downsized thumbnail for a local image or video file. Loads off the main
+/// thread; shows nothing until ready (the FileCardView below still carries name/size).
+private struct FileThumbnailView: View {
+    let path: String
+    let isVideo: Bool
+    var maxHeight: CGFloat
+
+    @State private var image: KdPlatformImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                ZStack {
+                    #if os(iOS)
+                    Image(uiImage: image).resizable().scaledToFit()
+                    #elseif os(macOS)
+                    Image(nsImage: image).resizable().scaledToFit()
+                    #endif
+
+                    if isVideo {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 40))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .black.opacity(0.45))
+                    }
+                }
+                .frame(maxWidth: 320, maxHeight: maxHeight)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: KdRadii.sm, style: .continuous))
+            }
+        }
+        .task(id: path) {
+            image = await loadFileThumbnail(path: path, isVideo: isVideo)
+        }
+    }
+}
+
+/// Loads a downsized thumbnail for a local file path — image via ImageIO, video via
+/// AVAssetImageGenerator. Returns nil on failure (missing/unsupported file).
+private func loadFileThumbnail(path: String, isVideo: Bool) async -> KdPlatformImage? {
+    let url: URL = path.hasPrefix("file://")
+        ? (URL(string: path) ?? URL(fileURLWithPath: path))
+        : URL(fileURLWithPath: path)
+
+    if isVideo {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 640, height: 640)
+        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
+        guard let result = try? await generator.image(at: time) else { return nil }
+        return platformImage(from: result.image)
+    } else {
+        return await Task.detached(priority: .userInitiated) {
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 640,
+            ]
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+                  let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+            else { return nil }
+            return platformImage(from: cg)
+        }.value
+    }
+}
+
+private func platformImage(from cg: CGImage) -> KdPlatformImage {
+    #if os(iOS)
+    return UIImage(cgImage: cg)
+    #elseif os(macOS)
+    return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+    #endif
 }
