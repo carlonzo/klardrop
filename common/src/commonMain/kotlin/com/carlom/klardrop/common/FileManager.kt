@@ -55,7 +55,7 @@ fun getAvailableFilePath(parentPath: Path, requestedFileName: String, fileSystem
   val firstChoiceStr = firstChoice.toString()
   if (!firstChoiceStr.startsWith("$resolvedParentStr/") &&
       !firstChoiceStr.startsWith("$resolvedParentStr\\")) {
-    throw SecurityException(
+    throw IllegalArgumentException(
       "Sanitised file name '$safeFileName' still escapes parent '$resolvedParent'. " +
         "Original name was '${requestedFileName}'."
     )
