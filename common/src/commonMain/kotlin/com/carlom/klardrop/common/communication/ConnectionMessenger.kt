@@ -158,6 +158,7 @@ class ConnectionMessenger internal constructor(
   }
 
   private suspend fun heartbeatLoop(serializer: MessageSerializer) {
+    var consecutiveSkips = 0
     while (!isClosed()) {
       delay(heartbeatConfig.interval)
       if (isClosed()) return
@@ -168,10 +169,23 @@ class ConnectionMessenger internal constructor(
       // until the transfer finishes (and might never get a PONG back, since the peer
       // is busy reading our payload bytes — they'd treat any PING bytes mid-stream as
       // payload, corrupting it).
+      //
+      // However, we bound how many consecutive skips are allowed. A writer that holds
+      // the lock across maxConsecutiveSkips full intervals is either catastrophically
+      // slow or genuinely wedged. In that case we close rather than suppress liveness
+      // detection indefinitely. A bound ≤ 0 restores the old unbounded behaviour.
       if (!writeLock.tryLock()) {
-        log("ConnectionMessenger: Heartbeat skipped for ${connection.deviceId} (write in flight)")
+        consecutiveSkips++
+        val maxSkips = heartbeatConfig.maxConsecutiveSkips
+        if (maxSkips > 0 && consecutiveSkips >= maxSkips) {
+          log("ConnectionMessenger: Heartbeat suppressed by held write lock for ${consecutiveSkips} consecutive ticks (>= $maxSkips); closing ${connection.deviceId} as wedged")
+          close()
+          return
+        }
+        log("ConnectionMessenger: Heartbeat skipped for ${connection.deviceId} (write in flight, skip $consecutiveSkips/$maxSkips)")
         continue
       }
+      consecutiveSkips = 0
 
       val pingId = Random.nextInt()
       val pongChannel = Channel<Unit>(capacity = 1)

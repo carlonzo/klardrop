@@ -264,6 +264,153 @@ class ConnectionMessengerTest {
     )
   }
 
+  /**
+   * Regression test for Reliability #2.2 — detection latency.
+   *
+   * A half-open connection (no PONG ever delivered) must be detected within
+   * approximately (interval + timeout). We verify that with the test config
+   * (interval=100ms, timeout=100ms) the connection is closed well within 2s —
+   * i.e. the detection latency is bounded and not dependent on any external
+   * probe outside the heartbeat.
+   *
+   * This also verifies that after heartbeat closure the pool evicts the entry
+   * so the next connectTo() attempt re-dials instead of reusing the dead socket.
+   */
+  @Test
+  fun halfOpenConnectionIsDetectedWithinHeartbeatWindow() = runTest(coroutines.dispatcher, timeout = 30.seconds) {
+    val handle = openLoopbackClientSocket()
+    // interval=100ms, timeout=100ms → detection window ≈ 200ms
+    val heartbeat = HeartbeatConfig.forTest(intervalMs = 100, timeoutMs = 100)
+    val messenger = ConnectionMessenger(
+      coroutines = coroutines,
+      connection = Connection.Tcp(handle.clientSocket, "peer-halfopen"),
+      messagesRouter = FakeMessagesRouter(),
+      readChannel = handle.readChannel,
+      writeChannel = handle.writeChannel,
+      ackTimeoutConfig = AckTimeoutConfig.DEFAULT,
+      heartbeatConfig = heartbeat,
+      messageSerializer = MessageSerializer(ProtoBuf, coroutines),
+    )
+
+    // Register with the real pool so we can verify eviction after heartbeat closes.
+    // ConnectionsPoolImpl.isAvailable() delegates to isClosed(), so it will return false
+    // once the heartbeat tears down the connection.
+    val pool = ConnectionsPoolImpl()
+    pool.updateConnection("peer-halfopen", messenger)
+
+    assertTrue(pool.isAvailable("peer-halfopen"), "Pool should report connection as available before heartbeat fires")
+
+    val startMark = TimeSource.Monotonic.markNow()
+    messenger.startHeartbeat()
+
+    // Poll for closure. Detection must occur within 2s (10x the interval+timeout window).
+    withContext(coroutines.ioDispatcher) {
+      val deadline = startMark + 2.seconds
+      while (!messenger.isClosed() && TimeSource.Monotonic.markNow() < deadline) {
+        delay(50.milliseconds)
+      }
+    }
+
+    val elapsed = startMark.elapsedNow()
+    assertTrue(messenger.isClosed(), "Heartbeat must close the half-open connection (elapsed: $elapsed)")
+    assertTrue(elapsed < 2.seconds, "Detection latency must be < 2s (actual: $elapsed)")
+
+    // After the heartbeat-driven close(), isClosed() returns true, so the pool's
+    // isAvailable() (which calls isClosed() internally) must also return false, and
+    // getConnection() must evict the dead entry and return null.
+    assertFalse(pool.isAvailable("peer-halfopen"), "Pool must not report a heartbeat-closed connection as available")
+    val evicted = pool.getConnection("peer-halfopen")
+    assertTrue(evicted == null, "Pool must evict the closed connection on getConnection()")
+  }
+
+  /**
+   * Regression test for Reliability #2.2 — write-lock starvation.
+   *
+   * When the write lock is continuously held (simulating a wedged or very-slow
+   * writer), the heartbeat must still close the connection after
+   * [HeartbeatConfig.maxConsecutiveSkips] * interval time — it must NOT suppress
+   * liveness detection indefinitely.
+   *
+   * Strategy: we use a FakeMessagesRouter whose onSendingMessage acquires the
+   * write lock passed to it and then suspends forever. This simulates a writer
+   * holding the lock without making progress — the scenario the bug describes.
+   * With maxConsecutiveSkips=3 and interval=100ms the connection must be torn
+   * down within ~2s.
+   */
+  @Test
+  fun writeLockStarvationClosesConnectionAfterMaxSkips() = runTest(coroutines.dispatcher, timeout = 30.seconds) {
+    val handle = openLoopbackClientSocket()
+    // maxConsecutiveSkips=3 keeps the test fast; production default is 12
+    val heartbeat = HeartbeatConfig.forTest(intervalMs = 100, timeoutMs = 500, maxConsecutiveSkips = 3)
+
+    val writeLockHeld = CompletableDeferred<Unit>()
+    val writeLockReleaseSignal = CompletableDeferred<Unit>()
+
+    // A router that acquires the write lock and blocks, simulating a wedged writer.
+    val blockingRouter = object : FakeMessagesRouter() {
+      override suspend fun <S : SendMessageRequest> onSendingMessage(
+        toDeviceId: String,
+        sendMessageRequest: S,
+        writeChannel: ByteWriteChannel,
+        readChannel: ByteReadChannel,
+        progress: MutableSharedFlow<MessengerSendProgress>,
+        awaitReadyAck: suspend () -> Unit,
+        writeLock: kotlinx.coroutines.sync.Mutex,
+        cipher: FrameCipher,
+      ) {
+        // Lock the write mutex (exactly what the production file writer does) and hold it.
+        writeLock.lock()
+        writeLockHeld.complete(Unit)
+        writeLockReleaseSignal.await()  // blocks until the test signals or is cancelled
+      }
+    }
+
+    val messenger = ConnectionMessenger(
+      coroutines = coroutines,
+      connection = Connection.Tcp(handle.clientSocket, "peer-wedged"),
+      messagesRouter = blockingRouter,
+      readChannel = handle.readChannel,
+      writeChannel = handle.writeChannel,
+      ackTimeoutConfig = AckTimeoutConfig(
+        readyAckTimeout = 60.seconds,
+        receivedAckTimeout = 60.seconds,
+        noPayloadAckTimeout = 60.seconds,
+      ),
+      heartbeatConfig = heartbeat,
+      messageSerializer = MessageSerializer(ProtoBuf, coroutines),
+    )
+
+    // Drive a send in the background — blockingRouter will hold the writeLock inside it
+    val sendJob = coroutines.appScope.launch(coroutines.ioDispatcher) {
+      runCatching {
+        messenger.send(
+          SimpleSendMessageRequest(TextMessage(text = "blocked")),
+          MutableSharedFlow(extraBufferCapacity = 10),
+        )
+      }
+    }
+
+    // Wait until the write lock is confirmed held before starting the heartbeat
+    withContext(coroutines.ioDispatcher) { writeLockHeld.await() }
+
+    val startMark = TimeSource.Monotonic.markNow()
+    messenger.startHeartbeat()
+
+    // Poll for closure. Deadline = (maxSkips + 2) × interval + generous scheduling slack.
+    withContext(coroutines.ioDispatcher) {
+      val deadline = startMark + 2.seconds
+      while (!messenger.isClosed() && TimeSource.Monotonic.markNow() < deadline) {
+        delay(50.milliseconds)
+      }
+    }
+
+    assertTrue(messenger.isClosed(), "Heartbeat must close a wedged-writer connection after maxConsecutiveSkips intervals")
+
+    // Unblock and cancel the background send so the test does not leak coroutines.
+    writeLockReleaseSignal.complete(Unit)
+    sendJob.cancel()
+  }
+
   private suspend fun openLoopbackClientSocket(): LoopbackHandle {
     val selectorManager = SelectorManager(coroutines.ioDispatcher)
     val serverSocket = aSocket(selectorManager).tcp().bind("127.0.0.1", 0)
