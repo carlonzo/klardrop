@@ -20,6 +20,22 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+
+/**
+ * Per-address TCP connect timeout (milliseconds), enforced via [withTimeout].
+ *
+ * Ktor's NIO-based connect suspends until the OS completes the 3-way
+ * handshake.  When a peer advertises a stale/black-holed address (SYN
+ * packets silently dropped rather than RST'd) there is no OS-level upper
+ * bound on that wait — it can block for the full OS retransmit cycle (tens
+ * of seconds).  One such address therefore consumes the entire 15 s
+ * CONNECTION_WAIT_TIMEOUT before any other advertised address is tried.
+ *
+ * 3 s is generous for any reachable LAN peer and leaves room for 4+ stale
+ * addresses to be tried sequentially within the 15 s budget.
+ */
+internal const val TCP_CONNECT_TIMEOUT_MS = 3_000L
 
 /**
  * Result of a [Client.connectTo] call. The connector uses this to distinguish a
@@ -130,11 +146,20 @@ class ClientImpl(
   private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<ConnectOutcome>) =
     runCatching {
 
-    val socket = aSocket(selectorManager).tcp().connect(address, port) {
-      // Coarse OS-level backstop. The application-level heartbeat is the
-      // primary liveness mechanism; keep-alive only helps if the heartbeat
-      // coroutine is itself wedged.
-      keepAlive = true
+    // withTimeout caps the per-address connect phase.  Ktor's NIO-based
+    // connect waits for the OS to complete the TCP 3-way handshake; if the
+    // remote address is black-holed (SYN packets silently dropped — not
+    // refused) this wait has no OS-level upper bound and can block for tens
+    // of seconds, consuming the entire CONNECTION_WAIT_TIMEOUT budget before
+    // any other advertised address is tried.  socketTimeout only applies to
+    // read/write I/O, not to connect, so withTimeout is the correct mechanism.
+    val socket = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+      aSocket(selectorManager).tcp().connect(address, port) {
+        // Coarse OS-level backstop. The application-level heartbeat is the
+        // primary liveness mechanism; keep-alive only helps if the heartbeat
+        // coroutine is itself wedged.
+        keepAlive = true
+      }
     }
     log("Client", "Connected to $address:$port. Sending greetings")
 
