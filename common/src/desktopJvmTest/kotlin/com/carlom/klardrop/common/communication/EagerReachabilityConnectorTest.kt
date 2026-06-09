@@ -65,6 +65,7 @@ class EagerReachabilityConnectorTest {
     override fun touchLastSeen(deviceId: String) = Unit
     override fun onDeviceLost(deviceId: String) { flow.value = emptyMap() }
     override fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection) = Unit
+    override fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int) = Unit
     override fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice? = null
   }
 
