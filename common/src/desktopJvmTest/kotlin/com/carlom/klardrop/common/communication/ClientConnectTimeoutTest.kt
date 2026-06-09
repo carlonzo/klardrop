@@ -24,8 +24,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.protobuf.ProtoBuf
-import java.net.ServerSocket
-import java.net.Socket
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -38,18 +36,27 @@ import kotlin.time.TimeSource
  * actually wrapped in `withTimeout(TCP_CONNECT_TIMEOUT_MS)` so a single stale/black-holed
  * address cannot stall the whole connect budget.
  *
- * **Black-hole simulation**: a localhost [ServerSocket] with backlog=1, pre-filled with one raw
- * socket. Further connects' SYNs are then silently dropped by the kernel (not RST'd), so a
- * connect to that port hangs for the OS retransmit cycle (tens of seconds) absent an explicit
- * timeout.
+ * **Black-hole address**: a non-routable TEST-NET-1 address ([BLACK_HOLE_ADDRESS], RFC 5737),
+ * which is reserved and not routed anywhere. A connect to it has no host to answer the SYN, so
+ * the dial hangs for the OS retransmit cycle (tens of seconds) absent an explicit timeout — and,
+ * crucially, the connect NEVER completes, so the test can't accidentally fall through to
+ * `ClientImpl`'s (intentionally un-timed) handshake read. This is more robust than localhost
+ * backlog saturation, which some kernels complete instead of dropping.
  *
  * **Regression guard**: the call is wrapped in a 10s test-side [withTimeout]. If someone removes
  * the production `withTimeout`, the black-holed connect hangs past 10s and this test fails. With
- * the fix, `connectTo` returns [ConnectOutcome.Failed] in ≈[TCP_CONNECT_TIMEOUT_MS]. On hosts
- * where backlog saturation does not produce a black hole (the connect fast-fails), the test still
- * asserts a bounded Failed result and logs that the timeout path was not exercised.
+ * the fix, `connectTo` returns [ConnectOutcome.Failed] in ≈[TCP_CONNECT_TIMEOUT_MS]. On the rare
+ * host that fast-fails the dial (immediate ICMP unreachable), the test still asserts a bounded
+ * Failed result and logs that the timeout path was not exercised.
  */
 class ClientConnectTimeoutTest {
+
+  private companion object {
+    // RFC 5737 TEST-NET-1: reserved, unrouted — SYNs are dropped, so connect() hangs until the
+    // per-address withTimeout fires. Never completes, so the handshake read is never reached.
+    const val BLACK_HOLE_ADDRESS = "192.0.2.1"
+    const val BLACK_HOLE_PORT = 9 // discard; irrelevant since no host answers
+  }
 
   /** Exposes exactly one peer whose only Klardrop endpoint is the given address/port. */
   private class SingleKlardropPeer(
@@ -95,15 +102,9 @@ class ClientConnectTimeoutTest {
 
   @Test
   fun connectToReturnsFailedWithinBudgetForBlackHoledAddress() = runBlocking(Dispatchers.IO) {
-    val serverSocket = ServerSocket()
-    serverSocket.bind(java.net.InetSocketAddress("127.0.0.1", 0), /* backlog = */ 1)
-    val port = serverSocket.localPort
-    val filler = Socket()
-    filler.connect(java.net.InetSocketAddress("127.0.0.1", port), 500)
-
     val coroutines = TestCoroutines()
     val peerId = "peerblkh"
-    val visibleDevices = SingleKlardropPeer(peerId, "127.0.0.1", port)
+    val visibleDevices = SingleKlardropPeer(peerId, BLACK_HOLE_ADDRESS, BLACK_HOLE_PORT)
     val currentDeviceProvider = CurrentDeviceProvider(FixedIdPropertiesRepository("self0001"))
     // Never invoked on the black-hole path (the connect throws before any handshake), but
     // ClientImpl requires non-null instances.
@@ -129,14 +130,9 @@ class ClientConnectTimeoutTest {
     val outcome = try {
       withTimeout(10_000L) { client.connectTo(peerId) }
     } catch (e: TimeoutCancellationException) {
-      filler.close()
-      serverSocket.close()
       fail("connectTo did not return within 10s — the per-address connect timeout (withTimeout) is missing")
     }
     val elapsedMs = mark.elapsedNow().inWholeMilliseconds
-
-    filler.close()
-    serverSocket.close()
 
     assertEquals(
       ConnectOutcome.Failed,
@@ -145,8 +141,8 @@ class ClientConnectTimeoutTest {
     )
 
     if (elapsedMs < TCP_CONNECT_TIMEOUT_MS - 500L) {
-      // The connect fast-failed (immediate RST/ICMP) — backlog saturation did not black-hole on
-      // this host. Still a valid bounded result, but the timeout path was not exercised.
+      // The connect fast-failed (immediate ICMP unreachable) instead of black-holing on this
+      // host. Still a valid bounded result, but the timeout path was not exercised.
       println(
         "ClientConnectTimeoutTest: inconclusive on this host (connect resolved in ${elapsedMs}ms); " +
           "timeout path not exercised but result is bounded.",
