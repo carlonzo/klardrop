@@ -44,10 +44,22 @@ sealed interface FrameCipher {
     override fun decode(wire: ByteArray): ByteArray = wire
   }
 
-  /** AES-GCM frame encryption backed by a completed UKEY2 [D2DConnectionContext]. */
+  /**
+   * AES-GCM frame encryption backed by a completed UKEY2 [D2DConnectionContext].
+   *
+   * @param verificationSas Short Authentication String derived deterministically from the UKEY2
+   *   verification string. Both sides of a legitimate (non-MITM) handshake produce identical SAS
+   *   values; an active on-path attacker running two independent UKEY2 handshakes will produce
+   *   DIFFERENT SAS values on the two legs. The SAS is therefore a lightweight, out-of-band
+   *   comparison primitive: if both peers display the same code, no active MITM is in progress.
+   *   Currently a 6-digit numeric code (000000–999999). The app layer MAY surface this to the
+   *   user during first-contact to let them verify channel integrity. It is always available,
+   *   even for already-trusted peers (where [authenticated] is `true`).
+   */
   class Encrypted(
     private val context: D2DConnectionContext,
     override val authenticated: Boolean,
+    val verificationSas: String,
   ) : FrameCipher {
     override fun encode(payload: ByteArray): ByteArray = context.encodeMessageToPeer(payload)
     override fun decode(wire: ByteArray): ByteArray = context.decodeMessageFromPeer(wire)
@@ -73,6 +85,41 @@ object KlardropEncryptedTransport {
   private const val TAG = "KlardropEncryptedTransport"
   private const val VERIFICATION_STRING_LENGTH = 32
 
+  /**
+   * Derive a short, human-comparable SAS (Short Authentication String) from the raw UKEY2
+   * verification string. Both endpoints of a genuine handshake share the same verification
+   * string and will therefore produce the same SAS. An active MITM runs two independent UKEY2
+   * sessions, each with its own verification string, so the SAS values on the two legs will
+   * differ — a mismatch detectable by out-of-band comparison.
+   *
+   * Derivation: fold [verificationString] into a 32-bit big-endian integer by XOR-folding every
+   * 4-byte block, then take modulo 1_000_000 to get a 6-digit decimal code. The derivation is
+   * deterministic, parameter-free, and requires no additional cryptographic dependencies. It is
+   * NOT a keyed MAC — it is purely an in-protocol signal: the security comes from the fact that
+   * the underlying verification string is a UKEY2 commitment hash; this just shortens it for
+   * human display.
+   */
+  internal fun deriveVerificationSas(verificationString: ByteArray): String {
+    var acc = 0
+    var i = 0
+    while (i + 3 < verificationString.size) {
+      val word = ((verificationString[i].toInt() and 0xFF) shl 24) or
+        ((verificationString[i + 1].toInt() and 0xFF) shl 16) or
+        ((verificationString[i + 2].toInt() and 0xFF) shl 8) or
+        (verificationString[i + 3].toInt() and 0xFF)
+      acc = acc xor word
+      i += 4
+    }
+    // Handle any trailing bytes (should not occur for the fixed 32-byte length we use, but be safe).
+    while (i < verificationString.size) {
+      acc = acc xor ((verificationString[i].toInt() and 0xFF) shl ((3 - (i % 4)) * 8))
+      i++
+    }
+    // Convert to unsigned 32-bit and take mod 1_000_000 for a 6-digit code.
+    val code = (acc.toLong() and 0xFFFFFFFFL) % 1_000_000L
+    return code.toString().padStart(6, '0')
+  }
+
   /** Initiator (TCP/BLE client) side of the handshake. Sends the first UKEY2 message. */
   suspend fun runInitiatorHandshake(
     readChannel: ByteReadChannel,
@@ -94,6 +141,8 @@ object KlardropEncryptedTransport {
     client.verifyHandshake()
     val context = client.toConnectionContext()
 
+    val sas = deriveVerificationSas(verificationString)
+
     // Initiator sends its binding first, then reads the peer's.
     val authenticated = exchangeBinding(
       context = context,
@@ -105,8 +154,8 @@ object KlardropEncryptedTransport {
       readChannel = readChannel,
       writeChannel = writeChannel,
     )
-    log(TAG, "Initiator UKEY2 handshake complete with $peerDeviceId (authenticated=$authenticated)")
-    return FrameCipher.Encrypted(context, authenticated)
+    log(TAG, "Initiator UKEY2 handshake complete with $peerDeviceId (authenticated=$authenticated, sas=$sas)")
+    return FrameCipher.Encrypted(context, authenticated, sas)
   }
 
   /** Responder (TCP/BLE server) side of the handshake. Reads the first UKEY2 message. */
@@ -130,6 +179,8 @@ object KlardropEncryptedTransport {
     server.verifyHandshake()
     val context = server.toConnectionContext()
 
+    val sas = deriveVerificationSas(verificationString)
+
     // Responder reads the peer's binding first, then sends its own.
     val authenticated = exchangeBinding(
       context = context,
@@ -141,8 +192,8 @@ object KlardropEncryptedTransport {
       readChannel = readChannel,
       writeChannel = writeChannel,
     )
-    log(TAG, "Responder UKEY2 handshake complete with $peerDeviceId (authenticated=$authenticated)")
-    return FrameCipher.Encrypted(context, authenticated)
+    log(TAG, "Responder UKEY2 handshake complete with $peerDeviceId (authenticated=$authenticated, sas=$sas)")
+    return FrameCipher.Encrypted(context, authenticated, sas)
   }
 
   /**

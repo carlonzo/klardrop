@@ -20,9 +20,69 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+
+/**
+ * Per-address TCP connect timeout (milliseconds), enforced via [withTimeout].
+ *
+ * Ktor's NIO-based connect suspends until the OS completes the 3-way
+ * handshake.  When a peer advertises a stale/black-holed address (SYN
+ * packets silently dropped rather than RST'd) there is no OS-level upper
+ * bound on that wait — it can block for the full OS retransmit cycle (tens
+ * of seconds).  One such address therefore consumes the entire 15 s
+ * CONNECTION_WAIT_TIMEOUT before any other advertised address is tried.
+ *
+ * 3 s is generous for any reachable LAN peer and leaves room for 4+ stale
+ * addresses to be tried sequentially within the 15 s budget.
+ */
+internal const val TCP_CONNECT_TIMEOUT_MS = 3_000L
+
+/**
+ * Result of a [Client.connectTo] call. The connector uses this to distinguish a
+ * genuine dial failure from a deliberate decision not to initiate (e.g. BLE
+ * role-selection means the peer will dial *us*), so reachability is not
+ * incorrectly forced to [Unreachable] for inbound-only peers.
+ */
+sealed interface ConnectOutcome {
+  /** A connection was successfully established and added to the pool. */
+  data object Connected : ConnectOutcome
+
+  /**
+   * We deliberately did not initiate — e.g. BLE role-selection says the peer
+   * dials us, or we are already connected. The probe is inconclusive; the peer
+   * may still reach us via an inbound connection.
+   */
+  data object NotInitiated : ConnectOutcome
+
+  /** Every dial attempt failed with an error. The peer is genuinely unreachable. */
+  data object Failed : ConnectOutcome
+}
 
 interface Client {
-  suspend fun connectTo(deviceId: String)
+  suspend fun connectTo(deviceId: String): ConnectOutcome
+}
+
+/**
+ * Returns true when this exception represents a hard connection refusal (ECONNREFUSED /
+ * ConnectException) — meaning the remote port is not listening. Used to distinguish
+ * "peer is gone / restarted" from transient network glitches. Works across JVM, iOS, and
+ * desktop by inspecting class simpleName and message text rather than using JVM-only types.
+ */
+internal fun Throwable.isConnectionRefused(): Boolean {
+  var current: Throwable? = this
+  var depth = 0
+  while (current != null && depth < 8) {
+    val name = current::class.simpleName ?: ""
+    val msg = current.message.orEmpty()
+    if (name == "ConnectException") return true
+    if ((name == "IOException" || name == "SocketException") &&
+      (msg.contains("ECONNREFUSED", ignoreCase = true) ||
+        msg.contains("Connection refused", ignoreCase = true))
+    ) return true
+    current = current.cause?.takeIf { it !== current }
+    depth++
+  }
+  return false
 }
 
 class ClientImpl(
@@ -44,16 +104,16 @@ class ClientImpl(
 
   private val selectorManager = SelectorManager(coroutines.ioDispatcher)
 
-  override suspend fun connectTo(deviceId: String) = coroutines.ioDispatcher {
+  override suspend fun connectTo(deviceId: String): ConnectOutcome = coroutines.ioDispatcher {
 
     if (connectionsPool.isAvailable(deviceId)) {
       log("Client", "has already a connection with $deviceId. skipping")
-      return@ioDispatcher
+      return@ioDispatcher ConnectOutcome.Connected
     }
 
     val discoveryDevice = visibleDevicesFlow.value[deviceId] ?: kotlin.run {
       log("Client", "cant connect. Device $deviceId cant be found")
-      return@ioDispatcher
+      return@ioDispatcher ConnectOutcome.Failed
     }
 
     val tcpConnections = discoveryDevice.getKlardropConnection()
@@ -63,7 +123,7 @@ class ClientImpl(
       "Cant connect to $deviceId. No Klardrop TCP or BLE connection is available"
     }
 
-    val connectionJob = CompletableDeferred<Boolean>()
+    val connectionJob = CompletableDeferred<ConnectOutcome>()
 
     // launch coroutine to connect and await for the connection to stay alive. TCP is
     // preferred (higher throughput); BLE is only tried if no TCP path worked, and only
@@ -75,7 +135,17 @@ class ClientImpl(
           // TCP dial failures (peer not listening, connection refused, peer closed
           // mid-handshake) are routine on a flaky LAN. Keep the on-device log,
           // skip Bugsnag.
-          .onFailure { logLocal("Client", "Failed TCP connect to $deviceId @ ${connection.address}", it) }
+          .onFailure { cause ->
+            logLocal("Client", "Failed TCP connect to $deviceId @ ${connection.address}", cause)
+            // If the dial was actively refused (peer's port is dead — e.g. peer restarted
+            // on a new ephemeral port), remove the stale endpoint from the visible-device
+            // cache immediately. This prevents every subsequent send attempt from retrying
+            // the dead address+port until mDNS delivers a fresh SRV record.
+            if (cause.isConnectionRefused()) {
+              log("Client", "Connection refused to $deviceId @ ${connection.address}:${connection.port} — invalidating stale endpoint")
+              visibleDevices.invalidateKlardropEndpoint(deviceId, connection.address, connection.port)
+            }
+          }
         if (connectionJob.isCompleted) return@launch
       }
 
@@ -83,7 +153,9 @@ class ClientImpl(
         val selfId = currentDeviceProvider.get().shortDeviceId
         if (!BleRoleSelector.shouldInitiate(selfShortDeviceId = selfId, peerShortDeviceId = deviceId)) {
           log("Client", "Not the initiator for BLE to $deviceId (self=$selfId); awaiting inbound GATT")
-          connectionJob.complete(false)
+          // Deliberately not initiating — the peer will dial us. This is not a failure;
+          // leave reachability as Probing so we don't mark the peer Unreachable.
+          connectionJob.complete(ConnectOutcome.NotInitiated)
           return@launch
         }
         for (ble in bleConnections) {
@@ -94,22 +166,33 @@ class ClientImpl(
         }
       }
 
-      if (!connectionJob.isCompleted) connectionJob.complete(false)
+      // All TCP and BLE attempts were exhausted without success — genuine failure.
+      if (!connectionJob.isCompleted) connectionJob.complete(ConnectOutcome.Failed)
     }
 
     // await for the connection to be established and connectionpool to be updated
-    val connectionResult = connectionJob.await()
-    log("Client", "On client connection completed with $deviceId: result: $connectionResult")
+    val outcome = connectionJob.await()
+    log("Client", "On client connection completed with $deviceId: outcome: $outcome")
+    outcome
   }
 
-  private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<Boolean>) =
+  private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<ConnectOutcome>) =
     runCatching {
 
-    val socket = aSocket(selectorManager).tcp().connect(address, port) {
-      // Coarse OS-level backstop. The application-level heartbeat is the
-      // primary liveness mechanism; keep-alive only helps if the heartbeat
-      // coroutine is itself wedged.
-      keepAlive = true
+    // withTimeout caps the per-address connect phase.  Ktor's NIO-based
+    // connect waits for the OS to complete the TCP 3-way handshake; if the
+    // remote address is black-holed (SYN packets silently dropped — not
+    // refused) this wait has no OS-level upper bound and can block for tens
+    // of seconds, consuming the entire CONNECTION_WAIT_TIMEOUT budget before
+    // any other advertised address is tried.  socketTimeout only applies to
+    // read/write I/O, not to connect, so withTimeout is the correct mechanism.
+    val socket = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+      aSocket(selectorManager).tcp().connect(address, port) {
+        // Coarse OS-level backstop. The application-level heartbeat is the
+        // primary liveness mechanism; keep-alive only helps if the heartbeat
+        // coroutine is itself wedged.
+        keepAlive = true
+      }
     }
     log("Client", "Connected to $address:$port. Sending greetings")
 
@@ -131,7 +214,7 @@ class ClientImpl(
 
     if (serverHandshakeMessage.deviceId != deviceId) {
       log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
-      connectionJob.complete(false)
+      connectionJob.complete(ConnectOutcome.Failed)
       socket.close()
       return@runCatching
     }
@@ -140,7 +223,7 @@ class ClientImpl(
     // than silently falling back to cleartext.
     if (!serverHandshakeMessage.supportsEncryption) {
       log("Client", "Device $deviceId does not support encrypted transport; refusing (encryption required)")
-      connectionJob.complete(false)
+      connectionJob.complete(ConnectOutcome.Failed)
       socket.close()
       return@runCatching
     }
@@ -189,13 +272,13 @@ class ClientImpl(
       }
     }
 
-    connectionJob.complete(true)
+    connectionJob.complete(ConnectOutcome.Connected)
   }
 
   private suspend fun establishBleConnection(
     bleConnection: DeviceConnection.BleConnection,
     deviceId: String,
-    connectionJob: CompletableDeferred<Boolean>,
+    connectionJob: CompletableDeferred<ConnectOutcome>,
   ) = runCatching {
     val transport = checkNotNull(bleTransport) { "No BLE transport injected" }
     val session = transport.connectCentral(bleConnection.address, deviceId)
@@ -220,7 +303,7 @@ class ClientImpl(
     if (serverHandshake.deviceId != deviceId) {
       log("Client", "BLE handshake id mismatch: expected $deviceId got ${serverHandshake.deviceId}")
       bridge.close()
-      connectionJob.complete(false)
+      connectionJob.complete(ConnectOutcome.Failed)
       return@runCatching
     }
 
@@ -228,7 +311,7 @@ class ClientImpl(
     if (!serverHandshake.supportsEncryption) {
       log("Client", "BLE peer $deviceId does not support encrypted transport; refusing (encryption required)")
       bridge.close()
-      connectionJob.complete(false)
+      connectionJob.complete(ConnectOutcome.Failed)
       return@runCatching
     }
 
@@ -274,6 +357,6 @@ class ClientImpl(
     )
     connectionsPool.updateConnection(deviceId, connectionMessenger)
     clientScope.launch { connectionMessenger.acceptIncomingMessages() }
-    connectionJob.complete(true)
+    connectionJob.complete(ConnectOutcome.Connected)
   }
 }

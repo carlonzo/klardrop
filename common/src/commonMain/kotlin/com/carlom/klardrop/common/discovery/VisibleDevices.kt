@@ -53,6 +53,18 @@ interface VisibleDevices {
 
   fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice?
 
+  /**
+   * Remove a specific [KlardropConnection] endpoint (address+port) from the cached device
+   * entry. Called when a dial to that endpoint is refused (ECONNREFUSED / ConnectException),
+   * which means the peer restarted and its old ephemeral port is dead. Removing the stale
+   * endpoint prevents repeated dials to the dead port while mDNS rediscovery delivers the
+   * fresh SRV. If removing the endpoint leaves the device with no connections at all, the
+   * device is removed from the visible map entirely so callers don't see a ghost entry.
+   *
+   * No-op when [deviceId] is unknown or the endpoint is not cached.
+   */
+  fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int)
+
 }
 
 internal class VisibleDevicesImpl(
@@ -72,6 +84,22 @@ internal class VisibleDevicesImpl(
     // timestamp from the TCP heartbeat path so an actively-connected peer never expires
     // here even if its mDNS announcement is missed by our browser.
     val deviceTTLVisibility = 5.minutes
+
+    // Grace window for bare onDeviceLost(deviceId) (no address) removals.
+    //
+    // On Android, NsdManager.onServiceLost delivers an UNRESOLVED ServiceInfo (no IP
+    // addresses), so DiscoveryNetwork falls through to the bare onDeviceLost(deviceId)
+    // path which previously deleted the entire device entry immediately. This is wrong
+    // when the device is actively connected: the TCP heartbeat refreshes lastSeenTimestamp
+    // via touchLastSeen(), so a fresh timestamp is evidence the peer is alive.
+    //
+    // If the device's lastSeenTimestamp is within this window we skip the removal and
+    // defer to the TTL sweep, which will remove it after deviceTTLVisibility if no
+    // further liveness signal arrives. 30 seconds is safely larger than any reasonable
+    // test jitter, far shorter than the 5-minute TTL, and much smaller than the typical
+    // TCP heartbeat interval (60 s), so a genuinely-departed peer whose heartbeats have
+    // stopped will not be shielded indefinitely.
+    val lostEventGraceWindow = 30.seconds
   }
 
   private val visibleDevicesFlow = MutableStateFlow(emptyMap<String, DiscoveryDevice>())
@@ -172,8 +200,20 @@ internal class VisibleDevicesImpl(
   }
 
   override fun onDeviceLost(deviceId: String) {
-    visibleDevicesFlow.update {
-      it.toMutableMap().also { map -> map.remove(deviceId) }
+    visibleDevicesFlow.update { current ->
+      val device = current[deviceId] ?: return@update current
+      val ageMs = clock.currentTimeMillis() - device.lastSeenTimestamp
+      if (ageMs < lostEventGraceWindow.inWholeMilliseconds) {
+        // The device's lastSeenTimestamp is fresh — it is likely alive via a TCP
+        // heartbeat or another transport. Skip this removal and let the TTL sweep
+        // evict it if liveness signals stop arriving.
+        log(
+          "VisibleDevices",
+          "Ignoring bare onDeviceLost for ${device.deviceInfo.name} (id: $deviceId): lastSeen ${ageMs}ms ago (within grace window)"
+        )
+        return@update current
+      }
+      current.toMutableMap().also { map -> map.remove(deviceId) }
     }
   }
 
@@ -226,6 +266,12 @@ internal class VisibleDevicesImpl(
     val hostname = address.hostname
 
     return visibleDevicesFlow.value.values.firstOrNull { device -> device.deviceConnections.any { it.address == hostname } }
+  }
+
+  override fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int) {
+    val staleConnection = DeviceConnection.KlardropConnection(address = address, port = port)
+    log("VisibleDevices", "Invalidating stale Klardrop endpoint for $deviceId @ $address:$port")
+    onDeviceLost(deviceId, staleConnection)
   }
 
   /**

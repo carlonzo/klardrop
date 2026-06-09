@@ -104,14 +104,23 @@ class EagerReachabilityConnector(
     connectionsPool.markProbing(deviceId)
     scope.launch {
       runCatching { client.connectTo(deviceId) }
-        .onSuccess {
-          if (connectionsPool.isAvailable(deviceId)) {
-            failureCooldownUntil.remove(deviceId)
-            log(TAG, "Probe succeeded for $deviceId")
-            // updateConnection() inside Client already marked Reachable.
-          } else {
-            log(TAG, "Probe completed without establishing connection for $deviceId")
-            connectionsPool.markUnreachable(deviceId)
+        .onSuccess { outcome ->
+          when (outcome) {
+            ConnectOutcome.Connected -> {
+              failureCooldownUntil.remove(deviceId)
+              log(TAG, "Probe succeeded for $deviceId")
+              // updateConnection() inside Client already marked Reachable.
+            }
+            ConnectOutcome.NotInitiated -> {
+              // We deliberately did not initiate (e.g. BLE non-initiator role, or already
+              // connected). The peer may dial us — leave reachability as Probing so the UI
+              // does not show Unreachable for an inbound-only peer.
+              log(TAG, "Probe inconclusive for $deviceId (not initiator); leaving as Probing")
+            }
+            ConnectOutcome.Failed -> {
+              log(TAG, "Probe completed without establishing connection for $deviceId")
+              connectionsPool.markUnreachable(deviceId)
+            }
           }
         }
         .onFailure {
