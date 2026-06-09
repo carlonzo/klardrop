@@ -1,18 +1,23 @@
 package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.ble.BleSession
+import com.carlom.klardrop.common.network.NetworkChangeEvent
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.network.sockets.Socket
 import io.ktor.network.sockets.isClosed
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -63,6 +68,19 @@ internal class ConnectionsPoolImpl(
   private val currentDeviceProvider: com.carlom.klardrop.common.discovery.CurrentDeviceProvider? = null,
 ) : ConnectionsPool {
 
+  /**
+   * Test-only constructor: accepts the raw [Flow] of [NetworkChangeEvent]s so tests
+   * can drive events via a [kotlinx.coroutines.flow.MutableSharedFlow] without needing
+   * the platform-specific [NetworkLifecycleMonitor] expect class.
+   */
+  internal constructor(
+    coroutines: Coroutines,
+    networkEvents: Flow<NetworkChangeEvent>,
+    currentDeviceProvider: com.carlom.klardrop.common.discovery.CurrentDeviceProvider? = null,
+  ) : this(coroutines = null, networkLifecycleMonitor = null, currentDeviceProvider = currentDeviceProvider) {
+    subscribeToNetworkEvents(coroutines, networkEvents)
+  }
+
   private val mutex = Mutex(locked = false)
   private val connections = mutableMapOf<String, ConnectionMessenger>()
   private val reachabilityFlow = MutableStateFlow<Map<String, Reachability>>(emptyMap())
@@ -78,14 +96,52 @@ internal class ConnectionsPoolImpl(
     // flushing. After NIC up/down or post-wake we have to assume every pooled
     // socket is half-open; dropping them forces the next send to redial fresh.
     if (coroutines != null && networkLifecycleMonitor != null) {
-      val scope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
-      networkLifecycleMonitor.observe()
-        .onEach {
-          log("ConnectionPool", "Network change detected; flushing all pooled connections")
+      subscribeToNetworkEvents(coroutines, networkLifecycleMonitor.observe())
+    }
+  }
+
+  /**
+   * Subscribes to [events] with a manual debounce so that a rapid burst of spurious
+   * [NetworkChangeEvent.Changed] emissions (e.g. Android's onCapabilitiesChanged /
+   * onLinkPropertiesChanged firing in quick succession for signal-strength or DNS
+   * updates) collapses into a single flush rather than closing every in-flight
+   * connection on each callback.
+   *
+   * Implementation uses a cancel-and-relaunch pattern with [delay] rather than
+   * [kotlinx.coroutines.flow.debounce] because `debounce` is `@FlowPreview` and
+   * does not respect the coroutine dispatcher's virtual clock in tests. Plain [delay]
+   * IS virtual-time aware and gives correct behavior in both production and tests.
+   *
+   * The debounce window ([NETWORK_EVENT_DEBOUNCE_MS] = 500 ms) is chosen to:
+   *  - absorb the typical Android burst of 2-4 consecutive callbacks that arrives
+   *    within ~100 ms when capabilities change;
+   *  - still react within half a second on a genuine loss / address change, which
+   *    is well within user perception for a reconnect.
+   *
+   * A real network loss or address change still emits one or more [Changed] events;
+   * after the debounce window elapses those events resolve to a single flush —
+   * preserving the existing "dead sockets get cleared on a real change" guarantee.
+   */
+  private fun subscribeToNetworkEvents(coroutines: Coroutines, events: Flow<NetworkChangeEvent>) {
+    val scope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
+    var debounceJob: Job? = null
+    events
+      .onEach {
+        // Cancel any in-flight debounce timer so back-to-back events within the window
+        // collapse into a single flush.
+        debounceJob?.cancel()
+        debounceJob = scope.launch {
+          delay(NETWORK_EVENT_DEBOUNCE_MS)
+          log("ConnectionPool", "Network change detected (debounced); flushing all pooled connections")
           closeAllConnections()
         }
-        .launchIn(scope)
-    }
+      }
+      .launchIn(scope)
+  }
+
+  private companion object {
+    /** Debounce window in milliseconds for network-change events. See [subscribeToNetworkEvents]. */
+    const val NETWORK_EVENT_DEBOUNCE_MS = 500L
   }
 
   override suspend fun isAvailable(deviceId: String): Boolean {
