@@ -72,6 +72,22 @@ internal class VisibleDevicesImpl(
     // timestamp from the TCP heartbeat path so an actively-connected peer never expires
     // here even if its mDNS announcement is missed by our browser.
     val deviceTTLVisibility = 5.minutes
+
+    // Grace window for bare onDeviceLost(deviceId) (no address) removals.
+    //
+    // On Android, NsdManager.onServiceLost delivers an UNRESOLVED ServiceInfo (no IP
+    // addresses), so DiscoveryNetwork falls through to the bare onDeviceLost(deviceId)
+    // path which previously deleted the entire device entry immediately. This is wrong
+    // when the device is actively connected: the TCP heartbeat refreshes lastSeenTimestamp
+    // via touchLastSeen(), so a fresh timestamp is evidence the peer is alive.
+    //
+    // If the device's lastSeenTimestamp is within this window we skip the removal and
+    // defer to the TTL sweep, which will remove it after deviceTTLVisibility if no
+    // further liveness signal arrives. 30 seconds is safely larger than any reasonable
+    // test jitter, far shorter than the 5-minute TTL, and much smaller than the typical
+    // TCP heartbeat interval (60 s), so a genuinely-departed peer whose heartbeats have
+    // stopped will not be shielded indefinitely.
+    val lostEventGraceWindow = 30.seconds
   }
 
   private val visibleDevicesFlow = MutableStateFlow(emptyMap<String, DiscoveryDevice>())
@@ -172,8 +188,20 @@ internal class VisibleDevicesImpl(
   }
 
   override fun onDeviceLost(deviceId: String) {
-    visibleDevicesFlow.update {
-      it.toMutableMap().also { map -> map.remove(deviceId) }
+    visibleDevicesFlow.update { current ->
+      val device = current[deviceId] ?: return@update current
+      val ageMs = clock.currentTimeMillis() - device.lastSeenTimestamp
+      if (ageMs < lostEventGraceWindow.inWholeMilliseconds) {
+        // The device's lastSeenTimestamp is fresh — it is likely alive via a TCP
+        // heartbeat or another transport. Skip this removal and let the TTL sweep
+        // evict it if liveness signals stop arriving.
+        log(
+          "VisibleDevices",
+          "Ignoring bare onDeviceLost for ${device.deviceInfo.name} (id: $deviceId): lastSeen ${ageMs}ms ago (within grace window)"
+        )
+        return@update current
+      }
+      current.toMutableMap().also { map -> map.remove(deviceId) }
     }
   }
 
