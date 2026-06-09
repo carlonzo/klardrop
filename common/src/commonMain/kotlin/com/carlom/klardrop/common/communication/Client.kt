@@ -217,7 +217,18 @@ class ClientImpl(
     log("Client", "Waiting for response greetings from $deviceId")
 
     val readChannel = socket.openReadChannel()
-    val serverHandshakeMessage = readChannel.readMessage(serializer) as HandshakeMessage
+    // Bound the wait for the peer's greeting too. A peer can complete the TCP
+    // 3-way handshake — satisfying the connect withTimeout above — yet never send
+    // its HandshakeMessage: e.g. a connection the peer's kernel queued but the app
+    // never accepted (backlog-stalled), a half-open/black-holed socket, or a peer
+    // that died right after accept. socketTimeout only covers post-handshake I/O on
+    // an established channel and would not fire here, so without this explicit bound
+    // that silent peer stalls the whole dial indefinitely — the same black-hole
+    // symptom we already cap at the connect phase. Reuse the connect budget: a real
+    // peer sends its greeting immediately after accept, well inside this window.
+    val serverHandshakeMessage = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+      readChannel.readMessage(serializer) as HandshakeMessage
+    }
 
     if (serverHandshakeMessage.deviceId != deviceId) {
       log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
