@@ -53,6 +53,18 @@ interface VisibleDevices {
 
   fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice?
 
+  /**
+   * Remove a specific [KlardropConnection] endpoint (address+port) from the cached device
+   * entry. Called when a dial to that endpoint is refused (ECONNREFUSED / ConnectException),
+   * which means the peer restarted and its old ephemeral port is dead. Removing the stale
+   * endpoint prevents repeated dials to the dead port while mDNS rediscovery delivers the
+   * fresh SRV. If removing the endpoint leaves the device with no connections at all, the
+   * device is removed from the visible map entirely so callers don't see a ghost entry.
+   *
+   * No-op when [deviceId] is unknown or the endpoint is not cached.
+   */
+  fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int)
+
 }
 
 internal class VisibleDevicesImpl(
@@ -254,6 +266,12 @@ internal class VisibleDevicesImpl(
     val hostname = address.hostname
 
     return visibleDevicesFlow.value.values.firstOrNull { device -> device.deviceConnections.any { it.address == hostname } }
+  }
+
+  override fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int) {
+    val staleConnection = DeviceConnection.KlardropConnection(address = address, port = port)
+    log("VisibleDevices", "Invalidating stale Klardrop endpoint for $deviceId @ $address:$port")
+    onDeviceLost(deviceId, staleConnection)
   }
 
   /**

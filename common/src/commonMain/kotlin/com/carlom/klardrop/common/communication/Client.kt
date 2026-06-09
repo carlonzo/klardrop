@@ -62,6 +62,29 @@ interface Client {
   suspend fun connectTo(deviceId: String): ConnectOutcome
 }
 
+/**
+ * Returns true when this exception represents a hard connection refusal (ECONNREFUSED /
+ * ConnectException) — meaning the remote port is not listening. Used to distinguish
+ * "peer is gone / restarted" from transient network glitches. Works across JVM, iOS, and
+ * desktop by inspecting class simpleName and message text rather than using JVM-only types.
+ */
+internal fun Throwable.isConnectionRefused(): Boolean {
+  var current: Throwable? = this
+  var depth = 0
+  while (current != null && depth < 8) {
+    val name = current::class.simpleName ?: ""
+    val msg = current.message.orEmpty()
+    if (name == "ConnectException") return true
+    if ((name == "IOException" || name == "SocketException") &&
+      (msg.contains("ECONNREFUSED", ignoreCase = true) ||
+        msg.contains("Connection refused", ignoreCase = true))
+    ) return true
+    current = current.cause?.takeIf { it !== current }
+    depth++
+  }
+  return false
+}
+
 class ClientImpl(
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
@@ -112,7 +135,17 @@ class ClientImpl(
           // TCP dial failures (peer not listening, connection refused, peer closed
           // mid-handshake) are routine on a flaky LAN. Keep the on-device log,
           // skip Bugsnag.
-          .onFailure { logLocal("Client", "Failed TCP connect to $deviceId @ ${connection.address}", it) }
+          .onFailure { cause ->
+            logLocal("Client", "Failed TCP connect to $deviceId @ ${connection.address}", cause)
+            // If the dial was actively refused (peer's port is dead — e.g. peer restarted
+            // on a new ephemeral port), remove the stale endpoint from the visible-device
+            // cache immediately. This prevents every subsequent send attempt from retrying
+            // the dead address+port until mDNS delivers a fresh SRV record.
+            if (cause.isConnectionRefused()) {
+              log("Client", "Connection refused to $deviceId @ ${connection.address}:${connection.port} — invalidating stale endpoint")
+              visibleDevices.invalidateKlardropEndpoint(deviceId, connection.address, connection.port)
+            }
+          }
         if (connectionJob.isCompleted) return@launch
       }
 

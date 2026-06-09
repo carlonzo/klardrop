@@ -68,6 +68,10 @@ class FakeVisibleDevices : VisibleDevices {
     error("not required to be implemented for this test")
   }
 
+  override fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int) {
+    // No-op in the fake — endpoint invalidation isn't exercised by these tests.
+  }
+
   fun addKlardropDevice(deviceId: String, address: String, port: Int) {
     val deviceInfo = DeviceInfo(
       deviceId = deviceId,
