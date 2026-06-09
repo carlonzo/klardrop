@@ -63,10 +63,18 @@ interface Client {
 }
 
 /**
- * Returns true when this exception represents a hard connection refusal (ECONNREFUSED /
- * ConnectException) — meaning the remote port is not listening. Used to distinguish
- * "peer is gone / restarted" from transient network glitches. Works across JVM, iOS, and
- * desktop by inspecting class simpleName and message text rather than using JVM-only types.
+ * Returns true when this exception (or any cause in its chain) represents a hard connection
+ * refusal — ECONNREFUSED, i.e. the remote port is not listening. Used to distinguish
+ * "peer is gone / restarted" from transient network glitches. Works across platforms by
+ * inspecting class simpleName and message text rather than JVM-only types:
+ *  - JVM / Android: `java.net.ConnectException`.
+ *  - Apple-native (Ktor over POSIX sockets): `PosixException.ConnectionRefusedException`
+ *    (simpleName "ConnectionRefusedException") and/or the strerror text "Connection refused".
+ *
+ * We deliberately match ONLY the refusal-specific class name and the canonical refusal text —
+ * NOT the broad `PosixException` base, which also covers ECONNRESET / ETIMEDOUT /
+ * EHOSTUNREACH. Treating those as "refused" would wrongly invalidate a still-valid endpoint
+ * on a transient error.
  */
 internal fun Throwable.isConnectionRefused(): Boolean {
   var current: Throwable? = this
@@ -74,10 +82,9 @@ internal fun Throwable.isConnectionRefused(): Boolean {
   while (current != null && depth < 8) {
     val name = current::class.simpleName ?: ""
     val msg = current.message.orEmpty()
-    if (name == "ConnectException") return true
-    if ((name == "IOException" || name == "SocketException") &&
-      (msg.contains("ECONNREFUSED", ignoreCase = true) ||
-        msg.contains("Connection refused", ignoreCase = true))
+    if (name == "ConnectException" || name == "ConnectionRefusedException") return true
+    if (msg.contains("ECONNREFUSED", ignoreCase = true) ||
+      msg.contains("Connection refused", ignoreCase = true)
     ) return true
     current = current.cause?.takeIf { it !== current }
     depth++
@@ -210,7 +217,18 @@ class ClientImpl(
     log("Client", "Waiting for response greetings from $deviceId")
 
     val readChannel = socket.openReadChannel()
-    val serverHandshakeMessage = readChannel.readMessage(serializer) as HandshakeMessage
+    // Bound the wait for the peer's greeting too. A peer can complete the TCP
+    // 3-way handshake — satisfying the connect withTimeout above — yet never send
+    // its HandshakeMessage: e.g. a connection the peer's kernel queued but the app
+    // never accepted (backlog-stalled), a half-open/black-holed socket, or a peer
+    // that died right after accept. socketTimeout only covers post-handshake I/O on
+    // an established channel and would not fire here, so without this explicit bound
+    // that silent peer stalls the whole dial indefinitely — the same black-hole
+    // symptom we already cap at the connect phase. Reuse the connect budget: a real
+    // peer sends its greeting immediately after accept, well inside this window.
+    val serverHandshakeMessage = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+      readChannel.readMessage(serializer) as HandshakeMessage
+    }
 
     if (serverHandshakeMessage.deviceId != deviceId) {
       log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")

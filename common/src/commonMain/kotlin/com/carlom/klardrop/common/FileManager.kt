@@ -51,7 +51,11 @@ fun getAvailableFilePath(parentPath: Path, requestedFileName: String, fileSystem
   // on the invariant established by sanitizeFileName: safeFileName contains no '/' or '\'
   // and is not "." or "..", so Path(resolvedParent, safeFileName) is always one level deep.
   // The check below is defence-in-depth for unexpected platform behaviours.
-  val resolvedParentStr = resolvedParent.toString()
+  //
+  // Strip any trailing separator from the parent before building the prefix: if the platform
+  // reports the parent as "/share/" we must compare against "/share/", not "/share//", which
+  // would otherwise reject every legitimate child with a false-positive escape.
+  val resolvedParentStr = resolvedParent.toString().trimEnd('/', '\\')
   val firstChoiceStr = firstChoice.toString()
   if (!firstChoiceStr.startsWith("$resolvedParentStr/") &&
       !firstChoiceStr.startsWith("$resolvedParentStr\\")) {

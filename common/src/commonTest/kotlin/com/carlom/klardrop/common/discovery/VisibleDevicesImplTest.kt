@@ -148,6 +148,33 @@ class VisibleDevicesImplTest {
   }
 
   /**
+   * Negative counterpart to [mdnsServiceLostDoesNotRemoveDeviceWithFreshLastSeen]: once a
+   * device's lastSeenTimestamp is OLDER than the 30s grace window (no heartbeat has refreshed
+   * it), a bare onDeviceLost MUST evict it — the grace window must not shield a genuinely
+   * departed peer indefinitely. Uses an injected time source so we can age the clock past the
+   * window without a real-time wait.
+   */
+  @Test
+  fun mdnsServiceLostRemovesDeviceWhenLastSeenIsStale() = runTest(coroutines.dispatcher) {
+    var now = 1_000_000L
+    val devices = VisibleDevicesImpl(coroutines, Clock(), nowMs = { now })
+
+    devices.onNewDeviceVisible(device1, connection1)
+    assertNotNull(devices.getDevice(device1.deviceId), "device should be visible after onNewDeviceVisible")
+
+    // Advance past the 30s grace window with no liveness refresh — the peer has gone quiet.
+    now += 31_000L
+
+    // The bare onDeviceLost path (Android unresolved ServiceInfo) must now remove it.
+    devices.onDeviceLost(device1.deviceId)
+
+    assertNull(
+      devices.getDevice(device1.deviceId),
+      "device whose lastSeen is older than the grace window must be removed by a bare onDeviceLost",
+    )
+  }
+
+  /**
    * Sanity-check: the two-arg onDeviceLost (specific-address removal) continues to
    * work normally — it must still remove the matching transport entry and, when the
    * last connection is gone, remove the device entirely.
