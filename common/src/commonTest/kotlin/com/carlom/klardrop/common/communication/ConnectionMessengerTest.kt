@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.FakeMessagesRouter
 import com.carlom.klardrop.common.communication.message.AckType
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
+import com.carlom.klardrop.common.communication.message.PingMessage
 import com.carlom.klardrop.common.communication.message.PongMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
@@ -25,6 +26,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlin.test.AfterTest
@@ -409,6 +411,138 @@ class ConnectionMessengerTest {
     // Unblock and cancel the background send so the test does not leak coroutines.
     writeLockReleaseSignal.complete(Unit)
     sendJob.cancel()
+  }
+
+  /**
+   * Regression test for Reliability #2.2 — the write-lock-starvation bound must NOT
+   * false-close a *healthy* saturated transfer.
+   *
+   * A real chunked file send holds the write lock for each framed chunk and releases it
+   * between chunks (during the next disk read). On a saturated link the lock is held a high
+   * fraction of the time, so the heartbeat's instantaneous `tryLock()` usually fails — but
+   * the writer is plainly alive because it keeps RELEASING the lock. The probe in
+   * [ConnectionMessenger.heartbeatLoop] must observe one of those releases each tick and
+   * reset the skip counter, so the connection survives well past
+   * `maxConsecutiveSkips × interval`.
+   *
+   * Setup uses a full loopback pair: the server end answers every PING with a PONG (a real
+   * peer), and the client router both (a) drives a progressing writer that cycles the write
+   * lock and (b) dispatches inbound PONGs to the heartbeat. Under the OLD code (every
+   * "lock held" sample counted as a skip) this connection closes within ~maxSkips intervals;
+   * under the fix it stays open.
+   */
+  @Test
+  fun progressingWriterIsNotClosedByHeartbeat() = runTest(coroutines.dispatcher, timeout = 30.seconds) {
+    val selectorManager = SelectorManager(coroutines.ioDispatcher)
+    val serverSocket = aSocket(selectorManager).tcp().bind("127.0.0.1", 0)
+    val port = (serverSocket.localAddress as InetSocketAddress).port
+    val acceptDeferred = coroutines.appScope.async(coroutines.ioDispatcher) { serverSocket.accept() }
+    val clientSocket = aSocket(selectorManager).tcp().connect("127.0.0.1", port)
+    val serverAccepted = acceptDeferred.await()
+
+    val clientRead = clientSocket.openReadChannel()
+    val clientWrite = clientSocket.openWriteChannel(autoFlush = true)
+    val serverRead = serverAccepted.openReadChannel()
+    val serverWrite = serverAccepted.openWriteChannel(autoFlush = true)
+
+    val serializer = MessageSerializer(ProtoBuf, coroutines)
+    val stop = CompletableDeferred<Unit>()
+
+    // Server end: behave like a real peer — reply to every PING with the matching PONG.
+    val pongResponder = coroutines.appScope.launch(coroutines.ioDispatcher) {
+      runCatching {
+        while (!stop.isCompleted) {
+          val msg = serverRead.readMessage(serializer)
+          if (msg is PingMessage) serverWrite.sendMessage(PongMessage(pingId = msg.id), serializer)
+        }
+      }
+    }
+
+    // interval=100ms, probe window=min(interval,1s)=100ms, maxSkips=3.
+    val heartbeat = HeartbeatConfig.forTest(intervalMs = 100, timeoutMs = 500, maxConsecutiveSkips = 3)
+
+    val progressingRouter = object : FakeMessagesRouter() {
+      // Read the inbound stream and feed PONGs to the heartbeat (what the real router does).
+      override suspend fun onMessageIncoming(
+        fromDeviceId: String,
+        writeChannel: ByteWriteChannel,
+        readChannel: ByteReadChannel,
+        ackCallback: (suspend (MessageAcknowledgment) -> Unit),
+        pongCallback: (suspend (PongMessage) -> Unit),
+        writeLock: kotlinx.coroutines.sync.Mutex,
+        cipher: FrameCipher,
+      ) {
+        val msg = readChannel.readMessage(serializer, cipher)
+        if (msg is PongMessage) pongCallback(msg)
+      }
+
+      // Simulate a healthy chunked writer: grab the lock for ~one chunk write, release it
+      // (the per-chunk disk read), repeat. Hold ratio ≈ 80% so the heartbeat's tryLock
+      // usually fails, forcing the probe path — but a release happens within every 100ms
+      // probe window, so the writer is always detected as progressing.
+      override suspend fun <S : SendMessageRequest> onSendingMessage(
+        toDeviceId: String,
+        sendMessageRequest: S,
+        writeChannel: ByteWriteChannel,
+        readChannel: ByteReadChannel,
+        progress: MutableSharedFlow<MessengerSendProgress>,
+        awaitReadyAck: suspend () -> Unit,
+        writeLock: kotlinx.coroutines.sync.Mutex,
+        cipher: FrameCipher,
+      ) {
+        while (!stop.isCompleted) {
+          writeLock.withLock { delay(80.milliseconds) }
+          delay(20.milliseconds)
+        }
+      }
+    }
+
+    val messenger = ConnectionMessenger(
+      coroutines = coroutines,
+      connection = Connection.Tcp(clientSocket, "peer-progressing"),
+      messagesRouter = progressingRouter,
+      readChannel = clientRead,
+      writeChannel = clientWrite,
+      ackTimeoutConfig = AckTimeoutConfig(
+        readyAckTimeout = 60.seconds,
+        receivedAckTimeout = 60.seconds,
+        noPayloadAckTimeout = 60.seconds,
+      ),
+      heartbeatConfig = heartbeat,
+      messageSerializer = serializer,
+    )
+
+    // acceptIncomingMessages() starts the heartbeat and pumps inbound PONGs.
+    val readLoop = coroutines.appScope.launch(coroutines.ioDispatcher) {
+      runCatching { messenger.acceptIncomingMessages() }
+    }
+    // The send drives the progressing writer (cycles the write lock).
+    val sendJob = coroutines.appScope.launch(coroutines.ioDispatcher) {
+      runCatching {
+        messenger.send(
+          SimpleSendMessageRequest(TextMessage(text = "streaming")),
+          MutableSharedFlow(extraBufferCapacity = 10),
+        )
+      }
+    }
+
+    // Run well past maxConsecutiveSkips × interval (3 × 100ms = 300ms). The OLD code would
+    // close within ~300–600ms; the fixed code keeps it open.
+    withContext(coroutines.ioDispatcher) { delay(1500.milliseconds) }
+
+    assertFalse(
+      messenger.isClosed(),
+      "Heartbeat must NOT close a connection whose writer keeps releasing the lock (healthy saturated transfer)",
+    )
+
+    stop.complete(Unit)
+    sendJob.cancel()
+    readLoop.cancel()
+    pongResponder.cancel()
+    runCatching { clientSocket.close() }
+    runCatching { serverAccepted.close() }
+    runCatching { serverSocket.close() }
+    runCatching { selectorManager.close() }
   }
 
   private suspend fun openLoopbackClientSocket(): LoopbackHandle {

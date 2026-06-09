@@ -63,10 +63,18 @@ interface Client {
 }
 
 /**
- * Returns true when this exception represents a hard connection refusal (ECONNREFUSED /
- * ConnectException) — meaning the remote port is not listening. Used to distinguish
- * "peer is gone / restarted" from transient network glitches. Works across JVM, iOS, and
- * desktop by inspecting class simpleName and message text rather than using JVM-only types.
+ * Returns true when this exception (or any cause in its chain) represents a hard connection
+ * refusal — ECONNREFUSED, i.e. the remote port is not listening. Used to distinguish
+ * "peer is gone / restarted" from transient network glitches. Works across platforms by
+ * inspecting class simpleName and message text rather than JVM-only types:
+ *  - JVM / Android: `java.net.ConnectException`.
+ *  - Apple-native (Ktor over POSIX sockets): `PosixException.ConnectionRefusedException`
+ *    (simpleName "ConnectionRefusedException") and/or the strerror text "Connection refused".
+ *
+ * We deliberately match ONLY the refusal-specific class name and the canonical refusal text —
+ * NOT the broad `PosixException` base, which also covers ECONNRESET / ETIMEDOUT /
+ * EHOSTUNREACH. Treating those as "refused" would wrongly invalidate a still-valid endpoint
+ * on a transient error.
  */
 internal fun Throwable.isConnectionRefused(): Boolean {
   var current: Throwable? = this
@@ -74,10 +82,9 @@ internal fun Throwable.isConnectionRefused(): Boolean {
   while (current != null && depth < 8) {
     val name = current::class.simpleName ?: ""
     val msg = current.message.orEmpty()
-    if (name == "ConnectException") return true
-    if ((name == "IOException" || name == "SocketException") &&
-      (msg.contains("ECONNREFUSED", ignoreCase = true) ||
-        msg.contains("Connection refused", ignoreCase = true))
+    if (name == "ConnectException" || name == "ConnectionRefusedException") return true
+    if (msg.contains("ECONNREFUSED", ignoreCase = true) ||
+      msg.contains("Connection refused", ignoreCase = true)
     ) return true
     current = current.cause?.takeIf { it !== current }
     depth++

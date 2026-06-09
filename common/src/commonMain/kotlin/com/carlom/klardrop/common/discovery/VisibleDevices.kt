@@ -69,7 +69,12 @@ interface VisibleDevices {
 
 internal class VisibleDevicesImpl(
   private val coroutines: Coroutines,
-  private val clock: Clock
+  private val clock: Clock,
+  /**
+   * Epoch-millis time source. Defaults to [clock]; overridable in tests to drive the
+   * grace-window and TTL logic deterministically without real-time waits.
+   */
+  private val nowMs: () -> Long = { clock.currentTimeMillis() },
 ) : VisibleDevices {
 
   private companion object {
@@ -95,10 +100,16 @@ internal class VisibleDevicesImpl(
     //
     // If the device's lastSeenTimestamp is within this window we skip the removal and
     // defer to the TTL sweep, which will remove it after deviceTTLVisibility if no
-    // further liveness signal arrives. 30 seconds is safely larger than any reasonable
-    // test jitter, far shorter than the 5-minute TTL, and much smaller than the typical
-    // TCP heartbeat interval (60 s), so a genuinely-departed peer whose heartbeats have
-    // stopped will not be shielded indefinitely.
+    // further liveness signal arrives.
+    //
+    // INVARIANT: this window MUST be comfortably larger than the TCP heartbeat interval
+    // (HeartbeatConfig.interval, currently 15 s). The heartbeat refreshes lastSeenTimestamp
+    // via touchLastSeen() on every inbound frame, so an actively-connected peer's age stays
+    // below one interval; keeping the window > interval guarantees such a peer is always
+    // shielded from a spurious bare onDeviceLost. 30 s gives ~2× headroom over the 15 s
+    // interval (tolerating a missed beat) while staying far below the 5-minute TTL, so a
+    // genuinely-departed peer whose heartbeats have stopped is still evicted promptly.
+    // If the heartbeat interval is ever raised, raise this window to stay > interval.
     val lostEventGraceWindow = 30.seconds
   }
 
@@ -133,7 +144,7 @@ internal class VisibleDevicesImpl(
         } else {
           val rows = snapshot.values.joinToString(separator = "\n  ") { d ->
             val transports = d.deviceConnections.map { it.deviceConnectionType }.distinct()
-            val ageSec = (clock.currentTimeMillis() - d.lastSeenTimestamp) / 1000
+            val ageSec = (nowMs() - d.lastSeenTimestamp) / 1000
             "${d.deviceInfo.name} id=${d.deviceInfo.deviceId} transports=$transports age=${ageSec}s"
           }
           log("VisibleDevices", "snapshot (${snapshot.size}):\n  $rows")
@@ -143,7 +154,7 @@ internal class VisibleDevicesImpl(
   }
 
   private fun cleanupStaleDevices() {
-    val currentTime = clock.currentTimeMillis()
+    val currentTime = nowMs()
 
     val staleDevices = visibleDevicesFlow.value.filter { (deviceId, device) ->
       val isStale = (currentTime - device.lastSeenTimestamp) > deviceTTLVisibility.inWholeMilliseconds
@@ -194,7 +205,7 @@ internal class VisibleDevicesImpl(
     visibleDevicesFlow.update { current ->
       val device = current[deviceId] ?: return@update current
       current.toMutableMap().apply {
-        put(deviceId, device.copy(lastSeenTimestamp = clock.currentTimeMillis()))
+        put(deviceId, device.copy(lastSeenTimestamp = nowMs()))
       }
     }
   }
@@ -202,7 +213,7 @@ internal class VisibleDevicesImpl(
   override fun onDeviceLost(deviceId: String) {
     visibleDevicesFlow.update { current ->
       val device = current[deviceId] ?: return@update current
-      val ageMs = clock.currentTimeMillis() - device.lastSeenTimestamp
+      val ageMs = nowMs() - device.lastSeenTimestamp
       if (ageMs < lostEventGraceWindow.inWholeMilliseconds) {
         // The device's lastSeenTimestamp is fresh — it is likely alive via a TCP
         // heartbeat or another transport. Skip this removal and let the TTL sweep
@@ -299,7 +310,7 @@ internal class VisibleDevicesImpl(
       }
 
       visibleDevicesFlow.update {
-        val now = clock.currentTimeMillis()
+        val now = nowMs()
         // Seed from the existing entry if present, otherwise from the identity
         // cache so a re-discovery after eviction picks up the previously-learned
         // friendly identity.

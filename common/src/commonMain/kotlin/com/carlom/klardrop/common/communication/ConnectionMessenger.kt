@@ -27,6 +27,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
 import kotlin.time.ExperimentalTime
 
@@ -170,19 +171,47 @@ class ConnectionMessenger internal constructor(
       // is busy reading our payload bytes — they'd treat any PING bytes mid-stream as
       // payload, corrupting it).
       //
-      // However, we bound how many consecutive skips are allowed. A writer that holds
-      // the lock across maxConsecutiveSkips full intervals is either catastrophically
-      // slow or genuinely wedged. In that case we close rather than suppress liveness
-      // detection indefinitely. A bound ≤ 0 restores the old unbounded behaviour.
+      // BUT a held lock alone is ambiguous. A healthy transfer that is merely saturated
+      // holds the lock a high fraction of the time yet still RELEASES it between every
+      // framed chunk (the chunk loop frees the lock during each disk read). A wedged
+      // writer — or one whose socket writes are blocked because the peer silently
+      // vanished (send buffer fills, write never drains) — holds it CONTINUOUSLY.
+      // Counting every "lock held" sample as a skip therefore false-closes healthy
+      // saturated transfers (the heartbeat just happens to sample mid-chunk every time).
+      //
+      // So when tryLock fails we PROBE: wait a bounded window for the lock to free. If it
+      // frees within the window the writer is cycling normally → the link is alive, reset
+      // the skip counter (we do NOT send a PING mid-transfer; the lock freeing at all is
+      // sufficient proof of progress, and a dead peer would block the write and fail the
+      // probe). Only if the lock stays held for the WHOLE window across maxConsecutiveSkips
+      // ticks do we treat the link as wedged and close it — bounding liveness-detection
+      // latency without sacrificing healthy slow transfers. A bound ≤ 0 disables the close.
       if (!writeLock.tryLock()) {
+        val probeWindowMs = minOf(heartbeatConfig.interval.inWholeMilliseconds, WRITE_PROBE_MAX_MS)
+        val writerProgressed = withTimeoutOrNull(probeWindowMs) {
+          writeLock.lock()
+          true
+        } ?: false
+
+        if (writerProgressed) {
+          // The writer released the lock within the probe window → it is making progress,
+          // so the link is alive. Release immediately (no PING) and clear the skip streak.
+          writeLock.unlock()
+          if (consecutiveSkips > 0) {
+            log("ConnectionMessenger: Write lock freed within probe for ${connection.deviceId}; writer is progressing, resetting skip counter")
+          }
+          consecutiveSkips = 0
+          continue
+        }
+
         consecutiveSkips++
         val maxSkips = heartbeatConfig.maxConsecutiveSkips
         if (maxSkips > 0 && consecutiveSkips >= maxSkips) {
-          log("ConnectionMessenger: Heartbeat suppressed by held write lock for ${consecutiveSkips} consecutive ticks (>= $maxSkips); closing ${connection.deviceId} as wedged")
+          log("ConnectionMessenger: Write lock held continuously across $consecutiveSkips heartbeat ticks (>= $maxSkips); closing ${connection.deviceId} as wedged")
           close()
           return
         }
-        log("ConnectionMessenger: Heartbeat skipped for ${connection.deviceId} (write in flight, skip $consecutiveSkips/$maxSkips)")
+        log("ConnectionMessenger: Heartbeat skipped for ${connection.deviceId} (write lock held through probe, skip $consecutiveSkips/$maxSkips)")
         continue
       }
       consecutiveSkips = 0
@@ -466,5 +495,16 @@ class ConnectionMessenger internal constructor(
 
     log("ConnectionMessenger: [DEBUG] isClosed() = false for ${connection.deviceId}")
     return false
+  }
+
+  private companion object {
+    /**
+     * Upper bound (ms) on the heartbeat's write-lock probe window. A writer making normal
+     * per-chunk progress frees the lock far more often than this, so 1s reliably catches a
+     * release for any transfer faster than ~32 KB/s while keeping genuine-wedge detection
+     * prompt. The effective window is `min(heartbeat interval, WRITE_PROBE_MAX_MS)` so the
+     * sub-second intervals used in tests stay proportional.
+     */
+    const val WRITE_PROBE_MAX_MS = 1_000L
   }
 }

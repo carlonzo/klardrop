@@ -65,16 +65,18 @@ class DeviceChatViewModel(
 
   /**
    * Most recent receive update from this device that's awaiting the user's accept/reject
-   * decision. Null when nothing is pending. Subscribes directly to the per-device receive
-   * flow (a StateFlow with current value) instead of [Messenger.receive] which is a
-   * replay-less notifier — that previously meant the chat screen missed prompts that
-   * fired before it was opened, leaving them only on the discovery-screen banner stack.
-   * Going through [MessageReceiver.onReceiveMessage] gives us the current pending state
-   * the moment the chat screen subscribes, regardless of timing.
+   * decision. Null when nothing is pending.
+   *
+   * Reads [MessageReceiver.latestUpdates] — the aggregated, retained per-device receive
+   * state that mirrors the LIVE producer flow. Previously this called
+   * [MessageReceiver.onReceiveMessage], which mints a brand-new flow that the receive
+   * pipeline never writes to, so the banner only ever appeared on the discovery/home
+   * screen. [latestUpdates] holds the current value, so the prompt shows here regardless
+   * of whether the chat screen was already open when the transfer arrived.
    */
   val pendingAuth: StateFlow<ReceiveMessageUpdate?> =
-    messageReceiver.onReceiveMessage(deviceId)
-      .map { update -> update.takeIf { it.status is ReceiveMessageStatus.PendingAuthorization } }
+    messageReceiver.latestUpdates
+      .map { updates -> updates[deviceId]?.takeIf { it.status is ReceiveMessageStatus.PendingAuthorization } }
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
   init {
