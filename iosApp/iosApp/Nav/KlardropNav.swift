@@ -34,6 +34,22 @@ struct KlardropNav: View {
     /// Drives the rename sheet presented from the iPad sidebar footer button.
     @State private var showRenameSheet = false
 
+    /// Add-device flow (mirrors DiscoveryScreen / Compose WideLayout): the picker lists
+    /// nearby untrusted candidates; picking one opens the link-confirm dialog, which on
+    /// confirm calls model.addToTrusted to start the pairing/trust flow.
+    @State private var showAddDevicePicker = false
+    @State private var pendingLinkDevice: DeviceUi? = nil
+    /// Trusted device awaiting forget confirmation (long-press / context menu on a sidebar row).
+    @State private var pendingForgetDevice: DeviceUi? = nil
+
+    private var trustedDevices: [DeviceUi] {
+        model.state.devices.filter { isTrusted($0) }
+    }
+
+    private var nearbyDevices: [DeviceUi] {
+        model.state.devices.filter { !isTrusted($0) }
+    }
+
     var body: some View {
         Group {
             #if os(iOS)
@@ -71,6 +87,43 @@ struct KlardropNav: View {
                     showRenameSheet = false
                 }
             )
+        }
+        // Add-device picker: list of nearby untrusted candidates.
+        .sheet(isPresented: $showAddDevicePicker) {
+            AddDevicePickerSheet(
+                candidates: nearbyDevices,
+                onDismiss: { showAddDevicePicker = false },
+                onPick: { device in
+                    showAddDevicePicker = false
+                    pendingLinkDevice = device
+                }
+            )
+        }
+        // Confirm dialog → starts the trust/pairing flow (same as Compose desktop).
+        .sheet(item: $pendingLinkDevice, onDismiss: { pendingLinkDevice = nil }) { device in
+            LinkDeviceConfirmDialog(
+                device: device,
+                onConfirm: {
+                    model.addToTrusted(device)
+                    pendingLinkDevice = nil
+                },
+                onDismiss: { pendingLinkDevice = nil }
+            )
+        }
+        // Forget-device confirmation (from a trusted sidebar row's context menu).
+        .sheet(item: $pendingForgetDevice, onDismiss: { pendingForgetDevice = nil }) { device in
+            ForgetDeviceConfirmDialog(
+                device: device,
+                onConfirm: {
+                    model.forgetDevice(device)
+                    pendingForgetDevice = nil
+                },
+                onDismiss: { pendingForgetDevice = nil }
+            )
+        }
+        // Auto-dismiss the picker once a device becomes trusted.
+        .onChange(of: trustedDevices.count) { _, count in
+            if count > 0 { showAddDevicePicker = false }
         }
     }
 
@@ -157,16 +210,20 @@ struct KlardropNav: View {
             // Scrollable device sections
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    // "My devices" section
-                    SectionHeadView(label: "My devices")
-                        .padding(.horizontal, KdSpacing.s3)
-                        .padding(.top, KdSpacing.s3)
+                    // "My devices" section — the header carries a "+" to add a device.
+                    SectionHeadView(label: "My devices") {
+                        Button { showAddDevicePicker = true } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(kd.text2)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, KdSpacing.s3)
+                    .padding(.top, KdSpacing.s3)
 
                     if trusted.isEmpty {
-                        Text("No trusted devices")
-                            .kdStyle(.caption, color: kd.text3)
-                            .padding(.horizontal, KdSpacing.s5)
-                            .padding(.vertical, KdSpacing.s2)
+                        addDevicePromptRow
                     } else {
                         ForEach(trusted, id: \.deviceId) { device in
                             sidebarRow(device: device)
@@ -222,6 +279,27 @@ struct KlardropNav: View {
         .scrollContentBackground(.hidden)
     }
 
+    // MARK: - Add-device prompt row (empty "My devices")
+
+    /// Orange "+ Add a device" row shown when there are no trusted devices yet.
+    /// Mirrors Compose WideLayout's AddDevicePromptRow.
+    private var addDevicePromptRow: some View {
+        Button { showAddDevicePicker = true } label: {
+            HStack(spacing: KdSpacing.s2) {
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(kd.accent)
+                Text("Add a device")
+                    .kdStyle(.caption, color: kd.accent)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, KdSpacing.s5)
+            .padding(.vertical, KdSpacing.s2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Sidebar device row helper
 
     @ViewBuilder
@@ -244,6 +322,16 @@ struct KlardropNav: View {
             }
         )
         .padding(.horizontal, KdSpacing.s2)
+        // Trusted devices can be un-trusted via a right-click / long-press menu.
+        .contextMenu {
+            if trusted {
+                Button(role: .destructive) {
+                    pendingForgetDevice = device
+                } label: {
+                    Label("Forget device", systemImage: "trash")
+                }
+            }
+        }
     }
 
     // MARK: - Helpers
