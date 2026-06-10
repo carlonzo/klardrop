@@ -16,7 +16,7 @@ bugsnag-jvm = "4.0.0"
 filekit = "0.14.1"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
-coil3 = "3.4.0"
+coil3 = "3.5.0"
 nav3 = "1.1.2"
 
 [libraries]
