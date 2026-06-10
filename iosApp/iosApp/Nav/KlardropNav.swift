@@ -115,6 +115,7 @@ struct KlardropNav: View {
         ) {
             iPadSidebar
                 .navigationTitle("Klardrop")
+                .navigationSplitViewColumnWidth(min: 200, ideal: 260)
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
                 #endif

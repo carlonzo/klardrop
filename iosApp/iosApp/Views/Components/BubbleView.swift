@@ -80,8 +80,12 @@ struct BubbleView<Content: View>: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            // Limit bubble width to 78% of parent via containerRelativeFrame (iOS 17+).
-            .containerRelativeFrame(.horizontal, count: 100, span: 78, spacing: 0)
+            // Fixed 300pt max bubble width. Left/right gravity is handled by the
+            // surrounding HStack spacers (incoming → leading, outgoing → trailing).
+            // NOTE: do not use containerRelativeFrame here — on macOS it resolves
+            // against the window width, not the split-view detail pane, which let
+            // bubbles slide left underneath the sidebar.
+            .frame(maxWidth: 300, alignment: .leading)
             .background(bgColor)
             .clipShape(BubbleShape(direction: direction))
 
