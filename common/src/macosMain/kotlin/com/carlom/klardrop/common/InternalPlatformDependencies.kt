@@ -13,7 +13,6 @@ import com.carlom.klardrop.common.permissions.PermissionsMonitor
 import com.carlom.klardrop.common.trust.AppleTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
-import kotlinx.io.files.SystemFileSystem
 import platform.AppKit.NSWorkspace
 import platform.Foundation.*
 
@@ -32,6 +31,9 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
   }
 
   actual fun getDownloadStoragePath(): Path {
+    // Drop received files straight into the user's ~/Downloads (no "Klardrop" subfolder).
+    // Downloads always exists, so there's nothing to create — which also avoids the sandbox
+    // `mkdir` that the downloads entitlement now permits but we no longer need.
     val downloadDirectory = NSFileManager.defaultManager.URLForDirectory(
       directory = NSDownloadsDirectory,
       inDomain = NSUserDomainMask,
@@ -40,13 +42,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
       error = null
     )
 
-    val klardropStoragePath = Path(requireNotNull(downloadDirectory?.path), "Klardrop")
-
-    if (!SystemFileSystem.exists(klardropStoragePath)) {
-      SystemFileSystem.createDirectories(klardropStoragePath, mustCreate = true)
-    }
-
-    return klardropStoragePath
+    return Path(requireNotNull(downloadDirectory?.path))
   }
 
   actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {

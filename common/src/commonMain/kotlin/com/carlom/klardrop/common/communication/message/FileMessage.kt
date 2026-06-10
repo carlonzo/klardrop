@@ -16,6 +16,7 @@ import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.path
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -249,8 +250,19 @@ class FileReceivePipeline internal constructor(
     }
   }
 
-  suspend fun complete() {
-    if (isFinished) return
+  /**
+   * Finalize the received file. Returns `true` when the transfer completed intact (bytes
+   * flushed, integrity verified, moved to final storage) and `false` when it failed for any
+   * reason — an integrity mismatch OR a storage/finalize error.
+   *
+   * NEVER throws. A finalize failure (e.g. a sandbox `mkdir` denial, disk full) must fail only
+   * THIS transfer and surface as a `false` verdict; it must not bubble up to the connection
+   * read loop, which treats any exception as fatal and tears down the whole connection —
+   * starving the sender's ACK wait into a retry storm. The caller uses the verdict to decide
+   * which terminal ACK to send (RECEIVED on `true`, REJECTED on `false`).
+   */
+  suspend fun complete(): Boolean {
+    if (isFinished) return false
     isFinished = true
     runCatching { sink.close() }
 
@@ -267,7 +279,7 @@ class FileReceivePipeline internal constructor(
       receiveFlow.update {
         it.copy(status = ReceiveMessageStatus.Failed("File integrity check failed (chunk $macFailureSeq)"))
       }
-      return
+      return false
     }
 
     if (verifyChunkMac == null) {
@@ -285,7 +297,7 @@ class FileReceivePipeline internal constructor(
           receiveFlow.update {
             it.copy(status = ReceiveMessageStatus.Failed("File integrity check failed"))
           }
-          return
+          return false
         }
       } else {
         log(
@@ -295,15 +307,34 @@ class FileReceivePipeline internal constructor(
       }
     }
 
-    val finalPath = fileTransfer.onTransferCompleted()
-    if (finalPath != null) {
-      messageRepository.updateFileTransferFilePath(fileTransferId, finalPath.toString())
+    // Move the staged file into its final location and persist. Any failure here (sandbox
+    // permission denial, disk full, …) fails only this transfer — never the connection.
+    return try {
+      val finalPath = fileTransfer.onTransferCompleted()
+      if (finalPath != null) {
+        messageRepository.updateFileTransferFilePath(fileTransferId, finalPath.toString())
+      }
+      messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
+      receiveFlow.update { it.copy(status = ReceiveMessageStatus.Completed) }
+      val durationMs = clock.currentTimeMillis() - recvStart
+      val kbPerSec = if (durationMs > 0) (totalReceived * 1000 / durationMs / 1024) else 0
+      log("FileReceivePipeline", "Received ${header.fileName} ($totalReceived bytes) in ${durationMs}ms ($kbPerSec KB/s)")
+      true
+    } catch (cancellation: CancellationException) {
+      throw cancellation
+    } catch (error: Throwable) {
+      log(
+        "FileReceivePipeline",
+        "Finalize failed for ${header.fileName} from ${header.id}: ${error.message}",
+        error,
+      )
+      runCatching { fileTransfer.onTransferFailed() }
+      runCatching { messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED) }
+      receiveFlow.update {
+        it.copy(status = ReceiveMessageStatus.Failed(error.message ?: "Failed to save received file"))
+      }
+      false
     }
-    messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
-    receiveFlow.update { it.copy(status = ReceiveMessageStatus.Completed) }
-    val durationMs = clock.currentTimeMillis() - recvStart
-    val kbPerSec = if (durationMs > 0) (totalReceived * 1000 / durationMs / 1024) else 0
-    log("FileReceivePipeline", "Received ${header.fileName} ($totalReceived bytes) in ${durationMs}ms ($kbPerSec KB/s)")
   }
 
   private fun ByteArray.toHexShort(): String =
