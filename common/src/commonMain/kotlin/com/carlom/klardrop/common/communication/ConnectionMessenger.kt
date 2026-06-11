@@ -127,8 +127,12 @@ class ConnectionMessenger internal constructor(
           cipher = cipher,
         )
       }.onFailure {
-        log("ConnectionMessenger: Exception in acceptIncomingMessages loop for ${connection.deviceId}: ${it::class.simpleName}: ${it.message}")
-        log("ConnectionMessenger: Error while listening for messages from ${connection.deviceId}. Closing connection.", it)
+        if (it.isExpectedNetworkNoise()) {
+          log("ConnectionMessenger: Peer ${connection.deviceId} disconnected cleanly: ${it.message}")
+        } else {
+          log("ConnectionMessenger: Exception in acceptIncomingMessages loop for ${connection.deviceId}: ${it::class.simpleName}: ${it.message}")
+          log("ConnectionMessenger: Error while listening for messages from ${connection.deviceId}. Closing connection.", it)
+        }
         close()
       }
     }
