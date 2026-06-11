@@ -1,6 +1,7 @@
 package com.carlom.klardrop.cli
 
 import com.carlom.klardrop.cli.commands.DiscoverCommand
+import com.carlom.klardrop.cli.commands.ListenCommand
 import com.carlom.klardrop.cli.commands.SendCommand
 import com.carlom.klardrop.cli.commands.StatusCommand
 import com.github.ajalt.clikt.core.CliktCommand
@@ -11,6 +12,7 @@ class KlardropCli : CliktCommand(name = "klardrop") {
   init {
     subcommands(
         DiscoverCommand(),
+        ListenCommand(),
         SendCommand(),
         StatusCommand()
     )
