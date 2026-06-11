@@ -26,10 +26,13 @@ if [ -z "${REPO}" ]; then
 fi
 echo ">> Linux repo: ${REPO}"
 
+# Safe sync: abort if the Linux tree has uncommitted work (never discard it),
+# then FAST-FORWARD ONLY (no `git reset --hard`). ff-only refuses on divergence.
 REMOTE_SHA="$(ssh "${LINUX}" "cd '${REPO}' \
+  && if [ -n \"\$(git status --porcelain)\" ]; then echo 'ABORT: linux tree dirty' >&2; git status --porcelain >&2; exit 3; fi \
   && git fetch origin --quiet \
   && (git checkout '${BRANCH}' --quiet 2>/dev/null || git checkout -b '${BRANCH}' 'origin/${BRANCH}' --quiet) \
-  && git reset --hard 'origin/${BRANCH}' --quiet \
+  && git merge --ff-only 'origin/${BRANCH}' --quiet \
   && git rev-parse --short HEAD")"
 
 if [ "${REMOTE_SHA}" = "${LOCAL_SHA}" ]; then
