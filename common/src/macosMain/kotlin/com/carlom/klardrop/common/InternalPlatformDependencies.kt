@@ -13,7 +13,9 @@ import com.carlom.klardrop.common.permissions.PermissionsMonitor
 import com.carlom.klardrop.common.trust.AppleTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
+import platform.AppKit.NSApplicationDidBecomeActiveNotification
 import platform.AppKit.NSWorkspace
+import platform.AppKit.NSWorkspaceDidWakeNotification
 import platform.Foundation.*
 
 actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
@@ -49,7 +51,30 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     return ServiceDiscoveryMdns()
   }
 
-  private val networkLifecycleMonitor by lazy { NetworkLifecycleMonitor() }
+  private val networkLifecycleMonitor by lazy {
+    val monitor = NetworkLifecycleMonitor()
+    // macOS native: NSNetService publishes can stall after display sleep or the app
+    // loses foreground. Mirror the iOS UIApplicationDidBecomeActive hook with two
+    // macOS-specific lifecycle notifications so DiscoveryNetwork.rebuildMdnsState()
+    // is always triggered on recovery:
+    //   1. NSApplicationDidBecomeActiveNotification — app regains foreground focus.
+    //   2. NSWorkspaceDidWakeNotification — system returns from sleep/display wake.
+    NSNotificationCenter.defaultCenter.addObserverForName(
+      name = NSApplicationDidBecomeActiveNotification,
+      `object` = null,
+      queue = NSOperationQueue.mainQueue,
+    ) { _ ->
+      monitor.trigger()
+    }
+    NSWorkspace.sharedWorkspace.notificationCenter.addObserverForName(
+      name = NSWorkspaceDidWakeNotification,
+      `object` = null,
+      queue = NSOperationQueue.mainQueue,
+    ) { _ ->
+      monitor.trigger()
+    }
+    monitor
+  }
 
   actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
