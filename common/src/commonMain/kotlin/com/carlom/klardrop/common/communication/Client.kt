@@ -148,8 +148,16 @@ class ClientImpl(
             // on a new ephemeral port), remove the stale endpoint from the visible-device
             // cache immediately. This prevents every subsequent send attempt from retrying
             // the dead address+port until mDNS delivers a fresh SRV record.
-            if (cause.isConnectionRefused()) {
-              log("Client", "Connection refused to $deviceId @ ${connection.address}:${connection.port} — invalidating stale endpoint")
+            // Also invalidate on a per-address connect/handshake TIMEOUT: a peer that
+            // moved ports/networks causes SYN black-holing (no RST), so the
+            // TimeoutCancellationException thrown by the withTimeout(TCP_CONNECT_TIMEOUT_MS)
+            // blocks in establishConnection signals the same "stale cached endpoint" condition
+            // as a refused connection. mDNS re-delivers the fresh SRV quickly after invalidation.
+            val refused = cause.isConnectionRefused()
+            val timedOut = cause is kotlinx.coroutines.TimeoutCancellationException
+            if (refused || timedOut) {
+              val reason = if (refused) "connection refused" else "connect/handshake timeout"
+              log("Client", "Dial to $deviceId @ ${connection.address}:${connection.port} failed ($reason) — invalidating stale endpoint")
               visibleDevices.invalidateKlardropEndpoint(deviceId, connection.address, connection.port)
             }
           }
