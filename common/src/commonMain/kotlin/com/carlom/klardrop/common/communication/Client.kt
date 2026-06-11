@@ -212,7 +212,15 @@ class ClientImpl(
       supportsEncryption = true,
     )
     val writeChannel = socket.openWriteChannel(autoFlush = true)
-    writeChannel.sendMessage(handshakeMessage, serializer)
+    // Bound the handshake write to match the connect and read phases.  On most
+    // JVM / Ktor stacks a single small write is heap-buffered and returns
+    // immediately, but on platforms where flush awaits the kernel drain a peer
+    // that accepts the TCP handshake then never reads can stall this write
+    // indefinitely — consuming the whole connection budget before any other
+    // address is tried.
+    withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+      writeChannel.sendMessage(handshakeMessage, serializer)
+    }
 
     log("Client", "Waiting for response greetings from $deviceId")
 
