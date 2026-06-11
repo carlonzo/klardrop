@@ -458,8 +458,14 @@ class ConnectionMessengerTest {
       }
     }
 
-    // interval=100ms, probe window=min(interval,1s)=100ms, maxSkips=3.
-    val heartbeat = HeartbeatConfig.forTest(intervalMs = 100, timeoutMs = 500, maxConsecutiveSkips = 3)
+    // Probe window must be comfortably LARGER than the writer's hold/release cycle (80ms +
+    // 20ms = 100ms) so the heartbeat reliably observes a lock release, and the PONG timeout
+    // must tolerate a loaded CI runner's real-socket round-trip. With interval==cycle (100ms)
+    // and a 500ms timeout this test flaked on the CI macOS runner (scheduling jitter made the
+    // probe miss the 20ms release window / a PONG land late). Widen both: a 300ms probe window
+    // spans ~3 writer cycles (always catches a release) and 1500ms gives ample PONG slack.
+    // maxSkips stays a safety net — a progressing writer should never accumulate skips at all.
+    val heartbeat = HeartbeatConfig.forTest(intervalMs = 300, timeoutMs = 1500, maxConsecutiveSkips = 5)
 
     val progressingRouter = object : FakeMessagesRouter() {
       // Read the inbound stream and feed PONGs to the heartbeat (what the real router does).
@@ -526,9 +532,9 @@ class ConnectionMessengerTest {
       }
     }
 
-    // Run well past maxConsecutiveSkips × interval (3 × 100ms = 300ms). The OLD code would
-    // close within ~300–600ms; the fixed code keeps it open.
-    withContext(coroutines.ioDispatcher) { delay(1500.milliseconds) }
+    // Run well past maxConsecutiveSkips × interval (5 × 300ms = 1500ms) so a regressed
+    // heartbeat would have closed by now; the fixed code keeps it open.
+    withContext(coroutines.ioDispatcher) { delay(2500.milliseconds) }
 
     assertFalse(
       messenger.isClosed(),

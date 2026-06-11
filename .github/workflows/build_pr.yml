@@ -30,7 +30,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
 
       - name: Build
-        run: ./gradlew build
+        # Exclude :presentation's Apple shared-metadata compiles. On Linux there is no Apple
+        # toolchain, so :klardrop-common's native targets are disabled (its Bugsnag cinterop
+        # can't be processed here) and its iosMain/appleMain metadata is skipped. :presentation
+        # would still try to compile its own Apple metadata, but can't resolve klardrop-common's
+        # now-absent native `actual`s (e.g. InternalPlatformDependencies' constructor) and fails.
+        # Apple is fully built and tested on the macOS job, so skip it here.
+        run: >-
+          ./gradlew build
+          -x :presentation:compileIosMainKotlinMetadata
+          -x :presentation:compileAppleMainKotlinMetadata
 
       - name: Publish Test Report
         uses: dorny/test-reporter@v3
