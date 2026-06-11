@@ -473,6 +473,22 @@ class ConnectionMessenger internal constructor(
     }
   }
 
+  /**
+   * Returns true if the connection currently has an in-flight write (i.e. [writeLock] is held
+   * by a sender). Used by the network-flush path to skip connections mid-transfer — mirrors the
+   * same probe the heartbeat loop uses to avoid aborting an active chunked file send.
+   *
+   * Non-suspending: uses [Mutex.tryLock] so callers never block.
+   */
+  fun hasInflightWrite(): Boolean {
+    return if (writeLock.tryLock()) {
+      writeLock.unlock()
+      false
+    } else {
+      true
+    }
+  }
+
   fun isClosed(): Boolean {
     // Check if the transport is explicitly closed (socket / BLE session).
     if (connection.isClosed) {
