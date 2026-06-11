@@ -105,9 +105,13 @@ jobs:
           # cocoapods integration and macOS FRAMEWORK_SEARCH_PATHS depend on.
           ./gradlew :klardrop-common:podBuildBugsnagMacos :presentation:generateDummyFramework
           pod install --project-directory=iosApp
+          # ARCHS=arm64: the KMP framework only builds the iosSimulatorArm64 target, so the
+          # presentation.framework has no x86_64 slice. 'generic/platform=iOS Simulator'
+          # otherwise also builds x86_64 and fails with "could not find module 'presentation'
+          # for target 'x86_64-apple-ios-simulator'". Restrict to arm64 (CI runner is arm64).
           xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme iosApp \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug build CODE_SIGNING_ALLOWED=NO
+            -configuration Debug build CODE_SIGNING_ALLOWED=NO ARCHS=arm64
           xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
             -destination 'platform=macOS,arch=arm64' \
             -configuration Debug build CODE_SIGNING_ALLOWED=NO
