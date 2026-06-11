@@ -5,11 +5,11 @@
 # two placeholders by hand, point url at a real release DMG, then run
 # `brew install --cask ./klardrop.rb`.
 #
-# The macOS DMG is currently UNSIGNED (no Apple Developer ID). Gatekeeper would
-# otherwise refuse to launch it, so the postflight below strips the quarantine
-# attribute that Homebrew applies on install, and the caveats explain the manual
-# fallback. This lives in a third-party tap, so it is not subject to the official
-# homebrew-cask Gatekeeper audit.
+# The macOS DMG shipped via this cask is a Developer ID-signed + notarized native
+# macOS app (built from Swift/SKIE, not the legacy Compose/JVM desktop). The
+# Homebrew job only publishes this cask when the release contains a macos-verified.txt
+# marker (written by the notarize step), guaranteeing this cask always points at
+# a properly signed and notarized build.
 
 cask "klardrop" do
   version "@VERSION@"
@@ -21,30 +21,7 @@ cask "klardrop" do
   desc "Share files and clipboard with nearby devices over the local network (AirDrop-style)"
   homepage "https://github.com/carlonzo/klardrop"
 
-  app "klardrop.app"
-
-  # The app is unsigned, so Homebrew's quarantine attribute would make macOS
-  # Gatekeeper block the first launch. Strip it from the installed bundle. This
-  # uses the standard cask DSL (system_command in a postflight block) and does
-  # NOT rely on the deprecated --no-quarantine flag.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/klardrop.app"],
-                   sudo: false
-  end
-
-  caveats <<~EOS
-    Klardrop is not signed with an Apple Developer ID, so macOS Gatekeeper may
-    still refuse to open it on first launch.
-
-    The install above already tried to clear the quarantine flag for you. If
-    macOS still reports that the app "cannot be opened", do one of:
-
-      * Right-click (or Control-click) #{appdir}/klardrop.app in Finder and
-        choose Open, then confirm in the dialog; or
-      * Clear the quarantine flag manually:
-          xattr -dr com.apple.quarantine "#{appdir}/klardrop.app"
-  EOS
+  app "Klardrop.app"
 
   zap trash: [
     "~/Library/Application Support/com.carlom.Klardrop",

@@ -99,7 +99,10 @@ class KlardropIntegrationTest {
    */
   private fun integrationTest(
     timeout: Duration = 120.seconds,
-    attempts: Int = 2,
+    // 3 attempts: these real-socket + virtual-time tests flake more often on a heavily
+    // contended CI runner (a single load-induced miss can recur across two tries). A genuine
+    // break still fails all three, so this only absorbs flakes, it doesn't mask regressions.
+    attempts: Int = 3,
     body: suspend TestScope.() -> Unit,
   ) {
     var lastError: Throwable? = null

@@ -16,7 +16,7 @@ kotlin {
     }
   }
   jvm("desktopJvm")
-//  macosArm64()
+  macosArm64()
   iosArm64()
   iosSimulatorArm64()
 
@@ -24,7 +24,8 @@ kotlin {
 
   cocoapods {
     version = rootProject.version.toString()
-    ios.deploymentTarget = "14.1"
+    ios.deploymentTarget = "17.0"
+    osx.deploymentTarget = "14.0"
     pod("Bugsnag", "~> 6.0")
   }
 
@@ -81,14 +82,19 @@ kotlin {
       }
     }
 
-    val iosMain by getting {
+    val appleMain by getting {
       dependencies {
-        implementation(deps.bugsnag.kmp)
         implementation(deps.sqldelight.native.driver)
       }
     }
 
-    matching { it.name.startsWith("ios") }.configureEach {
+    val iosMain by getting {
+      dependencies {
+        implementation(deps.bugsnag.kmp)
+      }
+    }
+
+    matching { it.name.startsWith("ios") || it.name.startsWith("macos") }.configureEach {
       languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
     }
 

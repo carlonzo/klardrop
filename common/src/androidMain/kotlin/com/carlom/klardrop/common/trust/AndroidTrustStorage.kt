@@ -154,19 +154,28 @@ class AndroidTrustStorage(
     }
 
     override suspend fun getDevicePublicKey(): ByteArray? {
-        sharedPrefs.getString(DEVICE_PUBLIC_KEY, null)?.let { encoded ->
-            try {
-                return Base64.decode(encoded, Base64.NO_WRAP)
-            } catch (_: IllegalArgumentException) {
-                sharedPrefs.edit { remove(DEVICE_PUBLIC_KEY) }
+        // The Keystore key is the source of truth — it's what signWithDeviceKey() signs with.
+        // Derive the public key from its certificate whenever the alias exists, and refresh the
+        // SharedPreferences cache to match. The cache must NEVER override the keystore: if the
+        // alias was regenerated while a stale cache survived (e.g. an app restore or keystore
+        // reset), a cache-first read would advertise a public key we can no longer sign for —
+        // peers would then reject every signature from us as a "possible MITM" / identity-binding
+        // failure, even right after a successful pairing. Only fall back to the cache when there
+        // is no usable Keystore key (legacy / test paths).
+        val cert = runCatching { keyStore.getCertificate(DEVICE_KEY_ALIAS) }.getOrNull()
+        if (cert != null) {
+            (cert.publicKey as? ECPublicKey)?.toRawUncompressed()?.let { raw ->
+                val encoded = Base64.encodeToString(raw, Base64.NO_WRAP)
+                if (sharedPrefs.getString(DEVICE_PUBLIC_KEY, null) != encoded) {
+                    sharedPrefs.edit { putString(DEVICE_PUBLIC_KEY, encoded) }
+                }
+                return raw
             }
         }
-        // Cache miss / corrupt cache: rebuild from the Keystore certificate.
-        val cert = runCatching { keyStore.getCertificate(DEVICE_KEY_ALIAS) }.getOrNull() ?: return null
-        val pub = cert.publicKey as? ECPublicKey ?: return null
-        val raw = pub.toRawUncompressed()
-        sharedPrefs.edit { putString(DEVICE_PUBLIC_KEY, Base64.encodeToString(raw, Base64.NO_WRAP)) }
-        return raw
+
+        return sharedPrefs.getString(DEVICE_PUBLIC_KEY, null)?.let { encoded ->
+            runCatching { Base64.decode(encoded, Base64.NO_WRAP) }.getOrNull()
+        }
     }
 
     override suspend fun deleteDevicePrivateKey() {

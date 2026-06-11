@@ -131,6 +131,72 @@ class FileMessageHandlerTest {
     assertEquals("disk full", status.reason)
   }
 
+  /**
+   * Verdict contract (success): a clean transfer must report `true` from complete() so the
+   * router sends ACK_RECEIVED. The router keys its terminal ACK off this boolean.
+   */
+  @Test
+  fun completeReturnsTrueOnSuccessfulFinalize() = runTest(testDispatcher) {
+    val payload = ByteArray(200) { (it % 256).toByte() }
+    val header = FileMessage("ok.bin", payload.size.toLong(), "application/octet-stream")
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 0, data = payload, isLast = true))
+
+    assertEquals(true, pipeline.complete(), "intact transfer must report true so the router sends ACK_RECEIVED")
+    assertEquals("updateFileTransferStatus(1, COMPLETED)", mockMessageRepository.calls.last())
+    assertTrue(flow.value.status is ReceiveMessageStatus.Completed)
+  }
+
+  /**
+   * Verdict contract (integrity): a content-hash mismatch must report `false` so the router
+   * sends ACK_REJECTED — NOT ACK_RECEIVED. Previously the router acked RECEIVED unconditionally
+   * after complete() returned, so a corrupt transfer was acknowledged as a success.
+   */
+  @Test
+  fun completeReturnsFalseOnContentHashMismatch() = runTest(testDispatcher) {
+    val realCrypto = com.carlom.klardrop.common.trust.TrustCrypto()
+    val payload = ByteArray(300) { (it % 256).toByte() }
+    // Header advertises a hash that the delivered bytes won't match.
+    val wrongHash = realCrypto.sha256(ByteArray(8))
+    val header = FileMessage("x.bin", payload.size.toLong(), "application/octet-stream", contentHash = wrongHash)
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 0, data = payload, isLast = true))
+
+    assertEquals(false, pipeline.complete(), "integrity mismatch must report false so the router sends ACK_REJECTED")
+    assertEquals("updateFileTransferStatus(1, FAILED)", mockMessageRepository.calls.last())
+    assertTrue(flow.value.status is ReceiveMessageStatus.Failed)
+  }
+
+  /**
+   * Verdict contract (finalize failure): when onTransferCompleted() throws — the exact macOS
+   * sandbox bug, `mkdir failed: Operation not permitted` — complete() must NOT propagate the
+   * exception (a throw would bubble to the connection read loop and tear down the whole
+   * connection, starving the sender into a retry storm). It must roll back, mark FAILED, and
+   * report `false` so the router sends a terminal ACK_REJECTED and the sender fails fast.
+   */
+  @Test
+  fun completeReturnsFalseAndDoesNotThrowWhenFinalizeFails() = runTest(testDispatcher) {
+    mockFileManager.completeError = kotlinx.io.IOException("mkdir failed: Operation not permitted")
+    val payload = ByteArray(120) { (it % 256).toByte() }
+    val header = FileMessage("y.bin", payload.size.toLong(), "application/octet-stream")
+    val flow = newReceiveFlow("peer-1")
+
+    val pipeline = fileMessageHandler.beginReceive(header, "peer-1", flow)
+    pipeline.acceptChunk(FileChunkMessage(header.id, seq = 0, data = payload, isLast = true))
+
+    // Must not throw.
+    val verdict = pipeline.complete()
+
+    assertEquals(false, verdict, "a finalize failure must report false, not throw")
+    assertEquals("updateFileTransferStatus(1, FAILED)", mockMessageRepository.calls.last())
+    assertTrue(flow.value.status is ReceiveMessageStatus.Failed)
+    assertTrue(mockFileManager.preparedFile!!.failedCalled, "a finalize failure must roll back via onTransferFailed()")
+  }
+
   @Test
   fun handleOutgoingChunkedSendsHeaderThenChunksWithLastFlag() = runTest(testDispatcher) {
     val payload = ByteArray(700_000) { (it % 256).toByte() } // > 2 chunks at 256KB
@@ -535,8 +601,12 @@ private open class MockFileManager : FileManager {
   var preparedFile: MockFileTransfer? = null
   val fileDataToServe = mutableMapOf<String, ByteArray>()
 
+  /** When set, the next prepared transfer's onTransferCompleted() throws this — simulates a
+   *  finalize/storage failure (e.g. the macOS sandbox `mkdir failed: Operation not permitted`). */
+  var completeError: Throwable? = null
+
   override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer {
-    return MockFileTransfer().also { preparedFile = it }
+    return MockFileTransfer(completeError).also { preparedFile = it }
   }
 
   override fun getReadStreamFrom(file: PlatformFile): RawSource {
@@ -548,7 +618,8 @@ private open class MockFileManager : FileManager {
   override suspend fun openUrl(url: String): Boolean = true
 }
 
-private class MockFileTransfer : FileTransfer {
+private class MockFileTransfer(private val completeError: Throwable? = null) : FileTransfer {
+  var failedCalled = false
   // Capture written bytes via a RawSink that survives close (Buffer.close discards).
   private val chunks = mutableListOf<ByteArray>()
 
@@ -576,7 +647,10 @@ private class MockFileTransfer : FileTransfer {
     return out
   }
 
-  override suspend fun onTransferCompleted(): Path? = null
-  override suspend fun onTransferFailed() {}
+  override suspend fun onTransferCompleted(): Path? {
+    completeError?.let { throw it }
+    return null
+  }
+  override suspend fun onTransferFailed() { failedCalled = true }
 }
 

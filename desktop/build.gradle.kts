@@ -23,7 +23,8 @@ kotlin {
     val jvmMain by getting {
       dependencies {
         implementation(project(":klardrop-common"))
-        implementation(project(":common-ui"))
+        implementation(project(":presentation"))
+        implementation(project(":compose-ui"))
         implementation(compose.desktop.currentOs)
         implementation(deps.kotlinx.coroutines.core)
         implementation(deps.bugsnag.jvm)

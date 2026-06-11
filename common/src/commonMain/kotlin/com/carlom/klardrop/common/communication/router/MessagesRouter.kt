@@ -484,15 +484,27 @@ internal class MessagesRouterImpl(
 
     if (chunk.isLast || chunkResult.isFailure) {
       receiveMutex.withLock { receivePipelines.remove(chunk.fileMessageId) }
-      if (chunkResult.isFailure) {
-        pipeline.fail(chunkResult.exceptionOrNull()!!)
-        // No ACK_RECEIVED on failure — sender will time out and report.
+
+      // Did the transfer finish intact? A mid-stream chunk failure fails it outright;
+      // otherwise complete() runs finalization and reports its own verdict (it never throws,
+      // so a finalize/integrity failure fails only this transfer instead of bubbling up to
+      // acceptIncomingMessages, which would close the whole connection).
+      val completedOk = if (chunkResult.isFailure) {
+        runCatching { pipeline.fail(chunkResult.exceptionOrNull()!!) }
+        false
       } else {
         pipeline.complete()
-        val ackReceived = MessageAcknowledgment(AckType.RECEIVED, chunk.fileMessageId)
-        writeLock.withLock {
-          sendMessageToDevice(fromDeviceId, ackReceived, writeChannel, cipher)
-        }
+      }
+
+      // Always send a terminal ACK so the sender resolves immediately rather than blocking
+      // until its ACK_RECEIVED timeout and then retrying: RECEIVED when the file landed
+      // intact, REJECTED on any failure (which the sender treats as terminal — no retry).
+      val ack = MessageAcknowledgment(
+        ackType = if (completedOk) AckType.RECEIVED else AckType.REJECTED,
+        id = chunk.fileMessageId,
+      )
+      writeLock.withLock {
+        sendMessageToDevice(fromDeviceId, ack, writeChannel, cipher)
       }
     }
   }

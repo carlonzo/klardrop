@@ -13,11 +13,10 @@ import com.carlom.klardrop.common.permissions.PermissionsMonitor
 import com.carlom.klardrop.common.trust.AppleTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
 import kotlinx.io.files.Path
-import kotlinx.io.files.SystemFileSystem
 import platform.AppKit.NSWorkspace
 import platform.Foundation.*
 
-actual class InternalPlatformDependencies {
+actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
   private val documentsDirectory: Path by lazy {
     val directory = NSFileManager.defaultManager.URLForDirectory(
@@ -32,6 +31,9 @@ actual class InternalPlatformDependencies {
   }
 
   actual fun getDownloadStoragePath(): Path {
+    // Drop received files straight into the user's ~/Downloads (no "Klardrop" subfolder).
+    // Downloads always exists, so there's nothing to create — which also avoids the sandbox
+    // `mkdir` that the downloads entitlement now permits but we no longer need.
     val downloadDirectory = NSFileManager.defaultManager.URLForDirectory(
       directory = NSDownloadsDirectory,
       inDomain = NSUserDomainMask,
@@ -40,13 +42,7 @@ actual class InternalPlatformDependencies {
       error = null
     )
 
-    val klardropStoragePath = Path(requireNotNull(downloadDirectory?.path), "Klardrop")
-
-    if (!SystemFileSystem.exists(klardropStoragePath)) {
-      SystemFileSystem.createDirectories(klardropStoragePath, mustCreate = true)
-    }
-
-    return klardropStoragePath
+    return Path(requireNotNull(downloadDirectory?.path))
   }
 
   actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
@@ -92,10 +88,9 @@ actual class InternalPlatformDependencies {
   }
 
   actual suspend fun openFile(filePath: String): Boolean {
-    // macOS file opening requires NSWorkspace
-    // This is a simplified implementation that always returns false
-    // A proper implementation would need platform-specific integration
-    return false
+    // Open the file in the user's default app for its type.
+    val fileUrl = NSURL.fileURLWithPath(filePath)
+    return NSWorkspace.sharedWorkspace.openURL(fileUrl)
   }
 
   actual suspend fun openUrl(url: String): Boolean {
