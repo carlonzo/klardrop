@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.log
@@ -13,7 +14,6 @@ import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
-import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
 
 class TextMessageHandler(
   private val serializer: MessageSerializer,
@@ -57,15 +57,10 @@ class TextMessageHandler(
     val textMessage = request.message as TextMessage
     log("TextMessageHandler", "Sending text message: ${textMessage.text}")
 
-    // Insert the sent message into the database
-    messageRepository.insertMessage(
-      remoteDeviceId = toDeviceId,
-      content = textMessage.text,
-      isSender = true,
-      messageType = PersistenceMessageType.TEXT,
-      isRead = true, // Outgoing messages are read by default
-      mimeType = "text/plain"
-    )
+    // Persistence of the outgoing message is handled by DeviceChatViewModel.sendTextMessage
+    // (optimistic-outbox pattern): the row is inserted as SENDING before messenger.send() is
+    // called and updated to SENT/FAILED based on the terminal progress event. Inserting here
+    // (i.e. only when bytes are actually written) would silently drop messages to offline peers.
 
     // Send the message directly since it has no payload
     writeChannel.sendMessage(textMessage, serializer, cipher)

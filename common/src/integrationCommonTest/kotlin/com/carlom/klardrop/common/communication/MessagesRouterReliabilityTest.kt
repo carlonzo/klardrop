@@ -231,7 +231,8 @@ class MessagesRouterReliabilityTest {
         fileTransferId: Long?,
         isRead: Boolean,
         mimeType: String,
-      ) {
+        sendStatus: com.carlom.klardrop.common.persistence.MessageSendStatus?,
+      ): Long {
         // Only the inbound (received) TEXT matters for the repro; an outgoing insert on the
         // server would be a sender-side artifact and shouldn't happen here.
         insertAttempts++
@@ -392,8 +393,10 @@ internal open class NoopMessageRepository : MessageRepository {
     fileTransferId: Long?,
     isRead: Boolean,
     mimeType: String,
-  ) {
-  }
+    sendStatus: com.carlom.klardrop.common.persistence.MessageSendStatus?,
+  ): Long = 1L
+
+  override suspend fun updateMessageSendStatus(id: Long, status: com.carlom.klardrop.common.persistence.MessageSendStatus) {}
 
   override suspend fun insertFileTransfer(
     fileName: String,

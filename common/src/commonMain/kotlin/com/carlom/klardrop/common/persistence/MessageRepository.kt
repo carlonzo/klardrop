@@ -18,6 +18,10 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 interface MessageRepository {
+  /**
+   * Insert a message row and return its row ID so callers can later call
+   * [updateMessageSendStatus] to flip the send_status from SENDING to SENT/FAILED.
+   */
   suspend fun insertMessage(
     remoteDeviceId: String,
     content: String,
@@ -25,8 +29,11 @@ interface MessageRepository {
     messageType: MessageType,
     fileTransferId: Long? = null,
     isRead: Boolean = false,
-    mimeType: String = "text/plain"
-  )
+    mimeType: String = "text/plain",
+    sendStatus: MessageSendStatus? = null,
+  ): Long
+
+  suspend fun updateMessageSendStatus(id: Long, status: MessageSendStatus)
 
   suspend fun insertFileTransfer(
     fileName: String,
@@ -61,6 +68,7 @@ interface MessageRepository {
 
 enum class MessageType { TEXT, FILE }
 enum class FileTransferStatus { IN_PROGRESS, COMPLETED, FAILED, REJECTED }
+enum class MessageSendStatus { SENDING, SENT, FAILED }
 
 class MessageRepositoryImpl(
   private val database: AppDatabase,
@@ -75,20 +83,34 @@ class MessageRepositoryImpl(
     messageType: MessageType,
     fileTransferId: Long?,
     isRead: Boolean,
-    mimeType: String
-  ) {
+    mimeType: String,
+    sendStatus: MessageSendStatus?,
+  ): Long = withContext(ioDispatcher) {
+    database.messageQueries.insert(
+      remote_device_id = remoteDeviceId,
+      content = content,
+      timestamp = clock.currentTimeMillis(),
+      is_sender = if (isSender) 1L else 0L,
+      message_type = messageType.name,
+      file_transfer_id = fileTransferId,
+      is_read = if (isRead) 1L else 0L,
+      mime_type = mimeType,
+      send_status = sendStatus?.name,
+    ).await().also {
+      log("MessageRepositoryImpl", "Inserted message for device $remoteDeviceId with type $messageType and file transfer ID $fileTransferId")
+    }
+    database.messageQueries.lastInsertRowId().executeAsOne().also { rowId ->
+      log("MessageRepositoryImpl", "Inserted message rowId=$rowId for device $remoteDeviceId")
+    }
+  }
+
+  override suspend fun updateMessageSendStatus(id: Long, status: MessageSendStatus) {
     withContext(ioDispatcher) {
-      database.messageQueries.insert(
-        remote_device_id = remoteDeviceId,
-        content = content,
-        timestamp = clock.currentTimeMillis(),
-        is_sender = if (isSender) 1L else 0L,
-        message_type = messageType.name,
-        file_transfer_id = fileTransferId,
-        is_read = if (isRead) 1L else 0L,
-        mime_type = mimeType
+      database.messageQueries.updateMessageSendStatus(
+        send_status = status.name,
+        id = id,
       ).await().also {
-        log("MessageRepositoryImpl", "Inserted message for device $remoteDeviceId with type $messageType and file transfer ID $fileTransferId")
+        log("MessageRepositoryImpl", "Updated message send status for ID $id to $status")
       }
     }
   }
