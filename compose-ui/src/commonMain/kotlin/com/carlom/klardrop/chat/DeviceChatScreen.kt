@@ -55,6 +55,7 @@ import com.carlom.klardrop.components.KdAvatarStyle
 import com.carlom.klardrop.components.KdBannerTone
 import com.carlom.klardrop.components.KdBubbleDirection
 import com.carlom.klardrop.components.KdBubbleMaxContentHeight
+import com.carlom.klardrop.components.KdDeliveryState
 import com.carlom.klardrop.components.KdDeviceKind
 import com.carlom.klardrop.components.KdFileState
 import com.carlom.klardrop.components.KdStatus
@@ -64,7 +65,8 @@ import com.carlom.klardrop.dropTargetForSending
 import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.FileMessage as ProtoFileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage as ProtoTextMessage
-import com.carlom.klardrop.common.database.Messages
+import com.carlom.klardrop.common.persistence.ChatMessage
+import com.carlom.klardrop.common.persistence.DeliveryStatus
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageType
@@ -130,7 +132,7 @@ fun DeviceChatScreen(
         }
     }
 
-    val sortedMessages by remember(messagesState) {
+    val sortedMessages: List<ChatMessage> by remember(messagesState) {
         derivedStateOf { messagesState.sortedByDescending { it.timestamp } }
     }
 
@@ -259,7 +261,7 @@ fun DeviceChatScreen(
                     }
                 },
                 onAttach = { filePickerLauncher.launch() },
-                enabled = !isOffline,
+                enabled = true, // Allow composing while offline; send shows SENDING→FAILED bubble
                 desktopVariant = mode == DeviceChatMode.Pane,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -386,7 +388,7 @@ private fun ChatEmptyState(
 
 @Composable
 private fun MessagesList(
-    messages: List<Messages>,
+    messages: List<ChatMessage>,
     messageRepository: MessageRepository,
     onOpenFileRequest: (filePath: String) -> Unit,
     onOpenUrlRequest: (url: String) -> Unit,
@@ -424,7 +426,7 @@ private fun MessagesList(
             val older = messages.getOrNull(index + 1)
 
             val isFirstOfGroup = older == null ||
-                older.is_sender != message.is_sender ||
+                older.isSender != message.isSender ||
                 message.timestamp - older.timestamp > GROUP_GAP_MILLIS
 
             val showDayDivider = older == null ||
@@ -454,7 +456,7 @@ private fun MessagesList(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageRow(
-    message: Messages,
+    message: ChatMessage,
     messageRepository: MessageRepository,
     onOpenFileRequest: (filePath: String) -> Unit,
     onOpenUrlRequest: (url: String) -> Unit,
@@ -463,14 +465,14 @@ private fun MessageRow(
     isFirstOfGroup: Boolean,
     isLargeScreen: Boolean,
 ) {
-    val isSender = message.is_sender != 0L
+    val isSender = message.isSender
     val direction = if (isSender) KdBubbleDirection.Out else KdBubbleDirection.In
     val topPadding = if (isFirstOfGroup) KdTheme.spacing.s2 else KdTheme.spacing.s1
     val timestamp = formatChatTime(message.timestamp)
 
     Column(modifier = Modifier.padding(top = topPadding)) {
         when {
-            message.message_type == MessageType.FILE.name && message.file_transfer_id != null -> {
+            message.messageType == MessageType.FILE.name && message.fileTransferId != null -> {
                 FileMessageBubble(
                     message = message,
                     messageRepository = messageRepository,
@@ -480,7 +482,7 @@ private fun MessageRow(
                     onRetryFile = onRetryFile,
                 )
             }
-            message.message_type == MessageType.TEXT.name -> {
+            message.messageType == MessageType.TEXT.name -> {
                 TextMessageBubble(
                     message = message,
                     direction = direction,
@@ -504,7 +506,7 @@ private fun MessageRow(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TextMessageBubble(
-    message: Messages,
+    message: ChatMessage,
     direction: KdBubbleDirection,
     timestamp: String,
     isLargeScreen: Boolean,
@@ -520,11 +522,19 @@ private fun TextMessageBubble(
     var overflowing by remember(message.content) { mutableStateOf(false) }
     var showViewer by remember(message.content) { mutableStateOf(false) }
 
+    // Map persistence DeliveryStatus → UI KdDeliveryState.
+    val kdDeliveryState: KdDeliveryState? = when (message.deliveryStatus) {
+        DeliveryStatus.SENDING -> KdDeliveryState.Sending
+        DeliveryStatus.FAILED -> KdDeliveryState.Failed
+        DeliveryStatus.SENT -> null // null = no label shown (sent is the default expectation)
+    }
+
     Column {
         if (openableUrl != null) {
             Bubble(
                 direction = direction,
                 timestamp = timestamp,
+                delivery = kdDeliveryState,
                 content = {
                     Text(
                         text = message.content,
@@ -542,6 +552,7 @@ private fun TextMessageBubble(
             Bubble(
                 direction = direction,
                 timestamp = timestamp,
+                delivery = kdDeliveryState,
                 content = {
                     SelectionContainer {
                         Text(
@@ -587,7 +598,7 @@ private fun TextMessageBubble(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileMessageBubble(
-    message: Messages,
+    message: ChatMessage,
     messageRepository: MessageRepository,
     direction: KdBubbleDirection,
     timestamp: String,
@@ -595,10 +606,10 @@ private fun FileMessageBubble(
     onRetryFile: (fileTransferId: Long) -> Unit,
 ) {
     val fileTransferState by messageRepository.getFileTransferById(
-        message.file_transfer_id ?: return
+        message.fileTransferId ?: return
     ).collectAsState(null)
 
-    val isSender = message.is_sender != 0L
+    val isSender = message.isSender
     val currentStatus = fileTransferState?.status
     val filePath = fileTransferState?.file_path
     val fileName = fileTransferState?.file_name ?: message.content
@@ -669,7 +680,7 @@ private fun FileMessageBubble(
                     state = fileState,
                     onRetry = {
                         if (isSender) {
-                            message.file_transfer_id?.let(onRetryFile)
+                            message.fileTransferId?.let(onRetryFile)
                         }
                     },
                     modifier = if (openablePath != null) {
@@ -696,7 +707,7 @@ private fun FileMessageBubble(
 
 @Composable
 private fun UnknownMessageBubble(
-    message: Messages,
+    message: ChatMessage,
     direction: KdBubbleDirection,
     timestamp: String,
 ) {
@@ -708,7 +719,7 @@ private fun UnknownMessageBubble(
         timestamp = timestamp,
         content = {
             Text(
-                text = "Unsupported message (${message.message_type})",
+                text = "Unsupported message (${message.messageType})",
                 style = typography.caption.copy(color = colors.err),
             )
         },

@@ -10,12 +10,17 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
-import com.carlom.klardrop.common.database.Messages
+import com.carlom.klardrop.common.persistence.ChatMessage
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.persistence.MessageOutbox
 import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.persistence.MessageType
+import com.carlom.klardrop.common.persistence.OutboxEntry
+import com.carlom.klardrop.common.persistence.SendStatus
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
@@ -45,6 +50,8 @@ class DeviceChatViewModel(
   private val platformFileSystem: PlatformFileSystem,
   private val clipboardManager: ClipboardManager,
   reachabilitySource: StateFlow<Map<String, Reachability>>,
+  private val outbox: MessageOutbox = MessageOutbox(),
+  private val clock: Clock = Clock(),
 ) {
 
   // TODO we need to dispose this viewmodel
@@ -59,7 +66,7 @@ class DeviceChatViewModel(
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Reachability.Unknown)
 
 
-  val messages: StateFlow<List<Messages>> =
+  val messages: StateFlow<List<ChatMessage>> =
     messageRepository.getMessagesForDevice(deviceId, limit = 100)
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -93,9 +100,50 @@ class DeviceChatViewModel(
       try {
         _uiState.value = _uiState.value.copy(error = null)
 
-        // Send the message - persistence is handled by TextMessageHandler
         val textMessage = TextMessage(text = text)
-        sendMessage(textMessage.toSimpleSendRequest())
+        val messageId = textMessage.id.toLong()
+
+        // (1) Optimistic: add to in-memory outbox as SENDING BEFORE touching the network.
+        // This makes the bubble appear immediately without any disk write.
+        outbox.add(
+          OutboxEntry(
+            messageId = messageId,
+            remoteDeviceId = deviceId,
+            content = text,
+            timestamp = clock.currentTimeMillis(),
+          )
+        )
+
+        val finalStatus = messenger.send(deviceId, textMessage.toSimpleSendRequest())
+          .untilCompleted()
+          .lastOrNull()
+
+        when (finalStatus) {
+          is MessengerSendProgress.Completed -> {
+            // TextMessageHandler.handleOutgoing already persisted the SENT row to disk.
+            // The VM must NOT insert again — just drop the outbox entry.
+            outbox.remove(messageId)
+          }
+          is MessengerSendProgress.Error -> {
+            // Persist as FAILED so it survives restart and is retryable, then drop from outbox.
+            messageRepository.insertMessage(
+              remoteDeviceId = deviceId,
+              content = text,
+              isSender = true,
+              messageType = MessageType.TEXT,
+              isRead = true,
+              sendStatus = SendStatus.FAILED,
+            )
+            outbox.remove(messageId)
+            _uiState.update {
+              it.copy(error = "Failed to send message: ${finalStatus.message}")
+            }
+          }
+          else -> {
+            // Null / Pending — shouldn't happen after untilCompleted, but drop the outbox entry.
+            outbox.remove(messageId)
+          }
+        }
 
       } catch (e: Exception) {
         _uiState.value = _uiState.value.copy(
@@ -176,7 +224,7 @@ class DeviceChatViewModel(
             )
 
             // Send the file - handler will create DB records and manage transfer
-            sendMessage(fileMessage.toSendRequest(file))
+            sendFileMessage(fileMessage.toSendRequest(file))
           }
         }
 
@@ -216,11 +264,8 @@ class DeviceChatViewModel(
     }
   }
 
-
-  private suspend fun sendMessage(
-    sendRequest: SendMessageRequest
-  ) {
-
+  /** Send a file message — persistence is handled by FileMessageHandler. */
+  private suspend fun sendFileMessage(sendRequest: SendMessageRequest) {
     val finalStatus = messenger.send(deviceId, sendRequest)
       .untilCompleted()
       .lastOrNull()
@@ -231,7 +276,6 @@ class DeviceChatViewModel(
       }
     }
   }
-
 }
 
 data class ChatUiState(

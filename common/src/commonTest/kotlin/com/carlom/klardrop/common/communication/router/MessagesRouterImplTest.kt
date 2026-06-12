@@ -69,7 +69,9 @@ class MessagesRouterImplTest {
       messageType: com.carlom.klardrop.common.persistence.MessageType,
       fileTransferId: Long?,
       isRead: Boolean,
-      mimeType: String
+      mimeType: String,
+      messageId: Long?,
+      sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
     ) {
       calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
     }
@@ -114,7 +116,7 @@ class MessagesRouterImplTest {
     override fun getMessagesForDevice(
       remoteDeviceId: String,
       limit: Long
-    ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> =
+    ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.persistence.ChatMessage>> =
       kotlinx.coroutines.flow.flowOf(emptyList())
 
     override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> =

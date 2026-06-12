@@ -231,6 +231,8 @@ class MessagesRouterReliabilityTest {
         fileTransferId: Long?,
         isRead: Boolean,
         mimeType: String,
+        messageId: Long?,
+        sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
       ) {
         // Only the inbound (received) TEXT matters for the repro; an outgoing insert on the
         // server would be a sender-side artifact and shouldn't happen here.
@@ -392,6 +394,8 @@ internal open class NoopMessageRepository : MessageRepository {
     fileTransferId: Long?,
     isRead: Boolean,
     mimeType: String,
+    messageId: Long?,
+    sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
   ) {
   }
 
@@ -414,7 +418,7 @@ internal open class NoopMessageRepository : MessageRepository {
   override fun getMessagesForDevice(
     remoteDeviceId: String,
     limit: Long,
-  ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> =
+  ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.persistence.ChatMessage>> =
     kotlinx.coroutines.flow.flowOf(emptyList())
 
   override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> =

@@ -15,6 +15,7 @@ import com.carlom.klardrop.common.discovery.TrustAwareDiscoveryUtils
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
+import com.carlom.klardrop.common.persistence.MessageOutbox
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.Clock
@@ -117,6 +118,8 @@ class CommonComponent(
   fun clipboardManager() = clipboardManager
 
   fun messageRepository() = messageRepository
+
+  fun messageOutbox(): MessageOutbox = storageModule.messageOutbox
 
   fun fileManager() = fileManager
 

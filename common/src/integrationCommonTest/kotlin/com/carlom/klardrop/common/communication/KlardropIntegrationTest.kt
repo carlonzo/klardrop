@@ -919,7 +919,9 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
     messageType: com.carlom.klardrop.common.persistence.MessageType,
     fileTransferId: Long?,
     isRead: Boolean,
-    mimeType: String
+    mimeType: String,
+    messageId: Long?,
+    sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
   ) {
   }
 
@@ -940,7 +942,7 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
   override fun getMessagesForDevice(
     remoteDeviceId: String,
     limit: Long
-  ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> = kotlinx.coroutines.flow.flowOf(emptyList())
+  ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.persistence.ChatMessage>> = kotlinx.coroutines.flow.flowOf(emptyList())
 
   override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> =
     kotlinx.coroutines.flow.flowOf(null)

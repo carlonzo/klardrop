@@ -565,7 +565,9 @@ private class MockMessageRepository : MessageRepository {
     messageType: PersistenceMessageType,
     fileTransferId: Long?,
     isRead: Boolean,
-    mimeType: String
+    mimeType: String,
+    messageId: Long?,
+    sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
   ) {
     calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
   }
@@ -592,7 +594,7 @@ private class MockMessageRepository : MessageRepository {
   override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> =
     kotlinx.coroutines.flow.flowOf(emptyMap())
   override fun getMessagesForDevice(remoteDeviceId: String, limit: Long) =
-    kotlinx.coroutines.flow.flowOf(emptyList<com.carlom.klardrop.common.database.Messages>())
+    kotlinx.coroutines.flow.flowOf(emptyList<com.carlom.klardrop.common.persistence.ChatMessage>())
   override fun getFileTransferById(id: Long) =
     kotlinx.coroutines.flow.flowOf<com.carlom.klardrop.common.database.File_transfers?>(null)
 }
