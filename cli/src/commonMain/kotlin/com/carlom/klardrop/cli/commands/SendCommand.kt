@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
+import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
@@ -15,8 +16,10 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.random.Random
@@ -51,6 +54,10 @@ class SendCommand : CliktCommand(
       "Use distinct paths per process for same-host multi-node testing.",
     envvar = "KLARDROP_HOME",
   )
+  private val settleTimeout by option(
+    "--settle-timeout",
+    help = "Seconds to wait for mDNS discovery to settle before giving up (default: 10)",
+  )
 
   override fun run() = runBlocking {
     val controller = CliController
@@ -67,16 +74,15 @@ class SendCommand : CliktCommand(
       exitProcess(EXIT_INIT_FAILURE)
     }
 
-    // Wait for device discovery
+    // Await target device with a bounded settle window so a freshly-started `send`
+    // doesn't fail immediately while mDNS is still resolving.
     echo("Looking for device $deviceId...")
-    delay(2000)
-
-    val devices = controller.getVisibleDevices().first()
-    val device = devices[deviceId]
+    val settleMs = (settleTimeout?.toLongOrNull() ?: 10L) * 1_000L
+    val device: DiscoveryDevice? = awaitDevice(controller.getVisibleDevices(), deviceId, settleMs)
 
     if (device == null) {
       CliLogging.error("Device $deviceId not found. Available devices:")
-      devices.values.forEach {
+      controller.getVisibleDevices().first().values.forEach {
         CliLogging.error("  ${it.deviceInfo.deviceId} - ${it.deviceInfo.name}")
       }
       controller.shutdown()
@@ -147,6 +153,31 @@ class SendCommand : CliktCommand(
       is MessengerSendProgress.Error -> exitProcess(EXIT_SEND_FAILURE)
       else -> exitProcess(EXIT_SEND_FAILURE) // flow drained with no terminal (shouldn't happen)
     }
+  }
+
+  /**
+   * Poll [devicesFlow] for [targetId] up to [timeoutMs] milliseconds.
+   * Returns the [DiscoveryDevice] as soon as it appears, or null if the window expires.
+   * Checks every 500 ms so the UI stays responsive while mDNS resolves.
+   */
+  private suspend fun awaitDevice(
+    devicesFlow: StateFlow<Map<String, DiscoveryDevice>>,
+    targetId: String,
+    timeoutMs: Long,
+  ): DiscoveryDevice? = withTimeoutOrNull(timeoutMs) {
+    var elapsed = 0L
+    val pollMs = 500L
+    while (true) {
+      val device = devicesFlow.value[targetId]
+      if (device != null) return@withTimeoutOrNull device
+      if (elapsed > 0 && elapsed % 2_000L == 0L) {
+        echo("  still waiting for $targetId (${elapsed / 1_000}s)...")
+      }
+      delay(pollMs)
+      elapsed += pollMs
+    }
+    @Suppress("UNREACHABLE_CODE")
+    null
   }
 
   private fun buildFileRequest(
