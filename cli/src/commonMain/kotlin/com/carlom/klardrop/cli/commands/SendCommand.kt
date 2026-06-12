@@ -5,6 +5,7 @@ import com.carlom.klardrop.cli.CliLogging
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
+import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
 import com.github.ajalt.clikt.core.CliktCommand
@@ -12,11 +13,15 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.io.files.Path
+import kotlinx.io.files.SystemFileSystem
 import kotlin.random.Random
 import kotlin.system.exitProcess
+import java.io.File as JvmFile
 
 // Exit codes:
 //   0 = delivery confirmed (ACK_RECEIVED)
@@ -40,11 +45,23 @@ class SendCommand : CliktCommand(
   private val debug by option("--debug", help = "Enable debug output").flag()
   private val noKlardrop by option("--no-klardrop", help = "Disable Klardrop TCP server").flag()
   private val noNearby by option("--no-nearby", help = "Disable Nearby Share server").flag()
+  private val dataDir by option(
+    "--data-dir",
+    help = "Root directory for identity/trust/storage (overrides KLARDROP_HOME env). " +
+      "Use distinct paths per process for same-host multi-node testing.",
+    envvar = "KLARDROP_HOME",
+  )
 
   override fun run() = runBlocking {
     val controller = CliController
 
-    if (!controller.initialize(debug = debug, disableKlardrop = noKlardrop, disableNearby = noNearby)) {
+    if (!controller.initialize(
+        debug = debug,
+        disableKlardrop = noKlardrop,
+        disableNearby = noNearby,
+        dataDir = dataDir,
+      )
+    ) {
       CliLogging.error("Failed to initialize Klardrop")
       controller.shutdown()
       exitProcess(EXIT_INIT_FAILURE)
@@ -69,19 +86,9 @@ class SendCommand : CliktCommand(
     echo("Found device: ${device.deviceInfo.name}")
 
     // Determine what to send
-    // NOTE: file sending (--file / path argument) is wired at the protocol level but
-    // fileSize=0L and no PlatformFile are passed here, so actual byte streaming is broken.
-    // Text send is fully functional. Tracked as a known limitation.
     val messageRequest = when {
       file != null -> {
-        echo("Sending file: $file")
-        val fileMessage = FileMessage(
-          id = Random.nextInt(),
-          fileName = file!!.substringAfterLast('/'),
-          fileSize = 0L, // known limitation: receiver allocates against this
-          mimeType = "application/octet-stream"
-        )
-        fileMessage.toSimpleSendRequest()
+        buildFileRequest(file!!, controller)
       }
 
       text != null -> {
@@ -96,14 +103,7 @@ class SendCommand : CliktCommand(
       content != null -> {
         // Try to determine if content is a file path or text
         if (content!!.contains('/') || content!!.contains('\\')) {
-          echo("Sending file: $content")
-          val fileMessage = FileMessage(
-            id = Random.nextInt(),
-            fileName = content!!.substringAfterLast('/'),
-            fileSize = 0L,
-            mimeType = "application/octet-stream"
-          )
-          fileMessage.toSimpleSendRequest()
+          buildFileRequest(content!!, controller)
         } else {
           echo("Sending text: $content")
           val textMessage = TextMessage(
@@ -147,5 +147,28 @@ class SendCommand : CliktCommand(
       is MessengerSendProgress.Error -> exitProcess(EXIT_SEND_FAILURE)
       else -> exitProcess(EXIT_SEND_FAILURE) // flow drained with no terminal (shouldn't happen)
     }
+  }
+
+  private fun buildFileRequest(
+    filePath: String,
+    controller: CliController,
+  ): FileMessage.FileSendRequest {
+    val path = Path(filePath)
+    val meta = SystemFileSystem.metadataOrNull(path)
+    if (meta == null || !meta.isRegularFile) {
+      CliLogging.error("File not found or not a regular file: $filePath")
+      controller.shutdown()
+      exitProcess(EXIT_USAGE_ERROR)
+    }
+    val fileSize = meta.size
+    val fileName = path.name
+    echo("Sending file: $filePath ($fileSize bytes)")
+    val fileMessage = FileMessage(
+      id = Random.nextInt(),
+      fileName = fileName,
+      fileSize = fileSize,
+      mimeType = "application/octet-stream",
+    )
+    return fileMessage.toSendRequest(PlatformFile(JvmFile(filePath)))
   }
 }

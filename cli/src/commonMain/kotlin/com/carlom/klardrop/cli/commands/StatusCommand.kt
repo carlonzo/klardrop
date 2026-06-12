@@ -19,11 +19,17 @@ class StatusCommand : CliktCommand(
 
   private val debug by option("--debug", help = "Enable debug output").flag()
   private val json by option("--json", help = "Output result as JSON to stdout").flag()
+  private val dataDir by option(
+    "--data-dir",
+    help = "Root directory for identity/trust/storage (overrides KLARDROP_HOME env). " +
+      "Use distinct paths per process for same-host multi-node testing.",
+    envvar = "KLARDROP_HOME",
+  )
 
   override fun run() = runBlocking {
     val controller = CliController
 
-    if (!controller.initialize(debug = debug)) {
+    if (!controller.initialize(debug = debug, dataDir = dataDir)) {
       CliLogging.error("Failed to initialize Klardrop")
       exitProcess(EXIT_INIT_FAILURE)
     }

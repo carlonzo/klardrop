@@ -35,12 +35,19 @@ class ListenCommand : CliktCommand(
   private val debug by option("--debug", help = "Enable debug output").flag()
   private val noKlardrop by option("--no-klardrop", help = "Disable Klardrop TCP server").flag()
   private val noNearby by option("--no-nearby", help = "Disable Nearby Share server").flag()
+  private val dataDir by option(
+    "--data-dir",
+    help = "Root directory for identity/trust/storage (overrides KLARDROP_HOME env). " +
+      "Use distinct paths per process for same-host multi-node testing.",
+    envvar = "KLARDROP_HOME",
+  )
 
   override fun run() {
     if (!CliController.initialize(
         debug = debug,
         disableKlardrop = noKlardrop,
-        disableNearby = noNearby
+        disableNearby = noNearby,
+        dataDir = dataDir,
       )
     ) {
       CliLogging.error("Failed to initialize Klardrop")

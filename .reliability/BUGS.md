@@ -111,3 +111,29 @@ Primary file: `common/src/macosMain/kotlin/com/carlom/klardrop/common/InternalPl
 
 ## Live-matrix findings
 _(filled by Track B)_
+
+---
+
+## CLI Tooling Changes
+
+### fileSize=0L bug — SendCommand hardcoded zero file size (FIXED)
+
+**Bug**: `SendCommand.buildFileRequest()` previously constructed a `FileMessage` with `fileSize = 0L` and passed no `PlatformFile` (used `toSimpleSendRequest()` instead of `toSendRequest(file)`). The receiver allocated its buffer against the declared 0-byte size, content hash comparison was vacuous, and `FileReceivePipeline` would mark the transfer completed with 0 bytes received.
+
+**Fix**: `buildFileRequest()` now calls `SystemFileSystem.metadataOrNull(path)` to resolve the real file size, exits with usage error if the file doesn't exist, and calls `fileMessage.toSendRequest(PlatformFile(JvmFile(filePath)))` to pass the actual platform file reference. Branch: `feature/reliability-hardening`, files: `cli/.../commands/SendCommand.kt`.
+
+**Same-host smoke result (2026-06-12)**: file `klardrop-smoke-test.txt` (70 bytes) sent from node A → node B; node B log confirms `beginReceive klardrop-smoke-test.txt (70 bytes)` and `Received klardrop-smoke-test.txt (70 bytes) in 15ms`. Size correct.
+
+---
+
+### --data-dir / KLARDROP_HOME isolation (ADDED)
+
+**Feature**: All CLI commands (`discover`, `listen`, `send`, `status`) now accept `--data-dir=PATH` (also readable via `KLARDROP_HOME` env var). When set, the system property `klardrop.data.dir` is written before `Klardrop` initialises; `InternalPlatformDependencies.trustStorage()` roots its `DesktopTrustStorage` under `<data-dir>/trust` instead of `~/.klardrop`, giving each CLI process a separate identity/trust/device-ID.
+
+**Same-host smoke result (2026-06-12)**:
+- Node A (`--data-dir=/tmp/kd-A`): device ID = `b5853dfc`
+- Node B (`--data-dir=/tmp/kd-B`): device ID = `7063e321`
+- Distinct IDs confirmed; node A discovered node B via mDNS (the previously-failing same-host self-filter is resolved by the distinct short device IDs).
+- Text "samehost-hello" and file (70 bytes) both received by node B, exit 0.
+
+**Known smell from logs**: `[🔐 TrustManager]: Failed to sign UKEY2 binding — SecKeychainItemModifyContent: The specified item already exists in the keychain.` — the ECDH key is keyed by the short device ID in the macOS Keychain, but both processes share the same Keychain and the same short ID happens to collide with a pre-existing entry. The fallback to opportunistic (unauthenticated) encryption kicks in automatically and transfers still succeed, but the Keychain collision should be investigated if MAC-authenticated transfers are required in same-host multi-node setups. This is a pre-existing Keychain isolation gap, not introduced by this PR.
