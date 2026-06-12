@@ -69,15 +69,9 @@ class MessagesRouterImplTest {
       messageType: com.carlom.klardrop.common.persistence.MessageType,
       fileTransferId: Long?,
       isRead: Boolean,
-      mimeType: String,
-      sendStatus: com.carlom.klardrop.common.persistence.MessageSendStatus?,
-    ): Long {
+      mimeType: String
+    ) {
       calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
-      return 1L
-    }
-
-    override suspend fun updateMessageSendStatus(id: Long, status: com.carlom.klardrop.common.persistence.MessageSendStatus) {
-      calls.add("updateMessageSendStatus($id, $status)")
     }
 
     override suspend fun insertFileTransfer(

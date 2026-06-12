@@ -13,8 +13,6 @@ import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.database.Messages
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.persistence.MessageRepository
-import com.carlom.klardrop.common.persistence.MessageSendStatus
-import com.carlom.klardrop.common.persistence.MessageType
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
@@ -95,37 +93,9 @@ class DeviceChatViewModel(
       try {
         _uiState.value = _uiState.value.copy(error = null)
 
-        // Optimistic outbox (B22): persist the outgoing message immediately as SENDING
-        // so it shows in the chat thread even when the peer is offline. The row is then
-        // flipped to SENT on Completed or FAILED on Error, mirroring the file-transfer
-        // status pattern.
+        // Send the message - persistence is handled by TextMessageHandler
         val textMessage = TextMessage(text = text)
-        val rowId = messageRepository.insertMessage(
-          remoteDeviceId = deviceId,
-          content = text,
-          isSender = true,
-          messageType = MessageType.TEXT,
-          isRead = true,
-          mimeType = "text/plain",
-          sendStatus = MessageSendStatus.SENDING,
-        )
-
-        val finalStatus = messenger.send(deviceId, textMessage.toSimpleSendRequest())
-          .untilCompleted()
-          .lastOrNull()
-
-        val terminalStatus = if (finalStatus is MessengerSendProgress.Error) {
-          MessageSendStatus.FAILED
-        } else {
-          MessageSendStatus.SENT
-        }
-        messageRepository.updateMessageSendStatus(rowId, terminalStatus)
-
-        if (finalStatus is MessengerSendProgress.Error) {
-          _uiState.update {
-            it.copy(error = "Failed to send message: ${finalStatus.message}")
-          }
-        }
+        sendMessage(textMessage.toSimpleSendRequest())
 
       } catch (e: Exception) {
         _uiState.value = _uiState.value.copy(
@@ -250,6 +220,7 @@ class DeviceChatViewModel(
   private suspend fun sendMessage(
     sendRequest: SendMessageRequest
   ) {
+
     val finalStatus = messenger.send(deviceId, sendRequest)
       .untilCompleted()
       .lastOrNull()

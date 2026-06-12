@@ -55,7 +55,6 @@ import com.carlom.klardrop.components.KdAvatarStyle
 import com.carlom.klardrop.components.KdBannerTone
 import com.carlom.klardrop.components.KdBubbleDirection
 import com.carlom.klardrop.components.KdBubbleMaxContentHeight
-import com.carlom.klardrop.components.KdDeliveryState
 import com.carlom.klardrop.components.KdDeviceKind
 import com.carlom.klardrop.components.KdFileState
 import com.carlom.klardrop.components.KdStatus
@@ -68,7 +67,6 @@ import com.carlom.klardrop.common.communication.message.TextMessage as ProtoText
 import com.carlom.klardrop.common.database.Messages
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
-import com.carlom.klardrop.common.persistence.MessageSendStatus
 import com.carlom.klardrop.common.persistence.MessageType
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
@@ -261,7 +259,7 @@ fun DeviceChatScreen(
                     }
                 },
                 onAttach = { filePickerLauncher.launch() },
-                enabled = true, // B22: text input always enabled; offline messages persist as FAILED
+                enabled = !isOffline,
                 desktopVariant = mode == DeviceChatMode.Pane,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -522,22 +520,11 @@ private fun TextMessageBubble(
     var overflowing by remember(message.content) { mutableStateOf(false) }
     var showViewer by remember(message.content) { mutableStateOf(false) }
 
-    // Map the persisted send_status to a KdDeliveryState for outgoing messages (B22).
-    val delivery: KdDeliveryState? = if (message.is_sender != 0L) {
-        when (message.send_status) {
-            MessageSendStatus.SENDING.name -> KdDeliveryState.Sending
-            MessageSendStatus.SENT.name    -> KdDeliveryState.Sent
-            MessageSendStatus.FAILED.name  -> KdDeliveryState.Failed
-            else                           -> null
-        }
-    } else null
-
     Column {
         if (openableUrl != null) {
             Bubble(
                 direction = direction,
                 timestamp = timestamp,
-                delivery = delivery,
                 content = {
                     Text(
                         text = message.content,
@@ -555,7 +542,6 @@ private fun TextMessageBubble(
             Bubble(
                 direction = direction,
                 timestamp = timestamp,
-                delivery = delivery,
                 content = {
                     SelectionContainer {
                         Text(

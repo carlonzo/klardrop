@@ -132,8 +132,6 @@ sqldelight {
   databases {
     create("AppDatabase") {
       packageName.set("com.carlom.klardrop.common.database")
-      version = 2
-      migrationOutputDirectory.set(file("src/commonMain/sqldelight/migrations"))
     }
   }
 }

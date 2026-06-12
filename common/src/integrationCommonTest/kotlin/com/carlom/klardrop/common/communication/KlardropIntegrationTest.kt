@@ -919,11 +919,9 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
     messageType: com.carlom.klardrop.common.persistence.MessageType,
     fileTransferId: Long?,
     isRead: Boolean,
-    mimeType: String,
-    sendStatus: com.carlom.klardrop.common.persistence.MessageSendStatus?,
-  ): Long = 1L
-
-  override suspend fun updateMessageSendStatus(id: Long, status: com.carlom.klardrop.common.persistence.MessageSendStatus) {}
+    mimeType: String
+  ) {
+  }
 
   override suspend fun insertFileTransfer(
     fileName: String,

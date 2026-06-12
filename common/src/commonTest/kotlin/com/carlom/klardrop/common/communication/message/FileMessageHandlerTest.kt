@@ -565,15 +565,9 @@ private class MockMessageRepository : MessageRepository {
     messageType: PersistenceMessageType,
     fileTransferId: Long?,
     isRead: Boolean,
-    mimeType: String,
-    sendStatus: com.carlom.klardrop.common.persistence.MessageSendStatus?,
-  ): Long {
+    mimeType: String
+  ) {
     calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
-    return nextMessageId++
-  }
-
-  override suspend fun updateMessageSendStatus(id: Long, status: com.carlom.klardrop.common.persistence.MessageSendStatus) {
-    calls.add("updateMessageSendStatus($id, $status)")
   }
 
   override suspend fun insertFileTransfer(fileName: String, filePath: String, totalSize: Long, status: FileTransferStatus, mimeType: String): Long {
