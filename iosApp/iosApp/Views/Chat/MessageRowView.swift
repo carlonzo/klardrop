@@ -17,12 +17,15 @@ private typealias KdPlatformImage = NSImage
 
 // ---------------------------------------------------------------------------
 // MessageRowView
-// Dispatches a Messages row to the appropriate bubble subview.
+// Dispatches a ChatMessage to the appropriate bubble subview.
 // Mirrors: compose-ui/.../chat/DeviceChatScreen.kt  MessageRow +
 //          TextMessageBubble / FileMessageBubble / UnknownMessageBubble
 //
 // Per-file-transfer Flow subscriptions live inside FileMessageBubble (each
 // row opens its own small Task) to avoid unbounded collectors on long threads.
+//
+// B26: Updated from Messages (SQLDelight row) to ChatMessage (the merged
+// UI-facing type returned by MessageRepository.getMessagesForDevice since B22).
 // ---------------------------------------------------------------------------
 
 /// Group-gap threshold in milliseconds (mirrors Kotlin's GROUP_GAP_MILLIS = 5 min).
@@ -30,20 +33,20 @@ private let groupGapMillis: Int64 = 5 * 60 * 1000
 
 struct MessageRowView: View {
 
-    let message: Messages
+    let message: ChatMessage
     let model: ChatModel
     let isFirstOfGroup: Bool
 
     @Environment(\.kdColors) private var kd
 
-    private var isSender: Bool { message.is_sender != 0 }
+    private var isSender: Bool { message.isSender }
     private var direction: KdBubbleDirection { isSender ? .outgoing : .incoming }
     private var timestamp: String { ChatTimeFormat.time(message.timestamp) }
     private var topPadding: CGFloat { isFirstOfGroup ? KdSpacing.s2 : KdSpacing.s1 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if message.message_type == "FILE", let ftId = message.file_transfer_id?.int64Value {
+            if message.messageType == "FILE", let ftId = message.fileTransferId?.int64Value {
                 FileMessageBubble(
                     message: message,
                     fileTransferId: ftId,
@@ -51,7 +54,7 @@ struct MessageRowView: View {
                     direction: direction,
                     timestamp: timestamp
                 )
-            } else if message.message_type == "TEXT" {
+            } else if message.messageType == "TEXT" {
                 TextMessageBubble(
                     message: message,
                     direction: direction,
@@ -74,7 +77,7 @@ struct MessageRowView: View {
 
 private struct TextMessageBubble: View {
 
-    let message: Messages
+    let message: ChatMessage
     let direction: KdBubbleDirection
     let timestamp: String
     let model: ChatModel
@@ -167,7 +170,7 @@ private struct TextHeightKey: PreferenceKey {
 
 private struct FileMessageBubble: View {
 
-    let message: Messages
+    let message: ChatMessage
     let fileTransferId: Int64
     let model: ChatModel
     let direction: KdBubbleDirection
@@ -185,7 +188,7 @@ private struct FileMessageBubble: View {
     @State private var previewURL: URL? = nil
     #endif
 
-    private var isSender: Bool { message.is_sender != 0 }
+    private var isSender: Bool { message.isSender }
 
     private var fileState: KdFileState {
         guard let ft = fileTransfer else {
@@ -361,7 +364,7 @@ private struct QuickLookPreview: UIViewControllerRepresentable {
 
 private struct UnknownMessageBubble: View {
 
-    let message: Messages
+    let message: ChatMessage
     let direction: KdBubbleDirection
     let timestamp: String
 
@@ -369,7 +372,7 @@ private struct UnknownMessageBubble: View {
 
     var body: some View {
         BubbleView(direction: direction, timestamp: timestamp) {
-            Text("Unsupported message (\(message.message_type))")
+            Text("Unsupported message (\(message.messageType))")
                 .kdStyle(.caption, color: kd.err)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
