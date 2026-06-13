@@ -229,6 +229,19 @@ internal fun createTestServer(
       fileManager,
       coroutines,
       authorizer,
+      messageRepository = object : com.carlom.klardrop.common.persistence.MessageRepository {
+        override suspend fun insertMessage(remoteDeviceId: String, content: String, isSender: Boolean, messageType: com.carlom.klardrop.common.persistence.MessageType, fileTransferId: Long?, isRead: Boolean, mimeType: String, messageId: Long?, sendStatus: com.carlom.klardrop.common.persistence.SendStatus) {}
+        override suspend fun insertFileTransfer(fileName: String, filePath: String, totalSize: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus, mimeType: String): Long = 0L
+        override suspend fun updateFileTransferStatus(id: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus) {}
+        override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {}
+        override suspend fun markStaleInProgressAsFailed() {}
+        override suspend fun markMessagesAsRead(remoteDeviceId: String) {}
+        override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long = 0L
+        override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> = kotlinx.coroutines.flow.flowOf(emptyMap())
+        override fun getMessagesForDevice(remoteDeviceId: String, limit: Long): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.persistence.ChatMessage>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> = kotlinx.coroutines.flow.flowOf(null)
+      },
+      clock = com.carlom.klardrop.common.utils.Clock(),
     ),
     visibleDevices = visibleDevices,
     messageReceiver = messageReceiver,

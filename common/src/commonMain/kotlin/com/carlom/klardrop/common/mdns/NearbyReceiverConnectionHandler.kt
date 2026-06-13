@@ -9,6 +9,9 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.router.IncomingAuthorizer
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.toDeviceType
+import com.carlom.klardrop.common.persistence.FileTransferStatus
+import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
@@ -42,6 +45,7 @@ class NearbyReceiverConnectionHandler(
   private val fileManager: FileManager,
   coroutines: Coroutines,
   private val incomingAuthorizer: IncomingAuthorizer,
+  private val messageRepository: MessageRepository,
 ) {
 
   private val messagesToReceive = mutableMapOf<Long, Message>()
@@ -163,6 +167,25 @@ class NearbyReceiverConnectionHandler(
     nearbyConnection: D2DConnectionContext
   ) {
 
+    val senderDeviceId = receiveFlow.value.device?.deviceId.orEmpty()
+
+    // Pre-insert file_transfer rows for every incoming file so that the file message
+    // row can reference its fileTransferId (mirrors FileMessageHandler.beginReceive).
+    val fileTransferIds = buildMap<Long, Long> {
+      messagesToReceive.forEach { (payloadId, message) ->
+        if (message is FileMessage) {
+          val fileTransferId = messageRepository.insertFileTransfer(
+            fileName = message.fileName,
+            filePath = "",
+            totalSize = message.fileSize,
+            status = FileTransferStatus.IN_PROGRESS,
+            mimeType = message.mimeType,
+          )
+          put(payloadId, fileTransferId)
+        }
+      }
+    }
+
     val fileTransfers = buildMap {
 
       messagesToReceive.forEach {
@@ -220,8 +243,28 @@ class NearbyReceiverConnectionHandler(
             // otherwise the last chunk's bytes are still sitting in the okio
             // buffer when onTransferCompleted reads the underlying storage.
             runCatching { fileTransfer.bufferedSink.close() }
-            fileTransfer.onTransferCompleted()
+            val finalPath = fileTransfer.onTransferCompleted()
             log("NearbyReceiverConnectionHandler", "File transfer completed")
+
+            // Persist the received file to the database so it appears in chat
+            // (mirrors FileMessageHandler.beginReceive + FileReceivePipeline.complete).
+            val fileTransferId = fileTransferIds[payloadId]
+            if (fileTransferId != null) {
+              if (finalPath != null) {
+                messageRepository.updateFileTransferFilePath(fileTransferId, finalPath.toString())
+              }
+              messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.COMPLETED)
+              messageRepository.insertMessage(
+                remoteDeviceId = senderDeviceId,
+                content = message.fileName,
+                isSender = false,
+                messageType = PersistenceMessageType.FILE,
+                fileTransferId = fileTransferId,
+                isRead = false,
+                mimeType = message.mimeType,
+              )
+            }
+
             pendingTransfers.remove(payloadId)
           } else {
             processFileChunk(payload, fileTransfer)
@@ -230,12 +273,23 @@ class NearbyReceiverConnectionHandler(
         } else if (message is TextMessage) {
           require(header.type == PayloadType.BYTES) { "Payload type is not bytes" }
 
-          messagesToReceive[payloadId] = message.copy(
-            text = message.text + payloadChunk.body!!.utf8()
-          )
+          val updatedText = message.text + payloadChunk.body!!.utf8()
+          messagesToReceive[payloadId] = message.copy(text = updatedText)
 
           if (payloadChunk.offset!! >= header.total_size!!) {
             log("NearbyReceiverConnectionHandler", "Text transfer completed")
+
+            // Persist the received text to the database so it appears in chat
+            // (mirrors TextMessageHandler.handleIncoming on the Klardrop path).
+            messageRepository.insertMessage(
+              remoteDeviceId = senderDeviceId,
+              content = updatedText,
+              isSender = false,
+              messageType = PersistenceMessageType.TEXT,
+              isRead = false,
+              mimeType = "text/plain",
+            )
+
             pendingTransfers.remove(payloadId)
           }
 
