@@ -1,73 +1,108 @@
-//
-//  ShareViewController.swift
-//  Klardrop Share
-//
-//  Created by Carlo Marinangeli on 29/07/2023.
-//  Copyright © 2023 orgName. All rights reserved.
-//
-
 import UIKit
-import Social
+import UniformTypeIdentifiers
 
-//class ShareViewController: SLComposeServiceViewController {
-//
-//    override func isContentValid() -> Bool {
-//        // Do validation of contentText and/or NSExtensionContext attachments here
-//        return true
-//    }
-//
-//    override func didSelectPost() {
-//        // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
-//
-//        // Inform the host that we're done, so it un-blocks its UI. Note: Alternatively you could call super's -didSelectPost, which will similarly complete the extension context.
-//        self.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
-//    }
-//
-//    override func configurationItems() -> [Any]! {
-//        // To add configuration options via table cells at the bottom of the sheet, return an array of SLComposeSheetConfigurationItem here.
-//        return []
-//    }
-//
-//}
-
-import UIKit
-import MobileCoreServices
-
-@objc(ShareExtensionViewController)
 class ShareViewController: UIViewController {
 
-  override func viewDidLoad() {
-    super.viewDidLoad()
-    
-    self.handleSharedFile()
-  }
-  
-    private func handleSharedFile() {
-      // extracting the path to the URL that is being shared
-      let attachments = (self.extensionContext?.inputItems.first as? NSExtensionItem)?.attachments ?? []
-      let contentType = kUTTypeData as String
-      for provider in attachments {
-        // Check if the content type is the same as we expected
-        if provider.hasItemConformingToTypeIdentifier(contentType) {
-          provider.loadItem(forTypeIdentifier: contentType,
-                            options: nil) { [unowned self] (data, error) in
-          // Handle the error here if you want
-          guard error == nil else { return }
-               
-          if let url = data as? URL,
-             let imageData = try? Data(contentsOf: url) {
-               self.save(imageData, key: "imageData", value: imageData)
-          } else {
-            // Handle this situation as you prefer
-            fatalError("Impossible to save image")
-          }
-        }}
-      }
+    private let appGroupID = "group.com.carlom.Klardrop"
+    private let pendingFilesKey = "pendingFilePaths"
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+        showLoadingIndicator()
+        extractSharedItems()
     }
-      
-    private func save(_ data: Data, key: String, value: Any) {
-      // You must use the userdefaults of an app group, otherwise the main app don't have access to it.
-        let userDefaults = UserDefaults.standard
-      userDefaults.set(data, forKey: key)
+
+    private func showLoadingIndicator() {
+        let spinner = UIActivityIndicatorView(style: .large)
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.startAnimating()
+        view.addSubview(spinner)
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
+
+    private func extractSharedItems() {
+        guard let extensionItems = extensionContext?.inputItems as? [NSExtensionItem] else {
+            finish(with: [])
+            return
+        }
+
+        let group = DispatchGroup()
+        var savedPaths: [String] = []
+        let lock = NSLock()
+
+        for item in extensionItems {
+            for provider in (item.attachments ?? []) {
+                let typeIdentifier: String
+                if provider.hasItemConformingToTypeIdentifier("public.image") {
+                    typeIdentifier = "public.image"
+                } else if provider.hasItemConformingToTypeIdentifier("public.movie") {
+                    typeIdentifier = "public.movie"
+                } else if provider.hasItemConformingToTypeIdentifier("public.data") {
+                    typeIdentifier = "public.data"
+                } else {
+                    continue
+                }
+
+                group.enter()
+                provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { [weak self] (url, error) in
+                    defer { group.leave() }
+                    guard let self = self, let url = url, error == nil else { return }
+                    if let savedPath = self.copyToSharedContainer(url: url) {
+                        lock.lock()
+                        savedPaths.append(savedPath)
+                        lock.unlock()
+                    }
+                }
+            }
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            self?.finish(with: savedPaths)
+        }
+    }
+
+    private func copyToSharedContainer(url: URL) -> String? {
+        guard let containerURL = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
+            .appendingPathComponent("shared_files", isDirectory: true) else { return nil }
+
+        try? FileManager.default.createDirectory(at: containerURL, withIntermediateDirectories: true)
+
+        let fileName = url.lastPathComponent.isEmpty ? "shared_file" : url.lastPathComponent
+        let destURL = containerURL.appendingPathComponent(UUID().uuidString + "_" + fileName)
+        do {
+            try FileManager.default.copyItem(at: url, to: destURL)
+            return destURL.path
+        } catch {
+            return nil
+        }
+    }
+
+    private func finish(with paths: [String]) {
+        if paths.isEmpty {
+            extensionContext?.cancelRequest(withError: NSError(
+                domain: Bundle.main.bundleIdentifier ?? "KlardropShare",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "No sharable content found"]
+            ))
+            return
+        }
+
+        let defaults = UserDefaults(suiteName: appGroupID)
+        defaults?.set(paths, forKey: pendingFilesKey)
+        defaults?.synchronize()
+
+        guard let url = URL(string: "klardrop://share") else {
+            extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+            return
+        }
+
+        extensionContext?.open(url) { [weak self] _ in
+            self?.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+        }
     }
 }

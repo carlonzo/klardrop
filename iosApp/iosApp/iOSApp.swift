@@ -3,18 +3,18 @@ import Bugsnag
 
 @main
 struct iOSApp: App {
+    let discoveryBridge = DiscoveryBridge()
+
     init() {
-        // Mirror the Android/desktop setup: only forward events from production
-        // builds. Development churn (manual disconnect tests, simulator network
-        // hiccups) was filling the dashboard and masking real issues.
         let config = BugsnagConfig.bugsnagConfiguration()
         Bugsnag.start(with: config)
     }
-	var body: some Scene {
-		WindowGroup {
-			ContentView()
-		}
-	}
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView(discoveryBridge: discoveryBridge)
+        }
+    }
 }
 
 private enum BugsnagConfig {
