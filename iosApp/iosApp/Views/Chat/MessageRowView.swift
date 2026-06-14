@@ -2,6 +2,8 @@ import SwiftUI
 import presentation
 import AVFoundation
 import ImageIO
+import Photos
+import UniformTypeIdentifiers
 #if os(iOS)
 import UIKit
 import QuickLook
@@ -262,7 +264,12 @@ private struct FileMessageBubble: View {
     /// (NSWorkspace via the KMP layer) on macOS.
     private func open(_ path: String) {
         #if os(iOS)
-        previewURL = toImageUrl(path: path)
+        if let assetId = photosLocalIdentifier(from: path) {
+            // Photos-backed media (received on iOS): export the asset to a temp file QuickLook can open.
+            Task { previewURL = await exportPhotosAssetToTempURL(localIdentifier: assetId) }
+        } else {
+            previewURL = toImageUrl(path: path)
+        }
         #else
         model.openFile(path)
         #endif
@@ -430,7 +437,11 @@ private struct FileThumbnailView: View {
             }
         }
         .task(id: path) {
-            image = await loadFileThumbnail(path: path, isVideo: isVideo)
+            if let assetId = photosLocalIdentifier(from: path) {
+                image = await loadPhotosThumbnail(localIdentifier: assetId, maxPixel: 640)
+            } else {
+                image = await loadFileThumbnail(path: path, isVideo: isVideo)
+            }
         }
     }
 }
@@ -471,3 +482,92 @@ private func platformImage(from cg: CGImage) -> KdPlatformImage {
     return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
     #endif
 }
+
+// MARK: - Photos-backed media (iOS received images/videos)
+
+/// Received media on iOS is saved to the Photos library; the Kotlin layer records a
+/// "ph://<localIdentifier>" reference in file_path. kotlinx.io's Path collapses the "//" to
+/// "/", so the persisted value can arrive as either "ph://…" or "ph:/…" — handle both
+/// (mirrors the existing "content://" / "content:/" handling).
+private func photosLocalIdentifier(from path: String) -> String? {
+    if path.hasPrefix("ph://") { return String(path.dropFirst("ph://".count)) }
+    if path.hasPrefix("ph:/") { return String(path.dropFirst("ph:/".count)) }
+    return nil
+}
+
+/// Loads a downsized thumbnail for a Photos asset (works for both image and video assets —
+/// videos return their poster frame). Returns nil if the asset can't be fetched (e.g. the
+/// user denied full Photos access).
+private func loadPhotosThumbnail(localIdentifier: String, maxPixel: CGFloat) async -> KdPlatformImage? {
+    guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil).firstObject
+    else { return nil }
+
+    let options = PHImageRequestOptions()
+    options.isNetworkAccessAllowed = true   // allow fetching from iCloud Photos if needed
+    options.deliveryMode = .highQualityFormat // single callback (no progressive degraded results)
+    options.resizeMode = .fast
+    let target = CGSize(width: maxPixel, height: maxPixel)
+
+    return await withCheckedContinuation { (cont: CheckedContinuation<KdPlatformImage?, Never>) in
+        PHImageManager.default().requestImage(
+            for: asset,
+            targetSize: target,
+            contentMode: .aspectFit,
+            options: options
+        ) { image, _ in
+            cont.resume(returning: image)
+        }
+    }
+}
+
+#if os(iOS)
+/// Exports a Photos asset to a temp file so QuickLook can present it (QuickLook needs a file URL;
+/// a PHAsset is not directly openable). Images are written from their data; videos are passthrough-
+/// exported. Returns nil on failure.
+private func exportPhotosAssetToTempURL(localIdentifier: String) async -> URL? {
+    guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil).firstObject
+    else { return nil }
+
+    if asset.mediaType == .video {
+        return await withCheckedContinuation { (cont: CheckedContinuation<URL?, Never>) in
+            let options = PHVideoRequestOptions()
+            options.isNetworkAccessAllowed = true
+            options.deliveryMode = .highQualityFormat
+            PHImageManager.default().requestExportSession(
+                forVideo: asset,
+                options: options,
+                exportPreset: AVAssetExportPresetPassthrough
+            ) { session, _ in
+                guard let session else { cont.resume(returning: nil); return }
+                let temp = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension("mov")
+                session.outputURL = temp
+                session.outputFileType = .mov
+                session.exportAsynchronously {
+                    cont.resume(returning: session.status == .completed ? temp : nil)
+                }
+            }
+        }
+    } else {
+        return await withCheckedContinuation { (cont: CheckedContinuation<URL?, Never>) in
+            let options = PHImageRequestOptions()
+            options.isNetworkAccessAllowed = true
+            options.deliveryMode = .highQualityFormat
+            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, dataUTI, _, _ in
+                guard let data else { cont.resume(returning: nil); return }
+                let ext = dataUTI.flatMap { UTType($0)?.preferredFilenameExtension } ?? "jpg"
+                let temp = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString)
+                    .appendingPathExtension(ext)
+                do {
+                    try data.write(to: temp)
+                    cont.resume(returning: temp)
+                } catch {
+                    cont.resume(returning: nil)
+                }
+            }
+        }
+    }
+}
+#endif
