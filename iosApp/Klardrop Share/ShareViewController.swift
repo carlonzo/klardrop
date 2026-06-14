@@ -1,5 +1,6 @@
 import UIKit
 import UniformTypeIdentifiers
+import ObjectiveC
 
 class ShareViewController: UIViewController {
 
@@ -101,8 +102,24 @@ class ShareViewController: UIViewController {
             return
         }
 
-        extensionContext?.open(url) { [weak self] _ in
-            self?.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+        // NSExtensionContext.open(_:) is unsupported for share extensions (only Today
+        // widgets may use it), so walk the responder chain to reach UIApplication and
+        // ask it to open our custom scheme — the standard hand-off-to-host technique.
+        openHostApp(url)
+        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+    }
+
+    @discardableResult
+    private func openHostApp(_ url: URL) -> Bool {
+        let selector = sel_registerName("openURL:")
+        var responder: UIResponder? = self
+        while let current = responder {
+            if current.responds(to: selector), current != self {
+                current.perform(selector, with: url)
+                return true
+            }
+            responder = current.next
         }
+        return false
     }
 }

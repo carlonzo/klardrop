@@ -31,12 +31,18 @@ struct ContentView: View {
                 ShareSheetView(
                     bridge: discoveryBridge,
                     filePaths: pendingFilePaths,
+                    // Invoked from a Kotlin background coroutine once every transfer
+                    // finishes — hop to main before touching SwiftUI state, and only
+                    // now delete the shared-container files we just finished reading.
                     onDismiss: {
-                        showShareSheet = false
-                        for path in pendingFilePaths {
-                            try? FileManager.default.removeItem(atPath: path)
+                        let paths = pendingFilePaths
+                        DispatchQueue.main.async {
+                            showShareSheet = false
+                            pendingFilePaths = []
+                            for path in paths {
+                                try? FileManager.default.removeItem(atPath: path)
+                            }
                         }
-                        pendingFilePaths = []
                     }
                 )
             }
