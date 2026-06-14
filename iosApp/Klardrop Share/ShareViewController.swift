@@ -1,73 +1,98 @@
-//
-//  ShareViewController.swift
-//  Klardrop Share
-//
-//  Created by Carlo Marinangeli on 29/07/2023.
-//  Copyright © 2023 orgName. All rights reserved.
-//
-
 import UIKit
-import Social
+import UniformTypeIdentifiers
+import ObjectiveC
 
-//class ShareViewController: SLComposeServiceViewController {
+// ---------------------------------------------------------------------------
+// ShareViewController (iOS) — receives files/images shared from other apps.
 //
-//    override func isContentValid() -> Bool {
-//        // Do validation of contentText and/or NSExtensionContext attachments here
-//        return true
-//    }
+// Pure UIKit, no KMP framework: the extension only copies attachments into the
+// App Group container (via ShareInbox) and hands off to the host app, which
+// holds the running discovery/transfer stack. Keeping the extension lightweight
+// avoids its tight memory budget and the cost of loading the KMP graph twice.
 //
-//    override func didSelectPost() {
-//        // This is called after the user selects Post. Do the upload of contentText and/or NSExtensionContext attachments.
-//
-//        // Inform the host that we're done, so it un-blocks its UI. Note: Alternatively you could call super's -didSelectPost, which will similarly complete the extension context.
-//        self.extensionContext!.completeRequest(returningItems: [], completionHandler: nil)
-//    }
-//
-//    override func configurationItems() -> [Any]! {
-//        // To add configuration options via table cells at the bottom of the sheet, return an array of SLComposeSheetConfigurationItem here.
-//        return []
-//    }
-//
-//}
+// Hand-off note: NSExtensionContext.open(_:) is unsupported for share
+// extensions (only Today widgets may use it), so we walk the responder chain to
+// reach UIApplication and ask it to open our klardrop:// URL.
+// ---------------------------------------------------------------------------
 
-import UIKit
-import MobileCoreServices
-
-@objc(ShareExtensionViewController)
 class ShareViewController: UIViewController {
 
-  override func viewDidLoad() {
-    super.viewDidLoad()
-    
-    self.handleSharedFile()
-  }
-  
-    private func handleSharedFile() {
-      // extracting the path to the URL that is being shared
-      let attachments = (self.extensionContext?.inputItems.first as? NSExtensionItem)?.attachments ?? []
-      let contentType = kUTTypeData as String
-      for provider in attachments {
-        // Check if the content type is the same as we expected
-        if provider.hasItemConformingToTypeIdentifier(contentType) {
-          provider.loadItem(forTypeIdentifier: contentType,
-                            options: nil) { [unowned self] (data, error) in
-          // Handle the error here if you want
-          guard error == nil else { return }
-               
-          if let url = data as? URL,
-             let imageData = try? Data(contentsOf: url) {
-               self.save(imageData, key: "imageData", value: imageData)
-          } else {
-            // Handle this situation as you prefer
-            fatalError("Impossible to save image")
-          }
-        }}
-      }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+        showSpinner()
+        extractItems()
     }
-      
-    private func save(_ data: Data, key: String, value: Any) {
-      // You must use the userdefaults of an app group, otherwise the main app don't have access to it.
-        let userDefaults = UserDefaults.standard
-      userDefaults.set(data, forKey: key)
+
+    private func showSpinner() {
+        let spinner = UIActivityIndicatorView(style: .large)
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.startAnimating()
+        view.addSubview(spinner)
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
+
+    private func extractItems() {
+        let items = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var paths: [String] = []
+
+        for item in items {
+            for provider in (item.attachments ?? []) {
+                guard let type = preferredType(for: provider) else { continue }
+                group.enter()
+                provider.loadFileRepresentation(forTypeIdentifier: type) { url, _ in
+                    defer { group.leave() }
+                    guard let url else { return }
+                    if let path = ShareInbox.ingest(url) {
+                        lock.lock(); paths.append(path); lock.unlock()
+                    }
+                }
+            }
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            self?.finish(with: paths)
+        }
+    }
+
+    private func preferredType(for provider: NSItemProvider) -> String? {
+        for type in [UTType.image, UTType.movie, UTType.fileURL, UTType.data] {
+            if provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                return type.identifier
+            }
+        }
+        return nil
+    }
+
+    private func finish(with paths: [String]) {
+        guard let url = ShareInbox.publish(paths: paths) else {
+            extensionContext?.cancelRequest(withError: NSError(
+                domain: Bundle.main.bundleIdentifier ?? "KlardropShare",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "No sharable content found"]
+            ))
+            return
+        }
+        openHostApp(url)
+        extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
+    }
+
+    @discardableResult
+    private func openHostApp(_ url: URL) -> Bool {
+        let selector = sel_registerName("openURL:")
+        var responder: UIResponder? = self
+        while let current = responder {
+            if current.responds(to: selector), current != self {
+                current.perform(selector, with: url)
+                return true
+            }
+            responder = current.next
+        }
+        return false
     }
 }

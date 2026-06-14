@@ -14,5 +14,9 @@
     <true/>
     <key>com.apple.security.device.bluetooth</key>
     <true/>
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>D7T5425WSW.group.com.carlom.Klardrop</string>
+    </array>
 </dict>
 </plist>

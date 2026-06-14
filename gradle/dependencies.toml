@@ -19,7 +19,7 @@ bugsnag-jvm = "4.0.0"
 filekit = "0.14.1"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
-coil3 = "3.4.0"
+coil3 = "3.5.0"
 nav3 = "1.1.2"
 
 [libraries]
@@ -52,8 +52,8 @@ dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = 
 simplestorage = { module = "com.anggrayudi:storage", version = "2.2.0" }
 
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.3" }
-jna = { module = "net.java.dev.jna:jna", version = "5.18.1" }
-jna-platform = { module = "net.java.dev.jna:jna-platform", version = "5.18.1" }
+jna = { module = "net.java.dev.jna:jna", version = "5.19.1" }
+jna-platform = { module = "net.java.dev.jna:jna-platform", version = "5.19.1" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.1" }
 bugsnag-kmp = { module = "com.bugsnag:bugsnag-kmp", version.ref = "bugsnag-kmp" }
