@@ -194,7 +194,7 @@ class OutboxMergeReliabilityTest {
     sendTextMessage(text, messageId, succeed = false)
 
     // After failure: dropped from the outbox, present on disk as FAILED.
-    assertNull(outbox.snapshot(deviceId).firstOrNull { it.messageId == messageId }, "dropped from outbox")
+    assertNull(outbox.entries.value.filter { it.remoteDeviceId == deviceId }.firstOrNull { it.messageId == messageId }, "dropped from outbox")
 
     // Survives "restart": a fresh repository over the same db still returns it as FAILED.
     val freshRepo = MessageRepositoryImpl(db, clock, dispatcher, MessageOutbox())
@@ -218,7 +218,7 @@ class OutboxMergeReliabilityTest {
 
     sendTextMessage(text, messageId, succeed = true)
 
-    assertNull(outbox.snapshot(deviceId).firstOrNull { it.messageId == messageId }, "dropped from outbox")
+    assertNull(outbox.entries.value.filter { it.remoteDeviceId == deviceId }.firstOrNull { it.messageId == messageId }, "dropped from outbox")
 
     repository.getMessagesForDevice(deviceId, 10).test {
       val merged = awaitItem()

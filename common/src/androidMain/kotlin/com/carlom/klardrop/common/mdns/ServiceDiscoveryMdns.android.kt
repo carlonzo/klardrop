@@ -11,7 +11,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
@@ -23,7 +22,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 actual class ServiceDiscoveryMdns(private val context: Context) {
@@ -138,30 +136,6 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
                 nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                   override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                     log("ServiceDiscoveryMdns", "onResolveFailed: $serviceInfo errorCode=$errorCode")
-                    if (errorCode == NsdManager.FAILURE_ALREADY_ACTIVE) {
-                      // Serialization should prevent this, but as a safety net, retry
-                      // after a short back-off rather than silently dropping the peer.
-                      log("ServiceDiscoveryMdns", "FAILURE_ALREADY_ACTIVE for ${serviceInfo.serviceName}; will retry via back-off")
-                      producer.launch {
-                        delay(RESOLVE_RETRY_BACKOFF)
-                        resolveMutex.withLock {
-                          val retryDeferred = CompletableDeferred<Unit>()
-                          @Suppress("DEPRECATION")
-                          nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
-                            override fun onResolveFailed(s: NsdServiceInfo, c: Int) {
-                              log("ServiceDiscoveryMdns", "onResolveFailed (retry): $s errorCode=$c")
-                              retryDeferred.complete(Unit)
-                            }
-                            override fun onServiceResolved(s: NsdServiceInfo) {
-                              log("ServiceDiscoveryMdns", "onServiceResolved (retry): $s")
-                              producer.launch { send(ServiceDiscoveryEvent.ServiceFound(s.toServiceInfo())) }
-                              retryDeferred.complete(Unit)
-                            }
-                          })
-                          retryDeferred.await()
-                        }
-                      }
-                    }
                     deferred.complete(Unit)
                   }
 
@@ -212,15 +186,6 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
     }
 
-  }
-
-  companion object {
-    /**
-     * Back-off delay before retrying a resolve that hit FAILURE_ALREADY_ACTIVE on
-     * API < 34. One slot is freed when the first in-flight resolve completes and
-     * releases the mutex; this small delay gives the system time to drain.
-     */
-    val RESOLVE_RETRY_BACKOFF = 200.milliseconds
   }
 
   actual suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {

@@ -2,12 +2,12 @@ package com.carlom.klardrop.cli.commands
 
 import com.carlom.klardrop.cli.CliController
 import com.carlom.klardrop.cli.CliLogging
-import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
 import kotlin.system.exitProcess
 
 private const val EXIT_OK = 0
@@ -37,9 +37,13 @@ class StatusCommand : CliktCommand(
     val devices = controller.getVisibleDevices().first()
 
     if (json) {
-      val deviceJson = devicesToJson(devices)
-      val statusObj = "{\"running\":true,\"debug\":$debug,\"device_count\":${devices.size},\"devices\":$deviceJson}"
-      CliLogging.info(statusObj)
+      val status = StatusJson(
+        running = true,
+        debug = debug,
+        device_count = devices.size,
+        devices = devices.values.map { it.toJson() },
+      )
+      CliLogging.info(cliJson.encodeToString(status))
     } else {
       echo("Klardrop CLI Status")
       echo("=".repeat(50))
@@ -72,28 +76,5 @@ class StatusCommand : CliktCommand(
 
     controller.shutdown()
     exitProcess(EXIT_OK)
-  }
-
-  private fun devicesToJson(devices: Map<String, DiscoveryDevice>): String {
-    val items = devices.values.joinToString(",") { device ->
-      val info = device.deviceInfo
-      val connections = device.deviceConnections.joinToString(",") { conn ->
-        "{\"type\":${jsonString(conn.deviceConnectionType.name)},\"address\":${jsonString(conn.address)},\"port\":${conn.port}}"
-      }
-      "{\"device_id\":${jsonString(info.deviceId)},\"name\":${jsonString(info.name)}," +
-        "\"device_type\":${jsonString(info.deviceType.name)},\"os_type\":${jsonString(info.osType.name)}," +
-        "\"connections\":[$connections]}"
-    }
-    return "[$items]"
-  }
-
-  private fun jsonString(s: String): String {
-    val escaped = s
-      .replace("\\", "\\\\")
-      .replace("\"", "\\\"")
-      .replace("\n", "\\n")
-      .replace("\r", "\\r")
-      .replace("\t", "\\t")
-    return "\"$escaped\""
   }
 }

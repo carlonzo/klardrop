@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
 import kotlin.system.exitProcess
 
 // Exit codes
@@ -145,15 +146,14 @@ class ListenCommand : CliktCommand(
     val msg = update.messages.firstOrNull()
 
     if (json) {
-      val jsonLine = buildJsonLine(
-        timestampMs = nowMs,
-        timestampIso = isoTs,
-        senderDeviceId = deviceId,
-        senderName = senderName,
-        senderType = senderType,
-        msg = msg,
-      )
-      CliLogging.info(jsonLine)
+      val received = when (msg) {
+        is TextMessage -> baseReceived(nowMs, isoTs, deviceId, senderName, senderType, "TEXT")
+          .copy(content = msg.text)
+        is FileMessage -> baseReceived(nowMs, isoTs, deviceId, senderName, senderType, "FILE")
+          .copy(filename = msg.fileName, size = msg.fileSize)
+        else -> baseReceived(nowMs, isoTs, deviceId, senderName, senderType, "UNKNOWN")
+      }
+      CliLogging.info(cliJson.encodeToString(received))
     } else {
       val typeLine = when (msg) {
         is TextMessage -> "type=TEXT content=${escapeText(msg.text)}"
@@ -165,54 +165,26 @@ class ListenCommand : CliktCommand(
     }
   }
 
-  private fun buildJsonLine(
+  private fun baseReceived(
     timestampMs: Long,
     timestampIso: String,
     senderDeviceId: String,
     senderName: String,
     senderType: String,
-    msg: com.carlom.klardrop.common.communication.message.Message?,
-  ): String {
-    val typeStr: String
-    val contentFields: String
-    when (msg) {
-      is TextMessage -> {
-        typeStr = "TEXT"
-        contentFields = "\"content\":${jsonString(msg.text)}"
-      }
-      is FileMessage -> {
-        typeStr = "FILE"
-        contentFields = "\"filename\":${jsonString(msg.fileName)},\"size\":${msg.fileSize}"
-      }
-      else -> {
-        typeStr = "UNKNOWN"
-        contentFields = ""
-      }
-    }
-    val extra = if (contentFields.isNotEmpty()) ",$contentFields" else ""
-    return "{\"timestamp_ms\":$timestampMs,\"timestamp\":${jsonString(timestampIso)}," +
-      "\"event\":\"received\",\"sender_id\":${jsonString(senderDeviceId)}," +
-      "\"sender_name\":${jsonString(senderName)},\"sender_type\":${jsonString(senderType)}," +
-      "\"type\":${jsonString(typeStr)}$extra}"
-  }
-
-  private fun jsonString(s: String): String {
-    val escaped = s
-      .replace("\\", "\\\\")
-      .replace("\"", "\\\"")
-      .replace("\n", "\\n")
-      .replace("\r", "\\r")
-      .replace("\t", "\\t")
-    return "\"$escaped\""
-  }
+    type: String,
+  ) = ReceivedJson(
+    timestamp_ms = timestampMs,
+    timestamp = timestampIso,
+    event = "received",
+    sender_id = senderDeviceId,
+    sender_name = senderName,
+    sender_type = senderType,
+    type = type,
+  )
 
   private fun escapeText(s: String): String = s.replace(" ", "_").take(120)
 
-  // Simple ISO 8601 formatter (no java.time to stay KMP-compatible, but this is JVM-only CLI)
-  private fun formatIso8601(epochMs: Long): String {
-    val dt = java.util.Date(epochMs)
-    val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
-    fmt.timeZone = java.util.TimeZone.getTimeZone("UTC")
-    return fmt.format(dt)
-  }
+  // Instant.toString() is ISO-8601 UTC with trailing Z, e.g. 2026-06-14T12:00:00.123Z (JVM-only CLI).
+  private fun formatIso8601(epochMs: Long): String =
+    java.time.Instant.ofEpochMilli(epochMs).toString()
 }

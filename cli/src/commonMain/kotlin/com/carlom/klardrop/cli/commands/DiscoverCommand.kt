@@ -2,7 +2,6 @@ package com.carlom.klardrop.cli.commands
 
 import com.carlom.klardrop.cli.CliController
 import com.carlom.klardrop.cli.CliLogging
-import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
@@ -12,6 +11,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
 import kotlin.system.exitProcess
 
 private const val EXIT_OK = 0
@@ -93,7 +93,7 @@ class DiscoverCommand : CliktCommand(
     val finalDevices = controller.getVisibleDevices().first()
 
     if (json) {
-      CliLogging.info(devicesToJson(finalDevices))
+      CliLogging.info(cliJson.encodeToString(finalDevices.values.map { it.toJson() }))
     } else {
       if (finalDevices.isEmpty()) {
         echo("\nNo devices discovered")
@@ -104,28 +104,5 @@ class DiscoverCommand : CliktCommand(
 
     controller.shutdown()
     exitProcess(EXIT_OK)
-  }
-
-  private fun devicesToJson(devices: Map<String, DiscoveryDevice>): String {
-    val items = devices.values.joinToString(",") { device ->
-      val info = device.deviceInfo
-      val connections = device.deviceConnections.joinToString(",") { conn ->
-        "{\"type\":${jsonString(conn.deviceConnectionType.name)},\"address\":${jsonString(conn.address)},\"port\":${conn.port}}"
-      }
-      "{\"device_id\":${jsonString(info.deviceId)},\"name\":${jsonString(info.name)}," +
-        "\"device_type\":${jsonString(info.deviceType.name)},\"os_type\":${jsonString(info.osType.name)}," +
-        "\"connections\":[$connections]}"
-    }
-    return "[$items]"
-  }
-
-  private fun jsonString(s: String): String {
-    val escaped = s
-      .replace("\\", "\\\\")
-      .replace("\"", "\\\"")
-      .replace("\n", "\\n")
-      .replace("\r", "\\r")
-      .replace("\t", "\\t")
-    return "\"$escaped\""
   }
 }

@@ -38,11 +38,4 @@ class MessageOutbox {
   fun remove(messageId: Long) {
     _entries.update { current -> current.filter { it.messageId != messageId } }
   }
-
-  /**
-   * Snapshot of current outbox entries for a specific device.
-   * Used in tests to assert outbox state without subscribing to a flow.
-   */
-  fun snapshot(remoteDeviceId: String): List<OutboxEntry> =
-    _entries.value.filter { it.remoteDeviceId == remoteDeviceId }
 }

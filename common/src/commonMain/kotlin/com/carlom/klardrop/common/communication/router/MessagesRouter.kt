@@ -128,8 +128,7 @@ internal class MessagesRouterImpl(
    * DB row. Bounded to [PROCESSED_TEXT_IDS_MAX] entries so it doesn't grow unboundedly on
    * a long-lived connection. Access is guarded by [processedTextIdsMutex].
    */
-  private val processedTextIds = mutableSetOf<Int>()
-  private val processedTextIdsOrder = ArrayDeque<Int>()
+  private val processedTextIds = LinkedHashSet<Int>()
   private val processedTextIdsMutex = Mutex()
 
   private suspend fun sendMessageToDevice(
@@ -365,10 +364,9 @@ internal class MessagesRouterImpl(
           // sees the id as already-processed.
           processedTextIdsMutex.withLock {
             if (processedTextIds.size >= PROCESSED_TEXT_IDS_MAX) {
-              processedTextIdsOrder.removeFirstOrNull()?.let { processedTextIds.remove(it) }
+              processedTextIds.remove(processedTextIds.first())
             }
             processedTextIds.add(ackId)
-            processedTextIdsOrder.addLast(ackId)
           }
           val messageHandler = handlers[message.type] ?: run {
             log("MessagesRouter", "No handler for message type ${message.type}")
