@@ -1,3 +1,12 @@
 TEAM_ID=
 BUNDLE_ID=com.carlom.Klardrop
 APP_NAME=Klardrop
+
+// SKIE generates Swift wrappers (enums, sealed-class onEnum, etc.) that live in the
+// presentation.framework Swift overlay (presentation.swiftmodule). Xcode 16+'s default
+// Swift Explicit Modules precompiles `presentation` as a clang-only module and does NOT
+// load that Swift overlay, so SKIE-generated Swift types (DeviceType, Capability, …)
+// become invisible to the app ("cannot find type 'DeviceType' in scope"). Disabling
+// explicit modules restores implicit overlay loading. Remove if/when SKIE + explicit
+// modules interoperate (SKIE upgrade) — SKIE is currently pinned (blocks Kotlin 2.4.0).
+SWIFT_ENABLE_EXPLICIT_MODULES = NO
