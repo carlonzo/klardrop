@@ -36,5 +36,16 @@
 	</array>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Used to discover and connect to nearby Klardrop devices over Bluetooth.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.carlom.Klardrop</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>klardrop</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
