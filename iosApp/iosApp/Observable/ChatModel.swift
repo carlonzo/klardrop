@@ -14,7 +14,7 @@ import presentation
 // StateFlow bridging:
 //   - messages: StateFlow<List<ChatMessage>> -> iterated via for-await, each
 //     element cast to NSArray then flattened to [ChatMessage] via compactMap.
-//     (B26: was [Messages] — B22 changed the repo return type to ChatMessage.)
+//     (was [Messages]; the repo now returns ChatMessage.)
 //   - uiState/reachability: typed SKIE StateFlow -> for-await, direct cast.
 //   - pendingAuth: Optional StateFlow -> for-await.
 //
@@ -75,7 +75,7 @@ final class ChatModel {
         uiState = vm.uiState.value as? ChatUiState ?? ChatUiState(error: nil, notice: nil)
         reachability = vm.reachability.value as? Reachability ?? ReachabilityUnknown()
         pendingAuth = vm.pendingAuth.value as? ReceiveMessageUpdate
-        // B26: cast to [ChatMessage] — B22 changed the repo return type from Messages to ChatMessage.
+        // Cast to [ChatMessage] — the repo returns ChatMessage, not the raw Messages row.
         if let list = vm.messages.value as? [ChatMessage] {
             messages = list
         } else if let arr = vm.messages.value as? NSArray {

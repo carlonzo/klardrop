@@ -26,8 +26,8 @@ private typealias KdPlatformImage = NSImage
 // Per-file-transfer Flow subscriptions live inside FileMessageBubble (each
 // row opens its own small Task) to avoid unbounded collectors on long threads.
 //
-// B26: Updated from Messages (SQLDelight row) to ChatMessage (the merged
-// UI-facing type returned by MessageRepository.getMessagesForDevice since B22).
+// Consumes ChatMessage (the merged UI-facing type returned by
+// MessageRepository.getMessagesForDevice), not the raw SQLDelight Messages row.
 // ---------------------------------------------------------------------------
 
 /// Group-gap threshold in milliseconds (mirrors Kotlin's GROUP_GAP_MILLIS = 5 min).

@@ -35,7 +35,7 @@ import kotlin.test.fail
 import kotlin.time.TimeSource
 
 /**
- * Repro driver for bug **B17**.
+ * Repro driver.
  *
  * [ClientImpl.establishConnection]'s `.onFailure` handler invalidates the stale cached endpoint
  * (via [VisibleDevices.invalidateKlardropEndpoint]) ONLY when the dial fails with a
@@ -124,7 +124,7 @@ class ClientConnectTimeoutInvalidatesEndpointTest {
   fun connectTimeoutInvalidatesStaleEndpoint() = runBlocking(Dispatchers.IO) {
     // A peer that ACCEPTS the TCP connection (so the bounded connect succeeds) but never sends its
     // greeting — the handshake-READ withTimeout(TCP_CONNECT_TIMEOUT_MS) then fires deterministically
-    // with a TimeoutCancellationException, exactly the stale-port symptom B17 describes.
+    // with a TimeoutCancellationException, exactly the stale-port symptom described.
     val serverSocket = ServerSocket()
     serverSocket.bind(java.net.InetSocketAddress("127.0.0.1", 0), /* backlog = */ 16)
     val port = serverSocket.localPort
@@ -187,12 +187,12 @@ class ClientConnectTimeoutInvalidatesEndpointTest {
         "the timeout path must have been the cause of the failure for this repro to be valid.",
     )
 
-    // THE B17 ASSERTION: a connect/handshake TIMEOUT must invalidate the stale endpoint, exactly
+    // THE ASSERTION: a connect/handshake TIMEOUT must invalidate the stale endpoint, exactly
     // like a connection-refused does, so the dead address:port is not re-dialed (burning another
     // full timeout) on the next probe cycle while mDNS delivers the fresh SRV.
     assertTrue(
       recordingDevices.invalidated.contains(Invalidation(peerId, address, port)),
-      "B17: a connect/handshake TIMEOUT (TimeoutCancellationException) must invalidate the stale " +
+      "A connect/handshake TIMEOUT (TimeoutCancellationException) must invalidate the stale " +
         "Klardrop endpoint $address:$port for $peerId — just like a connection-refused does. " +
         "It currently does NOT (only isConnectionRefused() triggers invalidation), so the Mac " +
         "keeps re-dialing the dead port and burns the full ${TCP_CONNECT_TIMEOUT_MS}ms timeout every " +

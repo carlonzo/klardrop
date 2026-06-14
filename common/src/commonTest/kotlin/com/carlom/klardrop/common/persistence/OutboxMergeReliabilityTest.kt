@@ -23,7 +23,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * B22 REDO — memory+disk outbox. Test-first repro (RED).
+ * Memory+disk outbox. Test-first repro (RED).
  *
  * DESIGN under test (common-side surfaces the redo must provide):
  *  - In-memory [MessageOutbox]: the transient SENDING state lives ONLY here, NEVER on disk.

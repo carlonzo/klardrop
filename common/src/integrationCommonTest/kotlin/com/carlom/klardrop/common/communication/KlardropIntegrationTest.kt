@@ -277,11 +277,11 @@ class KlardropIntegrationTest {
     }
   }
 
-  // B25 (real product bug, live-found on macOS): a file/text received over Nearby Share
-  // never appears in the chat because the Nearby receive path persists nothing to the DB.
-  // The chat list is rendered exclusively from messageRepository.getMessagesForDevice
-  // (i.e. rows persisted via insertMessage/insertFileTransfer). The Klardrop receive path
-  // persists via TextMessageHandler.handleIncoming / FileMessageHandler.beginReceive
+  // A file/text received over Nearby Share never appears in the chat because the Nearby
+  // receive path persists nothing to the DB. The chat list is rendered exclusively from
+  // messageRepository.getMessagesForDevice (i.e. rows persisted via
+  // insertMessage/insertFileTransfer). The Klardrop receive path persists via
+  // TextMessageHandler.handleIncoming / FileMessageHandler.beginReceive
   // (insertMessage(isSender=false)); the Nearby receive path
   // (NearbyReceiverConnectionHandler) only writes the file to disk + emits the receiveFlow
   // and has no MessageRepository at all — so nothing is stored and the chat stays empty.
@@ -677,7 +677,7 @@ internal class KlardropTestContext(
   val serverFileManager = InMemoryTestFileManager()
 
   // Recording repository wired into the SERVER module so a test can assert what the
-  // receive path persisted (B25: the Nearby Share receive path must insert the received
+  // receive path persisted (the Nearby Share receive path must insert the received
   // message as is_sender=false, just like the Klardrop receive path does).
   val serverMessageRepository = RecordingMessageRepository()
   private val testAckTimeoutConfig = AckTimeoutConfig(
@@ -1017,8 +1017,8 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
  *
  * The chat list is rendered purely from rows persisted via [insertMessage]/[insertFileTransfer]
  * (the UI reads getMessagesForDevice, which reads the DB). So if a received transfer never
- * lands here as is_sender=false, it never shows up in the chat — which is exactly bug B25 for
- * the Nearby Share receive path.
+ * lands here as is_sender=false, it never shows up in the chat — this is exactly the failure
+ * mode for the Nearby Share receive path.
  */
 internal class RecordingMessageRepository : com.carlom.klardrop.common.persistence.MessageRepository {
 

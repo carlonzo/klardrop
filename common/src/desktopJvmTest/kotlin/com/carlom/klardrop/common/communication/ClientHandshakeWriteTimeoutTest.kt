@@ -34,14 +34,14 @@ import kotlin.test.fail
 import kotlin.time.TimeSource
 
 /**
- * Repro driver for bug **B06**: the handshake WRITE in [ClientImpl.establishConnection]
+ * Repro driver: the handshake WRITE in [ClientImpl.establishConnection]
  * (`writeChannel.sendMessage(handshakeMessage, serializer)`) is NOT wrapped in a [withTimeout],
  * whereas the per-address TCP connect and the handshake READ both are (each bounded to
  * [TCP_CONNECT_TIMEOUT_MS]).
  *
  * This test drives the PRODUCTION [ClientImpl.connectTo] against a real loopback peer that
  * completes the TCP 3-way handshake (so the bounded connect succeeds) and then **never reads and
- * never replies** — the exact "peer accepts TCP then stalls" scenario B06 describes. The whole
+ * never replies** — the exact "peer accepts TCP then stalls" scenario described. The whole
  * `connectTo` is wrapped in a generous test-side `withTimeout(10s)`; the fix's intent is that the
  * handshake write be bounded by `withTimeout(TCP_CONNECT_TIMEOUT_MS)` so a stalled peer cannot
  * burn the whole connection budget.
@@ -106,7 +106,7 @@ class ClientHandshakeWriteTimeoutTest {
   @Test
   fun connectToReturnsFailedWithinBudgetWhenPeerStallsAfterAccept() = runBlocking(Dispatchers.IO) {
     // A peer that ACCEPTS the TCP connection (so the bounded connect succeeds) but never reads and
-    // never replies — the stalled-peer scenario B06 describes.
+    // never replies — the stalled-peer scenario described.
     val serverSocket = ServerSocket()
     serverSocket.bind(java.net.InetSocketAddress("127.0.0.1", 0), /* backlog = */ 16)
     val port = serverSocket.localPort
@@ -151,7 +151,7 @@ class ClientHandshakeWriteTimeoutTest {
         "connectTo did not return within 10s — a peer that accepts TCP but then stalls (no read, " +
           "no greeting) hung the whole connection attempt. The handshake write/read phases must " +
           "each be bounded by withTimeout(TCP_CONNECT_TIMEOUT_MS) so a stalled peer cannot burn " +
-          "the connection budget (bug B06).",
+          "the connection budget.",
       )
     }
     val elapsedMs = mark.elapsedNow().inWholeMilliseconds

@@ -26,7 +26,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * B23 — silent-peer churn keeps the awake device's klardrop NsdManager browse
+ * Silent-peer churn keeps the awake device's klardrop NsdManager browse
  * wedged "found", so the peer never re-appears after it drops to BLE-only.
  *
  * ROOT CAUSE (confirmed live): the klardrop browse is subscribed exactly ONCE
@@ -36,8 +36,8 @@ import kotlin.time.Duration.Companion.seconds
  * answering multicast WITHOUT a goodbye, so NsdManager never fires
  * onServiceLost and keeps the instance cached as 'found', de-duplicating any
  * later onServiceFound when the peer wakes. Meanwhile the app already removed
- * the peer's klardrop endpoint (Client.invalidateKlardropEndpoint after the
- * B17 connect-timeout, plus the 5-minute VisibleDevices TTL sweep). With no
+ * the peer's klardrop endpoint (Client.invalidateKlardropEndpoint after a
+ * connect-timeout, plus the 5-minute VisibleDevices TTL sweep). With no
  * fresh ServiceFound and no browse restart, the peer is stuck BLE/Nearby-only
  * / offline permanently.
  *
@@ -52,24 +52,23 @@ import kotlin.time.Duration.Companion.seconds
  *
  * TODAY no such restart happens — only rebuildMdnsState() on a
  * NetworkChangeEvent re-subscribes — so every assertion below is RED on the
- * current code (overturning the earlier B12 "restart() no-op" and B14 "no
- * periodic re-discover" dismissals for SILENT PEER churn).
+ * current code.
  *
  * Test-seam note: ServiceDiscoveryMdns / NetworkLifecycleMonitor / BleTransport
  * are final `expect class`es and cannot be subclassed into a counting fake from
  * common test code, and the Android actual needs a Context. This test therefore
  * lives in the desktopJvm test source set, drives a REAL [DiscoveryNetwork] with
  * the real-but-inert desktopJvm collaborators (cold mDNS flow, unsupported BLE,
- * never-triggered NIC monitor) plus a controllable [B23VisibleDevices], and
- * tracks klardrop browse subscriptions via the harness counter. The B23 fix is
+ * never-triggered NIC monitor) plus a controllable [VisibleDevicesStub], and
+ * tracks klardrop browse subscriptions via the harness counter. The fix is
  * expected to wire the browse-restart so that counter rises beyond the single
  * init-time subscription.
  */
-class DiscoveryKlardropBrowseRestartB23Test {
+class DiscoveryKlardropBrowseRestartTest {
 
   /**
    * (a) When a known KLARDROP peer loses its last klardrop endpoint (drops to
-   * BLE-only — exactly what B17 endpoint-invalidation + TTL sweep produce for a
+   * BLE-only — exactly what endpoint-invalidation + TTL sweep produce for a
    * silent peer), DiscoveryNetwork MUST restart the klardrop browse so a wedged
    * NsdManager session is re-evaluated and the peer can be re-discovered.
    *
@@ -78,7 +77,7 @@ class DiscoveryKlardropBrowseRestartB23Test {
    */
   @Test
   fun klardropBrowseRestartsWhenKnownPeerDropsToBleOnly() = runTest {
-    val harness = newB23DiscoveryHarness(this)
+    val harness = newDiscoveryHarness(this)
 
     // Init-time browse subscription (Klardrop.init -> discoveryKlardropDevices).
     harness.discoveryNetwork.discoveryKlardropDevices()
@@ -90,7 +89,7 @@ class DiscoveryKlardropBrowseRestartB23Test {
     )
 
     // A known klardrop peer is visible, then its last klardrop endpoint is
-    // invalidated (B17 connect-timeout) leaving it BLE-only.
+    // invalidated (connect-timeout) leaving it BLE-only.
     harness.visibleDevices.addKlardropDevice(deviceId = "pixel-7a", address = "192.168.1.50", port = 44321)
     harness.visibleDevices.dropPeerToBleOnly(deviceId = "pixel-7a", bleAddress = "AA:BB:CC:DD:EE:FF")
     harness.advanceUntilIdle()
@@ -120,7 +119,7 @@ class DiscoveryKlardropBrowseRestartB23Test {
    */
   @Test
   fun gatedPeriodicBackstopIssuesAtLeastTwoBrowseRestartsForStuckBleOnlyPeer() = runTest {
-    val harness = newB23DiscoveryHarness(this)
+    val harness = newDiscoveryHarness(this)
 
     harness.discoveryNetwork.discoveryKlardropDevices()
     // Only process idle tasks at t=0 (no time advance yet).
@@ -176,7 +175,7 @@ class DiscoveryKlardropBrowseRestartB23Test {
    */
   @Test
   fun gatedPeriodicBackstopStopsAfterCapForLegitimatelyBleOnlyPeer() = runTest {
-    val harness = newB23DiscoveryHarness(this)
+    val harness = newDiscoveryHarness(this)
 
     harness.discoveryNetwork.discoveryKlardropDevices()
     harness.advanceUntilIdle()
@@ -229,7 +228,7 @@ class DiscoveryKlardropBrowseRestartB23Test {
    */
   @Test
   fun rapidEndpointLossesDebounceToASingleBrowseRestart() = runTest {
-    val harness = newB23DiscoveryHarness(this)
+    val harness = newDiscoveryHarness(this)
 
     harness.discoveryNetwork.discoveryKlardropDevices()
     advanceTimeBy(1.seconds)
@@ -266,20 +265,20 @@ class DiscoveryKlardropBrowseRestartB23Test {
 // ---------------------------------------------------------------------------
 
 /**
- * Test seam for the B23 klardrop-browse-restart orchestration. Wraps a REAL
+ * Test seam for the klardrop-browse-restart orchestration. Wraps a REAL
  * [DiscoveryNetwork] driven with real-but-inert desktopJvm collaborators and
  * exposes:
  *  - the klardrop browse subscription count ([klardropBrowseSubscriptions]), and
- *  - a controllable [B23VisibleDevices] for simulating silent-peer churn.
+ *  - a controllable [VisibleDevicesStub] for simulating silent-peer churn.
  */
-interface B23DiscoveryHarness {
+interface DiscoveryHarness {
   val discoveryNetwork: DiscoveryNetwork
-  val visibleDevices: B23VisibleDevices
+  val visibleDevices: VisibleDevicesStub
 
   /**
    * How many times the klardrop service browse
    * (`discoverServices(KLARDROP_SERVICE_TYPE)`) has been subscribed. The
-   * init-time call subscribes once; a B23 browse-restart re-subscribes,
+   * init-time call subscribes once; a browse-restart re-subscribes,
    * incrementing this.
    */
   fun klardropBrowseSubscriptions(): Int
@@ -288,21 +287,21 @@ interface B23DiscoveryHarness {
 }
 
 /**
- * Builds a [B23DiscoveryHarness] bound to [testScope].
+ * Builds a [DiscoveryHarness] bound to [testScope].
  *
  * The final `expect class` collaborators are constructed but kept inert:
  *  - [ServiceDiscoveryMdns] is real; `discoverServices` is a COLD flow that does
  *    no network work until collected.
  *  - [NetworkLifecycleMonitor] is real but `observe()` only works when collected,
  *    and we never trigger a NetworkChangeEvent — so the ONLY existing
- *    browse-restart path is intentionally not exercised, isolating the B23
+ *    browse-restart path is intentionally not exercised, isolating the
  *    restart paths (endpoint loss + periodic backstop) under test.
  *  - [BleTransport] is real and unsupported on this host (helper == null), so
  *    BLE advertise/scan are no-ops.
  */
-fun newB23DiscoveryHarness(testScope: TestScope): B23DiscoveryHarness {
+fun newDiscoveryHarness(testScope: TestScope): DiscoveryHarness {
   val coroutines = TestScopeCoroutines(testScope)
-  val visible = B23VisibleDevices()
+  val visible = VisibleDevicesStub()
 
   val discoveryNetwork = DiscoveryNetwork(
     coroutines,
@@ -310,19 +309,19 @@ fun newB23DiscoveryHarness(testScope: TestScope): B23DiscoveryHarness {
     ServiceDiscoveryMdns(),
     NearbyShareDiscoveryUtils(),
     KlardropDiscoveryUtils(),
-    CurrentDeviceProvider(B23LocalProperties()),
+    CurrentDeviceProvider(StubLocalProperties()),
     BleTransport(),
     NetworkLifecycleMonitor(),
   )
 
-  return object : B23DiscoveryHarness {
+  return object : DiscoveryHarness {
     override val discoveryNetwork = discoveryNetwork
     override val visibleDevices = visible
 
     override fun klardropBrowseSubscriptions(): Int {
       // Read directly from the production counter that DiscoveryNetwork increments
       // every time discoveryKlardropDevices() is called (initial + each restart).
-      // The B23 fix wires the browse-restart so this counter rises beyond 1.
+      // The fix wires the browse-restart so this counter rises beyond 1.
       return discoveryNetwork.klardropBrowseStartCount.value
     }
 
@@ -333,12 +332,12 @@ fun newB23DiscoveryHarness(testScope: TestScope): B23DiscoveryHarness {
 }
 
 /**
- * Minimal controllable [VisibleDevices] for the B23 orchestration tests. Models
+ * Minimal controllable [VisibleDevices] for the browse-restart orchestration tests. Models
  * just enough of the visible-device lifecycle to reproduce silent-peer churn:
  * a peer with a klardrop endpoint, the loss of that endpoint (drop to BLE-only),
  * and a peer that is BLE-only from the start.
  */
-class B23VisibleDevices : VisibleDevices {
+class VisibleDevicesStub : VisibleDevices {
 
   private val devices = linkedMapOf<String, DiscoveryDevice>()
   private val flow = MutableStateFlow<Map<String, DiscoveryDevice>>(emptyMap())
@@ -379,7 +378,7 @@ class B23VisibleDevices : VisibleDevices {
 
   /**
    * Remove the peer's klardrop endpoint(s) and leave it BLE-only — exactly the
-   * state B17 endpoint-invalidation + the TTL sweep leave a silent peer in.
+   * state endpoint-invalidation + the TTL sweep leave a silent peer in.
    */
   fun dropPeerToBleOnly(deviceId: String, bleAddress: String) {
     val existing = devices[deviceId] ?: return
@@ -434,7 +433,7 @@ class B23VisibleDevices : VisibleDevices {
   }
 }
 
-private class B23LocalProperties : LocalPropertiesRepository {
+private class StubLocalProperties : LocalPropertiesRepository {
   override val properties = MutableStateFlow(KlardropProperties(deviceId = "selfselfself"))
   override suspend fun getProperty(): KlardropProperties = properties.first()
   override suspend fun save(properties: KlardropProperties) { this.properties.value = properties }

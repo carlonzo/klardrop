@@ -62,12 +62,12 @@ class DiscoveryNetwork internal constructor(
 
   /**
    * How many times the klardrop browse has been started (initial + restarts).
-   * Exposed as `internal` for the B23 repro test to observe that browse-restarts
+   * Exposed as `internal` for the repro test to observe that browse-restarts
    * actually fire. Not intended for production callers.
    */
   internal val klardropBrowseStartCount = MutableStateFlow(0)
 
-  // --- B23 browse-restart state ---
+  // --- browse-restart state ---
 
   /**
    * Running debounce job — cancelled when a second trigger arrives within the
@@ -239,9 +239,9 @@ class DiscoveryNetwork internal constructor(
 
           is ServiceDiscoveryEvent.ServiceLost -> {
             onLostService(deviceId, it.serviceInfo, DeviceConnectionType.KLARDROP)
-            // B23 trigger (a): a ServiceLost from mDNS may indicate the peer dropped
-            // to Wi-Fi power-save. Restart the browse so NsdManager re-evaluates the
-            // peer when it wakes (wedged 'found' sessions are cleared by re-subscribe).
+            // A ServiceLost from mDNS may indicate the peer dropped to Wi-Fi power-save.
+            // Restart the browse so NsdManager re-evaluates the peer when it wakes
+            // (wedged 'found' sessions are cleared by re-subscribe).
             requestKlardropDiscoveryRefresh("ServiceLost for $deviceId")
           }
 
@@ -254,7 +254,7 @@ class DiscoveryNetwork internal constructor(
   }
 
   /**
-   * Idempotently starts the B23 browse-restart triggers:
+   * Idempotently starts the browse-restart triggers:
    *   1. Peer-loss watcher: observes [visibleDevices] and fires [requestKlardropDiscoveryRefresh]
    *      when ANY visible peer currently has no Klardrop endpoint (BLE-only or Nearby-only).
    *   2. Periodic backstop: while any peer lacks Klardrop transport, retries the browse restart
@@ -267,7 +267,7 @@ class DiscoveryNetwork internal constructor(
    *       and schedules a debounced browse restart so a wedged NsdManager session is cleared.
    *   (b) The 5-min TTL sweep (VisibleDevicesImpl) removes a stale klardrop endpoint —
    *       the watcher fires and schedules a restart so the peer can be re-discovered.
-   *   (c) B17 endpoint-invalidation (connect/handshake timeout) removes a dead klardrop
+   *   (c) Endpoint-invalidation (connect/handshake timeout) removes a dead klardrop
    *       endpoint — same watcher path, same recovery.
    *   (d) A peer with NO prior klardrop endpoint (BLE-only from the start) triggers the
    *       watcher as soon as it appears, attempting an mDNS rediscovery. Useful for peers
@@ -296,7 +296,7 @@ class DiscoveryNetwork internal constructor(
         .distinctUntilChanged()
         .onEach { noKlardropIds ->
           if (noKlardropIds.isNotEmpty()) {
-            log("DiscoveryNetwork", "B23: ${noKlardropIds.size} peer(s) without klardrop endpoint — requesting browse refresh")
+            log("DiscoveryNetwork", "${noKlardropIds.size} peer(s) without klardrop endpoint — requesting browse refresh")
             requestKlardropDiscoveryRefresh("peer(s) without klardrop endpoint: $noKlardropIds")
             // Start the periodic backstop if not already running.
             startPeriodicBackstopIfNeeded()
@@ -337,26 +337,26 @@ class DiscoveryNetwork internal constructor(
           .toSet()
 
         if (nonKlardropPeers.isEmpty()) {
-          log("DiscoveryNetwork", "B23 periodic backstop: all peers recovered; stopping after $retries retry(ies)")
+          log("DiscoveryNetwork", "periodic backstop: all peers recovered; stopping after $retries retry(ies)")
           break
         }
 
         log(
           "DiscoveryNetwork",
-          "B23 periodic backstop retry $retries/$BROWSE_BACKSTOP_MAX_RETRIES: ${nonKlardropPeers.size} peer(s) still without klardrop endpoint"
+          "periodic backstop retry $retries/$BROWSE_BACKSTOP_MAX_RETRIES: ${nonKlardropPeers.size} peer(s) still without klardrop endpoint"
         )
         requestKlardropDiscoveryRefresh("periodic backstop retry $retries for peers: $nonKlardropPeers")
       }
 
       if (retries >= BROWSE_BACKSTOP_MAX_RETRIES) {
-        log("DiscoveryNetwork", "B23 periodic backstop: reached retry cap ($BROWSE_BACKSTOP_MAX_RETRIES); stopping to avoid battery drain")
+        log("DiscoveryNetwork", "periodic backstop: reached retry cap ($BROWSE_BACKSTOP_MAX_RETRIES); stopping to avoid battery drain")
       }
     }
   }
 
   private fun stopPeriodicBackstop(reason: String) {
     if (periodicBackstopJob?.isActive == true) {
-      log("DiscoveryNetwork", "B23 periodic backstop: stopping ($reason)")
+      log("DiscoveryNetwork", "periodic backstop: stopping ($reason)")
       periodicBackstopJob?.cancel()
       periodicBackstopJob = null
     }
@@ -379,9 +379,9 @@ class DiscoveryNetwork internal constructor(
 
     browseRestartDebounceJob?.cancel()
     browseRestartDebounceJob = discoveryScope.launch {
-      log("DiscoveryNetwork", "B23 browse refresh scheduled (reason: $reason); debounce ${BROWSE_RESTART_DEBOUNCE}")
+      log("DiscoveryNetwork", "browse refresh scheduled (reason: $reason); debounce ${BROWSE_RESTART_DEBOUNCE}")
       delay(BROWSE_RESTART_DEBOUNCE)
-      log("DiscoveryNetwork", "B23 browse refresh: restarting klardrop browse ($reason)")
+      log("DiscoveryNetwork", "browse refresh: restarting klardrop browse ($reason)")
       discoveryKlardropDevices()
     }
   }
@@ -492,7 +492,7 @@ class DiscoveryNetwork internal constructor(
   companion object {
 
     /**
-     * Minimum gap between consecutive klardrop browse restarts (B23 debounce).
+     * Minimum gap between consecutive klardrop browse restarts (debounce).
      * Two restart-triggers within this window collapse to a single restart.
      * Uses [delay]-based debouncing so it is compatible with virtual-time test
      * schedulers ([kotlinx.coroutines.test.TestScope]).

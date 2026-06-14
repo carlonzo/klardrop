@@ -121,7 +121,7 @@ internal class MessagesRouterImpl(
   private val authorizationScope = CoroutineScope(SupervisorJob() + coroutines.ioDispatcher)
 
   /**
-   * B05: bounded FIFO set of inbound TEXT wire-frame ids that have already been processed
+   * Bounded FIFO set of inbound TEXT wire-frame ids that have already been processed
    * (or are currently being processed) on this connection. When a sender retries after a
    * lost ACK the same wire-frame id arrives again; we skip `insertMessage` but still reply
    * with ACK_RECEIVED so the sender's retry is acknowledged without inserting a duplicate
@@ -214,7 +214,7 @@ internal class MessagesRouterImpl(
           } else {
             log("MessagesRouter", "SECURITY: signature verification failed for TrustedMessage from $fromDeviceId")
           }
-          // B03: always send a terminal ACK_REJECTED so the sender fast-fails instead of
+          // Always send a terminal ACK_REJECTED so the sender fast-fails instead of
           // timing out and retrying — mirroring the FILE path's terminal-ACK contract. Both
           // sub-paths (unknown-sender and known-bad-signature) return without processing the
           // message, so neither is an ACK_RECEIVED situation.
@@ -323,7 +323,7 @@ internal class MessagesRouterImpl(
     // whole TEXT processing path off the read loop so PONGs continue to drain.
     if (message is TextMessage) {
       authorizationScope.launch {
-        // B01/B02: wrap the entire authorize→handle→ACK pipeline so any exception from the
+        // Wrap the entire authorize→handle→ACK pipeline so any exception from the
         // authorizer or from TextMessageHandler.handleIncoming (e.g. a DB write failure) is
         // caught and replied to with ACK_REJECTED rather than being silently swallowed by the
         // SupervisorJob. Without this, the sender's ACK_RECEIVED wait times out and the TEXT
@@ -349,7 +349,7 @@ internal class MessagesRouterImpl(
             }
             return@runCatching
           }
-          // B05: dedup inbound TEXT by wire-frame id. If this id was already processed
+          // Dedup inbound TEXT by wire-frame id. If this id was already processed
           // (the sender is retrying after a lost ACK), skip insertMessage but still
           // reply ACK_RECEIVED so the retry is acknowledged without duplicating the DB row.
           val alreadyProcessed = processedTextIdsMutex.withLock { ackId in processedTextIds }
@@ -667,7 +667,7 @@ internal class MessagesRouterImpl(
   }
 
   private companion object {
-    /** Maximum number of processed inbound TEXT ids retained for dedup (B05). */
+    /** Maximum number of processed inbound TEXT ids retained for dedup. */
     const val PROCESSED_TEXT_IDS_MAX = 256
   }
 }

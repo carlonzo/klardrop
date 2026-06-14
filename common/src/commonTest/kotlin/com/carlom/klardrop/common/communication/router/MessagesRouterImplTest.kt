@@ -309,14 +309,14 @@ class MessagesRouterImplTest {
   // class asserted on a code path that no longer exists.
 
   /**
-   * B05 regression: inbound TEXT must be de-duplicated by wire-frame id.
+   * Regression: inbound TEXT must be de-duplicated by wire-frame id.
    *
    * Scenario: the receiver inserts the message and sends ACK_RECEIVED, but that ACK is lost on the
    * wire. The sender's `awaitRegisteredAck(RECEIVED)` times out and `handleKlardropTransfer` retries
    * the SAME TEXT — same wire-frame id, since `TextMessage.id` is fixed at construction. Without
    * idempotency the receiver would `insertMessage` a second time, leaving a duplicate DB row.
    *
-   * Contract enforced here (the B05 fix in [MessagesRouterImpl], commit bd8734e):
+   * Contract enforced here (the dedup fix in [MessagesRouterImpl], commit bd8734e):
    *  - the handler (which performs the DB insert) runs exactly ONCE across the two identical frames
    *    (the duplicate is skipped, so no duplicate row), AND
    *  - ACK_RECEIVED is still written BOTH times, so a sender retrying after a lost ACK is
@@ -344,7 +344,7 @@ class MessagesRouterImplTest {
     mockMessageHandlers.handlerToReturn = textHandler as MessageHandler<Message, SendMessageRequest>
 
     // One message instance => one stable wire-frame id, re-sent twice == the lost-ACK retry.
-    val textMessage = TextMessage(text = "B05 lost-ack retry")
+    val textMessage = TextMessage(text = "lost-ack retry")
 
     val writeChannel = ByteChannel(true)
 

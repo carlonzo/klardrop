@@ -30,7 +30,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Repro for B11 (reliability hardening): the network-flush path bypasses the per-connection
+ * Repro for the reliability issue where the network-flush path bypasses the per-connection
  * [writeLock], so a spurious [NetworkChangeEvent.Changed] during a live transfer aborts the
  * in-flight send.
  *

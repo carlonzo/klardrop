@@ -29,7 +29,7 @@ import kotlin.time.TimeSource
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Repro for live-discovered bug B18.
+ * Repro for a live-discovered bug.
  *
  * When a sender finishes a transfer (ACK_RECEIVED already exchanged) and simply closes its TCP
  * socket WITHOUT a protocol-level GOODBYE, the receiver's [ConnectionMessenger.acceptIncomingMessages]
@@ -129,7 +129,7 @@ class CleanDisconnectReadLoopTest {
       delay(200)
 
       // The "sender" finishes and closes its TCP socket WITHOUT any protocol-level GOODBYE — exactly
-      // the B18 scenario. The receiver's blocking readFully then throws EOFException.
+      // this scenario. The receiver's blocking readFully then throws EOFException.
       serverAccepted.close()
 
       // Wait (real time) for the read loop to observe EOF, classify, log and tear down.

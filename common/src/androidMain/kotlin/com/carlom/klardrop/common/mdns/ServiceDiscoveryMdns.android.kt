@@ -64,7 +64,7 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
 
       // Track active API-34+ ServiceInfoCallback instances so we can unregister
       // them all in awaitClose / on ServiceLost to avoid callback leaks across
-      // browse restarts (B23 hardening: repeated restarts would otherwise
+      // browse restarts (hardening: repeated restarts would otherwise
       // accumulate callbacks, each of which keeps its own NsdManager slot alive).
       val activeCallbacks = ConcurrentHashMap<String, NsdManager.ServiceInfoCallback>()
 

@@ -52,7 +52,7 @@ import kotlin.time.TimeSource
  * ACK_REJECTED on failure so the sender fast-fails without retrying.
  *
  * These tests reuse the two-real-module loopback pattern from KlardropIntegrationTest but inject a
- * SERVER-side [MessageRepository] that throws (B01/B02) and counts attempts.
+ * SERVER-side [MessageRepository] that throws and counts attempts.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessagesRouterReliabilityTest {
@@ -97,7 +97,7 @@ class MessagesRouterReliabilityTest {
   }
 
   /**
-   * B01/B02: server-side `insertMessage` throws on every inbound TEXT.
+   * Server-side `insertMessage` throws on every inbound TEXT.
    *
    * The bug: the throw is swallowed by the SupervisorJob, no terminal ACK is sent, the sender's
    * RECEIVED wait times out, and `handleKlardropTransfer` re-delivers the TEXT maxRetries more
@@ -133,7 +133,7 @@ class MessagesRouterReliabilityTest {
         "send should reach a terminal state, was $terminal",
       )
 
-      // The crux of B01/B02: a single user send of ONE text must not be re-delivered to the
+      // The crux of this test: a single user send of ONE text must not be re-delivered to the
       // receiver as retry-induced ghost duplicates. The router must terminally ACK_REJECTED the
       // first delivery so the sender stops. Pre-fix the receiver silently swallows the throw,
       // never ACKs, and the sender retries -> insertMessage is attempted 1 + maxRetries times.
@@ -150,8 +150,8 @@ class MessagesRouterReliabilityTest {
   }
 
   /**
-   * B03: the server holds NO ECDSA key for the client, so when the client (which trusts the
-   * server) wraps its TEXT in a signed TrustedMessage, the server's `verifyMessage` fails and the
+   * The server holds NO ECDSA key for the client, so when the client (which trusts the server)
+   * wraps its TEXT in a signed TrustedMessage, the server's `verifyMessage` fails and the
    * `!senderKnown` sub-path runs: it replies with a revocation but sends NO transfer ACK at all.
    *
    * The sender is waiting on ACK_RECEIVED (it never registered a pending-revocation channel), so
@@ -195,12 +195,12 @@ class MessagesRouterReliabilityTest {
         "expected the server to attempt verification of the inbound TrustedMessage at least once",
       )
 
-      // The crux of B03: when the server can't verify the signature it must reply with a terminal
-      // ACK_REJECTED so the sender fast-fails as a DECLINE. Pre-fix the server's unknown-sender
-      // branch returns WITHOUT any transfer ACK, so the sender's RECEIVED wait times out and the
-      // send is retried to exhaustion — surfacing a transport-timeout Error ("Transfer failed ...")
-      // rather than the clean decline. Asserting on the exact terminal message distinguishes the
-      // fast-reject (post-fix) from the retry-timeout (pre-fix) unambiguously.
+      // When the server can't verify the signature it must reply with a terminal ACK_REJECTED so
+      // the sender fast-fails as a DECLINE. Pre-fix the server's unknown-sender branch returns
+      // WITHOUT any transfer ACK, so the sender's RECEIVED wait times out and the send is retried
+      // to exhaustion — surfacing a transport-timeout Error ("Transfer failed ...") rather than
+      // the clean decline. Asserting on the exact terminal message distinguishes the fast-reject
+      // (post-fix) from the retry-timeout (pre-fix) unambiguously.
       assertEquals(
         "Recipient declined the transfer",
         (terminal as Error).message,
@@ -218,7 +218,7 @@ class MessagesRouterReliabilityTest {
 
     // Counts inbound-TEXT handler invocations on the server. handleIncoming throws AFTER
     // incrementing so we measure how many times the receiver was actually hit (= ghost
-    // redeliveries for B01/B02).
+    // redeliveries).
     private var insertAttempts = 0
     fun serverInsertAttempts() = insertAttempts
 
@@ -241,7 +241,7 @@ class MessagesRouterReliabilityTest {
       }
     }
 
-    // Counts inbound TrustedMessage verifications on the server (B03). verifyMessage's first step
+    // Counts inbound TrustedMessage verifications on the server. verifyMessage's first step
     // is `storage.getECDSAKey(senderId)`, so counting client-key lookups counts verification
     // attempts. The UKEY2 handshake also looks the key up once during connection setup, so the
     // counter is reset (resetVerifyAttempts) right after setup completes — leaving only the

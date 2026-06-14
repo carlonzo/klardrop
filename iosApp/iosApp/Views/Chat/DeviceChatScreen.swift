@@ -69,7 +69,7 @@ struct DeviceChatScreen: View {
     private var headerAvatarStyle: KdAvatarStyle { isOwned ? .tinted : .neutral }
 
     // Messages oldest-first — natural chat order (newest at the bottom).
-    // B26: type changed from [Messages] to [ChatMessage].
+    // Type is [ChatMessage] (was [Messages]).
     private var sortedMessages: [ChatMessage] {
         model.messages.sorted { $0.timestamp < $1.timestamp }
     }
@@ -400,7 +400,7 @@ private struct ChipButton: View {
 /// Scrollable message list — oldest at top, newest at the bottom (natural order).
 /// Uses iOS 17's .defaultScrollAnchor(.bottom) + scroll-to-last instead of the
 /// fragile double-rotation trick.
-/// B26: messages type changed from [Messages] to [ChatMessage].
+/// messages is [ChatMessage] (was [Messages]).
 private struct MessageListView: View {
 
     /// Oldest-first.

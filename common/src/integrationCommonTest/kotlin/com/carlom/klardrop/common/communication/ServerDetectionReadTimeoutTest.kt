@@ -27,10 +27,10 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
 /**
- * Repro for B07: [Server.handleConnection]'s FIRST [ByteReadChannel.readByteArrayMessage] — the
- * protocol-detection read — has NO timeout. A peer that completes the TCP 3-way handshake (so the
- * server `accept()`s the socket) but then sends NOTHING leaves the server blocked forever in
- * `readFully(lengthBytes)`, holding the file descriptor and the per-connection coroutine for the
+ * Repro for the case where [Server.handleConnection]'s FIRST [ByteReadChannel.readByteArrayMessage]
+ * — the protocol-detection read — has NO timeout. A peer that completes the TCP 3-way handshake
+ * (so the server `accept()`s the socket) but then sends NOTHING leaves the server blocked forever
+ * in `readFully(lengthBytes)`, holding the file descriptor and the per-connection coroutine for the
  * life of the process.
  *
  * The server's mirror-image client path already bounds this with `withTimeout(TCP_CONNECT_TIMEOUT_MS)`
@@ -137,7 +137,7 @@ class ServerDetectionReadTimeoutTest {
           "Server never closed a silent peer's connection within ${outerBudgetMs}ms. The protocol-" +
             "detection read in Server.handleConnection is not bounded by " +
             "withTimeout(TCP_CONNECT_TIMEOUT_MS) (${TCP_CONNECT_TIMEOUT_MS}ms), so a peer that " +
-            "completes TCP accept but sends nothing holds the FD + coroutine forever (B07).",
+            "completes TCP accept but sends nothing holds the FD + coroutine forever.",
         )
       }
 
