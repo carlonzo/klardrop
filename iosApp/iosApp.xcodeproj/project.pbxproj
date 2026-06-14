@@ -12,6 +12,7 @@
 		03ACDFC7638A4E76C64A2173 /* AddDevicePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34E4F67BD5762736F3B412C /* AddDevicePickerSheet.swift */; };
 		050A1E17A5532A25C637F1C5 /* KdRadii.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CB52301BD5AE4C16FDF6255 /* KdRadii.swift */; };
 		058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557BA273AAA24004C7B11 /* Assets.xcassets */; };
+		0AC1C04A5500AAAA0BBBB001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557BA273AAA24004C7B11 /* Assets.xcassets */; };
 		058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */; };
 		0E638F6AF8C7F62B12CF8C98 /* FileCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DEE486D88CA987250E3748F /* FileCardView.swift */; };
 		0EDD3237A4CB6E60005B9919 /* DateChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3329AA02CA5C53FD205CD6F /* DateChipView.swift */; };
@@ -516,6 +517,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0AC1C04A5500AAAA0BBBB001 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
