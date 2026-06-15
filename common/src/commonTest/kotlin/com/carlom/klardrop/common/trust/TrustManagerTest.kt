@@ -439,6 +439,68 @@ class TrustManagerTest {
     assertFalse(bob.verifyRevocationMessage(revocation), "replay of the same nonce must be rejected")
   }
 
+  /**
+   * Regression for the reported "trusted devices can't share after pairing" bug.
+   *
+   * The device's private and public key halves live in separate stores with different
+   * lifetimes (on desktop: OS keychain vs. a file under the app dir). When they desync,
+   * ensureDeviceKey used to blindly reuse the mismatched pair: it advertised the stored
+   * public key at pairing time but signed with the non-matching private key, so the peer
+   * rejected EVERY signed message ("signature verification failed") forever — and
+   * re-pairing didn't help because the same broken pair kept coming back.
+   *
+   * Here we seed Alice's storage with mismatched halves (private from one keypair, public
+   * from another), then run the normal pair + sign + verify flow. Pre-fix Bob rejects the
+   * signature; post-fix ensureDeviceKey detects the mismatch, regenerates a consistent
+   * pair, and Bob verifies.
+   */
+  @Test
+  fun desyncedDeviceKeyHalvesAreHealedSoSignedMessagesVerify() = runTest {
+    val crypto = TrustCrypto()
+    val aliceStorage = InMemoryTrustStorage()
+
+    // Two unrelated keypairs; store the private half of one and the public half of the other.
+    val pairA = crypto.generateECDSAKeyPair()
+    val pairB = crypto.generateECDSAKeyPair()
+    aliceStorage.storeDevicePrivateKey(pairA.privateKey.data)
+    aliceStorage.storeDevicePublicKey(pairB.publicKey.data)
+
+    val (alice, _) = newManager(aliceId, aliceStorage)
+    val (bob, _) = newManager(bobId)
+
+    // Pairing advertises whatever ensureDeviceKey returns; Bob stores that as Alice's key.
+    val request = alice.createPairingRequest(bobId).getOrThrow()
+    bob.createPairingAcceptance(request).getOrThrow()
+
+    val signed = assertNotNull(alice.signMessage("trusted text".encodeToByteArray()))
+    assertTrue(
+      bob.verifyMessage(signed),
+      "Bob must verify Alice's signature: the advertised public key MUST match the signing key",
+    )
+  }
+
+  /**
+   * Companion to the test above at the storage layer: ensureDeviceKey must return a public
+   * key that actually corresponds to what signWithDeviceKey signs with, even when the stored
+   * halves were left mismatched.
+   */
+  @Test
+  fun ensureDeviceKeyReturnsPublicMatchingTheSigningPrivateKey() = runTest {
+    val crypto = TrustCrypto()
+    val storage = InMemoryTrustStorage()
+    storage.storeDevicePrivateKey(crypto.generateECDSAKeyPair().privateKey.data)
+    storage.storeDevicePublicKey(crypto.generateECDSAKeyPair().publicKey.data) // mismatched
+
+    val advertisedPublic = storage.ensureDeviceKey(crypto).data
+
+    val data = "probe".encodeToByteArray()
+    val signature = assertNotNull(storage.signWithDeviceKey(data, crypto))
+    assertTrue(
+      crypto.verifyECDSA(advertisedPublic, data, signature),
+      "ensureDeviceKey must hand back the public key that pairs with the signing private key",
+    )
+  }
+
   private fun syntheticRequest(timestamp: Long) = TrustPairingRequest(
     deviceId = "attacker",
     deviceName = "Attacker",

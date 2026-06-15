@@ -170,11 +170,28 @@ interface TrustStorage {
      * Platforms backed by a secure store that generates keys in-place (Android
      * Keystore, Apple Keychain) override this to skip the byte-array round trip
      * and read the public key out of the secure store instead.
+     *
+     * The private and public halves can live in *different* stores with different
+     * lifetimes — on desktop the private key is in the OS keychain (global, survives
+     * an app-data wipe) while the public key is a properties file under the app dir.
+     * If those desync (a storage migration, a partial data clear, a keychain entry
+     * left over from a previous identity) we would otherwise advertise one public key
+     * at pairing time while signing with a non-matching private key: every peer then
+     * rejects our signatures permanently, and re-pairing can't recover because we keep
+     * handing back the same broken pair. So before reusing a stored pair we confirm the
+     * two halves actually match; on mismatch (or a missing half) we regenerate both.
      */
     suspend fun ensureDeviceKey(crypto: TrustCrypto): TrustCrypto.ECDSAPublicKey {
         val storedPublic = getDevicePublicKey()
         if (hasDeviceKey() && storedPublic != null) {
-            return TrustCrypto.ECDSAPublicKey(storedPublic)
+            // getDevicePrivateKey() returns null on secure-store platforms that don't
+            // export private bytes — but those override ensureDeviceKey(), so here a null
+            // means "no usable private key" and we fall through to regenerate. When bytes
+            // are present, prove the halves are a pair before trusting them.
+            val storedPrivate = getDevicePrivateKey()
+            if (storedPrivate != null && ecdsaKeyHalvesMatch(crypto, storedPrivate, storedPublic)) {
+                return TrustCrypto.ECDSAPublicKey(storedPublic)
+            }
         }
         val fresh = crypto.generateECDSAKeyPair()
         storeDevicePrivateKey(fresh.privateKey.data)
@@ -182,3 +199,19 @@ interface TrustStorage {
         return fresh.publicKey
     }
 }
+
+/**
+ * Fixed probe signed with [privateKey] and verified against [publicKey] to confirm the two
+ * are the same P-256 keypair. Cheap (one sign + one verify, once per app launch) and self-
+ * contained — no dedicated "derive public from private" API needed across platforms. Any
+ * exception (corrupt bytes, wrong length) is treated as "don't match" so the caller regenerates.
+ */
+private suspend fun ecdsaKeyHalvesMatch(
+    crypto: TrustCrypto,
+    privateKey: ByteArray,
+    publicKey: ByteArray,
+): Boolean = runCatching {
+    val probe = "klardrop-identity-keypair-probe".encodeToByteArray()
+    val signature = crypto.signWithECDSA(TrustCrypto.ECDSAPrivateKey(privateKey), probe)
+    crypto.verifyECDSA(publicKey, probe, signature)
+}.getOrDefault(false)
