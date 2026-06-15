@@ -127,8 +127,12 @@ class ConnectionMessenger internal constructor(
           cipher = cipher,
         )
       }.onFailure {
-        log("ConnectionMessenger: Exception in acceptIncomingMessages loop for ${connection.deviceId}: ${it::class.simpleName}: ${it.message}")
-        log("ConnectionMessenger: Error while listening for messages from ${connection.deviceId}. Closing connection.", it)
+        if (it.isExpectedNetworkNoise()) {
+          log("ConnectionMessenger: Peer ${connection.deviceId} disconnected cleanly: ${it.message}")
+        } else {
+          log("ConnectionMessenger: Exception in acceptIncomingMessages loop for ${connection.deviceId}: ${it::class.simpleName}: ${it.message}")
+          log("ConnectionMessenger: Error while listening for messages from ${connection.deviceId}. Closing connection.", it)
+        }
         close()
       }
     }
@@ -470,6 +474,22 @@ class ConnectionMessenger internal constructor(
       log("ConnectionMessenger: [DEBUG] Connection closed for ${connection.deviceId}")
     } else {
       log("ConnectionMessenger: [DEBUG] close() called but connection already closed for ${connection.deviceId}")
+    }
+  }
+
+  /**
+   * Returns true if the connection currently has an in-flight write (i.e. [writeLock] is held
+   * by a sender). Used by the network-flush path to skip connections mid-transfer — mirrors the
+   * same probe the heartbeat loop uses to avoid aborting an active chunked file send.
+   *
+   * Non-suspending: uses [Mutex.tryLock] so callers never block.
+   */
+  fun hasInflightWrite(): Boolean {
+    return if (writeLock.tryLock()) {
+      writeLock.unlock()
+      false
+    } else {
+      true
     }
   }
 

@@ -69,7 +69,8 @@ struct DeviceChatScreen: View {
     private var headerAvatarStyle: KdAvatarStyle { isOwned ? .tinted : .neutral }
 
     // Messages oldest-first — natural chat order (newest at the bottom).
-    private var sortedMessages: [Messages] {
+    // Type is [ChatMessage] (was [Messages]).
+    private var sortedMessages: [ChatMessage] {
         model.messages.sorted { $0.timestamp < $1.timestamp }
     }
 
@@ -399,10 +400,11 @@ private struct ChipButton: View {
 /// Scrollable message list — oldest at top, newest at the bottom (natural order).
 /// Uses iOS 17's .defaultScrollAnchor(.bottom) + scroll-to-last instead of the
 /// fragile double-rotation trick.
+/// messages is [ChatMessage] (was [Messages]).
 private struct MessageListView: View {
 
     /// Oldest-first.
-    let messages: [Messages]
+    let messages: [ChatMessage]
     let model: ChatModel
     let isOffline: Bool
 
@@ -420,7 +422,7 @@ private struct MessageListView: View {
                             || ChatTimeFormat.dayKey(older!.timestamp) != ChatTimeFormat.dayKey(message.timestamp)
 
                         let isFirstOfGroup = older == nil
-                            || older!.is_sender != message.is_sender
+                            || older!.isSender != message.isSender
                             || message.timestamp - older!.timestamp > groupGapMillis
 
                         // Day divider sits above the first message of a new day.

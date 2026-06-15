@@ -207,7 +207,7 @@ class CommunicationModule(
       messagesRouter,
       serializer,
       currentDeviceProvider,
-      NearbyReceiverConnectionHandlerFactory(fileManager, coroutines, incomingAuthorizer),
+      NearbyReceiverConnectionHandlerFactory(fileManager, coroutines, incomingAuthorizer, messageRepository, clock),
       visibleDevices,
       messageReceiver,
       protoBuf,

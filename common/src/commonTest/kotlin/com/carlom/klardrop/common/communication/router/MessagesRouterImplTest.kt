@@ -69,7 +69,9 @@ class MessagesRouterImplTest {
       messageType: com.carlom.klardrop.common.persistence.MessageType,
       fileTransferId: Long?,
       isRead: Boolean,
-      mimeType: String
+      mimeType: String,
+      messageId: Long?,
+      sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
     ) {
       calls.add("insertMessage($remoteDeviceId, $content, $isSender, $messageType, $fileTransferId, $isRead, $mimeType)")
     }
@@ -114,7 +116,7 @@ class MessagesRouterImplTest {
     override fun getMessagesForDevice(
       remoteDeviceId: String,
       limit: Long
-    ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> =
+    ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.persistence.ChatMessage>> =
       kotlinx.coroutines.flow.flowOf(emptyList())
 
     override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> =
@@ -305,6 +307,84 @@ class MessagesRouterImplTest {
   // and handleOutgoingChunked directly. Behavior is covered by FileMessageHandlerTest (handler
   // unit tests) and KlardropIntegrationTest (end-to-end loopback). The previous tests in this
   // class asserted on a code path that no longer exists.
+
+  /**
+   * Regression: inbound TEXT must be de-duplicated by wire-frame id.
+   *
+   * Scenario: the receiver inserts the message and sends ACK_RECEIVED, but that ACK is lost on the
+   * wire. The sender's `awaitRegisteredAck(RECEIVED)` times out and `handleKlardropTransfer` retries
+   * the SAME TEXT — same wire-frame id, since `TextMessage.id` is fixed at construction. Without
+   * idempotency the receiver would `insertMessage` a second time, leaving a duplicate DB row.
+   *
+   * Contract enforced here (the dedup fix in [MessagesRouterImpl], commit bd8734e):
+   *  - the handler (which performs the DB insert) runs exactly ONCE across the two identical frames
+   *    (the duplicate is skipped, so no duplicate row), AND
+   *  - ACK_RECEIVED is still written BOTH times, so a sender retrying after a lost ACK is
+   *    acknowledged and stops retrying.
+   *
+   * We feed the same [TextMessage] instance through `onMessageIncoming` twice on the SAME router
+   * instance (the dedup set is per-router == per-connection). The device is untrusted in the
+   * default fixture, so frames are plain (unsigned) and the ACKs come back as bare
+   * [MessageAcknowledgment]s. The real [TextMessageHandler] is wired to [MockMessageRepository] so
+   * insert calls are recorded — proving the "no duplicate DB row" half of the contract directly.
+   *
+   * Neutralising the `processedTextIds` check in production makes this fail with 2 insert calls.
+   */
+  @Test
+  fun duplicateInboundTextIsDedupedButStillReAcked() = runTest(testDispatcher) {
+    val fromDeviceId = "retry-peer"
+
+    // Real TextMessageHandler so handleIncoming actually drives MockMessageRepository.insertMessage —
+    // that's the "duplicate DB row" the dedup must prevent.
+    val textHandler = com.carlom.klardrop.common.communication.message.TextMessageHandler(
+      serializer = mockMessageSerializer,
+      messageRepository = mockMessageRepository,
+    )
+    @Suppress("UNCHECKED_CAST")
+    mockMessageHandlers.handlerToReturn = textHandler as MessageHandler<Message, SendMessageRequest>
+
+    // One message instance => one stable wire-frame id, re-sent twice == the lost-ACK retry.
+    val textMessage = TextMessage(text = "lost-ack retry")
+
+    val writeChannel = ByteChannel(true)
+
+    // First delivery: handler runs, ACK_RECEIVED written.
+    messagesRouter.onMessageIncoming(
+      fromDeviceId,
+      writeChannel,
+      ByteReadChannel(createMessageBytes(textMessage)),
+      ackCallback = { },
+    )
+    // Second delivery: same id => duplicate. Handler must be SKIPPED, ACK_RECEIVED re-sent.
+    messagesRouter.onMessageIncoming(
+      fromDeviceId,
+      writeChannel,
+      ByteReadChannel(createMessageBytes(textMessage)),
+      ackCallback = { },
+    )
+
+    // No duplicate DB row: the real handler inserted exactly once across both deliveries.
+    val insertCalls = mockMessageRepository.calls.count { it.startsWith("insertMessage(") }
+    assertEquals(
+      1,
+      insertCalls,
+      "Duplicate inbound TEXT (same wire-frame id) must be deduped — insertMessage should run " +
+        "exactly once, but ran $insertCalls times (calls=${mockMessageRepository.calls}).",
+    )
+
+    // Both retries acknowledged: two ACK_RECEIVED frames on the wire (device untrusted => unsigned).
+    val firstAck = writeChannel.readMessage(mockMessageSerializer)
+    val secondAck = writeChannel.readMessage(mockMessageSerializer)
+    assertTrue(firstAck is MessageAcknowledgment, "Expected ACK, got ${firstAck::class.simpleName}")
+    assertTrue(secondAck is MessageAcknowledgment, "Expected ACK, got ${secondAck::class.simpleName}")
+    assertEquals(AckType.RECEIVED, firstAck.ackType, "First delivery must be ACK_RECEIVED")
+    assertEquals(
+      AckType.RECEIVED, secondAck.ackType,
+      "The duplicate retry must STILL be ACK_RECEIVED so the sender stops retrying after a lost ACK",
+    )
+    assertEquals(textMessage.id, firstAck.id, "ACK must echo the wire-frame id")
+    assertEquals(textMessage.id, secondAck.id, "Re-ACK must echo the same wire-frame id")
+  }
 
   /**
    * Trust storage helper where [trustedIds] are considered trusted (returns a non-null fake

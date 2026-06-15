@@ -11,7 +11,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
@@ -20,6 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration.Companion.seconds
@@ -41,11 +41,30 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
   private suspend fun publishMutexFor(serviceType: String): Mutex =
     mutexMapMutex.withLock { publishMutexByServiceType.getOrPut(serviceType) { Mutex() } }
 
+  /**
+   * Mutex serializing pre-Tiramisu [NsdManager.resolveService] calls.
+   *
+   * NsdManager allows only ONE resolveService in flight at a time on API < 34.
+   * A browse restart re-fires [onServiceFound] for ALL previously-found services
+   * simultaneously, so without serialization the second call gets
+   * FAILURE_ALREADY_ACTIVE (3) and the peer is never resolved.
+   *
+   * API 34+ uses [registerServiceInfoCallback] which supports concurrent resolve
+   * and does not need this mutex.
+   */
+  private val resolveMutex = Mutex()
+
   actual fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
 
     return callbackFlow {
 
       val producer = this
+
+      // Track active API-34+ ServiceInfoCallback instances so we can unregister
+      // them all in awaitClose / on ServiceLost to avoid callback leaks across
+      // browse restarts (hardening: repeated restarts would otherwise
+      // accumulate callbacks, each of which keeps its own NsdManager slot alive).
+      val activeCallbacks = ConcurrentHashMap<String, NsdManager.ServiceInfoCallback>()
 
       val listener = object : NsdManager.DiscoveryListener {
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
@@ -67,43 +86,70 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
           log("ServiceDiscoveryMdns", "onServiceFound: $serviceInfo")
 
-          val resolveListener = object : NsdManager.ServiceInfoCallback {
-            override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
-              log("ServiceDiscoveryMdns", "onServiceInfoCallbackRegistrationFailed: $errorCode")
-            }
-
-            override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
-              log("ServiceDiscoveryMdns", "onServiceUpdated: $serviceInfo")
-              producer.launch {
-                send(ServiceDiscoveryEvent.ServiceFound(serviceInfo.toServiceInfo()))
-              }
-            }
-
-            override fun onServiceLost() {
-              log("ServiceDiscoveryMdns", "onServiceLost (callback)")
-            }
-
-            override fun onServiceInfoCallbackUnregistered() {
-              log("ServiceDiscoveryMdns", "onServiceInfoCallbackUnregistered")
-            }
-          }
-
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            nsdManager.registerServiceInfoCallback(serviceInfo, { it.run() }, resolveListener)
-          } else {
-            @Suppress("DEPRECATION")
-            nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
-              override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                log("ServiceDiscoveryMdns", "onResolveFailed: $serviceInfo $errorCode")
+            // API 34+: register a ServiceInfoCallback for live updates.
+            // Track it so we can unregister on ServiceLost or flow close.
+            val key = serviceInfo.serviceName
+            val resolveListener = object : NsdManager.ServiceInfoCallback {
+              override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
+                log("ServiceDiscoveryMdns", "onServiceInfoCallbackRegistrationFailed: $errorCode for $key")
+                activeCallbacks.remove(key)
               }
 
-              override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                log("ServiceDiscoveryMdns", "onServiceResolved: $serviceInfo")
+              override fun onServiceUpdated(info: NsdServiceInfo) {
+                log("ServiceDiscoveryMdns", "onServiceUpdated: $info")
                 producer.launch {
-                  send(ServiceDiscoveryEvent.ServiceFound(serviceInfo.toServiceInfo()))
+                  send(ServiceDiscoveryEvent.ServiceFound(info.toServiceInfo()))
                 }
               }
-            })
+
+              override fun onServiceLost() {
+                log("ServiceDiscoveryMdns", "onServiceLost (callback) for $key")
+                // Unregister eagerly on ServiceLost to release the NsdManager slot.
+                val cb = activeCallbacks.remove(key)
+                if (cb != null) {
+                  runCatching { nsdManager.unregisterServiceInfoCallback(cb) }
+                    .onFailure { log("ServiceDiscoveryMdns", "unregisterServiceInfoCallback failed for $key: ${it.message}") }
+                }
+              }
+
+              override fun onServiceInfoCallbackUnregistered() {
+                log("ServiceDiscoveryMdns", "onServiceInfoCallbackUnregistered for $key")
+                activeCallbacks.remove(key)
+              }
+            }
+            // Remove any stale callback for this key before registering (idempotent on browse restart).
+            activeCallbacks.put(key, resolveListener)?.let { stale ->
+              runCatching { nsdManager.unregisterServiceInfoCallback(stale) }
+                .onFailure { log("ServiceDiscoveryMdns", "unregister stale callback for $key: ${it.message}") }
+            }
+            nsdManager.registerServiceInfoCallback(serviceInfo, { it.run() }, resolveListener)
+          } else {
+            // API < 34: resolveService is limited to ONE concurrent call.
+            // Serialize all resolve attempts through resolveMutex so that a browse
+            // restart firing onServiceFound for many services at once doesn't hit
+            // FAILURE_ALREADY_ACTIVE (errorCode 3).
+            producer.launch {
+              resolveMutex.withLock {
+                val deferred = CompletableDeferred<Unit>()
+                @Suppress("DEPRECATION")
+                nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                  override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                    log("ServiceDiscoveryMdns", "onResolveFailed: $serviceInfo errorCode=$errorCode")
+                    deferred.complete(Unit)
+                  }
+
+                  override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                    log("ServiceDiscoveryMdns", "onServiceResolved: $serviceInfo")
+                    producer.launch {
+                      send(ServiceDiscoveryEvent.ServiceFound(serviceInfo.toServiceInfo()))
+                    }
+                    deferred.complete(Unit)
+                  }
+                })
+                deferred.await()
+              }
+            }
           }
         }
 
@@ -126,6 +172,14 @@ actual class ServiceDiscoveryMdns(private val context: Context) {
       )
 
       awaitClose {
+        // Unregister all tracked ServiceInfoCallbacks to prevent leaks across browse restarts.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+          activeCallbacks.values.forEach { cb ->
+            runCatching { nsdManager.unregisterServiceInfoCallback(cb) }
+              .onFailure { log("ServiceDiscoveryMdns", "unregisterServiceInfoCallback in awaitClose: ${it.message}") }
+          }
+          activeCallbacks.clear()
+        }
         lock.release()
         nsdManager.stopServiceDiscovery(listener)
       }

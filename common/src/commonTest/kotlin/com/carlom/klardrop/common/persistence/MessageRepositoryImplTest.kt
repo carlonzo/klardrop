@@ -58,12 +58,13 @@ class MessageRepositoryImplTest {
             val messages = awaitItem()
             assertEquals(1, messages.size)
             val msg = messages.first()
-            assertEquals(remoteDeviceId, msg.remote_device_id)
+            assertEquals(remoteDeviceId, msg.remoteDeviceId)
             assertEquals(content, msg.content)
-            assertEquals(1L, msg.is_sender)
-            assertEquals(MessageType.TEXT.name, msg.message_type)
-            assertEquals(1L, msg.is_read) // Check read status
+            assertTrue(msg.isSender)
+            assertEquals(MessageType.TEXT.name, msg.messageType)
+            assertEquals(1L, msg.isRead) // Check read status
             assertTrue(msg.timestamp > 0) // Just verify timestamp is set
+            assertEquals(DeliveryStatus.SENT, msg.deliveryStatus)
         }
     }
 
@@ -84,7 +85,7 @@ class MessageRepositoryImplTest {
             val messages = awaitItem()
             assertEquals(1, messages.size)
             val msg = messages.first()
-            assertEquals(0L, msg.is_read) // Should be unread
+            assertEquals(0L, msg.isRead) // Should be unread
         }
     }
 
@@ -105,7 +106,7 @@ class MessageRepositoryImplTest {
             val messages = awaitItem()
             assertEquals(3, messages.size)
             messages.forEach { message ->
-                assertEquals(1L, message.is_read)
+                assertEquals(1L, message.isRead)
             }
         }
     }
@@ -171,12 +172,12 @@ class MessageRepositoryImplTest {
             val messages = awaitItem()
             assertEquals(1, messages.size)
             val msg = messages.first()
-            assertEquals(remoteDeviceId, msg.remote_device_id)
+            assertEquals(remoteDeviceId, msg.remoteDeviceId)
             assertEquals(fileName, msg.content)
-            assertEquals(0L, msg.is_sender)
-            assertEquals(MessageType.FILE.name, msg.message_type)
-            assertEquals(fileTransferId, msg.file_transfer_id)
-            assertEquals(0L, msg.is_read) // Should be unread
+            assertTrue(!msg.isSender)
+            assertEquals(MessageType.FILE.name, msg.messageType)
+            assertEquals(fileTransferId, msg.fileTransferId)
+            assertEquals(0L, msg.isRead) // Should be unread
             assertTrue(msg.timestamp > 0) // Just verify timestamp is set
         }
     }

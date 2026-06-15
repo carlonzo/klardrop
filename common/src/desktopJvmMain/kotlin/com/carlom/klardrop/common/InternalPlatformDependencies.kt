@@ -63,8 +63,17 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
   }
 
   actual fun trustStorage(): TrustStorage {
-    // Use user's home directory/.klardrop for storing trust data
-    val appDir = File(System.getProperty("user.home"), ".klardrop")
+    // When KLARDROP_HOME env or klardrop.data.dir system property is set (e.g. by the CLI
+    // --data-dir flag), root trust storage there so each process gets an isolated identity.
+    // Otherwise fall back to the traditional ~/.klardrop directory.
+    val dataDirOverride = System.getProperty("klardrop.data.dir")
+      ?: System.getenv("KLARDROP_HOME")
+    val appDir = if (dataDirOverride != null) {
+      File(dataDirOverride, "trust")
+    } else {
+      File(System.getProperty("user.home"), ".klardrop")
+    }
+    appDir.mkdirs()
     return DesktopTrustStorage(appDir)
   }
 

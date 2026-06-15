@@ -12,6 +12,7 @@
 		03ACDFC7638A4E76C64A2173 /* AddDevicePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34E4F67BD5762736F3B412C /* AddDevicePickerSheet.swift */; };
 		050A1E17A5532A25C637F1C5 /* KdRadii.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CB52301BD5AE4C16FDF6255 /* KdRadii.swift */; };
 		058557BB273AAA24004C7B11 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557BA273AAA24004C7B11 /* Assets.xcassets */; };
+		0AC1C04A5500AAAA0BBBB001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557BA273AAA24004C7B11 /* Assets.xcassets */; };
 		058557D9273AAEEB004C7B11 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */; };
 		0E638F6AF8C7F62B12CF8C98 /* FileCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DEE486D88CA987250E3748F /* FileCardView.swift */; };
 		0EDD3237A4CB6E60005B9919 /* DateChipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3329AA02CA5C53FD205CD6F /* DateChipView.swift */; };
@@ -167,15 +168,15 @@
 		058557D8273AAEEB004C7B11 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		06887C53DA33681456E20E84 /* SystemNotificationCardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SystemNotificationCardView.swift; sourceTree = "<group>"; };
 		11146602E1139C67C03F1B8F /* PairingApprovalSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PairingApprovalSheet.swift; sourceTree = "<group>"; };
-		1535C70BA72B5D678B510F57 /* DeviceUiHelpers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DeviceUiHelpers.swift; path = DeviceUiHelpers.swift; sourceTree = "<group>"; };
+		1535C70BA72B5D678B510F57 /* DeviceUiHelpers.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceUiHelpers.swift; sourceTree = "<group>"; };
 		1DEE486D88CA987250E3748F /* FileCardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FileCardView.swift; sourceTree = "<group>"; };
 		20C856D7669F8371BB9A27FF /* ShareInboxSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ShareInboxSheet.swift; path = iosApp/Views/Dialogs/ShareInboxSheet.swift; sourceTree = "<group>"; };
 		2175ED977EC2D04318EAD200 /* ChatModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatModel.swift; sourceTree = "<group>"; };
 		236550742A75989700412ADF /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		236550772A75989700412ADF /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
 		236550792A75989700412ADF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		2405ADA8D7EA482D702EEB81 /* KlardropMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KlardropMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		2B0C2857366865997CD52F57 /* RootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = RootView.swift; path = RootView.swift; sourceTree = "<group>"; };
+		2405ADA8D7EA482D702EEB81 /* Klardrop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Klardrop.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2B0C2857366865997CD52F57 /* RootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		2F0E5908AF635BAECCE52473 /* SidebarView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		374C118F971889B9DC26AE84 /* MessageInputView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageInputView.swift; sourceTree = "<group>"; };
 		38FF9C58AD2000465E2ED481 /* MessageRowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageRowView.swift; sourceTree = "<group>"; };
@@ -186,12 +187,12 @@
 		46809ECE42F4D435E5EF2CB5 /* BubbleView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BubbleView.swift; sourceTree = "<group>"; };
 		4F185C59B6B0ACD3A15285E9 /* ChatHeaderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatHeaderView.swift; sourceTree = "<group>"; };
 		5BBAF324273D25F8CE8733D1 /* FilePicking.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FilePicking.swift; sourceTree = "<group>"; };
-		62ABA6F429B4D01F34B3E772 /* KdMotion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdMotion.swift; path = KdMotion.swift; sourceTree = "<group>"; };
+		62ABA6F429B4D01F34B3E772 /* KdMotion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KdMotion.swift; sourceTree = "<group>"; };
 		63BAADE3561E108884D3C79D /* BannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BannerView.swift; sourceTree = "<group>"; };
 		685D4A396535152D088D7EE2 /* KlardropNav.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KlardropNav.swift; sourceTree = "<group>"; };
 		69B1E9EF5F99DBB03856B8D4 /* TextMessageViewerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TextMessageViewerView.swift; sourceTree = "<group>"; };
 		6B1049432C0C2B312090ABF6 /* Pods_iosApp.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_iosApp.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		6CB52301BD5AE4C16FDF6255 /* KdRadii.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdRadii.swift; path = KdRadii.swift; sourceTree = "<group>"; };
+		6CB52301BD5AE4C16FDF6255 /* KdRadii.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KdRadii.swift; sourceTree = "<group>"; };
 		7555FF7B242A565900829871 /* Klardrop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Klardrop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7555FF8C242A565B00829871 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		7619154102E69A08B9FA4A20 /* DeviceChatScreen.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceChatScreen.swift; sourceTree = "<group>"; };
@@ -199,10 +200,10 @@
 		7EB6210D64D956E0F14FB9F9 /* MacInfo.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = MacInfo.plist; sourceTree = "<group>"; };
 		7F0AB332F093C5BE0B59C363 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		81A6B3B9F6E62D30973F9798 /* Pods-iosApp.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug.xcconfig"; sourceTree = "<group>"; };
-		82B73B7F2DC511088F596B4D /* Color+Hex.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = "Color+Hex.swift"; path = "Color+Hex.swift"; sourceTree = "<group>"; };
+		82B73B7F2DC511088F596B4D /* Color+Hex.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "Color+Hex.swift"; sourceTree = "<group>"; };
 		8320B3CCB3CAA291C7EBDB0F /* MacApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MacApp.swift; sourceTree = "<group>"; };
-		84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdSpacing.swift; path = KdSpacing.swift; sourceTree = "<group>"; };
-		90204E2C20EA390FEFAC5EE3 /* DiscoveryModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = DiscoveryModel.swift; path = DiscoveryModel.swift; sourceTree = "<group>"; };
+		84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KdSpacing.swift; sourceTree = "<group>"; };
+		90204E2C20EA390FEFAC5EE3 /* DiscoveryModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiscoveryModel.swift; sourceTree = "<group>"; };
 		94F0B700418BBDFDC584CBF6 /* ChatTimeFormat.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatTimeFormat.swift; sourceTree = "<group>"; };
 		967BB6CB99DA93EC43589E22 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		9B893524BEA113EBDCBBE3C6 /* ShareSheetView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareSheetView.swift; sourceTree = "<group>"; };
@@ -210,7 +211,7 @@
 		A1313E8598603FA619FB910F /* UpdateBannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UpdateBannerView.swift; sourceTree = "<group>"; };
 		A3329AA02CA5C53FD205CD6F /* DateChipView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DateChipView.swift; sourceTree = "<group>"; };
 		A60A548AA3ECC229B28CA439 /* DeviceUiMapping.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceUiMapping.swift; sourceTree = "<group>"; };
-		A88E5A453CA492BB4D6E32AB /* KdColors.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdColors.swift; path = KdColors.swift; sourceTree = "<group>"; };
+		A88E5A453CA492BB4D6E32AB /* KdColors.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KdColors.swift; sourceTree = "<group>"; };
 		A985EB45486147EFEEC0083A /* IncomingBannerStackView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IncomingBannerStackView.swift; sourceTree = "<group>"; };
 		AB3632DC29227652001CCB65 /* Config.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		AB495E57B6219ABCC27832DD /* SectionHeadView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SectionHeadView.swift; sourceTree = "<group>"; };
@@ -221,10 +222,10 @@
 		C34E4F67BD5762736F3B412C /* AddDevicePickerSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AddDevicePickerSheet.swift; sourceTree = "<group>"; };
 		D0AB44E8D4F3EA79ACC09244 /* Pods_KlardropMac.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_KlardropMac.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		D119C94B2B5700FAB79C0A91 /* Pods-KlardropMac.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-KlardropMac.release.xcconfig"; path = "Target Support Files/Pods-KlardropMac/Pods-KlardropMac.release.xcconfig"; sourceTree = "<group>"; };
-		D1D6B7FC122907F1322FD677 /* sqlite3_macos_stubs.c */ = {isa = PBXFileReference; includeInIndex = 1; path = sqlite3_macos_stubs.c; sourceTree = "<group>"; };
+		D1D6B7FC122907F1322FD677 /* sqlite3_macos_stubs.c */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.c; path = sqlite3_macos_stubs.c; sourceTree = "<group>"; };
 		D2CEA18344862A46BA3E1986 /* ShareViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ShareViewController.swift; path = "Klardrop Mac Share/ShareViewController.swift"; sourceTree = "<group>"; };
-		DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = KdType.swift; path = KdType.swift; sourceTree = "<group>"; };
-		E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = StatusDotView.swift; path = StatusDotView.swift; sourceTree = "<group>"; };
+		DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KdType.swift; sourceTree = "<group>"; };
+		E142D5EC4C517FAA288D91B5 /* StatusDotView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StatusDotView.swift; sourceTree = "<group>"; };
 		E8D02C9FE68B9DA10D7FC00D /* KlardropShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KlardropShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9F55DCA6FC30682D610A0A3 /* KlardropMac.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = KlardropMac.entitlements; sourceTree = "<group>"; };
 		EF30C1BD0565A0DA4667C725 /* IncomingTransferCardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IncomingTransferCardView.swift; sourceTree = "<group>"; };
@@ -232,7 +233,7 @@
 		EF9586097D5E0ABD36716A68 /* VisibilityPillView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VisibilityPillView.swift; sourceTree = "<group>"; };
 		FC56B4EA9CDB5D8456404160 /* PairingDialogView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PairingDialogView.swift; sourceTree = "<group>"; };
 		FCA74CDA387605E6B2A63703 /* NavRoutes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NavRoutes.swift; sourceTree = "<group>"; };
-		FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = iOSApp.swift; path = iOSApp.swift; sourceTree = "<group>"; };
+		FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
 		FF8F32CDC8B365315F430B2F /* PermissionsChecklistView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PermissionsChecklistView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -278,7 +279,6 @@
 			children = (
 				D1D6B7FC122907F1322FD677 /* sqlite3_macos_stubs.c */,
 			);
-			name = Stubs;
 			path = Stubs;
 			sourceTree = "<group>";
 		};
@@ -300,7 +300,6 @@
 				84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */,
 				DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */,
 			);
-			name = Design;
 			path = Design;
 			sourceTree = "<group>";
 		};
@@ -329,7 +328,6 @@
 				FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */,
 				8320B3CCB3CAA291C7EBDB0F /* MacApp.swift */,
 			);
-			name = App;
 			path = App;
 			sourceTree = "<group>";
 		};
@@ -345,7 +343,6 @@
 				9B893524BEA113EBDCBBE3C6 /* ShareSheetView.swift */,
 				C0C82CF44F0D12B62B630D44 /* TrustDialogs.swift */,
 			);
-			name = Dialogs;
 			path = Dialogs;
 			sourceTree = "<group>";
 		};
@@ -379,7 +376,7 @@
 			isa = PBXGroup;
 			children = (
 				7555FF7B242A565900829871 /* Klardrop.app */,
-				2405ADA8D7EA482D702EEB81 /* KlardropMac.app */,
+				2405ADA8D7EA482D702EEB81 /* Klardrop.app */,
 				E8D02C9FE68B9DA10D7FC00D /* KlardropShare.appex */,
 				7A8FF713C2C9F29BFAACB17B /* KlardropMacShare.appex */,
 			);
@@ -411,7 +408,6 @@
 				685D4A396535152D088D7EE2 /* KlardropNav.swift */,
 				5BBAF324273D25F8CE8733D1 /* FilePicking.swift */,
 			);
-			name = Nav;
 			path = Nav;
 			sourceTree = "<group>";
 		};
@@ -426,7 +422,6 @@
 				AB495E57B6219ABCC27832DD /* SectionHeadView.swift */,
 				EF9586097D5E0ABD36716A68 /* VisibilityPillView.swift */,
 			);
-			name = Components;
 			path = Components;
 			sourceTree = "<group>";
 		};
@@ -452,7 +447,6 @@
 				90204E2C20EA390FEFAC5EE3 /* DiscoveryModel.swift */,
 				2175ED977EC2D04318EAD200 /* ChatModel.swift */,
 			);
-			name = Observable;
 			path = Observable;
 			sourceTree = "<group>";
 		};
@@ -469,7 +463,6 @@
 				06887C53DA33681456E20E84 /* SystemNotificationCardView.swift */,
 				A1313E8598603FA619FB910F /* UpdateBannerView.swift */,
 			);
-			name = Discovery;
 			path = Discovery;
 			sourceTree = "<group>";
 		};
@@ -483,7 +476,6 @@
 				34A1A8A57E76764BD20BABBA /* Dialogs */,
 				CB97ADA48D3BE51BC8532E72 /* Discovery */,
 			);
-			name = Views;
 			path = Views;
 			sourceTree = "<group>";
 		};
@@ -509,7 +501,6 @@
 				38FF9C58AD2000465E2ED481 /* MessageRowView.swift */,
 				69B1E9EF5F99DBB03856B8D4 /* TextMessageViewerView.swift */,
 			);
-			name = Chat;
 			path = Chat;
 			sourceTree = "<group>";
 		};
@@ -571,7 +562,7 @@
 			);
 			name = KlardropMac;
 			productName = KlardropMac;
-			productReference = 2405ADA8D7EA482D702EEB81 /* KlardropMac.app */;
+			productReference = 2405ADA8D7EA482D702EEB81 /* Klardrop.app */;
 			productType = "com.apple.product-type.application";
 		};
 		A8BDB6209E7EDBC9F1131AA2 /* KlardropShare */ = {
@@ -649,6 +640,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0AC1C04A5500AAAA0BBBB001 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -670,9 +662,13 @@
 			inputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-frameworks-${CONFIGURATION}-input-files.xcfilelist",
 			);
+			inputPaths = (
+			);
 			name = "[CP] Embed Pods Frameworks";
 			outputFileListPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-iosApp/Pods-iosApp-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -1042,7 +1038,7 @@
 				DEVELOPMENT_TEAM = D7T5425WSW;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = iosApp/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1073,7 +1069,7 @@
 				DEVELOPMENT_TEAM = D7T5425WSW;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = iosApp/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1162,6 +1158,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iosApp/MacInfo.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1230,6 +1227,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iosApp/MacInfo.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

@@ -12,8 +12,9 @@ import presentation
 //   - .task { model.start() } preferred driver (auto-cancels on disappear).
 //
 // StateFlow bridging:
-//   - messages: StateFlow<List<Messages>> -> iterated via for-await, each
-//     element cast to NSArray then flattened to [Messages] via compactMap.
+//   - messages: StateFlow<List<ChatMessage>> -> iterated via for-await, each
+//     element cast to NSArray then flattened to [ChatMessage] via compactMap.
+//     (was [Messages]; the repo now returns ChatMessage.)
 //   - uiState/reachability: typed SKIE StateFlow -> for-await, direct cast.
 //   - pendingAuth: Optional StateFlow -> for-await.
 //
@@ -26,7 +27,7 @@ final class ChatModel {
 
     // MARK: - Observable state
 
-    private(set) var messages: [Messages] = []
+    private(set) var messages: [ChatMessage] = []
     private(set) var uiState: ChatUiState = ChatUiState(error: nil, notice: nil)
     private(set) var pendingAuth: ReceiveMessageUpdate? = nil
     private(set) var reachability: Reachability = ReachabilityUnknown()
@@ -74,21 +75,22 @@ final class ChatModel {
         uiState = vm.uiState.value as? ChatUiState ?? ChatUiState(error: nil, notice: nil)
         reachability = vm.reachability.value as? Reachability ?? ReachabilityUnknown()
         pendingAuth = vm.pendingAuth.value as? ReceiveMessageUpdate
-        if let list = vm.messages.value as? [Messages] {
+        // Cast to [ChatMessage] — the repo returns ChatMessage, not the raw Messages row.
+        if let list = vm.messages.value as? [ChatMessage] {
             messages = list
         } else if let arr = vm.messages.value as? NSArray {
-            messages = arr.compactMap { $0 as? Messages }
+            messages = arr.compactMap { $0 as? ChatMessage }
         }
 
         tasks = [
-            // messages: StateFlow<List<Messages>> — emits Kotlin List, bridged as NSArray
+            // messages: StateFlow<List<ChatMessage>> — emits Kotlin List, bridged as NSArray
             Task { [weak self] in
                 guard let self else { return }
                 for await next in self.viewModel.messages {
-                    if let list = next as? [Messages] {
+                    if let list = next as? [ChatMessage] {
                         self.messages = list
                     } else if let arr = next as? NSArray {
-                        self.messages = arr.compactMap { $0 as? Messages }
+                        self.messages = arr.compactMap { $0 as? ChatMessage }
                     }
                 }
             },

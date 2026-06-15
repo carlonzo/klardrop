@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
   alias(deps.plugins.kotlin.multiplatform)
+  alias(deps.plugins.kotlin.serialization)
 }
 
 group = "com.carlom.klardrop"
@@ -26,6 +27,7 @@ kotlin {
         implementation(deps.kotlinx.coroutines.core)
         implementation(deps.clikt)
         implementation(deps.filekit.core)
+        implementation(deps.kotlinx.serialization.json)
       }
     }
 

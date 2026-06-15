@@ -120,6 +120,17 @@ internal class MessagesRouterImpl(
    */
   private val authorizationScope = CoroutineScope(SupervisorJob() + coroutines.ioDispatcher)
 
+  /**
+   * Bounded FIFO set of inbound TEXT wire-frame ids that have already been processed
+   * (or are currently being processed) on this connection. When a sender retries after a
+   * lost ACK the same wire-frame id arrives again; we skip `insertMessage` but still reply
+   * with ACK_RECEIVED so the sender's retry is acknowledged without inserting a duplicate
+   * DB row. Bounded to [PROCESSED_TEXT_IDS_MAX] entries so it doesn't grow unboundedly on
+   * a long-lived connection. Access is guarded by [processedTextIdsMutex].
+   */
+  private val processedTextIds = LinkedHashSet<Int>()
+  private val processedTextIdsMutex = Mutex()
+
   private suspend fun sendMessageToDevice(
     deviceId: String,
     message: Message,
@@ -201,6 +212,17 @@ internal class MessagesRouterImpl(
             }
           } else {
             log("MessagesRouter", "SECURITY: signature verification failed for TrustedMessage from $fromDeviceId")
+          }
+          // Always send a terminal ACK_REJECTED so the sender fast-fails instead of
+          // timing out and retrying — mirroring the FILE path's terminal-ACK contract. Both
+          // sub-paths (unknown-sender and known-bad-signature) return without processing the
+          // message, so neither is an ACK_RECEIVED situation.
+          runCatching {
+            writeLock.withLock {
+              sendMessageToDevice(fromDeviceId, MessageAcknowledgment(AckType.REJECTED, ackId), writeChannel, cipher)
+            }
+          }.onFailure { e ->
+            log("MessagesRouter", "Failed to send ACK_REJECTED for invalid TrustedMessage from $fromDeviceId", e)
           }
           return@ioDispatcher
         }
@@ -300,33 +322,70 @@ internal class MessagesRouterImpl(
     // whole TEXT processing path off the read loop so PONGs continue to drain.
     if (message is TextMessage) {
       authorizationScope.launch {
-        val authorized = incomingAuthorizer.authorize(
-          fromDeviceId = fromDeviceId,
-          kind = IncomingAuthorizer.TransferKind.TEXT,
-          headers = listOf(message),
-          receiveFlow = receiveFlow,
-          notifyAwaitingUser = {
-            val ackAwaiting = MessageAcknowledgment(AckType.AWAITING_USER, ackId)
+        // Wrap the entire authorize→handle→ACK pipeline so any exception from the
+        // authorizer or from TextMessageHandler.handleIncoming (e.g. a DB write failure) is
+        // caught and replied to with ACK_REJECTED rather than being silently swallowed by the
+        // SupervisorJob. Without this, the sender's ACK_RECEIVED wait times out and the TEXT
+        // is retried up to maxRetries times, causing ghost duplicate deliveries.
+        // Mirrors the FILE path's terminal-ACK contract in handleFileChunk.
+        runCatching {
+          val authorized = incomingAuthorizer.authorize(
+            fromDeviceId = fromDeviceId,
+            kind = IncomingAuthorizer.TransferKind.TEXT,
+            headers = listOf(message),
+            receiveFlow = receiveFlow,
+            notifyAwaitingUser = {
+              val ackAwaiting = MessageAcknowledgment(AckType.AWAITING_USER, ackId)
+              writeLock.withLock {
+                sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel, cipher)
+              }
+            },
+          )
+          if (!authorized) {
+            val ackRejected = MessageAcknowledgment(AckType.REJECTED, ackId)
             writeLock.withLock {
-              sendMessageToDevice(fromDeviceId, ackAwaiting, writeChannel, cipher)
+              sendMessageToDevice(fromDeviceId, ackRejected, writeChannel, cipher)
             }
-          },
-        )
-        if (!authorized) {
-          val ackRejected = MessageAcknowledgment(AckType.REJECTED, ackId)
-          writeLock.withLock {
-            sendMessageToDevice(fromDeviceId, ackRejected, writeChannel, cipher)
+            return@runCatching
           }
-          return@launch
-        }
-        val messageHandler = handlers[message.type] ?: run {
-          log("MessagesRouter", "No handler for message type ${message.type}")
-          return@launch
-        }
-        messageHandler.handleIncoming(message, readChannel, receiveFlow)
-        val ackReceived = MessageAcknowledgment(AckType.RECEIVED, ackId)
-        writeLock.withLock {
-          sendMessageToDevice(fromDeviceId, ackReceived, writeChannel, cipher)
+          // Dedup inbound TEXT by wire-frame id. If this id was already processed
+          // (the sender is retrying after a lost ACK), skip insertMessage but still
+          // reply ACK_RECEIVED so the retry is acknowledged without duplicating the DB row.
+          val alreadyProcessed = processedTextIdsMutex.withLock { ackId in processedTextIds }
+          if (alreadyProcessed) {
+            log("MessagesRouter", "Duplicate inbound TEXT id=$ackId from $fromDeviceId; re-ACKing without re-inserting")
+            val ackReceived = MessageAcknowledgment(AckType.RECEIVED, ackId)
+            writeLock.withLock {
+              sendMessageToDevice(fromDeviceId, ackReceived, writeChannel, cipher)
+            }
+            return@runCatching
+          }
+          // Mark as in-flight before suspending on handleIncoming so a concurrent retry
+          // sees the id as already-processed.
+          processedTextIdsMutex.withLock {
+            if (processedTextIds.size >= PROCESSED_TEXT_IDS_MAX) {
+              processedTextIds.remove(processedTextIds.first())
+            }
+            processedTextIds.add(ackId)
+          }
+          val messageHandler = handlers[message.type] ?: run {
+            log("MessagesRouter", "No handler for message type ${message.type}")
+            return@runCatching
+          }
+          messageHandler.handleIncoming(message, readChannel, receiveFlow)
+          val ackReceived = MessageAcknowledgment(AckType.RECEIVED, ackId)
+          writeLock.withLock {
+            sendMessageToDevice(fromDeviceId, ackReceived, writeChannel, cipher)
+          }
+        }.onFailure { error ->
+          log("MessagesRouter", "Error processing inbound TEXT from $fromDeviceId (id=$ackId): ${error.message}", error)
+          runCatching {
+            writeLock.withLock {
+              sendMessageToDevice(fromDeviceId, MessageAcknowledgment(AckType.REJECTED, ackId), writeChannel, cipher)
+            }
+          }.onFailure { e ->
+            log("MessagesRouter", "Failed to send ACK_REJECTED for failed TEXT from $fromDeviceId", e)
+          }
         }
       }
       return@ioDispatcher
@@ -603,5 +662,10 @@ internal class MessagesRouterImpl(
         }
       }
     }
+  }
+
+  private companion object {
+    /** Maximum number of processed inbound TEXT ids retained for dedup. */
+    const val PROCESSED_TEXT_IDS_MAX = 256
   }
 }

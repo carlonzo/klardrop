@@ -148,8 +148,17 @@ class Server(
   private suspend fun handleConnection(socket: Socket, remoteAddress: String) {
     val readChannel = socket.openReadChannel()
 
-    // Read the first message to detect protocol
-    val firstMessage = readChannel.readByteArrayMessage()
+    // Read the first message to detect protocol. Bound by TCP_CONNECT_TIMEOUT_MS so a peer that
+    // completes the TCP handshake but then sends nothing cannot hold the FD + coroutine forever.
+    val firstMessage = try {
+      withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+        readChannel.readByteArrayMessage()
+      }
+    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+      log("Server", "Protocol-detection read timed out for $remoteAddress — closing silent peer")
+      socket.close()
+      return
+    }
 
     val protocol = detectProtocol(firstMessage)
     log("Server", "Detected protocol: $protocol for connection from $remoteAddress")

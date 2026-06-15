@@ -12,6 +12,9 @@ import com.carlom.klardrop.common.notifications.Notifier
 import com.carlom.klardrop.common.permissions.PermissionsMonitor
 import com.carlom.klardrop.common.trust.AppleTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
+import com.carlom.klardrop.common.utils.FileTypeUtils
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import platform.Foundation.NSDocumentDirectory
@@ -20,6 +23,11 @@ import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserDomainMask
+import platform.Photos.PHAccessLevelReadWrite
+import platform.Photos.PHAssetChangeRequest
+import platform.Photos.PHAuthorizationStatusAuthorized
+import platform.Photos.PHAuthorizationStatusLimited
+import platform.Photos.PHPhotoLibrary
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationDidBecomeActiveNotification
 
@@ -119,10 +127,54 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     return true
   }
 
-  // iOS keeps using FileKit.saveImageToGallery (no tracked path); the caller falls back.
+  // Save received images/videos to the Photos library and return a "ph://<localIdentifier>"
+  // reference so the chat can render a preview (and tap-to-open) by fetching the PHAsset back.
+  // Returns null on any failure (permission denied, save error) — moveToStorage then falls back
+  // to FileKit's gallery save, which records no path (no preview, but no regression either).
+  //
+  // NOTE on the "ph://" scheme: moveToStorage wraps this string in kotlinx.io Path and persists
+  // Path.toString(), which collapses the "//" to "/". The Swift side restores both "ph://" and
+  // the collapsed "ph:/" forms — mirroring exactly how Android's "content://" URIs round-trip.
   actual suspend fun saveMediaToGallery(
     tempPath: kotlinx.io.files.Path,
     mimeType: String,
     displayName: String,
-  ): String? = null
+  ): String? {
+    val isImage = FileTypeUtils.isImageMimeType(mimeType)
+    val isVideo = FileTypeUtils.isVideoMimeType(mimeType)
+    if (!isImage && !isVideo) return null
+
+    // Add-only authorization can write to Photos but cannot fetch the asset back by
+    // localIdentifier — which the preview relies on. Request read-write (Limited is fine:
+    // assets this app creates stay visible to it).
+    val status = suspendCancellableCoroutine { cont ->
+      PHPhotoLibrary.requestAuthorizationForAccessLevel(PHAccessLevelReadWrite) { st ->
+        cont.resume(st)
+      }
+    }
+    if (status != PHAuthorizationStatusAuthorized && status != PHAuthorizationStatusLimited) {
+      return null
+    }
+
+    val fileUrl = NSURL.fileURLWithPath(tempPath.toString())
+    val localId: String? = suspendCancellableCoroutine { cont ->
+      // Captured across the change/completion blocks; the change block runs before completion.
+      val captured = arrayOfNulls<String>(1)
+      PHPhotoLibrary.sharedPhotoLibrary().performChanges(
+        changeBlock = {
+          val request = if (isVideo) {
+            PHAssetChangeRequest.creationRequestForAssetFromVideoAtFileURL(fileUrl)
+          } else {
+            PHAssetChangeRequest.creationRequestForAssetFromImageAtFileURL(fileUrl)
+          }
+          captured[0] = request?.placeholderForCreatedAsset?.localIdentifier
+        },
+        completionHandler = { success, _ ->
+          cont.resume(if (success) captured[0] else null)
+        },
+      )
+    }
+
+    return localId?.let { "ph://$it" }
+  }
 }

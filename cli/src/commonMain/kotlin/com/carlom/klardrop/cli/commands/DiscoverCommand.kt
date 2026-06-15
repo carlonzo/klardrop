@@ -11,27 +11,41 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
+import kotlin.system.exitProcess
+
+private const val EXIT_OK = 0
+private const val EXIT_INIT_FAILURE = 3
 
 class DiscoverCommand : CliktCommand(
   name = "discover",
 ) {
 
   private val debug by option("--debug", help = "Enable debug output").flag()
+  private val json by option("--json", help = "Output result as JSON to stdout").flag()
   private val timeout by option("--timeout", help = "Discovery timeout in seconds (default: 5)")
+  private val dataDir by option(
+    "--data-dir",
+    help = "Root directory for identity/trust/storage (overrides KLARDROP_HOME env). " +
+      "Use distinct paths per process for same-host multi-node testing.",
+    envvar = "KLARDROP_HOME",
+  )
 
   override fun run() = runBlocking {
     val controller = CliController
 
-    if (!controller.initialize(debug = debug)) {
-      echo("Failed to initialize Klardrop", err = true)
-      return@runBlocking
+    if (!controller.initialize(debug = debug, dataDir = dataDir)) {
+      CliLogging.error("Failed to initialize Klardrop")
+      exitProcess(EXIT_INIT_FAILURE)
     }
 
-    echo("Discovering nearby devices...")
-    if (debug) {
-      CliLogging.info("Debug mode enabled - showing detailed logs")
-    } else {
-      echo("Press Ctrl+C to stop discovery")
+    if (!json) {
+      echo("Discovering nearby devices...")
+      if (debug) {
+        CliLogging.info("Debug mode enabled - showing detailed logs")
+      } else {
+        echo("Press Ctrl+C to stop discovery")
+      }
     }
 
     val timeoutMs = (timeout?.toLongOrNull() ?: 5L) * 1000
@@ -47,15 +61,17 @@ class DiscoverCommand : CliktCommand(
             if (!seenDevices.contains(deviceId)) {
               seenDevices.add(deviceId)
 
-              CliLogging.info("\n🔍 Discovered device:")
-              CliLogging.info("   Device ID: ${device.deviceInfo.deviceId}")
-              CliLogging.info("   Name:      ${device.deviceInfo.name}")
-              CliLogging.info("   Type:      ${device.deviceInfo.deviceType}")
+              if (!json) {
+                CliLogging.info("\nDiscovered device:")
+                CliLogging.info("   Device ID: ${device.deviceInfo.deviceId}")
+                CliLogging.info("   Name:      ${device.deviceInfo.name}")
+                CliLogging.info("   Type:      ${device.deviceInfo.deviceType}")
 
-              device.deviceConnections.forEach { connection ->
-                CliLogging.info("   Connection: ${connection.deviceConnectionType} at ${connection.address}:${connection.port}")
+                device.deviceConnections.forEach { connection ->
+                  CliLogging.info("   Connection: ${connection.deviceConnectionType} at ${connection.address}:${connection.port}")
+                }
+                CliLogging.info("   " + "-".repeat(50))
               }
-              CliLogging.info("   " + "─".repeat(50))
             }
           }
         }
@@ -64,7 +80,7 @@ class DiscoverCommand : CliktCommand(
       // Wait for timeout
       var elapsed = 0L
       while (elapsed < timeoutMs) {
-        if (!debug) {
+        if (!debug && !json) {
           echo(".", trailingNewline = false)
         }
         delay(1000)
@@ -75,12 +91,18 @@ class DiscoverCommand : CliktCommand(
     }
 
     val finalDevices = controller.getVisibleDevices().first()
-    if (finalDevices.isEmpty()) {
-      echo("\n❌ No devices discovered")
+
+    if (json) {
+      CliLogging.info(cliJson.encodeToString(finalDevices.values.map { it.toJson() }))
     } else {
-      echo("\n✅ Discovery complete - found ${finalDevices.size} device(s)")
+      if (finalDevices.isEmpty()) {
+        echo("\nNo devices discovered")
+      } else {
+        echo("\nDiscovery complete - found ${finalDevices.size} device(s)")
+      }
     }
 
     controller.shutdown()
+    exitProcess(EXIT_OK)
   }
 }

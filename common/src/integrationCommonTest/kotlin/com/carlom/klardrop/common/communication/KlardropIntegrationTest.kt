@@ -277,6 +277,64 @@ class KlardropIntegrationTest {
     }
   }
 
+  // A file/text received over Nearby Share never appears in the chat because the Nearby
+  // receive path persists nothing to the DB. The chat list is rendered exclusively from
+  // messageRepository.getMessagesForDevice (i.e. rows persisted via
+  // insertMessage/insertFileTransfer). The Klardrop receive path persists via
+  // TextMessageHandler.handleIncoming / FileMessageHandler.beginReceive
+  // (insertMessage(isSender=false)); the Nearby receive path
+  // (NearbyReceiverConnectionHandler) only writes the file to disk + emits the receiveFlow
+  // and has no MessageRepository at all — so nothing is stored and the chat stays empty.
+  //
+  // This drives a real Nearby Share send (text then file) end-to-end over loopback sockets
+  // and asserts the SERVER's repository recorded both as is_sender=false. On current code
+  // the server repository receives zero inserts, so this test FAILS (RED).
+  @Test
+  fun testNearbyShareReceivePersistsMessagesToRepository() = integrationTest(timeout = 120.seconds) {
+    testContext.setupServerAndClient(DeviceConnectionType.NEARBY)
+
+    turbineScope(timeout = 60.seconds) {
+      with(testContext) {
+        // Both of these confirm (on the wire / receiveFlow) that the transfer completed.
+        sendAndVerifyMessage("nearby chat text that must be persisted")
+
+        val fileData = "nearby file body that must be persisted".encodeToByteArray()
+        sendAndVerifyFile("nearby-persisted.txt", fileData, "text/plain")
+      }
+    }
+
+    val repo = testContext.serverMessageRepository
+
+    // The received FILE must have produced a file_transfer row + a FILE message persisted as
+    // is_sender=false (mirroring FileMessageHandler.beginReceive on the Klardrop path).
+    val fileTransfer = repo.insertedFileTransfers.firstOrNull { it.fileName == "nearby-persisted.txt" }
+    assertNotNull(
+      fileTransfer,
+      "Nearby receive must persist a file_transfer row for the received file, " +
+        "but the server repository recorded ${repo.insertedFileTransfers}",
+    )
+
+    val incomingFileMessage = repo.insertedMessages.firstOrNull {
+      it.messageType == com.carlom.klardrop.common.persistence.MessageType.FILE && !it.isSender
+    }
+    assertNotNull(
+      incomingFileMessage,
+      "Nearby receive must persist the received FILE as an is_sender=false message so it " +
+        "appears in the chat, but the server repository recorded ${repo.insertedMessages}",
+    )
+
+    // The received TEXT must also be persisted as is_sender=false (mirroring
+    // TextMessageHandler.handleIncoming on the Klardrop path).
+    val incomingTextMessage = repo.insertedMessages.firstOrNull {
+      it.messageType == com.carlom.klardrop.common.persistence.MessageType.TEXT && !it.isSender
+    }
+    assertNotNull(
+      incomingTextMessage,
+      "Nearby receive must persist the received TEXT as an is_sender=false message so it " +
+        "appears in the chat, but the server repository recorded ${repo.insertedMessages}",
+    )
+  }
+
   @Test
   fun testMessengerReconnectionFromClient() = testMessengerReconnection(clientDropsConnection = true, serverDropsConnection = false)
 
@@ -617,6 +675,11 @@ internal class KlardropTestContext(
 
   val clientFileManager = InMemoryTestFileManager()
   val serverFileManager = InMemoryTestFileManager()
+
+  // Recording repository wired into the SERVER module so a test can assert what the
+  // receive path persisted (the Nearby Share receive path must insert the received
+  // message as is_sender=false, just like the Klardrop receive path does).
+  val serverMessageRepository = RecordingMessageRepository()
   private val testAckTimeoutConfig = AckTimeoutConfig(
     noPayloadAckTimeout = 60.seconds,
     readyAckTimeout = 60.seconds,
@@ -667,7 +730,7 @@ internal class KlardropTestContext(
     clock = clock,
     fileManager = serverFileManager,
     currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(serverDeviceId)),
-    messageRepository = FakeMessageRepository(),
+    messageRepository = serverMessageRepository,
     clipboardManager = FakeClipboardManager(),
     trustStorage = InMemoryTrustStorage(),
     ackTimeoutConfig = testAckTimeoutConfig,
@@ -919,7 +982,9 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
     messageType: com.carlom.klardrop.common.persistence.MessageType,
     fileTransferId: Long?,
     isRead: Boolean,
-    mimeType: String
+    mimeType: String,
+    messageId: Long?,
+    sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
   ) {
   }
 
@@ -940,7 +1005,88 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
   override fun getMessagesForDevice(
     remoteDeviceId: String,
     limit: Long
-  ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.database.Messages>> = kotlinx.coroutines.flow.flowOf(emptyList())
+  ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.persistence.ChatMessage>> = kotlinx.coroutines.flow.flowOf(emptyList())
+
+  override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> =
+    kotlinx.coroutines.flow.flowOf(null)
+}
+
+/**
+ * In-memory [com.carlom.klardrop.common.persistence.MessageRepository] that records every
+ * inserted message and file-transfer so a test can assert what the receive path persisted.
+ *
+ * The chat list is rendered purely from rows persisted via [insertMessage]/[insertFileTransfer]
+ * (the UI reads getMessagesForDevice, which reads the DB). So if a received transfer never
+ * lands here as is_sender=false, it never shows up in the chat — this is exactly the failure
+ * mode for the Nearby Share receive path.
+ */
+internal class RecordingMessageRepository : com.carlom.klardrop.common.persistence.MessageRepository {
+
+  data class InsertedMessage(
+    val remoteDeviceId: String,
+    val content: String,
+    val isSender: Boolean,
+    val messageType: com.carlom.klardrop.common.persistence.MessageType,
+    val fileTransferId: Long?,
+    val mimeType: String,
+  )
+
+  data class InsertedFileTransfer(
+    val fileName: String,
+    val totalSize: Long,
+    val mimeType: String,
+  )
+
+  val insertedMessages = mutableListOf<InsertedMessage>()
+  val insertedFileTransfers = mutableListOf<InsertedFileTransfer>()
+  private var nextFileTransferId = 1L
+
+  override suspend fun insertMessage(
+    remoteDeviceId: String,
+    content: String,
+    isSender: Boolean,
+    messageType: com.carlom.klardrop.common.persistence.MessageType,
+    fileTransferId: Long?,
+    isRead: Boolean,
+    mimeType: String,
+    messageId: Long?,
+    sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
+  ) {
+    insertedMessages.add(
+      InsertedMessage(
+        remoteDeviceId = remoteDeviceId,
+        content = content,
+        isSender = isSender,
+        messageType = messageType,
+        fileTransferId = fileTransferId,
+        mimeType = mimeType,
+      )
+    )
+  }
+
+  override suspend fun insertFileTransfer(
+    fileName: String,
+    filePath: String,
+    totalSize: Long,
+    status: com.carlom.klardrop.common.persistence.FileTransferStatus,
+    mimeType: String
+  ): Long {
+    insertedFileTransfers.add(
+      InsertedFileTransfer(fileName = fileName, totalSize = totalSize, mimeType = mimeType)
+    )
+    return nextFileTransferId++
+  }
+
+  override suspend fun updateFileTransferStatus(id: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus) {}
+  override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {}
+  override suspend fun markStaleInProgressAsFailed() {}
+  override suspend fun markMessagesAsRead(remoteDeviceId: String) {}
+  override suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long = 0L
+  override fun getAllDevicesWithUnreadCounts(): kotlinx.coroutines.flow.Flow<Map<String, Long>> = kotlinx.coroutines.flow.flowOf(emptyMap())
+  override fun getMessagesForDevice(
+    remoteDeviceId: String,
+    limit: Long
+  ): kotlinx.coroutines.flow.Flow<List<com.carlom.klardrop.common.persistence.ChatMessage>> = kotlinx.coroutines.flow.flowOf(emptyList())
 
   override fun getFileTransferById(id: Long): kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.database.File_transfers?> =
     kotlinx.coroutines.flow.flowOf(null)

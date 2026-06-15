@@ -132,8 +132,8 @@ internal class ConnectionsPoolImpl(
         debounceJob?.cancel()
         debounceJob = scope.launch {
           delay(NETWORK_EVENT_DEBOUNCE_MS)
-          log("ConnectionPool", "Network change detected (debounced); flushing all pooled connections")
-          closeAllConnections()
+          log("ConnectionPool", "Network change detected (debounced); flushing idle pooled connections")
+          closeIdleConnections()
         }
       }
       .launchIn(scope)
@@ -257,6 +257,43 @@ internal class ConnectionsPoolImpl(
           // state until the next probe lands. Don't jump straight to
           // Unreachable here because that would briefly flash an Offline
           // indicator on a peer that's about to be re-probed.
+          flushedDeviceIds.forEach { put(it, Reachability.Unknown) }
+        }
+      }
+    }
+  }
+
+  /**
+   * Network-flush variant of [closeAllConnections]: closes only connections that are
+   * currently IDLE (no in-flight write). Connections whose [ConnectionMessenger.hasInflightWrite]
+   * returns true are skipped — a live chunked-file transfer holds the writeLock for the whole
+   * send, so closing the socket mid-write would abort an otherwise healthy transfer triggered by
+   * spurious network noise (Android's onCapabilitiesChanged / onLinkPropertiesChanged bursts).
+   *
+   * Mirrors the probe guard already present in [ConnectionMessenger.heartbeatLoop]: tryLock
+   * succeeds → messenger is idle → safe to flush; tryLock fails → writer is mid-frame → skip.
+   *
+   * Called exclusively from [subscribeToNetworkEvents]' debounce job so that real network
+   * address changes still flush idle sockets while live transfers survive the event burst.
+   */
+  private suspend fun closeIdleConnections() {
+    val flushedDeviceIds = mutableListOf<String>()
+    mutex.withLock {
+      val iter = connections.iterator()
+      while (iter.hasNext()) {
+        val (deviceId, messenger) = iter.next()
+        if (messenger.hasInflightWrite()) {
+          log("ConnectionPool", "Skipping network-flush for $deviceId: write in progress")
+          continue
+        }
+        messenger.close()
+        iter.remove()
+        flushedDeviceIds += deviceId
+      }
+    }
+    if (flushedDeviceIds.isNotEmpty()) {
+      reachabilityFlow.update { current ->
+        current.toMutableMap().apply {
           flushedDeviceIds.forEach { put(it, Reachability.Unknown) }
         }
       }

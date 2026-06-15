@@ -9,6 +9,8 @@
 	</dict>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Used to store the images and videos shared with the user from the app</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Used to show previews of the photos and videos you receive directly inside your chats.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleExecutable</key>

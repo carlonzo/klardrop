@@ -7,11 +7,11 @@ import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.database.File_transfers
-import com.carlom.klardrop.common.database.Messages
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlin.uuid.ExperimentalUuidApi
@@ -25,7 +25,9 @@ interface MessageRepository {
     messageType: MessageType,
     fileTransferId: Long? = null,
     isRead: Boolean = false,
-    mimeType: String = "text/plain"
+    mimeType: String = "text/plain",
+    messageId: Long? = null,
+    sendStatus: SendStatus = SendStatus.SENT,
   )
 
   suspend fun insertFileTransfer(
@@ -46,7 +48,16 @@ interface MessageRepository {
    */
   suspend fun markStaleInProgressAsFailed()
 
-  fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<Messages>>
+  /**
+   * Returns a merged flow of [ChatMessage] for the given device.
+   *
+   * Merges the on-disk SQLDelight flow with the in-memory outbox flow (sorted by timestamp
+   * descending). Deduplication: a disk row wins over an outbox entry with the same id.
+   * Outbox entries appear as [DeliveryStatus.SENDING]; disk rows with send_status='FAILED'
+   * appear as [DeliveryStatus.FAILED]; everything else (send_status NULL) appears as
+   * [DeliveryStatus.SENT].
+   */
+  fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<ChatMessage>>
 
   fun getFileTransferById(id: Long): Flow<File_transfers?>
 
@@ -65,7 +76,8 @@ enum class FileTransferStatus { IN_PROGRESS, COMPLETED, FAILED, REJECTED }
 class MessageRepositoryImpl(
   private val database: AppDatabase,
   private val clock: Clock,
-  private val ioDispatcher: CoroutineDispatcher
+  private val ioDispatcher: CoroutineDispatcher,
+  private val outbox: MessageOutbox = MessageOutbox(),
 ) : MessageRepository {
 
   override suspend fun insertMessage(
@@ -75,9 +87,12 @@ class MessageRepositoryImpl(
     messageType: MessageType,
     fileTransferId: Long?,
     isRead: Boolean,
-    mimeType: String
+    mimeType: String,
+    messageId: Long?,
+    sendStatus: SendStatus,
   ) {
     withContext(ioDispatcher) {
+      val sendStatusString = if (sendStatus == SendStatus.FAILED) "FAILED" else null
       database.messageQueries.insert(
         remote_device_id = remoteDeviceId,
         content = content,
@@ -86,9 +101,14 @@ class MessageRepositoryImpl(
         message_type = messageType.name,
         file_transfer_id = fileTransferId,
         is_read = if (isRead) 1L else 0L,
-        mime_type = mimeType
+        mime_type = mimeType,
+        send_status = sendStatusString,
       ).await().also {
-        log("MessageRepositoryImpl", "Inserted message for device $remoteDeviceId with type $messageType and file transfer ID $fileTransferId")
+        log(
+          "MessageRepositoryImpl",
+          "Inserted message for device $remoteDeviceId with type $messageType, " +
+            "file transfer ID $fileTransferId, sendStatus=$sendStatus"
+        )
       }
     }
   }
@@ -134,10 +154,59 @@ class MessageRepositoryImpl(
     }
   }
 
-  override fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<Messages>> {
-    return database.messageQueries.getMessagesForDevice(remoteDeviceId, limit)
+  override fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<ChatMessage>> {
+    val diskFlow: Flow<List<ChatMessage>> = database.messageQueries
+      .getMessagesForDevice(remoteDeviceId, limit)
       .asFlow()
       .mapToList(ioDispatcher)
+      .map { rows ->
+        rows.map { row ->
+          val delivery = when (row.send_status) {
+            "FAILED" -> DeliveryStatus.FAILED
+            else -> DeliveryStatus.SENT
+          }
+          ChatMessage(
+            id = row.id,
+            remoteDeviceId = row.remote_device_id,
+            content = row.content,
+            timestamp = row.timestamp,
+            isSender = row.is_sender != 0L,
+            messageType = row.message_type,
+            fileTransferId = row.file_transfer_id,
+            isRead = row.is_read,
+            mimeType = row.mime_type,
+            deliveryStatus = delivery,
+          )
+        }
+      }
+
+    val outboxFlow: Flow<List<ChatMessage>> = outbox.entries.map { entries ->
+      entries
+        .filter { it.remoteDeviceId == remoteDeviceId }
+        .map { entry ->
+          ChatMessage(
+            id = entry.messageId,
+            remoteDeviceId = entry.remoteDeviceId,
+            content = entry.content,
+            timestamp = entry.timestamp,
+            isSender = true,
+            messageType = MessageType.TEXT.name,
+            fileTransferId = null,
+            isRead = 1L,
+            mimeType = "text/plain",
+            deliveryStatus = DeliveryStatus.SENDING,
+          )
+        }
+    }
+
+    // Merge: disk rows take precedence over outbox entries with the same id.
+    return diskFlow.combine(outboxFlow) { diskMessages, outboxMessages ->
+      val diskIds = diskMessages.map { it.id }.toSet()
+      val filteredOutbox = outboxMessages.filter { it.id !in diskIds }
+      (diskMessages + filteredOutbox)
+        .sortedByDescending { it.timestamp }
+        .take(limit.toInt())
+    }
   }
 
   override fun getFileTransferById(id: Long): Flow<File_transfers?> {
