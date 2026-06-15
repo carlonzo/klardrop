@@ -148,6 +148,12 @@ final class ChatModel {
         viewModel.doCopyText(text: text)
     }
 
+    /// Send the clipboard's current text (attachment chooser "Paste" action).
+    /// Reuses the shared VM logic, which also surfaces a "Clipboard is empty" notice.
+    func pasteFromClipboard() {
+        viewModel.pasteFromClipboard()
+    }
+
     func openFile(_ path: String) {
         viewModel.openFileClicked(filePath: path)
     }

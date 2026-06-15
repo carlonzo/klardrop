@@ -183,6 +183,16 @@ class DeviceChatViewModel(
     _uiState.update { it.copy(notice = "Copied to clipboard") }
   }
 
+  /** Send whatever text is currently on the clipboard (used by the attachment chooser's Paste action). */
+  fun pasteFromClipboard() {
+    val text = clipboardManager.read().trim()
+    if (text.isEmpty()) {
+      _uiState.update { it.copy(notice = "Clipboard is empty") }
+      return
+    }
+    sendTextMessage(text)
+  }
+
   fun openUrlClicked(url: String) {
     viewModelScope.launch {
       try {
