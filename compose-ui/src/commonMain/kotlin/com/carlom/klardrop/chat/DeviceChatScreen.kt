@@ -44,6 +44,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.OnDataToSend
+import com.carlom.klardrop.common.CommonPlatformDependencies
+import com.carlom.klardrop.common.utils.OsType
+import com.carlom.klardrop.components.AttachmentChooser
 import com.carlom.klardrop.components.Banner
 import com.carlom.klardrop.components.Bubble
 import com.carlom.klardrop.components.BubbleQuickActions
@@ -117,6 +120,12 @@ fun DeviceChatScreen(
     ) { files ->
         if (!files.isNullOrEmpty()) viewModel.sendFiles(files)
     }
+
+    // The attachment chooser (Gallery / Files / Paste + recent-media rail) is a
+    // mobile/tablet affordance. Desktop keeps the direct file picker, so only
+    // intercept the paperclip on Android.
+    val useChooser = remember { CommonPlatformDependencies.osType() == OsType.ANDROID }
+    var chooserOpen by remember { mutableStateOf(false) }
 
     uiState.error?.let { error ->
         LaunchedEffect(error) {
@@ -260,7 +269,9 @@ fun DeviceChatScreen(
                         textToSend = ""
                     }
                 },
-                onAttach = { filePickerLauncher.launch() },
+                onAttach = {
+                    if (useChooser) chooserOpen = true else filePickerLauncher.launch()
+                },
                 enabled = true, // Allow composing while offline; send shows SENDING→FAILED bubble
                 desktopVariant = mode == DeviceChatMode.Pane,
                 modifier = Modifier
@@ -269,6 +280,17 @@ fun DeviceChatScreen(
                     .padding(horizontal = spacing.s3, vertical = spacing.s2)
                     .navigationBarsPadding(),
             )
+
+            if (chooserOpen) {
+                AttachmentChooser(
+                    isLargeScreen = mode == DeviceChatMode.Pane,
+                    onGallery = { imagePickerLauncher.launch() },
+                    onFiles = { filePickerLauncher.launch() },
+                    onPaste = { viewModel.pasteFromClipboard() },
+                    onPickMedia = { viewModel.sendFiles(listOf(it)) },
+                    onDismiss = { chooserOpen = false },
+                )
+            }
         }
     }
 }

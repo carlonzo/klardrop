@@ -1,6 +1,8 @@
 import SwiftUI
 #if os(iOS)
+import UIKit
 import PhotosUI
+import Photos
 #endif
 import presentation
 
@@ -36,8 +38,19 @@ struct DeviceChatScreen: View {
     @State private var showFilePicker = false
     #if os(iOS)
     @State private var photoItems: [PhotosPickerItem] = []
+    @State private var showChooser = false
     #endif
     @State private var showToast: String? = nil
+
+    private func onAttachTapped() {
+        // Mobile/tablet (iOS/iPadOS) open the Gallery/Files/Paste chooser; macOS
+        // keeps the plain file picker.
+        #if os(iOS)
+        showChooser = true
+        #else
+        showFilePicker = true
+        #endif
+    }
 
     // Reachability-derived flags
     private var isOffline: Bool {
@@ -140,11 +153,22 @@ struct DeviceChatScreen: View {
                 MessageInputView(
                     text: Bindable(model).draft,
                     onSend: { model.send() },
-                    onAttach: { showFilePicker = true },
+                    onAttach: { onAttachTapped() },
                     enabled: !isOffline
                 )
                 .background(kd.bg0)
                 .padding(.bottom, KdSpacing.s1)
+                // Attachment chooser: popover anchored to the input on iPad,
+                // auto-adapting to a bottom sheet on iPhone (compact width).
+                #if os(iOS)
+                .popover(
+                    isPresented: $showChooser,
+                    attachmentAnchor: .point(.bottomLeading),
+                    arrowEdge: .bottom
+                ) {
+                    AttachmentChooserView(model: model, isPresented: $showChooser)
+                }
+                #endif
             }
         }
         // Navigation bar (iPhone): compact device header pinned to the left, next to the
@@ -471,3 +495,305 @@ private struct ToastView: View {
             .animation(KdMotion.easeOut, value: message)
     }
 }
+
+#if os(iOS)
+
+// MARK: - AttachmentChooserView
+//
+// Gallery / Files / Paste actions plus an inline rail of the user's recent
+// photos & videos. Presented as a popover on iPad and (via the system's compact
+// adaptation) a bottom sheet on iPhone. Mirrors the Compose AttachmentChooser.
+
+private struct AttachmentChooserView: View {
+
+    let model: ChatModel
+    @Binding var isPresented: Bool
+
+    @Environment(\.kdColors) private var kd
+
+    @State private var photoItems: [PhotosPickerItem] = []
+    @State private var showFilesImporter = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: KdSpacing.s3) {
+            Text("Add attachment")
+                .kdStyle(.headline, color: kd.text)
+                .padding(.horizontal, KdSpacing.s4)
+                .padding(.top, KdSpacing.s4)
+
+            HStack(spacing: KdSpacing.s2) {
+                // Gallery — native photo picker (no permission prompt needed)
+                PhotosPicker(
+                    selection: $photoItems,
+                    maxSelectionCount: 0,
+                    matching: .any(of: [.images, .videos])
+                ) {
+                    AttachmentTile(icon: "photo.on.rectangle", label: "Gallery")
+                }
+                .buttonStyle(.plain)
+                .onChange(of: photoItems) { _, items in
+                    guard !items.isEmpty else { return }
+                    Task {
+                        let files = await AttachmentImport.platformFiles(from: items)
+                        if !files.isEmpty { model.sendFiles(files) }
+                        isPresented = false
+                    }
+                }
+
+                // Files — system document picker
+                Button { showFilesImporter = true } label: {
+                    AttachmentTile(icon: "doc", label: "Files")
+                }
+                .buttonStyle(.plain)
+
+                // Paste — send clipboard text
+                Button {
+                    model.pasteFromClipboard()
+                    isPresented = false
+                } label: {
+                    AttachmentTile(icon: "doc.on.clipboard", label: "Paste")
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, KdSpacing.s4)
+
+            // Inline recent-media rail (asks for photo permission on first appear)
+            RecentMediaRailView { files in
+                if !files.isEmpty { model.sendFiles(files) }
+                isPresented = false
+            }
+            .padding(.bottom, KdSpacing.s4)
+        }
+        .frame(minWidth: 340, maxWidth: .infinity, alignment: .leading)
+        .background(kd.bg1)
+        .fileImporter(
+            isPresented: $showFilesImporter,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            if case .success(let urls) = result {
+                let files = AttachmentImport.platformFiles(fromSecurityScoped: urls)
+                if !files.isEmpty { model.sendFiles(files) }
+            }
+            isPresented = false
+        }
+        .presentationDetents([.height(300)])
+        .presentationDragIndicator(.visible)
+        .presentationCompactAdaptation(.sheet)
+    }
+}
+
+// MARK: - AttachmentTile
+
+private struct AttachmentTile: View {
+    let icon: String
+    let label: String
+    @Environment(\.kdColors) private var kd
+
+    var body: some View {
+        VStack(spacing: KdSpacing.s2) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .regular))
+                .foregroundColor(kd.text2)
+            Text(label).kdStyle(.body, color: kd.text2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, KdSpacing.s4)
+        .background(kd.bg2)
+        .clipShape(RoundedRectangle(cornerRadius: KdRadii.md, style: .continuous))
+    }
+}
+
+// MARK: - RecentMediaRailView
+
+private struct RecentMediaRailView: View {
+
+    let onPick: ([Filekit_corePlatformFile]) -> Void
+
+    @Environment(\.kdColors) private var kd
+    @State private var assets: [PHAsset] = []
+    @State private var authorized = false
+
+    var body: some View {
+        Group {
+            if authorized && !assets.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: KdSpacing.s2) {
+                        ForEach(assets, id: \.localIdentifier) { asset in
+                            RecentThumb(asset: asset) {
+                                Task {
+                                    let pf = await AttachmentImport.platformFile(from: asset)
+                                    onPick(pf.map { [$0] } ?? [])
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, KdSpacing.s4)
+                }
+                .frame(height: 76)
+            } else {
+                EmptyView()
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        let status = await requestAuthorization()
+        guard status == .authorized || status == .limited else {
+            authorized = false
+            return
+        }
+        authorized = true
+
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.fetchLimit = 40
+        options.predicate = NSPredicate(
+            format: "mediaType == %d || mediaType == %d",
+            PHAssetMediaType.image.rawValue,
+            PHAssetMediaType.video.rawValue
+        )
+        let result = PHAsset.fetchAssets(with: options)
+        var list: [PHAsset] = []
+        result.enumerateObjects { obj, _, _ in list.append(obj) }
+        assets = list
+    }
+
+    private func requestAuthorization() async -> PHAuthorizationStatus {
+        let current = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if current != .notDetermined { return current }
+        return await withCheckedContinuation { cont in
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { cont.resume(returning: $0) }
+        }
+    }
+}
+
+// MARK: - RecentThumb
+
+private struct RecentThumb: View {
+    let asset: PHAsset
+    let onTap: () -> Void
+
+    @Environment(\.kdColors) private var kd
+    @State private var image: UIImage?
+
+    var body: some View {
+        Button(action: onTap) {
+            ZStack(alignment: .bottomLeading) {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    kd.bg2
+                }
+                if asset.mediaType == .video {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(4)
+                }
+            }
+            .frame(width: 76, height: 76)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: KdRadii.sm, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .task { await loadThumb() }
+    }
+
+    private func loadThumb() async {
+        let manager = PHImageManager.default()
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .fast
+        options.isNetworkAccessAllowed = true
+        let target = CGSize(width: 160, height: 160)
+        image = await withCheckedContinuation { (cont: CheckedContinuation<UIImage?, Never>) in
+            manager.requestImage(
+                for: asset,
+                targetSize: target,
+                contentMode: .aspectFill,
+                options: options
+            ) { img, _ in
+                cont.resume(returning: img)
+            }
+        }
+    }
+}
+
+// MARK: - AttachmentImport
+//
+// Shared helpers that turn picked sources into FileKit PlatformFiles the shared
+// KMP layer can send. Everything is copied into a temp sandbox dir first.
+
+private enum AttachmentImport {
+
+    static func platformFiles(fromSecurityScoped urls: [URL]) -> [Filekit_corePlatformFile] {
+        var out: [Filekit_corePlatformFile] = []
+        for url in urls {
+            guard url.startAccessingSecurityScopedResource() else { continue }
+            defer { url.stopAccessingSecurityScopedResource() }
+            if let pf = copyToTemp(from: url) { out.append(pf) }
+        }
+        return out
+    }
+
+    static func platformFiles(from items: [PhotosPickerItem]) async -> [Filekit_corePlatformFile] {
+        var out: [Filekit_corePlatformFile] = []
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+            let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
+            if let pf = writeTemp(data: data, filename: "photo.\(ext)") { out.append(pf) }
+        }
+        return out
+    }
+
+    static func platformFile(from asset: PHAsset) async -> Filekit_corePlatformFile? {
+        let resources = PHAssetResource.assetResources(for: asset)
+        let preferred: [PHAssetResourceType] = [.photo, .video, .fullSizePhoto, .fullSizeVideo, .pairedVideo]
+        let resource = preferred.compactMap { type in resources.first { $0.type == type } }.first
+            ?? resources.first
+        guard let resource else { return nil }
+
+        guard let dir = makeTempDir() else { return nil }
+        let dest = dir.appendingPathComponent(resource.originalFilename)
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+        do {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+                PHAssetResourceManager.default().writeData(for: resource, toFile: dest, options: options) { error in
+                    if let error { cont.resume(throwing: error) } else { cont.resume() }
+                }
+            }
+        } catch {
+            return nil
+        }
+        return PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+    }
+
+    private static func copyToTemp(from url: URL) -> Filekit_corePlatformFile? {
+        guard let dir = makeTempDir() else { return nil }
+        let dest = dir.appendingPathComponent(url.lastPathComponent)
+        guard (try? FileManager.default.copyItem(at: url, to: dest)) != nil else { return nil }
+        return PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+    }
+
+    private static func writeTemp(data: Data, filename: String) -> Filekit_corePlatformFile? {
+        guard let dir = makeTempDir() else { return nil }
+        let dest = dir.appendingPathComponent(filename)
+        guard (try? data.write(to: dest)) != nil else { return nil }
+        return PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+    }
+
+    private static func makeTempDir() -> URL? {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        guard (try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)) != nil else {
+            return nil
+        }
+        return dir
+    }
+}
+
+#endif
