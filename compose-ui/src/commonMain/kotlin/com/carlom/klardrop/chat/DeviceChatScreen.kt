@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.OnDataToSend
+import com.carlom.klardrop.ReceiveNotification
 import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.components.AttachmentChooser
@@ -222,11 +223,18 @@ fun DeviceChatScreen(
                 .padding(top = paddingValues.calculateTopPadding())
                 .background(dropTint),
         ) {
-            pendingAuth?.let { update ->
-                IncomingAuthBanner(
-                    update = update,
-                    modifier = Modifier.padding(horizontal = spacing.s3, vertical = spacing.s2),
-                )
+            // Incoming accept/reject prompt. In Pane mode the global IncomingBannerStack (rendered
+            // by WideLayout above the chat) already shows the card, so only surface it here in the
+            // standalone/compact chat to avoid the duplicate prompt.
+            if (mode != DeviceChatMode.Pane) {
+                pendingAuth?.let { update ->
+                    ReceiveNotification(
+                        receiveUpdate = update,
+                        onClicked = {},
+                        onDismissed = {},
+                        modifier = Modifier.padding(horizontal = spacing.s3, vertical = spacing.s2),
+                    )
+                }
             }
 
             if (isOffline) {
@@ -293,38 +301,6 @@ fun DeviceChatScreen(
             }
         }
     }
-}
-
-@Composable
-private fun IncomingAuthBanner(
-    update: ReceiveMessageUpdate,
-    modifier: Modifier = Modifier,
-) {
-    val status = update.status as? ReceiveMessageStatus.PendingAuthorization ?: return
-    val sender = update.device?.name ?: "this device"
-    val itemCount = update.messages.size
-    val preview = update.messages.firstOrNull()?.let { msg ->
-        when (msg) {
-            is ProtoTextMessage -> "“${msg.text.take(80)}”"
-            is ProtoFileMessage -> msg.fileName
-            else -> null
-        }
-    }
-
-    Banner(
-        tone = KdBannerTone.Warn,
-        title = "$sender wants to send you ${if (itemCount == 1) "an item" else "$itemCount items"}",
-        body = preview,
-        trailing = {
-            TextButton(onClick = { status.acceptTransfer(false) }) {
-                Text("Reject", color = KdTheme.colors.text2)
-            }
-            TextButton(onClick = { status.acceptTransfer(true) }) {
-                Text("Accept", color = KdTheme.colors.accent)
-            }
-        },
-        modifier = modifier,
-    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)

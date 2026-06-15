@@ -19,6 +19,8 @@ import com.carlom.klardrop.android.MainActivity
 import com.carlom.klardrop.android.applicationComponent
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
+import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
@@ -32,7 +34,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Foreground service that streams large shared files (>[BIG_FILE_THRESHOLD_BYTES]) to a peer.
+ * Foreground service that streams shared files to a peer.
  *
  * Why a service instead of just sending from the share Activity: a transfer only streams its
  * bytes *after* the receiver accepts, which can be long after the share sheet closed. The
@@ -40,14 +42,16 @@ import java.util.concurrent.atomic.AtomicInteger
  * from the (Activity-less) transfer coroutine throws SecurityException. By forwarding the grant
  * into this service's start Intent ([FLAG_GRANT_READ_URI_PERMISSION] + [ClipData]), the grant
  * lives for the service's lifetime, the process stays at foreground priority (won't be killed
- * mid-transfer), and the user gets a progress + cancel notification.
+ * mid-transfer — the share sheet can close and the transfer survives), and the user gets a
+ * progress + cancel notification.
  *
- * Small files take the cheaper copy-to-cache path in [ShareToDeviceController] instead, so a tiny
- * share doesn't trigger a notification-permission prompt.
+ * Every file share routes through here regardless of size: a tiny file still gates on the receiver
+ * accepting, so it needs the same foreground anchor as a big one. Live progress is mirrored into
+ * [ActiveSends] so the (still-open) share sheet can show status off the same source.
  */
 class FileSendService : Service() {
 
-  data class BigFile(val uri: Uri, val name: String, val size: Long, val mimeType: String)
+  data class SendFile(val uri: Uri, val name: String, val size: Long, val mimeType: String)
 
   private val coroutines: Coroutines by lazy { commonComponent().coroutines() }
   private val messenger: Messenger by lazy { commonComponent().messenger() }
@@ -81,6 +85,7 @@ class FileSendService : Service() {
 
     val batch = intent?.let(::parseBatch).orEmpty()
     val deviceId = intent?.getStringExtra(EXTRA_DEVICE_ID)
+    val transferId = intent?.getStringExtra(EXTRA_TRANSFER_ID)
     if (deviceId == null || batch.isEmpty()) {
       log("FileSendService", "No work in start command; stopping")
       stopIfIdle()
@@ -90,9 +95,11 @@ class FileSendService : Service() {
     activeBatches.incrementAndGet()
     serviceScope.launch {
       try {
-        sendBatch(deviceId, batch)
+        sendBatch(deviceId, batch, transferId)
+        transferId?.let { ActiveSends.publish(it, Completed) }
       } catch (e: Throwable) {
         log("FileSendService", "Batch to $deviceId failed", e)
+        transferId?.let { ActiveSends.publish(it, Error(e.message ?: "Transfer failed")) }
       } finally {
         activeBatches.decrementAndGet()
         stopIfIdle()
@@ -101,7 +108,7 @@ class FileSendService : Service() {
     return START_NOT_STICKY
   }
 
-  private fun parseBatch(intent: Intent): List<BigFile> {
+  private fun parseBatch(intent: Intent): List<SendFile> {
     val uris: List<Uri> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       intent.getParcelableArrayListExtra(EXTRA_URIS, Uri::class.java)
     } else {
@@ -112,7 +119,7 @@ class FileSendService : Service() {
     val sizes = intent.getLongArrayExtra(EXTRA_SIZES) ?: LongArray(0)
     val mimes = intent.getStringArrayListExtra(EXTRA_MIMES) ?: arrayListOf()
     return uris.mapIndexed { i, uri ->
-      BigFile(
+      SendFile(
         uri = uri,
         name = names.getOrElse(i) { "file" },
         size = sizes.getOrElse(i) { 0L },
@@ -121,7 +128,7 @@ class FileSendService : Service() {
     }
   }
 
-  private suspend fun sendBatch(deviceId: String, files: List<BigFile>) {
+  private suspend fun sendBatch(deviceId: String, files: List<SendFile>, transferId: String?) {
     // Keep WiFi at full power for the whole batch; released in finally on success OR failure.
     wifiLock.acquire()
     try {
@@ -132,10 +139,13 @@ class FileSendService : Service() {
         messenger.send(deviceId, FileMessage(file.name, file.size, file.mimeType).toSendRequest(PlatformFile(file.uri)))
           .untilCompleted()
           .collect { progress ->
+            // Mirror live progress for the share sheet. Suppress per-file Completed mid-batch — the
+            // batch-level terminal state is published once in onStartCommand after the whole loop.
+            if (progress !is Completed) transferId?.let { ActiveSends.publish(it, progress) }
             when (progress) {
               is MessengerSendProgress.InProgress -> updateProgress(file.name, index, files.size, progress.percentage)
-              is MessengerSendProgress.Error -> log("FileSendService", "Send of ${file.name} errored: ${progress.message}")
-              MessengerSendProgress.Completed -> log("FileSendService", "Sent ${file.name} to $deviceId")
+              is Error -> log("FileSendService", "Send of ${file.name} errored: ${progress.message}")
+              Completed -> log("FileSendService", "Sent ${file.name} to $deviceId")
               MessengerSendProgress.Pending -> {}
             }
           }
@@ -184,7 +194,7 @@ class FileSendService : Service() {
       .apply {
         if (progress == null) setProgress(0, 0, true) else setProgress(100, progress, false)
       }
-      .addAction(0, "Cancel", cancelIntent)
+      .addAction(0, "Terminate transfer", cancelIntent)
       .build()
   }
 
@@ -218,6 +228,7 @@ class FileSendService : Service() {
     private const val ACTION_CANCEL = "com.carlom.klardrop.action.CANCEL_FILE_SEND"
 
     private const val EXTRA_DEVICE_ID = "klardrop.device_id"
+    private const val EXTRA_TRANSFER_ID = "klardrop.transfer_id"
     private const val EXTRA_URIS = "klardrop.uris"
     private const val EXTRA_NAMES = "klardrop.names"
     private const val EXTRA_SIZES = "klardrop.sizes"
@@ -226,12 +237,14 @@ class FileSendService : Service() {
     /**
      * Start a foreground transfer for [files], forwarding this caller's temporary read grant for
      * each URI to the service. Must be called from a foreground context (e.g. the share Activity)
-     * that currently holds the grant.
+     * that currently holds the grant. [transferId] keys the live-progress entry in [ActiveSends]
+     * that the share sheet observes.
      */
-    fun start(context: Context, deviceId: String, files: List<BigFile>) {
+    fun start(context: Context, deviceId: String, files: List<SendFile>, transferId: String) {
       if (files.isEmpty()) return
       val intent = Intent(context, FileSendService::class.java).apply {
         putExtra(EXTRA_DEVICE_ID, deviceId)
+        putExtra(EXTRA_TRANSFER_ID, transferId)
         putParcelableArrayListExtra(EXTRA_URIS, ArrayList(files.map { it.uri }))
         putStringArrayListExtra(EXTRA_NAMES, ArrayList(files.map { it.name }))
         putExtra(EXTRA_SIZES, files.map { it.size }.toLongArray())
