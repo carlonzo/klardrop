@@ -300,12 +300,12 @@ struct DeviceChatScreen: View {
 
 // MARK: - IncomingAuthBannerView (private to chat screen)
 
-/// Warn-tone banner for a pending authorization request inside the chat screen.
+/// Pending authorization request inside the chat screen. Renders the same IncomingTransferCardView
+/// used by the discovery banner stack, so the accept/reject prompt looks identical everywhere
+/// (mirrors the Compose chat, which reuses ReceiveNotification).
 private struct IncomingAuthBannerView: View {
 
     let update: ReceiveMessageUpdate
-
-    @Environment(\.kdColors) private var kd
 
     var body: some View {
         // Only render for PendingAuthorization status
@@ -317,19 +317,18 @@ private struct IncomingAuthBannerView: View {
         }()
         guard let status else { return AnyView(EmptyView()) }
 
-        let sender = update.device?.name ?? "this device"
-        let count = update.messages.count
-        let title = "\(sender) wants to send you \(count == 1 ? "an item" : "\(count) items")"
+        let firstFile = update.messages.compactMap { $0 as? FileMessage }.first
+        let isText = firstFile == nil && update.messages.contains { $0 is TextMessage }
 
         return AnyView(
-            BannerView(tone: .warn, title: title) {
-                Button("Reject") { status.acceptTransfer(KotlinBoolean(value: false)) }
-                    .kdStyle(.body, color: kd.text2)
-                    .buttonStyle(.plain)
-                Button("Accept") { status.acceptTransfer(KotlinBoolean(value: true)) }
-                    .kdStyle(.body, color: kd.accent)
-                    .buttonStyle(.plain)
-            }
+            IncomingTransferCardView(
+                senderName: update.device?.name ?? "this device",
+                fileName: firstFile?.fileName,
+                fileSize: nil,
+                subtitle: isText ? "wants to send you a message" : "wants to send you a file",
+                onAccept: { status.acceptTransfer(true) },
+                onDecline: { status.acceptTransfer(false) }
+            )
         )
     }
 }

@@ -10,24 +10,39 @@ import android.os.Parcelable
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.TrustStatus
 import com.carlom.klardrop.android.applicationComponent
 import com.carlom.klardrop.common.Klardrop
+import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
+import kotlinx.coroutines.delay
 import com.carlom.klardrop.components.KdDeviceKind
 import com.carlom.klardrop.components.KdShareDevice
 import com.carlom.klardrop.components.KdStatus
@@ -58,7 +73,7 @@ class ShareToDeviceActivity : AppCompatActivity() {
     super.onCreate(savedInstanceState)
     applicationComponent().inject(this)
 
-    shareToDeviceController = ShareToDeviceController(klardrop.commonComponent, applicationContext)
+    shareToDeviceController = ShareToDeviceController(klardrop.commonComponent)
 
     parseIntent()
     // Large transfers post a progress notification from FileSendService; ask up-front so it can show.
@@ -70,11 +85,23 @@ class ShareToDeviceActivity : AppCompatActivity() {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
         var selectedId by remember { mutableStateOf<String?>(null) }
         var dismissed by remember { mutableStateOf(false) }
+        // Non-null once a file transfer is handed to FileSendService; the sheet then shows live
+        // status off ActiveSends instead of the device list. The transfer lives in the service, so
+        // dismissing the sheet just "minimizes" — the bytes keep flowing in the background.
+        var transferId by remember { mutableStateOf<String?>(null) }
+        val sendProgress = transferId?.let { id -> ActiveSends.flow(id)?.collectAsState()?.value }
 
         LaunchedEffect(dismissed) {
           if (dismissed) {
             sheetState.hide()
             finish()
+          }
+        }
+
+        LaunchedEffect(sendProgress) {
+          if (sendProgress is MessengerSendProgress.Completed) {
+            delay(900)
+            dismissed = true
           }
         }
 
@@ -92,28 +119,30 @@ class ShareToDeviceActivity : AppCompatActivity() {
           shape = KdTheme.radii.shapeSheet,
           containerColor = KdTheme.colors.bg1,
         ) {
-          ShareSheet(
-            trustedDevices = trustedShare,
-            nearbyDevices = nearbyShare,
-            selectedId = selectedId,
-            onSelectDevice = { selectedId = it.id },
-            onSend = { share ->
-              val target = share?.id?.let(byId::get) ?: return@ShareSheet
-              // Keep the Activity (and its content:// read grant) alive until the payload is safely
-              // handed off — bytes copied to cache for small files, or the grant forwarded to
-              // FileSendService for big ones — then dismiss. dispatch() does not wait for the whole
-              // network transfer, so sharing still feels instant.
-              lifecycleScope.launch {
-                try {
-                  dispatch(target.deviceId)
-                } catch (e: Throwable) {
-                  log("ShareToDeviceActivity", "Failed to dispatch share to ${target.deviceId}", e)
-                } finally {
-                  dismissed = true
+          if (transferId == null) {
+            ShareSheet(
+              trustedDevices = trustedShare,
+              nearbyDevices = nearbyShare,
+              selectedId = selectedId,
+              onSelectDevice = { selectedId = it.id },
+              onSend = { share ->
+                val target = share?.id?.let(byId::get) ?: return@ShareSheet
+                // Hand the payload to FileSendService (file) while we still hold the read grant, or
+                // fire-and-forget the text. Files keep the sheet open to show status; text dismisses.
+                lifecycleScope.launch {
+                  try {
+                    val id = dispatch(target.deviceId)
+                    if (id == null) dismissed = true else transferId = id
+                  } catch (e: Throwable) {
+                    log("ShareToDeviceActivity", "Failed to dispatch share to ${target.deviceId}", e)
+                    dismissed = true
+                  }
                 }
-              }
-            },
-          )
+              },
+            )
+          } else {
+            SendStatus(progress = sendProgress, onHide = { dismissed = true })
+          }
         }
       }
     }
@@ -143,40 +172,33 @@ class ShareToDeviceActivity : AppCompatActivity() {
   }
 
   /**
-   * Hand the shared payload to the right path while we still hold the read grant. Suspends only
-   * for the small-file copy; returns before the network transfer finishes so the share sheet can
-   * dismiss promptly.
+   * Hand the shared payload off while we still hold the read grant. Text is fire-and-forget
+   * (returns null). Files of any size stream through [FileSendService] under the forwarded grant —
+   * even a tiny file gates on the receiver accepting, so it needs the same foreground anchor as a
+   * big one. Returns the [ActiveSends] transfer id to observe, or null for text/empty.
    */
-  private suspend fun dispatch(deviceId: String) {
+  private suspend fun dispatch(deviceId: String): String? {
     pendingText?.let {
       shareToDeviceController.sendText(deviceId, it)
-      return
+      return null
     }
-    if (pendingUris.isEmpty()) return
+    if (pendingUris.isEmpty()) return null
 
     val fileSystem = klardrop.commonComponent.platformFileSystem()
     val ioDispatcher = klardrop.commonComponent.coroutines().ioDispatcher
 
-    // Resolve name/size/mime now, while the grant is valid, and split big vs small.
-    val resolved = withContext(ioDispatcher) {
-      pendingUris.map { uri -> uri to fileSystem.getResolvedFileData(PlatformFile(uri)) }
+    // Resolve name/size/mime now, while the grant is valid.
+    val files = withContext(ioDispatcher) {
+      pendingUris.map { uri ->
+        val data = fileSystem.getResolvedFileData(PlatformFile(uri))
+        FileSendService.SendFile(uri, data.fileName, data.fileSize, data.mimeType)
+      }
     }
 
-    val bigFiles = resolved
-      .filter { it.second.fileSize > BIG_FILE_THRESHOLD_BYTES }
-      .map { (uri, data) -> FileSendService.BigFile(uri, data.fileName, data.fileSize, data.mimeType) }
-    val smallFiles = resolved
-      .filter { it.second.fileSize <= BIG_FILE_THRESHOLD_BYTES }
-      .map { PlatformFile(it.first) }
-
-    if (bigFiles.isNotEmpty()) {
-      // Forwards the grant into the service; safe to finish the Activity right after.
-      FileSendService.start(this, deviceId, bigFiles)
-    }
-    if (smallFiles.isNotEmpty()) {
-      // Suspends until the bytes are cached; only then is it safe to drop the grant.
-      shareToDeviceController.prepareAndSendSmallFiles(deviceId, smallFiles)
-    }
+    val transferId = ActiveSends.create()
+    // Forwards the grant into the service; safe to finish the Activity at any point after.
+    FileSendService.start(this, deviceId, files, transferId)
+    return transferId
   }
 
   private fun maybeRequestNotificationPermission() {
@@ -209,10 +231,46 @@ class ShareToDeviceActivity : AppCompatActivity() {
     shareToDeviceController.dispose()
     super.onDestroy()
   }
+}
 
-  private companion object {
-    /** Files larger than this stream from a foreground service; smaller ones copy to cache. */
-    const val BIG_FILE_THRESHOLD_BYTES = 5L * 1024 * 1024
+/** In-sheet transfer status, fed by [ActiveSends]. Null/Pending means waiting on the receiver. */
+@Composable
+private fun SendStatus(progress: MessengerSendProgress?, onHide: () -> Unit) {
+  val spacing = KdTheme.spacing
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .padding(spacing.s5),
+    horizontalAlignment = Alignment.CenterHorizontally,
+  ) {
+    when (progress) {
+      is MessengerSendProgress.InProgress -> {
+        LinearProgressIndicator(
+          progress = { progress.percentage / 100f },
+          modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(spacing.s3))
+        Text("Sending… ${progress.percentage}%", style = KdTheme.typography.body)
+      }
+
+      is MessengerSendProgress.Completed -> Text("Sent ✓", style = KdTheme.typography.body)
+
+      is MessengerSendProgress.Error ->
+        Text("Couldn't send: ${progress.message}", style = KdTheme.typography.body)
+
+      else -> { // null / Pending
+        CircularProgressIndicator()
+        Spacer(Modifier.height(spacing.s3))
+        Text("Waiting for receiver to accept…", style = KdTheme.typography.body)
+      }
+    }
+
+    Spacer(Modifier.height(spacing.s4))
+    val terminal = progress is MessengerSendProgress.Completed || progress is MessengerSendProgress.Error
+    TextButton(onClick = onHide) {
+      Text(if (terminal) "Close" else "Hide — keeps sending in background")
+    }
+    Spacer(Modifier.height(spacing.s5))
   }
 }
 
