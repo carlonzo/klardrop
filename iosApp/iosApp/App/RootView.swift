@@ -25,15 +25,29 @@ struct RootView: View {
     // @MainActor init is called synchronously on the main thread.
     @State private var model: DiscoveryAppModel
 
+    // True when this view created the model (iOS): it then drives stop() on
+    // disappear. False when the model is injected and owned by the app (macOS
+    // menu bar): closing the window must NOT tear down discovery.
+    private let ownsModel: Bool
+
     // Share-extension hand-off state.
     @State private var shareFiles: [Filekit_corePlatformFile] = []
     @State private var showShareInbox = false
 
     init(bootstrap: KlardropBootstrap) {
         self.bootstrap = bootstrap
+        self.ownsModel = true
         // Initialize @State with a DiscoveryAppModel seeded from bootstrap.
         // This is safe: @State stores are initialized before `body` is first called.
         _model = State(initialValue: DiscoveryAppModel(bootstrap: bootstrap))
+    }
+
+    // App-owned model (macOS): the MenuBarExtra and the window share one model,
+    // so the app holds the strong reference and manages its lifecycle.
+    init(bootstrap: KlardropBootstrap, model: DiscoveryAppModel) {
+        self.bootstrap = bootstrap
+        self.ownsModel = false
+        _model = State(initialValue: model)
     }
 
     var body: some View {
@@ -45,7 +59,11 @@ struct RootView: View {
                 model.start()
             }
             .onDisappear {
-                model.stop()
+                // Only the iOS-owned model stops here. The macOS app owns its
+                // model so the menu bar keeps discovering after the window closes.
+                if ownsModel {
+                    model.stop()
+                }
             }
             .onOpenURL { url in
                 handleShareURL(url)
