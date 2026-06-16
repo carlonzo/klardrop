@@ -79,6 +79,39 @@ class DesktopTrustStorageTest {
         assertFalse(storage.hasDeviceKey())
     }
 
+    /**
+     * Regression for the "can't share after trusting" bug. The private key (secret store /
+     * keychain) and the public key (file under appDir) have independent lifetimes. If they
+     * desync — e.g. a leftover keychain entry from a previous identity plus a public-key file
+     * from another — ensureDeviceKey must NOT hand back the mismatched pair, or we advertise a
+     * public key at pairing that we can't sign for and every peer rejects us permanently.
+     */
+    @Test
+    fun ensureDeviceKeyRegeneratesWhenStoredHalvesDoNotMatch() = runTest {
+        val crypto = TrustCrypto()
+        // Seed mismatched halves: private of one keypair in the secret store, public of another on disk.
+        secretStore.put("device-private-key", crypto.generateECDSAKeyPair().privateKey.data)
+        storage.storeDevicePublicKey(crypto.generateECDSAKeyPair().publicKey.data)
+
+        val advertised = storage.ensureDeviceKey(crypto).data
+
+        val data = "desktop identity probe".encodeToByteArray()
+        val signature = assertNotNull(storage.signWithDeviceKey(data, crypto))
+        assertTrue(
+            crypto.verifyECDSA(advertised, data, signature),
+            "Desktop must advertise the public key that matches its keychain signing key",
+        )
+    }
+
+    @Test
+    fun ensureDeviceKeyReusesAConsistentStoredPair() = runTest {
+        val crypto = TrustCrypto()
+        val first = storage.ensureDeviceKey(crypto).data
+        // Second call (e.g. app restart against the same stores) must reuse the same identity.
+        val second = DesktopTrustStorage(appDir, secretStore).ensureDeviceKey(crypto).data
+        assertContentEquals(first, second, "A matching stored pair must be reused, not regenerated")
+    }
+
     @Test
     fun encryptedFileSecretStoreRoundTrips() {
         val store = EncryptedFileSecretStore(appDir)
