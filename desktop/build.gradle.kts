@@ -45,9 +45,14 @@ compose.desktop {
     nativeDistributions {
       targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
       packageName = "klardrop"
-      // jpackage requires a strictly numeric x.y.z; CI always passes a clean one
-      // derived from the git tag. Local builds fall back to 1.0.0.
-      packageVersion = providers.gradleProperty("klardrop.version").getOrElse("1.0.0")
+      // jpackage requires a strictly numeric x.y.z. Stable passes the tag directly via
+      // klardrop.version. Nightly's version is a pre-release semver (1.0.1-nightly.N) that
+      // jpackage rejects, so nightly passes the numeric base separately as
+      // klardrop.packageVersion; klardrop.version still carries the semver for the app's
+      // displayed/updater version (KlardropVersion.VERSION). Local builds fall back to 1.0.0.
+      packageVersion = providers.gradleProperty("klardrop.packageVersion")
+        .orElse(providers.gradleProperty("klardrop.version"))
+        .getOrElse("1.0.0")
       modules("jdk.unsupported")
       modules("java.sql")
       // The in-app update checker uses java.net.http.HttpClient; jlink omits this

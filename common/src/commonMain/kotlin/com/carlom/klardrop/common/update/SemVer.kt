@@ -31,8 +31,33 @@ internal data class SemVer(
       preRelease == null && other.preRelease == null -> 0
       preRelease == null -> 1
       other.preRelease == null -> -1
-      else -> preRelease.compareTo(other.preRelease)
+      else -> comparePreRelease(preRelease, other.preRelease)
     }
+  }
+
+  /**
+   * Compares two pre-release strings per semver §11: dot-separated identifiers compared
+   * left to right; both-numeric identifiers compare numerically (so `nightly.1000` >
+   * `nightly.999`), a numeric identifier ranks below an alphanumeric one, and a longer
+   * run of identifiers outranks a shorter prefix.
+   */
+  private fun comparePreRelease(a: String, b: String): Int {
+    val ai = a.split('.')
+    val bi = b.split('.')
+    for (i in 0 until minOf(ai.size, bi.size)) {
+      val x = ai[i]
+      val y = bi[i]
+      val xn = x.toLongOrNull()
+      val yn = y.toLongOrNull()
+      val cmp = when {
+        xn != null && yn != null -> xn.compareTo(yn)
+        xn != null -> -1            // numeric identifiers have lower precedence
+        yn != null -> 1
+        else -> x.compareTo(y)
+      }
+      if (cmp != 0) return cmp
+    }
+    return ai.size - bi.size
   }
 
   companion object {

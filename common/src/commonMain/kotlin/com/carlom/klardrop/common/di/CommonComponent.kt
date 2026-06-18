@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileManagerImpl
 import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.update.UpdateChecker
 import com.carlom.klardrop.common.update.createUpdateManifestFetcher
 import com.carlom.klardrop.common.update.detectInstallChannel
@@ -93,12 +94,15 @@ class CommonComponent(
   }
 
   private val updateChecker: UpdateChecker by lazy {
+    val channel = KlardropVersion.UPDATE_CHANNEL
     UpdateChecker(
       currentVersion = applicationInfo.appVersion,
       osType = CommonPlatformDependencies.osType(),
       fetcher = createUpdateManifestFetcher(),
       detectChannel = ::detectInstallChannel,
       coroutines = coroutines,
+      releaseChannel = channel,
+      manifestUrl = UpdateChecker.manifestUrlForChannel(channel),
     )
   }
 

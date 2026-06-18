@@ -14,7 +14,27 @@ set -euo pipefail
 
 REPO="carlonzo/klardrop"
 TARBALL="klardrop-linux-x64.tar.gz"
-BASE="https://github.com/${REPO}/releases/latest/download"
+
+# Channel + action. Stable (default) pulls the latest non-prerelease; nightly pulls the
+# rolling `nightly` prerelease (which carries a build that self-updates on the nightly
+# channel). Select with `--nightly` (or KLARDROP_CHANNEL=nightly); `--uninstall` removes.
+#   stable:  curl … | bash
+#   nightly: curl … | bash -s -- --nightly
+CHANNEL="${KLARDROP_CHANNEL:-stable}"
+ACTION="install"
+for arg in "$@"; do
+  case "$arg" in
+    --uninstall) ACTION="uninstall" ;;
+    --nightly)   CHANNEL="nightly" ;;
+    --stable)    CHANNEL="stable" ;;
+  esac
+done
+
+if [ "$CHANNEL" = "nightly" ]; then
+  BASE="https://github.com/${REPO}/releases/download/nightly"
+else
+  BASE="https://github.com/${REPO}/releases/latest/download"
+fi
 
 say()  { printf '\033[1;34m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m::\033[0m %s\n' "$*" >&2; }
@@ -54,7 +74,7 @@ uninstall() {
   exit 0
 }
 
-[ "${1:-}" = "--uninstall" ] && uninstall
+[ "$ACTION" = "uninstall" ] && uninstall
 
 # --- preflight ---------------------------------------------------------------
 arch="$(uname -m)"
@@ -68,7 +88,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 # --- download + verify -------------------------------------------------------
-say "Downloading latest Klardrop…"
+say "Downloading Klardrop ($CHANNEL)…"
 dl "$BASE/$TARBALL" "$tmp/$TARBALL"
 
 if dl "$BASE/$TARBALL.sha256" "$tmp/$TARBALL.sha256" 2>/dev/null && command -v sha256sum >/dev/null 2>&1; then
