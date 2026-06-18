@@ -21,4 +21,7 @@ class KlardropCli : CliktCommand(name = "klardrop") {
   override fun run() = Unit
 }
 
-fun main(args: Array<String>): Unit = KlardropCli().main(args)
+fun main(args: Array<String>) {
+  configureCliPlatformRuntime()
+  KlardropCli().main(args)
+}
