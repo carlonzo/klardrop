@@ -438,11 +438,10 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # Collect the desktop artifacts, publish/refresh the rolling `nightly` prerelease,
-  # and advance the `nightly` tag to this commit. Runs only when every build job
-  # succeeded, so a partial failure leaves the tag in place and the next run retries.
-  # prerelease:true keeps it off `releases/latest`, so install.sh / Homebrew (which
-  # track the stable release) are unaffected.
+  # Collect the desktop artifacts and (re)publish the rolling `nightly` prerelease.
+  # Runs only when every build job succeeded, so a partial failure leaves the tag in
+  # place and the next run retries. prerelease:true keeps it off `releases/latest`, so
+  # install.sh / Homebrew (which track the stable release) are unaffected.
   publish:
     needs: [gate, android, ios, linux, macos]
     if: needs.gate.outputs.proceed == 'true'
@@ -457,6 +456,18 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      # Delete the previous nightly release first, then recreate it from scratch below,
+      # so only the latest nightly's binaries are ever stored (the version-stamped DMG
+      # name changes whenever the base version bumps, so updating-in-place would otherwise
+      # leave stale assets behind and grow GitHub storage without bound). The git tag is
+      # kept (re-pointed in the next step) since the gate uses it as the commit marker.
+      - name: Delete the previous nightly release (keep only the latest binaries)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete nightly --repo "${{ github.repository }}" --yes || true
 
       - name: Advance the rolling `nightly` tag to this commit
         run: |
