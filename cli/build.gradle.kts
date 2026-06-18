@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.JavaExec
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -40,5 +41,17 @@ kotlin {
     all {
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
     }
+  }
+}
+
+// macOS: hide Dock icon and name the process before AWT initializes (see CliPlatformRuntime.jvm.kt).
+tasks.withType<JavaExec>().configureEach {
+  if (project.path == ":cli") {
+    jvmArgs(
+      "-Dapple.awt.UIElement=true",
+      "-Dapple.awt.application.name=klardrop",
+      "-Dcom.apple.mrj.application.apple.menu.about.name=klardrop",
+      "-Xdock:name=klardrop",
+    )
   }
 }

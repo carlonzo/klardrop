@@ -23,6 +23,10 @@ jobs:
       versionCode: ${{ steps.v.outputs.versionCode }}
       stable:      ${{ steps.v.outputs.stable }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # full history — versionCode is derived from the commit count
+
       - id: v
         shell: bash
         run: |
@@ -33,10 +37,14 @@ jobs:
             VERSION="${GITHUB_REF_NAME#v}"
           fi
           TAG="v$VERSION"
-          # versionCode = major*10000 + minor*100 + patch (pre-release suffix stripped).
-          CORE="${VERSION%%-*}"
-          IFS='.' read -r MA MI PA <<< "$CORE"
-          CODE=$(( ${MA:-0} * 10000 + ${MI:-0} * 100 + ${PA:-0} ))
+          # versionCode is a single monotonic integer shared with the nightly workflow:
+          #   code = (commits reachable from HEAD) * 2   [nightly adds +1]
+          # "higher code = newer commit"; the stable build (even) and the nightly rebuilt
+          # from the same commit by refresh-testers (odd, +1) never collide; and a later
+          # commit always outranks an earlier one on either channel. Needs full git
+          # history (fetch-depth: 0) and assumes main-line history only grows.
+          COMMITS="$(git rev-list --count HEAD)"
+          CODE=$(( COMMITS * 2 ))
           # A "stable" release is bare X.Y.Z (no pre-release suffix). Package-manager
           # bumps only run for stable versions.
           if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then STABLE=true; else STABLE=false; fi
@@ -44,7 +52,7 @@ jobs:
           echo "tag=$TAG"                >> "$GITHUB_OUTPUT"
           echo "versionCode=$CODE"       >> "$GITHUB_OUTPUT"
           echo "stable=$STABLE"          >> "$GITHUB_OUTPUT"
-          echo "Resolved version=$VERSION tag=$TAG versionCode=$CODE stable=$STABLE"
+          echo "Resolved version=$VERSION tag=$TAG versionCode=$CODE commits=$COMMITS stable=$STABLE"
 
   build:
     needs: version
@@ -273,6 +281,7 @@ jobs:
       - name: Archive KlardropMac
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          BUILD:   ${{ needs.version.outputs.versionCode }}
         run: |
           set -euo pipefail
           if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
@@ -280,9 +289,13 @@ jobs:
           else
             SIGN_ARGS="CODE_SIGNING_ALLOWED=NO"
           fi
+          # MARKETING_VERSION/CURRENT_PROJECT_VERSION on the command line override the
+          # xcconfig + every target (app + share extension), so the bundle versions
+          # match the release tag and stay consistent across targets.
           xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
             -configuration Release -destination 'generic/platform=macOS' \
-            -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" archive $SIGN_ARGS
+            -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" archive $SIGN_ARGS \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
 
       - name: Stage .app + build DMG
         env:
@@ -323,6 +336,46 @@ jobs:
           # macos-verified.txt is only present when notarization succeeded.
           path: dist/*
           if-no-files-found: error
+
+  # Publish the AAB to Google Play (production). Gated on the service-account secret
+  # + a stable version (pre-release tags don't touch production; nightlies go to the
+  # internal track from a separate scheduled workflow). The first-ever upload, the
+  # store listing, and Play App Signing enrollment must be done MANUALLY in the Play
+  # Console before this job can succeed — see docs/RELEASE_RUNBOOK.md §3.
+  play-publish:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard (service-account token present + stable version)
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          OK=true
+          if [ -z "${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}" ]; then
+            echo "PLAY_SERVICE_ACCOUNT_JSON not set — skipping Play publish."; OK=false
+          fi
+          if [ "${{ needs.version.outputs.stable }}" != "true" ]; then
+            echo "Pre-release version — skipping Play production publish."; OK=false
+          fi
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+
+      - name: Download AAB
+        if: steps.guard.outputs.ok == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: klardrop-aab
+          path: aab
+
+      - name: Upload to Google Play (production track)
+        if: steps.guard.outputs.ok == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.carlom.klardrop
+          releaseFiles: aab/*.aab
+          track: production
+          status: completed
 
   publish:
     needs: [version, build, build-macos-native]
@@ -469,3 +522,26 @@ jobs:
           git add Casks/klardrop.rb
           git commit -m "klardrop ${VERSION}" || { echo "no cask change"; exit 0; }
           git push
+
+  # After a stable release, refresh the tester tracks (Play internal + TestFlight +
+  # nightly prerelease) with the just-released commit so testers are never behind
+  # production. Dispatches the nightly workflow against the release tag with
+  # force=true (bypassing its no-new-commits gate); the nightly assigns a fresh,
+  # higher versionCode so it supersedes the previous nightly on every tester track.
+  # Requires release-nightly.yml to exist on the tagged commit.
+  refresh-testers:
+    needs: [version, publish]
+    if: needs.version.outputs.stable == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch nightly for the released commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG:      ${{ needs.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh workflow run release-nightly.yml \
+            --repo "${{ github.repository }}" \
+            --ref "$TAG" -f force=true
