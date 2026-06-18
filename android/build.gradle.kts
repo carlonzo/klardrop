@@ -86,6 +86,7 @@ android {
     }
 
     getByName("debug") {
+      applicationIdSuffix = ".debug"
       signingConfig = signingConfigs.getByName("debug")
     }
   }
