@@ -247,6 +247,15 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # Cache ~/.konan (Kotlin/Native compiler + Apple platform libs) — outside the
+      # Gradle home setup-gradle caches. Keyed on the version catalog.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+
       # Build the Bugsnag synthetic CocoaPod framework for macOS (both Debug and
       # Release variants). This must run BEFORE xcodebuild because FRAMEWORK_SEARCH_PATHS
       # in the pbxproj points at common/build/cocoapods/synthetic/macos/build/{Debug,Release}/Bugsnag.

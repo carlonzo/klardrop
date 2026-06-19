@@ -212,6 +212,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         if: steps.signing.outputs.enabled == 'true'
 
+      # ~/.konan (Kotlin/Native compiler + Apple platform libs) lives outside the
+      # Gradle home setup-gradle caches, so cache it explicitly — skips the ~1GB
+      # download per run. Keyed on the version catalog (Kotlin/konan version).
+      - name: Cache Kotlin/Native (~/.konan)
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+
       # iOS pulls Bugsnag through CocoaPods directly (unlike macOS, which needs the
       # synthetic Release framework prebuilt), so only the dummy framework + pod
       # install are needed before xcodebuild — mirrors build_pr.yml's iOS build.
@@ -368,6 +379,15 @@ jobs:
           distribution: 'zulu'
 
       - uses: gradle/actions/setup-gradle@v6
+
+      # Cache ~/.konan (Kotlin/Native compiler + Apple platform libs) — outside the
+      # Gradle home setup-gradle caches. Keyed on the version catalog.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-
 
       - name: Build Kotlin macOS frameworks (Bugsnag synthetic + dummy)
         run: ./gradlew :klardrop-common:podBuildBugsnagMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
