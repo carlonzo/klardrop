@@ -76,6 +76,15 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # Cache ~/.konan (Kotlin/Native compiler + Apple platform libs) — outside the
+      # Gradle home setup-gradle caches. Keyed on the version catalog.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+
       - name: Run macOS + iOS native tests
         # iOS Simulator + macOS native cover the shared KMP modules that Linux
         # cannot build (klardrop-common, presentation, protos). :compose-ui has
