@@ -104,8 +104,13 @@ jobs:
     if: needs.gate.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     env:
+      # packageVersion (numeric base) is set even though this job only builds the AAB:
+      # Gradle configures :desktop too, and Compose validates the jpackage version at
+      # configuration time — the suffixed semver alone makes that fail ("Illegal version
+      # for 'Dmg'").
       GRADLE_VERSION_ARGS: >-
         -Pklardrop.version=${{ needs.gate.outputs.semver }}
+        -Pklardrop.packageVersion=${{ needs.gate.outputs.base }}
         -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
     steps:
       - uses: actions/checkout@v7
