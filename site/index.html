@@ -342,6 +342,11 @@
   .modal-head .ver{ font-family:var(--font-mono); font-size:11.5px; color:var(--muted-2); letter-spacing:.04em; margin-top:2px; }
   .modal-body{ margin-top:24px; display:flex; flex-direction:column; gap:18px; }
   .opt-label{ font-family:var(--font-mono); font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted-2); margin-bottom:10px; }
+  .mtabs{ display:flex; gap:6px; background:var(--bg-3); border:1px solid var(--line-2); border-radius:10px; padding:4px; }
+  .mtab{ flex:1; padding:9px 12px; border-radius:7px; font-family:var(--font-mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted-2); background:transparent; border:0; cursor:pointer; transition:background .15s,color .15s; }
+  .mtab.on{ background:var(--bg); color:var(--text); }
+  .mpane{ display:none; flex-direction:column; gap:18px; }
+  .mpane.on{ display:flex; }
   .modal .btn-primary{ width:100%; justify-content:center; padding:15px 22px; font-size:16px; }
   .modal .dl-note{ font-size:13.5px; color:var(--muted-2); margin-top:9px; text-align:center; }
   .modal-or{ display:flex; align-items:center; gap:14px; color:var(--muted-2); font-family:var(--font-mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; }
@@ -677,6 +682,11 @@
     // Install script lives in the repo; the raw URL resolves once packaging/install.sh is on main.
     const INSTALL_SH    = `https://raw.githubusercontent.com/${REPO}/main/packaging/install.sh`;
     const BREW_CMD      = "brew install --cask carlonzo/klardrop/klardrop";
+    const BREW_NIGHTLY  = "brew install --cask carlonzo/klardrop/klardrop-nightly";
+    // Nightly channel: rolling `nightly` tag. The DMG filename is version-stamped, so
+    // resolve it from the nightly latest.json; fall back to the nightly release page.
+    const NIGHTLY_JSON  = `https://github.com/${REPO}/releases/download/nightly/latest.json`;
+    const NIGHTLY_PAGE  = `https://github.com/${REPO}/releases/tag/nightly`;
     const CURL_CMD      = `curl -fsSL ${INSTALL_SH} | bash`;
     // Mobile stores — replace the placeholder IDs to light these buttons up (greyed out until then).
     const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=<your.android.app.id>";
@@ -692,7 +702,8 @@
     const COPY_ICON = '<svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
     const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-    let DATA = null; // latest.json contents, or null if unavailable
+    let DATA = null;  // stable latest.json, or null if unavailable
+    let NDATA = null; // nightly latest.json, or null if unavailable
 
     const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     function fmtSize(bytes){
@@ -708,6 +719,14 @@
       const e = DATA && DATA.platforms && DATA.platforms[key];
       return e ? fmtSize(e.size) : "";
     }
+    function nurlFor(key, fallback){
+      const e = NDATA && NDATA.platforms && NDATA.platforms[key];
+      return e && e.url ? e.url : fallback;
+    }
+    function nsizeFor(key){
+      const e = NDATA && NDATA.platforms && NDATA.platforms[key];
+      return e ? fmtSize(e.size) : "";
+    }
 
     // a code block with a copy-to-clipboard button
     function codeBlock(cmd){
@@ -721,12 +740,30 @@
         + `${esc(label)}</a>${note ? `<p class="dl-note">${note}</p>` : ""}</div>`;
     }
 
+    // a tabbed view: items = [{id, label, panel}], first tab active by default
+    function tabs(items){
+      const heads = items.map((t,i) => `<button type="button" class="mtab${i===0?' on':''}" data-tab="${t.id}">${esc(t.label)}</button>`).join("");
+      const panes = items.map((t,i) => `<div class="mpane${i===0?' on':''}" data-pane="${t.id}">${t.panel}</div>`).join("");
+      return `<div class="mtabs">${heads}</div>${panes}`;
+    }
+    // a macOS download channel: .dmg button + Homebrew command
+    function macChannel(dmgLabel, dmgUrl, note, brew){
+      return primaryDownload(dmgLabel, dmgUrl, note)
+        + `<div class="modal-or">or install with Homebrew</div>`
+        + `<div><div class="opt-label">Homebrew</div>${codeBlock(brew)}</div>`;
+    }
+
     function bodyFor(platform){
       switch(platform){
         case "macos":
-          return primaryDownload("Download .dmg" + sizeFor("macos"), urlFor("macos"), "macOS 12+ · unsigned build — right-click the app and choose <b>Open</b> the first time.")
-            + `<div class="modal-or">or install with Homebrew</div>`
-            + `<div><div class="opt-label">Homebrew</div>${codeBlock(BREW_CMD)}</div>`;
+          return tabs([
+            { id:"stable", label:"Stable", panel: macChannel(
+                "Download .dmg" + sizeFor("macos"), urlFor("macos"),
+                "macOS 12+ · unsigned build — right-click the app and choose <b>Open</b> the first time.", BREW_CMD) },
+            { id:"nightly", label:"Nightly", panel: macChannel(
+                "Download .dmg" + nsizeFor("macos"), nurlFor("macos", NIGHTLY_PAGE),
+                "Latest tester build — newest features, less tested. Right-click → <b>Open</b> the first time.", BREW_NIGHTLY) },
+          ]);
         case "windows":
           return primaryDownload("Download .msi" + sizeFor("windows"), urlFor("windows"), "Windows 10 and 11 (x64)");
         case "linux":
@@ -797,6 +834,15 @@
     back.addEventListener('click', e => { if(e.target === back) closeModal(); });
     addEventListener('keydown', e => { if(e.key === 'Escape' && back.classList.contains('open')) closeModal(); });
 
+    // tab switching (delegated — Stable/Nightly inside the macOS modal)
+    body.addEventListener('click', e => {
+      const t = e.target.closest('.mtab');
+      if(!t) return;
+      const id = t.dataset.tab;
+      body.querySelectorAll('.mtab').forEach(b => b.classList.toggle('on', b === t));
+      body.querySelectorAll('.mpane').forEach(p => p.classList.toggle('on', p.dataset.pane === id));
+    });
+
     // copy-to-clipboard (delegated — works for dynamically inserted code blocks)
     body.addEventListener('click', async e => {
       const btn = e.target.closest('.copy');
@@ -821,6 +867,10 @@
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(d => { DATA = d; })
       .catch(() => { DATA = null; });
+    fetch(NIGHTLY_JSON, { cache: "no-store" })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => { NDATA = d; })
+      .catch(() => { NDATA = null; });
   })();
 </script>
 

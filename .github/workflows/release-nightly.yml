@@ -4,7 +4,7 @@ name: Release (nightly)
 # tag-driven and ships to Play production / App Store / Homebrew). This one runs on a
 # schedule (and on manual dispatch) and publishes to TESTER channels only:
 #   - iOS     → TestFlight
-#   - Android → Google Play `internal` track
+#   - Android → Google Play `beta` (Open testing) track
 #   - macOS   → rolling GitHub *prerelease* (DMG)
 #   - Linux   → rolling GitHub *prerelease* (universal tarball)
 #
@@ -97,7 +97,7 @@ jobs:
           echo "versionCode=$CODE" >> "$GITHUB_OUTPUT"
           echo "Nightly semver=$SEMVER base=$BASE versionCode=$CODE commits=$COMMITS (last stable: ${LAST:-none})"
 
-  # Android AAB → Play `internal` track. versionName carries the full pre-release
+  # Android AAB → Play `beta` (Open testing) track. versionName carries the full pre-release
   # semver (Android allows any string); versionCode is the integer ordering.
   android:
     needs: gate
@@ -155,14 +155,19 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Upload to Google Play (internal track)
+      # Open testing track. `status: completed` creates the track release AND rolls it
+      # out to 100% of open testers — without it the AAB only lands in the bundle
+      # explorer with no release attached. `beta` is the Play API id for the Open
+      # testing track (alpha = closed, internal = internal); change it here if you
+      # publish to a custom-named testing track instead.
+      - name: Upload to Google Play (open testing track)
         if: steps.play.outputs.enabled == 'true'
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.carlom.klardrop
           releaseFiles: android/build/outputs/bundle/release/*.aab
-          track: internal
+          track: beta
           status: completed
 
   # iOS/iPad archive → TestFlight (same automatic-signing flow the production iOS
@@ -546,3 +551,33 @@ jobs:
           prerelease: true
           files: artifacts/*
           fail_on_unmatched_files: true
+
+      # Bump the `klardrop-nightly` cask in the tap so testers can
+      # `brew install --cask carlonzo/klardrop/klardrop-nightly` and `brew upgrade` to
+      # each new build (cask version = full semver, so the version bump is what triggers
+      # the upgrade — the rolling `nightly` url stays fixed). Separate token from the
+      # stable `klardrop` cask. Non-fatal: the release is already published above.
+      - name: Publish nightly Homebrew cask
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION:   ${{ needs.gate.outputs.semver }}
+          BASE:      ${{ needs.gate.outputs.base }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_TOKEN}" ]; then
+            echo "HOMEBREW_TAP_TOKEN not set — skipping nightly Homebrew publish."; exit 0
+          fi
+          DMG="klardrop-${BASE}.dmg"
+          SHA="$(cat "artifacts/${DMG}.sha256")"
+          sed -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA}/g" -e "s/@DMG@/${DMG}/g" \
+            packaging/homebrew/klardrop-nightly.rb > klardrop-nightly.rb
+          echo "--- rendered cask ---"; cat klardrop-nightly.rb
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/carlonzo/homebrew-klardrop.git" tap
+          mkdir -p tap/Casks
+          cp klardrop-nightly.rb tap/Casks/klardrop-nightly.rb
+          cd tap
+          git config user.name "klardrop-ci"
+          git config user.email "carlo.marinangeli@gmail.com"
+          git add Casks/klardrop-nightly.rb
+          git commit -m "klardrop-nightly ${VERSION}" || { echo "no cask change"; exit 0; }
+          git push
