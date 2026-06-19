@@ -18,10 +18,11 @@ jobs:
   version:
     runs-on: ubuntu-latest
     outputs:
-      version:     ${{ steps.v.outputs.version }}
-      tag:         ${{ steps.v.outputs.tag }}
-      versionCode: ${{ steps.v.outputs.versionCode }}
-      stable:      ${{ steps.v.outputs.stable }}
+      version:        ${{ steps.v.outputs.version }}
+      packageVersion: ${{ steps.v.outputs.packageVersion }}
+      tag:            ${{ steps.v.outputs.tag }}
+      versionCode:    ${{ steps.v.outputs.versionCode }}
+      stable:         ${{ steps.v.outputs.stable }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -48,11 +49,17 @@ jobs:
           # A "stable" release is bare X.Y.Z (no pre-release suffix). Package-manager
           # bumps only run for stable versions.
           if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then STABLE=true; else STABLE=false; fi
+          # jpackage (desktop Deb/Msi/Dmg) requires a strictly numeric x.y.z and rejects a
+          # pre-release suffix. Strip it for the package version (e.g. 1.0.0-rc1 -> 1.0.0);
+          # klardrop.version still carries the full semver for the app's displayed/updater
+          # version. For a stable tag the two are identical.
+          PKGVER="${VERSION%%-*}"
           echo "version=$VERSION"        >> "$GITHUB_OUTPUT"
+          echo "packageVersion=$PKGVER"  >> "$GITHUB_OUTPUT"
           echo "tag=$TAG"                >> "$GITHUB_OUTPUT"
           echo "versionCode=$CODE"       >> "$GITHUB_OUTPUT"
           echo "stable=$STABLE"          >> "$GITHUB_OUTPUT"
-          echo "Resolved version=$VERSION tag=$TAG versionCode=$CODE commits=$COMMITS stable=$STABLE"
+          echo "Resolved version=$VERSION packageVersion=$PKGVER tag=$TAG versionCode=$CODE commits=$COMMITS stable=$STABLE"
 
   build:
     needs: version
@@ -69,8 +76,11 @@ jobs:
 
     env:
       # Threaded into every gradle invocation so the build version matches the tag.
+      # packageVersion is the numeric-only form jpackage accepts (no pre-release suffix);
+      # klardrop.version keeps the full semver for the in-app/updater version.
       GRADLE_VERSION_ARGS: >-
         -Pklardrop.version=${{ needs.version.outputs.version }}
+        -Pklardrop.packageVersion=${{ needs.version.outputs.packageVersion }}
         -Pklardrop.versionCode=${{ needs.version.outputs.versionCode }}
 
     steps:
