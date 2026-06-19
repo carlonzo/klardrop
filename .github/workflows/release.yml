@@ -292,12 +292,26 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.version }}
           BUILD:   ${{ needs.version.outputs.versionCode }}
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}
         run: |
           set -euo pipefail
           # bash array so the space in "Developer ID Application" stays a single arg
           # (an unquoted string would word-split it and xcodebuild reads "ID" as a build action).
+          PROV_FLAGS=()
           if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
-            SIGN_ARGS=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=Developer ID Application" "DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}")
+            # keychain-access-groups is a provisioning-profile-gated capability, so a bare
+            # Developer ID *manual* sign fails ("requires a provisioning profile"). Use automatic
+            # signing and hand xcodebuild the App Store Connect API key (same one we notarize with)
+            # so -allowProvisioningUpdates can fetch/create the Developer ID profile.
+            mkdir -p "$RUNNER_TEMP/keys"
+            echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey.p8"
+            SIGN_ARGS=(CODE_SIGN_STYLE=Automatic "CODE_SIGN_IDENTITY=Developer ID Application" "DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}")
+            PROV_FLAGS=(-allowProvisioningUpdates \
+              -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey.p8" \
+              -authenticationKeyID "$API_KEY_ID" \
+              -authenticationKeyIssuerID "$API_ISSUER")
           else
             SIGN_ARGS=(CODE_SIGNING_ALLOWED=NO)
           fi
@@ -307,7 +321,9 @@ jobs:
           # arm64-only: the Kotlin presentation.framework is built for the runner's
           # arch (Apple Silicon), so a universal (arm64+x86_64) archive fails with
           # "could not find module 'presentation' for target 'x86_64-apple-macos'".
-          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
+          # ${PROV_FLAGS[@]+...} guards the empty-array expansion under the runner's bash 3.2 + set -u.
+          xcodebuild ${PROV_FLAGS[@]+"${PROV_FLAGS[@]}"} \
+            -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
             -configuration Release -destination 'generic/platform=macOS' \
             -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" archive "${SIGN_ARGS[@]}" \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
