@@ -66,6 +66,14 @@ android {
   }
 
   signingConfigs {
+    // Shared debug key, committed at android/debug.keystore so every machine + CI
+    // signs debug builds identically (well-known creds — no secrecy intended).
+    getByName("debug") {
+      storeFile = file("debug.keystore")
+      storePassword = "android"
+      keyAlias = "androiddebugkey"
+      keyPassword = "android"
+    }
     if (hasReleaseSigning) {
       create("release") {
         storeFile = file(releaseStoreFilePath!!)

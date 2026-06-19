@@ -63,7 +63,10 @@ iosApp/Pods/Pods.xcodeproj/xcuserdata/carlo.xcuserdatad/xcschemes/xcschememanage
 ### Pods ###
 iosApp/Podfile.lock
 iosApp/Pods/
-# Android signing keystores — never commit
+# Android signing keystores — never commit (except the shared debug key)
 *.jks
+*.jks.b64
 *.keystore
+# shared debug key — well-known creds, safe to commit
+!android/debug.keystore
 keystore.properties
