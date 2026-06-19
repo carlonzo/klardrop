@@ -28,6 +28,7 @@ class UpdateChecker(
   private val detectChannel: () -> InstallChannel,
   coroutines: Coroutines,
   private val installerFactory: (InstallChannel) -> UpdateInstaller? = ::createUpdateInstaller,
+  private val releaseChannel: String = "stable",
   private val manifestUrl: String = DEFAULT_MANIFEST_URL,
 ) {
 
@@ -106,7 +107,12 @@ class UpdateChecker(
    */
   private fun actionFor(channel: InstallChannel, manifest: LatestManifest): UpdateAction = when (channel) {
     InstallChannel.BREW -> UpdateAction.RunCommand("brew upgrade --cask klardrop")
-    InstallChannel.TARBALL -> UpdateAction.RunCommand("curl -fsSL $INSTALL_SCRIPT_URL | bash")
+    // Re-running the installer upgrades in place. Nightly installs must stay on the
+    // nightly channel, so pass the flag through.
+    InstallChannel.TARBALL -> UpdateAction.RunCommand(
+      if (releaseChannel == "nightly") "curl -fsSL $INSTALL_SCRIPT_URL | bash -s -- --nightly"
+      else "curl -fsSL $INSTALL_SCRIPT_URL | bash"
+    )
     InstallChannel.DMG,
     InstallChannel.MANUAL,
     InstallChannel.UNKNOWN -> UpdateAction.OpenUrl(downloadUrl(manifest))
@@ -127,7 +133,15 @@ class UpdateChecker(
   companion object {
     const val DEFAULT_MANIFEST_URL =
       "https://github.com/carlonzo/klardrop/releases/latest/download/latest.json"
+    // The rolling `nightly` prerelease serves its own latest.json from a fixed tag URL
+    // (prereleases are excluded from /releases/latest, so the stable URL never sees it).
+    const val NIGHTLY_MANIFEST_URL =
+      "https://github.com/carlonzo/klardrop/releases/download/nightly/latest.json"
     const val RELEASES_PAGE = "https://github.com/carlonzo/klardrop/releases/latest"
+
+    /** The latest.json URL for a build's update channel ("nightly" vs stable default). */
+    fun manifestUrlForChannel(channel: String): String =
+      if (channel == "nightly") NIGHTLY_MANIFEST_URL else DEFAULT_MANIFEST_URL
 
     /** One-line Linux installer; re-running it upgrades in place. */
     const val INSTALL_SCRIPT_URL =

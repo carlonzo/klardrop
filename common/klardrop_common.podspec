@@ -9,6 +9,7 @@ Pod::Spec.new do |spec|
     spec.vendored_frameworks      = 'build/cocoapods/framework/klardrop_common.framework'
     spec.libraries                = 'c++'
     spec.ios.deployment_target    = '17.0'
+    spec.osx.deployment_target    = '14.0'
     spec.dependency 'Bugsnag', '~> 6.0'
     if !Dir.exist?('build/cocoapods/framework/klardrop_common.framework') || Dir.empty?('build/cocoapods/framework/klardrop_common.framework')
         raise "

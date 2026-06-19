@@ -43,4 +43,16 @@ class SemVerTest {
   fun unparseableCandidateNeverNewer() {
     assertFalse(isNewerVersion("not-a-version", "0.1.0"))
   }
+
+  @Test
+  fun nightlyPreReleasesOrderNumerically() {
+    // Nightly builds use <base>-nightly.<commitCount>. The suffix counter must compare
+    // numerically, not lexically — otherwise the updater stalls when the count gains a
+    // digit (lexically "nightly.1000" < "nightly.999"), and testers stop getting updates.
+    assertTrue(isNewerVersion("1.0.1-nightly.718", "1.0.1-nightly.717"))
+    assertTrue(isNewerVersion("1.0.1-nightly.1000", "1.0.1-nightly.999"))
+    assertFalse(isNewerVersion("1.0.1-nightly.999", "1.0.1-nightly.1000"))
+    // A higher base always wins regardless of the suffix.
+    assertTrue(isNewerVersion("1.0.2-nightly.5", "1.0.1-nightly.9999"))
+  }
 }

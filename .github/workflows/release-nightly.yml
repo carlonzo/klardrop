@@ -1,0 +1,537 @@
+name: Release (nightly)
+
+# Tester-track releases, separate from the production `Release` workflow (which is
+# tag-driven and ships to Play production / App Store / Homebrew). This one runs on a
+# schedule (and on manual dispatch) and publishes to TESTER channels only:
+#   - iOS     → TestFlight
+#   - Android → Google Play `internal` track
+#   - macOS   → rolling GitHub *prerelease* (DMG)
+#   - Linux   → rolling GitHub *prerelease* (universal tarball)
+#
+# A moving `nightly` git tag marks the commit of the last fully-successful nightly.
+# The `gate` job aborts the whole run when no commits have landed since that tag
+# (manual dispatch can override with `force: true`). The tag is only advanced by the
+# final `publish` job, so a failed nightly is retried on the next run.
+
+on:
+  schedule:
+    - cron: '0 4 * * *'   # daily, 04:00 UTC
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Run even if no new commits since the last nightly'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # publish the prerelease + move the `nightly` tag
+
+jobs:
+  # Abort unless there are new commits since the last nightly. Also derives the
+  # nightly version (see the `v` step): versionName = UTC date, versionCode =
+  # commits*2 + 1 — the same monotonic integer the stable workflow uses, on the odd
+  # (tester) side so it never collides with a stable build of the same commit.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      proceed:     ${{ steps.check.outputs.proceed }}
+      semver:      ${{ steps.v.outputs.semver }}
+      base:        ${{ steps.v.outputs.base }}
+      versionCode: ${{ steps.v.outputs.versionCode }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "Manual force run — skipping the new-commits check."
+            echo "proceed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! git rev-parse -q --verify refs/tags/nightly >/dev/null; then
+            echo "No previous 'nightly' tag — first nightly. Proceeding."
+            echo "proceed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          COUNT="$(git rev-list nightly..HEAD --count)"
+          echo "$COUNT commit(s) since the last nightly ($(git rev-parse --short nightly))."
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::notice::No new commits since the last nightly — nothing to release."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: v
+        if: steps.check.outputs.proceed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # One identifier drives everything — the commit count — so nightly and stable
+          # stay consistent (no dates; the stable workflow's versionCode is commit-based too).
+          #   base   = next patch above the latest stable tag (1.0.0 before the first release).
+          #            A nightly AFTER a stable must target the NEXT version, else its
+          #            pre-release semver would sort BELOW the stable it follows.
+          #   semver = <base>-nightly.<commits> — Android versionName + GitHub release title.
+          #            Per semver: last-stable < <base>-nightly.N < <base>, so reading it
+          #            tells you it's after the current stable and before the next release.
+          #   iOS CFBundleShortVersionString + desktop jpackage packageVersion can't carry a
+          #   pre-release suffix, so they use the numeric <base>; the build number keeps order.
+          #   versionCode = commits*2 + 1 (stable uses commits*2 — even vs odd never collide,
+          #   and the +1 supersedes the stable rebuilt from the same commit on tester tracks).
+          COMMITS="$(git rev-list --count HEAD)"
+          LAST="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)"
+          if [ -z "$LAST" ]; then
+            BASE="1.0.0"
+          else
+            core="${LAST#v}"; IFS='.' read -r MA MI PA <<< "$core"
+            BASE="${MA}.${MI}.$((PA + 1))"
+          fi
+          SEMVER="${BASE}-nightly.${COMMITS}"
+          CODE=$(( COMMITS * 2 + 1 ))
+          echo "base=$BASE"        >> "$GITHUB_OUTPUT"
+          echo "semver=$SEMVER"    >> "$GITHUB_OUTPUT"
+          echo "versionCode=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Nightly semver=$SEMVER base=$BASE versionCode=$CODE commits=$COMMITS (last stable: ${LAST:-none})"
+
+  # Android AAB → Play `internal` track. versionName carries the full pre-release
+  # semver (Android allows any string); versionCode is the integer ordering.
+  android:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.gate.outputs.semver }}
+        -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_KEYSTORE_BASE64:-}" ]; then
+            echo "No ANDROID_KEYSTORE_BASE64 — AAB will be debug-signed and Play upload will be skipped."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/klardrop-upload.jks"
+          {
+            echo "KLARDROP_KEYSTORE_FILE=$RUNNER_TEMP/klardrop-upload.jks"
+            echo "KLARDROP_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
+            echo "KLARDROP_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            echo "KLARDROP_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Build AAB
+        run: ./gradlew :android:bundleRelease $GRADLE_VERSION_ARGS
+
+      - name: Detect Play service-account secret
+        id: play
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}" ]; then
+            echo "PLAY_SERVICE_ACCOUNT_JSON absent — skipping Play upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to Google Play (internal track)
+        if: steps.play.outputs.enabled == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.carlom.klardrop
+          releaseFiles: android/build/outputs/bundle/release/*.aab
+          track: internal
+          status: completed
+
+  # iOS/iPad archive → TestFlight (same automatic-signing flow the production iOS
+  # path would use). macos-26 + latest-stable Xcode matches build_pr.yml's toolchain.
+  ios:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: macos-26
+    env:
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.gate.outputs.base }}
+        -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Detect Apple signing secrets
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}" ] || [ -z "${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}" ]; then
+            echo "Apple distribution cert / API key absent — skipping TestFlight upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select latest stable Xcode
+        if: steps.signing.outputs.enabled == 'true'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # JDK 21 is REQUIRED — the Kotlin pod syncFramework script phase (run by
+      # xcodebuild during archive) is pinned to JDK 21.
+      - uses: actions/setup-java@v5
+        if: steps.signing.outputs.enabled == 'true'
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - uses: gradle/actions/setup-gradle@v6
+        if: steps.signing.outputs.enabled == 'true'
+
+      # iOS pulls Bugsnag through CocoaPods directly (unlike macOS, which needs the
+      # synthetic Release framework prebuilt), so only the dummy framework + pod
+      # install are needed before xcodebuild — mirrors build_pr.yml's iOS build.
+      - name: Prebuild Kotlin framework + pod install
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          ./gradlew :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
+          pod install --project-directory=iosApp
+
+      - name: Import Apple Distribution cert
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          P12:    ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
+          P12_PW: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/build.keychain"
+          KCPW="$(openssl rand -hex 16)"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          echo "$P12" | base64 -d > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -k "$KC" -P "$P12_PW" -T /usr/bin/codesign
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPW" "$KC"
+
+      - name: Write App Store Connect API key
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8"
+
+      # Automatic signing (-allowProvisioningUpdates + the API key) lets Xcode create
+      # the App Store provisioning profiles for the app + share extension on the fly.
+      # exportArchive with destination=upload ships straight to TestFlight.
+      - name: Archive + upload to TestFlight
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          TEAM_ID:    ${{ secrets.APPLE_TEAM_ID }}
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          VERSION:    ${{ needs.gate.outputs.base }}
+          BUILD:      ${{ needs.gate.outputs.versionCode }}
+        run: |
+          set -euo pipefail
+          ARCHIVE="$RUNNER_TEMP/Klardrop.xcarchive"
+          KEY="$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8"
+
+          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme iosApp \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE" archive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
+
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>method</key><string>app-store-connect</string>
+          <key>teamID</key><string>${TEAM_ID}</string>
+          <key>destination</key><string>upload</string>
+          </dict></plist>
+          PLIST
+
+          xcodebuild -exportArchive -archivePath "$ARCHIVE" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER"
+
+  # Linux universal tarball (bundled JRE), uploaded as an artifact the `publish` job
+  # attaches to the nightly prerelease. (No ProGuard smoke gate here — that runs on
+  # the production release; nightly stays lean.)
+  linux:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    env:
+      # version = pre-release semver → KlardropVersion.VERSION (the app's displayed +
+      # updater version, so it compares correctly against the nightly latest.json).
+      # packageVersion = numeric base → jpackage (which rejects the -nightly suffix).
+      # updateChannel = nightly → the app polls the nightly latest.json and self-updates
+      # to newer nightlies instead of the stable release.
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.gate.outputs.semver }}
+        -Pklardrop.packageVersion=${{ needs.gate.outputs.base }}
+        -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
+        -Pklardrop.updateChannel=nightly
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build Linux app-image
+        run: ./gradlew :desktop:createReleaseDistributable $GRADLE_VERSION_ARGS
+
+      - name: Stage Linux universal tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          APPDIR=desktop/build/compose/binaries/main-release/app
+          STAGE=stage/klardrop-linux-x64
+          rm -rf stage && mkdir -p "$STAGE/icons"
+          cp -r "$APPDIR/klardrop" "$STAGE/klardrop"
+          cp packaging/linux/klardrop.desktop "$STAGE/"
+          cp packaging/linux/com.carlom.Klardrop.metainfo.xml "$STAGE/"
+          for s in 32 64 128 256 512; do
+            mkdir -p "$STAGE/icons/${s}x${s}"
+            cp "brand/klardrop-icon-${s}.png" "$STAGE/icons/${s}x${s}/klardrop.png"
+          done
+          mkdir -p "$STAGE/icons/scalable"
+          cp brand/klardrop-icon.svg "$STAGE/icons/scalable/klardrop.svg"
+          mkdir -p dist
+          tar -czf dist/klardrop-linux-x64.tar.gz -C stage klardrop-linux-x64
+          rm -rf stage
+          ls -la dist/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-linux
+          path: dist/*
+          if-no-files-found: error
+
+  # Native macOS DMG. Signed + notarized when the Apple secrets are present (same
+  # flow as the production build), otherwise an unsigned DMG for testers.
+  macos:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: macos-latest
+    env:
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.gate.outputs.base }}
+        -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build Kotlin macOS frameworks (Bugsnag synthetic + dummy)
+        run: ./gradlew :klardrop-common:podBuildBugsnagMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
+
+      - name: pod install
+        run: pod install --project-directory=iosApp
+
+      - name: Detect Apple signing secrets
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}" ] || [ -z "${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}" ]; then
+            echo "Apple signing/notarization secrets absent — building UNSIGNED .dmg."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Import Developer ID cert (signed builds only)
+        if: steps.signing.outputs.signed == 'true'
+        env:
+          P12: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          P12_PW: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/build.keychain"
+          KCPW="$(openssl rand -hex 16)"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          echo "$P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$P12_PW" -T /usr/bin/codesign
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPW" "$KC"
+
+      - name: Archive KlardropMac
+        env:
+          VERSION: ${{ needs.gate.outputs.base }}
+          BUILD:   ${{ needs.gate.outputs.versionCode }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            SIGN_ARGS="CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=Developer ID Application DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}"
+          else
+            SIGN_ARGS="CODE_SIGNING_ALLOWED=NO"
+          fi
+          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" archive $SIGN_ARGS \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
+
+      - name: Stage .app + build DMG
+        env:
+          VERSION: ${{ needs.gate.outputs.base }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist stage
+          cp -R "$RUNNER_TEMP/KlardropMac.xcarchive/Products/Applications/Klardrop.app" stage/
+          ln -s /Applications stage/Applications
+          hdiutil create -volname Klardrop -srcfolder stage -ov -format UDZO \
+            "dist/klardrop-${VERSION}.dmg"
+
+      - name: Notarize + staple (signed builds only)
+        if: steps.signing.outputs.signed == 'true'
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}
+          VERSION:    ${{ needs.gate.outputs.base }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey.p8"
+          xcrun notarytool submit "dist/klardrop-${VERSION}.dmg" \
+            --key "$RUNNER_TEMP/keys/AuthKey.p8" \
+            --key-id "$API_KEY_ID" \
+            --issuer "$API_ISSUER" \
+            --wait
+          xcrun stapler staple "dist/klardrop-${VERSION}.dmg"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-macos
+          path: dist/*
+          if-no-files-found: error
+
+  # Collect the desktop artifacts and (re)publish the rolling `nightly` prerelease.
+  # Runs only when every build job succeeded, so a partial failure leaves the tag in
+  # place and the next run retries. prerelease:true keeps it off `releases/latest`, so
+  # install.sh / Homebrew (which track the stable release) are unaffected.
+  publish:
+    needs: [gate, android, ios, linux, macos]
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # latest.json (+ .sha256 sidecars) so the in-app updater on the nightly channel has
+      # a manifest to poll. URLs point at the fixed `nightly` tag; version is the
+      # pre-release semver so the comparator orders successive nightlies. Mirrors the
+      # stable publish job, scoped to the assets the nightly produces (DMG + Linux tarball).
+      - name: Generate checksums + nightly latest.json
+        env:
+          REPO:    ${{ github.repository }}
+          VERSION: ${{ needs.gate.outputs.semver }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd artifacts
+          ls -la
+          for f in *; do
+            if [ -f "$f" ] && [[ "$f" != *.sha256 ]] && [[ "$f" != "latest.json" ]]; then
+              sha256sum "$f" | awk '{print $1}' > "$f.sha256"
+            fi
+          done
+          pick() { ls $1 2>/dev/null | head -n1 || true; }
+          DMG=$(pick "*.dmg")
+          TGZ=$(pick "*.tar.gz")
+          export BASE="https://github.com/${REPO}/releases/download/nightly"
+          python3 - "$DMG" "$TGZ" <<'PY' > latest.json
+          import json, os, sys, datetime, pathlib
+          dmg, tgz = sys.argv[1:3]
+          base = os.environ["BASE"]
+          def entry(name):
+              if not name: return None
+              digest = pathlib.Path(name + ".sha256").read_text().strip()
+              size   = pathlib.Path(name).stat().st_size
+              return {"url": f"{base}/{name}", "sha256": digest, "size": size}
+          platforms = {}
+          if dmg: platforms["macos"]         = entry(dmg)
+          if tgz: platforms["linux-tarball"] = entry(tgz)
+          out = {
+            "version":     os.environ["VERSION"],
+            "tag":         "nightly",
+            "publishedAt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "notes":       f"https://github.com/{os.environ['REPO']}/releases/tag/nightly",
+            "platforms":   platforms,
+          }
+          print(json.dumps(out, indent=2))
+          PY
+          cat latest.json
+
+      # Delete the previous nightly release first, then recreate it from scratch below,
+      # so only the latest nightly's binaries are ever stored (the version-stamped DMG
+      # name changes whenever the base version bumps, so updating-in-place would otherwise
+      # leave stale assets behind and grow GitHub storage without bound). The git tag is
+      # kept (re-pointed in the next step) since the gate uses it as the commit marker.
+      - name: Delete the previous nightly release (keep only the latest binaries)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete nightly --repo "${{ github.repository }}" --yes || true
+
+      - name: Advance the rolling `nightly` tag to this commit
+        run: |
+          set -euo pipefail
+          git tag -f nightly "$GITHUB_SHA"
+          git push -f origin nightly
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: nightly
+          name: "Klardrop ${{ needs.gate.outputs.semver }}"
+          body: "Automated nightly tester build ${{ needs.gate.outputs.semver }} (build ${{ needs.gate.outputs.versionCode }}). Not for production use."
+          prerelease: true
+          files: artifacts/*
+          fail_on_unmatched_files: true

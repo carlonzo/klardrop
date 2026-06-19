@@ -9,10 +9,10 @@ plugins {
 group = "com.carlom.klardrop"
 version = "1.0-SNAPSHOT"
 
-// Version single source of truth: driven by the `vX.Y.Z` git tag via CI.
-// versionName comes straight from `klardrop.version`; versionCode is computed
-// in CI as major*10000 + minor*100 + patch and passed as `klardrop.versionCode`.
-// Local builds fall back to dev values.
+// Version single source of truth: driven by CI. versionName comes straight from
+// `klardrop.version` (the `vX.Y.Z` tag for stable, a date for nightly); versionCode
+// is a monotonic integer = (commit count)*2, +1 for nightly/tester builds, computed
+// in CI and passed as `klardrop.versionCode`. Local builds fall back to dev values.
 val klardropVersionName: String = providers.gradleProperty("klardrop.version").getOrElse("1.0-SNAPSHOT")
 val klardropVersionCode: Int = providers.gradleProperty("klardrop.versionCode").map { it.toInt() }.getOrElse(1)
 
@@ -53,7 +53,11 @@ dependencies {
 android {
   compileSdk = 37
   defaultConfig {
-    applicationId = "com.carlom.klardrop.android"
+    // Play Store package name — must match the registered listing exactly.
+    // (namespace below stays com.carlom.klardrop.android: it's the source/R/BuildConfig
+    // package, independent of the install id. FileProvider authority is derived from
+    // applicationId at runtime, so it follows this automatically.)
+    applicationId = "com.carlom.klardrop"
     minSdk = 24
     targetSdk = 35
     versionCode = klardropVersionCode

@@ -80,3 +80,12 @@
 -dontwarn com.bugsnag.**
 -dontwarn com.fasterxml.jackson.**
 -dontwarn org.slf4j.**
+
+# Strip debug/verbose/info logging in release (R8 optimize removes these calls).
+# Log.e / Log.w are kept so error reporting and Bugsnag stay intact.
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int v(...);
+    public static int i(...);
+    public static boolean isLoggable(...);
+}

@@ -141,13 +141,20 @@ sqldelight {
 // builds fall back to a sentinel so a dev build never masquerades as a release.
 // The value is baked into a generated KlardropVersion.kt visible to all targets.
 val klardropVersion: String = providers.gradleProperty("klardrop.version").getOrElse("0.0.0-dev")
+// Update channel baked into the build: "stable" (default) or "nightly". Decides which
+// latest.json the in-app updater polls, so a nightly build self-updates to newer
+// nightlies instead of the stable release. CI passes `-Pklardrop.updateChannel=nightly`
+// for nightly desktop builds only.
+val klardropUpdateChannel: String = providers.gradleProperty("klardrop.updateChannel").getOrElse("stable")
 
 val generateKlardropVersion by tasks.registering {
   val outputDir = layout.buildDirectory.dir("generated/version")
   outputs.dir(outputDir)
-  // Captured as a local so the task action stays configuration-cache safe.
+  // Captured as locals so the task action stays configuration-cache safe.
   val versionValue = klardropVersion
+  val channelValue = klardropUpdateChannel
   inputs.property("version", versionValue)
+  inputs.property("channel", channelValue)
   doLast {
     val pkgDir = outputDir.get().asFile.resolve("com/carlom/klardrop/common")
     pkgDir.mkdirs()
@@ -158,6 +165,7 @@ val generateKlardropVersion by tasks.registering {
       /** Generated from the `klardrop.version` Gradle property — do not edit. */
       object KlardropVersion {
         const val VERSION: String = "$versionValue"
+        const val UPDATE_CHANNEL: String = "$channelValue"
       }
       """.trimIndent() + "\n"
     )
