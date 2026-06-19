@@ -480,6 +480,30 @@ jobs:
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER"
 
+          # -exportArchive (developer-id) signs the executables WITHOUT --options runtime, so
+          # notarization rejects them: "The executable does not have the hardened runtime enabled"
+          # (Klardrop + KlardropMacShare.appex). Re-sign inside-out WITH hardened runtime,
+          # preserving each bundle's already-resolved entitlements (the keychain-access-groups /
+          # app-group values Xcode filled in from the Developer ID profile — re-signing from the
+          # repo .entitlements would reintroduce the unexpanded $(AppIdentifierPrefix)).
+          APP="$RUNNER_TEMP/export/Klardrop.app"
+          resign() {
+            local bundle="$1" ent
+            ent="$(mktemp)"
+            codesign -d --entitlements - --xml "$bundle" 2>/dev/null > "$ent" || true
+            if [ -s "$ent" ]; then
+              codesign --force --options runtime --timestamp \
+                --sign "Developer ID Application" --entitlements "$ent" "$bundle"
+            else
+              codesign --force --options runtime --timestamp \
+                --sign "Developer ID Application" "$bundle"
+            fi
+          }
+          # extension first so the app's outer signature seals the re-signed extension
+          resign "$APP/Contents/PlugIns/KlardropMacShare.appex"
+          resign "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
       - name: Stage .app + build DMG
         env:
           VERSION: ${{ needs.gate.outputs.base }}
@@ -507,11 +531,20 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/keys"
           echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey.p8"
-          xcrun notarytool submit "dist/klardrop-${VERSION}.dmg" \
-            --key "$RUNNER_TEMP/keys/AuthKey.p8" \
-            --key-id "$API_KEY_ID" \
-            --issuer "$API_ISSUER" \
-            --wait
+          AUTH=(--key "$RUNNER_TEMP/keys/AuthKey.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER")
+          # Capture the submission id + status. `submit --wait` exits 0 even when the result is
+          # Invalid, so the old script blindly stapled a rejected build and died with a cryptic
+          # "ticket not found". Parse the status and, on anything but Accepted, dump the notary
+          # log (which names the offending files) and fail.
+          SUBMIT="$(xcrun notarytool submit "dist/klardrop-${VERSION}.dmg" "${AUTH[@]}" --wait --output-format json)"
+          echo "$SUBMIT"
+          ID="$(echo "$SUBMIT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+          STATUS="$(echo "$SUBMIT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::Notarization $STATUS — see log below"
+            xcrun notarytool log "$ID" "${AUTH[@]}" || true
+            exit 1
+          fi
           xcrun stapler staple "dist/klardrop-${VERSION}.dmg"
 
       - uses: actions/upload-artifact@v7
