@@ -405,14 +405,16 @@ jobs:
           BUILD:   ${{ needs.gate.outputs.versionCode }}
         run: |
           set -euo pipefail
+          # bash array so the space in "Developer ID Application" stays a single arg
+          # (an unquoted string would word-split it and xcodebuild reads "ID" as a build action).
           if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
-            SIGN_ARGS="CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=Developer ID Application DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}"
+            SIGN_ARGS=(CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=Developer ID Application" "DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}")
           else
-            SIGN_ARGS="CODE_SIGNING_ALLOWED=NO"
+            SIGN_ARGS=(CODE_SIGNING_ALLOWED=NO)
           fi
           xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
             -configuration Release -destination 'generic/platform=macOS' \
-            -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" archive $SIGN_ARGS \
+            -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" archive "${SIGN_ARGS[@]}" \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
 
       - name: Stage .app + build DMG
