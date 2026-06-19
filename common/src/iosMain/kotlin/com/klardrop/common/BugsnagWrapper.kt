@@ -2,6 +2,7 @@ package com.klardrop.common
 
 import com.bugsnag.kmp.BreadcrumbType
 import com.bugsnag.kmp.Bugsnag
+import com.bugsnag.kmp.User
 import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 
 
@@ -32,6 +33,16 @@ actual object BugsnagWrapper {
     } catch (e: Throwable) {
       // Bugsnag not available (e.g., during tests) - just print the breadcrumb
       println("iOS Bugsnag breadcrumb: $message (type: $type)")
+    }
+  }
+
+  actual fun setUser(deviceId: String, deviceName: String, osType: String) {
+    try {
+      Bugsnag.user = User(id = deviceId, name = deviceName)
+      Bugsnag.addMetadata("device", "platform", "ios")
+      Bugsnag.addMetadata("device", "osType", osType)
+    } catch (e: Throwable) {
+      println("iOS Bugsnag setUser: $deviceId")
     }
   }
 

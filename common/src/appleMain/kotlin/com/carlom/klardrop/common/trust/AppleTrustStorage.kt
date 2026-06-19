@@ -53,6 +53,7 @@ import platform.Security.kSecMatchLimit
 import platform.Security.kSecMatchLimitOne
 import platform.Security.kSecPrivateKeyAttrs
 import platform.Security.kSecReturnRef
+import platform.Security.kSecUseDataProtectionKeychain
 import platform.darwin.OSStatus
 
 /**
@@ -266,7 +267,15 @@ class AppleTrustStorage : TrustStorage {
 
     // ---- Keychain helpers ----
 
-    private fun findDeviceKey(): SecKeyRef? = memScoped {
+    // Each operation tries the data-protection keychain first (entitlement-gated, no interactive
+    // ACL prompt — same as iOS) and falls back to the legacy file keychain. The fallback keeps
+    // unsigned/ad-hoc builds working (the data-protection keychain returns errSecMissingEntitlement
+    // without a real team-prefixed access group) instead of failing key generation at startup.
+
+    private fun findDeviceKey(): SecKeyRef? =
+        findDeviceKey(dataProtection = true) ?: findDeviceKey(dataProtection = false)
+
+    private fun findDeviceKey(dataProtection: Boolean): SecKeyRef? = memScoped {
         val query = newCfDict {
             set(kSecClass, kSecClassKey)
             set(kSecAttrApplicationTag, deviceKeyTag())
@@ -274,6 +283,7 @@ class AppleTrustStorage : TrustStorage {
             set(kSecAttrKeyClass, kSecAttrKeyClassPrivate)
             set(kSecMatchLimit, kSecMatchLimitOne)
             set(kSecReturnRef, kCFBooleanTrue)
+            if (dataProtection) set(kSecUseDataProtectionKeychain, kCFBooleanTrue)
         }
         try {
             val out = alloc<CFTypeRefVar>()
@@ -286,16 +296,21 @@ class AppleTrustStorage : TrustStorage {
         }
     }
 
-    private fun generateDeviceKey(): SecKeyRef? = memScoped {
+    private fun generateDeviceKey(): SecKeyRef? =
+        generateDeviceKey(dataProtection = true) ?: generateDeviceKey(dataProtection = false)
+
+    private fun generateDeviceKey(dataProtection: Boolean): SecKeyRef? = memScoped {
         val privateAttrs = newCfDict {
             set(kSecAttrIsPermanent, kCFBooleanTrue)
             set(kSecAttrApplicationTag, deviceKeyTag())
             set(kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+            if (dataProtection) set(kSecUseDataProtectionKeychain, kCFBooleanTrue)
         }
         val parameters = newCfDict {
             set(kSecAttrKeyType, kSecAttrKeyTypeECSECPrimeRandom)
             set(kSecAttrKeySizeInBits, P256_KEY_SIZE_BITS.toCFNumber())
             set(kSecAttrLabel, DEVICE_KEY_LABEL.toCFString())
+            if (dataProtection) set(kSecUseDataProtectionKeychain, kCFBooleanTrue)
             set(kSecPrivateKeyAttrs, privateAttrs)
         }
         try {
@@ -310,10 +325,16 @@ class AppleTrustStorage : TrustStorage {
     }
 
     private fun deleteDeviceKey() {
+        deleteDeviceKey(dataProtection = true)
+        deleteDeviceKey(dataProtection = false)
+    }
+
+    private fun deleteDeviceKey(dataProtection: Boolean) {
         val query = newCfDict {
             set(kSecClass, kSecClassKey)
             set(kSecAttrApplicationTag, deviceKeyTag())
             set(kSecAttrKeyType, kSecAttrKeyTypeECSECPrimeRandom)
+            if (dataProtection) set(kSecUseDataProtectionKeychain, kCFBooleanTrue)
         }
         try {
             SecItemDelete(query)

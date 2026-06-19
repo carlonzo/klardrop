@@ -2,6 +2,7 @@ package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.di.CommonComponent
 
+import com.klardrop.common.BugsnagWrapper
 import com.carlom.klardrop.common.utils.UtilsModule
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.launch
@@ -81,6 +82,15 @@ class Klardrop(
 
     // Check for a newer release (desktop only; a no-op where unsupported).
     commonComponent.updateChecker().checkNow()
+
+    // Tag Bugsnag events/crashes with platform + device identity once the device
+    // id is resolved (it's persisted lazily on first read).
+    appScope.launch(commonComponent.coroutines().ioDispatcher) {
+      runCatching {
+        val device = commonComponent.currentDeviceProvider().get()
+        BugsnagWrapper.setUser(device.shortDeviceId, device.deviceName, device.osType.name)
+      }.onFailure { log("Klardrop", "Failed to set Bugsnag user", it) }
+    }
   }
 
   fun visibleDevices() = commonComponent.visibleDevices()

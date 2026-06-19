@@ -9,7 +9,10 @@ actual class DriverFactory(private val context: Context, private val disablePers
     return if (disablePersistence) {
       AndroidSqliteDriver(AppDatabase.Schema, context, null) // null database name creates in-memory database
     } else {
-      AndroidSqliteDriver(AppDatabase.Schema, context, "AppDatabase.db")
+      openOrRecreate(
+        open = { AndroidSqliteDriver(AppDatabase.Schema, context, "AppDatabase.db") },
+        deleteDatabase = { context.deleteDatabase("AppDatabase.db") },
+      )
     }
   }
 }

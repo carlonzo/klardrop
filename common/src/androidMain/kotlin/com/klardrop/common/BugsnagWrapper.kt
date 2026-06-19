@@ -21,6 +21,16 @@ actual object BugsnagWrapper {
       // Bugsnag not initialized
     }
   }
+
+  actual fun setUser(deviceId: String, deviceName: String, osType: String) {
+    try {
+      Bugsnag.setUser(deviceId, null, deviceName)
+      Bugsnag.addMetadata("device", "platform", "android")
+      Bugsnag.addMetadata("device", "osType", osType)
+    } catch (e: IllegalStateException) {
+      // Bugsnag not initialized
+    }
+  }
 }
 
 private fun BugsnagBreadcrumbType.toAndroidBreadcrumbType(): com.bugsnag.android.BreadcrumbType {

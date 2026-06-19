@@ -11,8 +11,22 @@ actual object BugsnagWrapper {
   // `desktopJvm` target) would upload test failures as production events.
   private var bugsnag: Bugsnag? = null
 
+  // The JVM SDK has no global setUser/addMetadata; values are stashed here and
+  // applied to every event via the addOnError callback registered in init().
+  @Volatile private var deviceId: String? = null
+  @Volatile private var deviceName: String? = null
+  @Volatile private var osType: String? = null
+
   fun init(appVersion: String) {
-    val instance = bugsnag ?: Bugsnag(BugsnagConfig.apiKey).also { bugsnag = it }
+    val instance = bugsnag ?: Bugsnag(BugsnagConfig.apiKey).also {
+      bugsnag = it
+      it.addOnError { event ->
+        deviceId?.let { id -> event.setUser(id, null, deviceName) }
+        event.addMetadata("device", "platform", "desktop")
+        osType?.let { os -> event.addMetadata("device", "osType", os) }
+        true
+      }
+    }
     instance.setAppVersion(appVersion)
     // Filtering happens in `notify` below — keeps the API surface uniform with
     // the Android/iOS wrappers and avoids depending on the JVM SDK's Callback
@@ -26,5 +40,11 @@ actual object BugsnagWrapper {
 
   actual fun leaveBreadcrumb(message: String, type: BugsnagBreadcrumbType) {
 
+  }
+
+  actual fun setUser(deviceId: String, deviceName: String, osType: String) {
+    this.deviceId = deviceId
+    this.deviceName = deviceName
+    this.osType = osType
   }
 }
