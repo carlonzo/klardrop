@@ -23,7 +23,7 @@ jobs:
       versionCode: ${{ steps.v.outputs.versionCode }}
       stable:      ${{ steps.v.outputs.stable }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # full history — versionCode is derived from the commit count
 
