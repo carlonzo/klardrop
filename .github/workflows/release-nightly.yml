@@ -39,7 +39,7 @@ jobs:
       base:        ${{ steps.v.outputs.base }}
       versionCode: ${{ steps.v.outputs.versionCode }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -108,7 +108,7 @@ jobs:
         -Pklardrop.version=${{ needs.gate.outputs.semver }}
         -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
         with:
           java-version: '21'
@@ -171,7 +171,7 @@ jobs:
         -Pklardrop.version=${{ needs.gate.outputs.base }}
         -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Detect Apple signing secrets
         id: signing
@@ -302,7 +302,7 @@ jobs:
         -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
         -Pklardrop.updateChannel=nightly
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
         with:
           java-version: '21'
@@ -350,7 +350,7 @@ jobs:
         -Pklardrop.version=${{ needs.gate.outputs.base }}
         -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v5
         with:
@@ -454,7 +454,7 @@ jobs:
     if: needs.gate.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
