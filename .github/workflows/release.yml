@@ -304,9 +304,13 @@ jobs:
           # MARKETING_VERSION/CURRENT_PROJECT_VERSION on the command line override the
           # xcconfig + every target (app + share extension), so the bundle versions
           # match the release tag and stay consistent across targets.
+          # arm64-only: the Kotlin presentation.framework is built for the runner's
+          # arch (Apple Silicon), so a universal (arm64+x86_64) archive fails with
+          # "could not find module 'presentation' for target 'x86_64-apple-macos'".
           xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
             -configuration Release -destination 'generic/platform=macOS' \
             -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" archive "${SIGN_ARGS[@]}" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
 
       - name: Stage .app + build DMG
