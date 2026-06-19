@@ -66,7 +66,7 @@ jobs:
         -Pklardrop.versionCode=${{ needs.version.outputs.versionCode }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v5
         with:
@@ -218,7 +218,7 @@ jobs:
         -Pklardrop.version=${{ needs.version.outputs.version }}
         -Pklardrop.versionCode=${{ needs.version.outputs.versionCode }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # JDK 21 is REQUIRED — the Kotlin pod syncFramework script phase (invoked by
       # xcodebuild during the pod build phase) is pinned to JDK 21.
@@ -328,7 +328,7 @@ jobs:
     needs: [version, build, build-macos-native]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/download-artifact@v8
         with:
@@ -407,7 +407,7 @@ jobs:
     needs: [version, publish]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Guard (token present + stable version + verified native DMG)
         id: guard
