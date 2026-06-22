@@ -71,9 +71,6 @@ iosApp/Pods/
 !android/debug.keystore
 keystore.properties
 
-# local macOS release signing secrets
-scripts/macos-release-local.env
-
 # python bytecode
 __pycache__/
 *.pyc
