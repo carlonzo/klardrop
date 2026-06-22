@@ -70,3 +70,7 @@ iosApp/Pods/
 # shared debug key — well-known creds, safe to commit
 !android/debug.keystore
 keystore.properties
+
+# python bytecode
+__pycache__/
+*.pyc
