@@ -484,35 +484,30 @@ jobs:
           # notarization rejects them: "The executable does not have the hardened runtime enabled"
           # (Klardrop + KlardropMacShare.appex). Re-sign inside-out WITH hardened runtime.
           #
-          # Developer ID profiles do NOT carry keychain-access-groups, so exportArchive emits an
-          # empty entitlements set. Without a team-prefixed keychain group the app can't use the
-          # data-protection keychain (kSecUseDataProtectionKeychain -> errSecMissingEntitlement);
-          # the device-identity key then lands in the legacy login keychain, whose per-app ACL
-          # pops a "enter your keychain password" dialog on every signing op. Inject the group
-          # explicitly here, preserving anything else Xcode resolved. ${TEAM_ID} is expanded now,
-          # so no unexpanded $(AppIdentifierPrefix) leaks in (the reason we don't re-sign from the
-          # repo .entitlements).
+          # exportArchive emits an empty entitlements set (the Developer ID profile carries none),
+          # so re-signing from the post-export signature drops app-sandbox, app-groups, network,
+          # etc. A share extension MUST stay sandboxed or the host app won't even launch
+          # (RunningBoard "Launchd job spawn failed", POSIX 163). Re-sign each bundle from its repo
+          # .entitlements instead, expanding $(AppIdentifierPrefix) -> TEAMID. so no Xcode variable
+          # leaks in. This also restores the team-prefixed keychain-access-groups (without it the
+          # data-protection keychain fails with errSecMissingEntitlement and macOS pops a "enter
+          # your keychain password" dialog on every signing op).
           APP="$RUNNER_TEMP/export/Klardrop.app"
           resign() {
-            local bundle="$1" ent
+            local bundle="$1" src="$2" ent
             ent="$(mktemp)"
-            codesign -d --entitlements - --xml "$bundle" 2>/dev/null > "$ent" || true
-            if [ ! -s "$ent" ]; then
-              printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
-                '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-                '<plist version="1.0"><dict/></plist>' > "$ent"
-            fi
-            /usr/libexec/PlistBuddy -c "Delete :keychain-access-groups" "$ent" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :keychain-access-groups array" "$ent"
-            /usr/libexec/PlistBuddy -c "Add :keychain-access-groups:0 string ${TEAM_ID}.com.carlom.Klardrop" "$ent"
+            sed "s/\$(AppIdentifierPrefix)/${TEAM_ID}./g" "$src" > "$ent"
             codesign --force --options runtime --timestamp \
               --sign "Developer ID Application" --entitlements "$ent" "$bundle"
           }
           # extension first so the app's outer signature seals the re-signed extension
-          resign "$APP/Contents/PlugIns/KlardropMacShare.appex"
-          resign "$APP"
+          resign "$APP/Contents/PlugIns/KlardropMacShare.appex" "iosApp/Klardrop Mac Share/KlardropMacShare.entitlements"
+          resign "$APP" "iosApp/iosApp/KlardropMac.entitlements"
           codesign --verify --deep --strict --verbose=2 "$APP"
-          # fail the build if the keychain group didn't survive signing (don't ship a broken nightly)
+          # don't ship a broken nightly: appex must stay sandboxed, app must keep its keychain group
+          codesign -d --entitlements - --xml "$APP/Contents/PlugIns/KlardropMacShare.appex" 2>/dev/null \
+            | grep -q "com.apple.security.app-sandbox" \
+            || { echo "::error::app-sandbox missing from KlardropMacShare.appex"; exit 1; }
           codesign -d --entitlements - --xml "$APP" 2>/dev/null | grep -q "${TEAM_ID}.com.carlom.Klardrop" \
             || { echo "::error::keychain-access-groups missing from signed Klardrop.app"; exit 1; }
 
