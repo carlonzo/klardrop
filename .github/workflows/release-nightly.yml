@@ -516,48 +516,63 @@ jobs:
           codesign -d --entitlements - --xml "$APP" 2>/dev/null | grep -q "${TEAM_ID}.com.carlom.Klardrop" \
             || { echo "::error::keychain-access-groups missing from signed Klardrop.app"; exit 1; }
 
-      - name: Stage .app + build DMG
-        env:
-          VERSION: ${{ needs.gate.outputs.base }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist stage
-          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
-            APP="$RUNNER_TEMP/export/Klardrop.app"
-          else
-            APP="$RUNNER_TEMP/KlardropMac.xcarchive/Products/Applications/Klardrop.app"
-          fi
-          cp -R "$APP" stage/
-          ln -s /Applications stage/Applications
-          hdiutil create -volname Klardrop -srcfolder stage -ov -format UDZO \
-            "dist/klardrop-${VERSION}.dmg"
-
-      - name: Notarize + staple (signed builds only)
-        if: steps.signing.outputs.signed == 'true'
+      - name: Stage .app, notarize, build DMG
         env:
           API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}
           VERSION:    ${{ needs.gate.outputs.base }}
+          SIGNED:     ${{ steps.signing.outputs.signed }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/keys"
-          echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey.p8"
-          AUTH=(--key "$RUNNER_TEMP/keys/AuthKey.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER")
-          # Capture the submission id + status. `submit --wait` exits 0 even when the result is
-          # Invalid, so the old script blindly stapled a rejected build and died with a cryptic
-          # "ticket not found". Parse the status and, on anything but Accepted, dump the notary
-          # log (which names the offending files) and fail.
-          SUBMIT="$(xcrun notarytool submit "dist/klardrop-${VERSION}.dmg" "${AUTH[@]}" --wait --output-format json)"
-          echo "$SUBMIT"
-          ID="$(echo "$SUBMIT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-          STATUS="$(echo "$SUBMIT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
-          if [ "$STATUS" != "Accepted" ]; then
-            echo "::error::Notarization $STATUS — see log below"
-            xcrun notarytool log "$ID" "${AUTH[@]}" || true
-            exit 1
+          mkdir -p dist stage
+          if [ "$SIGNED" = "true" ]; then
+            APP="$RUNNER_TEMP/export/Klardrop.app"
+          else
+            APP="$RUNNER_TEMP/KlardropMac.xcarchive/Products/Applications/Klardrop.app"
           fi
-          xcrun stapler staple "dist/klardrop-${VERSION}.dmg"
+          cp -R "$APP" stage/
+
+          if [ "$SIGNED" = "true" ]; then
+            mkdir -p "$RUNNER_TEMP/keys"
+            echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey.p8"
+            AUTH=(--key "$RUNNER_TEMP/keys/AuthKey.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER")
+            # Submit one file and fail on anything but Accepted. `submit --wait` exits 0 even when
+            # the result is Invalid, so parse the status and, on failure, dump the notary log
+            # (which names the offending files) before exiting.
+            notarize() {
+              local f="$1" out id status
+              out="$(xcrun notarytool submit "$f" "${AUTH[@]}" --wait --output-format json)"
+              echo "$out"
+              id="$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+              status="$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
+              if [ "$status" != "Accepted" ]; then
+                echo "::error::Notarization $status for $f — see log below"
+                xcrun notarytool log "$id" "${AUTH[@]}" || true
+                exit 1
+              fi
+            }
+
+            # Notarize + staple the .app FIRST so the notarization ticket is embedded in the
+            # bundle. Homebrew copies Klardrop.app OUT of the DMG into /Applications, where the
+            # DMG's own staple is unreachable; without an app-level ticket Gatekeeper falls back
+            # to an online notarization lookup, which fails offline / behind firewalls and shows
+            # "Apple could not verify Klardrop is free of malware" on first launch. Stapling the
+            # app lets Gatekeeper validate it with no network.
+            ditto -c -k --keepParent stage/Klardrop.app "$RUNNER_TEMP/Klardrop.app.zip"
+            notarize "$RUNNER_TEMP/Klardrop.app.zip"
+            xcrun stapler staple stage/Klardrop.app
+          fi
+
+          ln -s /Applications stage/Applications
+          hdiutil create -volname Klardrop -srcfolder stage -ov -format UDZO \
+            "dist/klardrop-${VERSION}.dmg"
+
+          # Notarize + staple the DMG too, so a direct .dmg download is trusted on first open.
+          if [ "$SIGNED" = "true" ]; then
+            notarize "dist/klardrop-${VERSION}.dmg"
+            xcrun stapler staple "dist/klardrop-${VERSION}.dmg"
+          fi
 
       - uses: actions/upload-artifact@v7
         with:
