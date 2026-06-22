@@ -71,7 +71,19 @@ xcodebuild -exportArchive \
   -authenticationKeyID "$APPSTORE_API_KEY_ID" \
   -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
 
-# --- resign WITH hardened runtime, from repo entitlements (mirrors CI) ------
+# --- embed Developer ID provisioning profiles (mirrors CI) ------------------
+# A sandboxed Developer ID app declaring an App Group must ship an embedded
+# profile or launchd refuses to spawn it (163). exportArchive does not embed one.
+CERT_SERIAL="$(openssl pkcs12 -legacy -in "$WORK/cert.p12" -nokeys -passin pass:"$MACOS_CERTIFICATE_PASSWORD" 2>/dev/null | openssl x509 -noout -serial | cut -d= -f2)"
+VENV="$WORK/venv"; [ -d "$VENV" ] || python3 -m venv "$VENV"
+"$VENV/bin/pip" install --quiet pyjwt cryptography
+"$VENV/bin/python" scripts/embed_devid_profiles.py \
+  --p8 "$WORK/keys/AuthKey.p8" --key-id "$APPSTORE_API_KEY_ID" \
+  --issuer "$APPSTORE_API_ISSUER_ID" --team "$TEAM_ID" --cert-serial "$CERT_SERIAL" \
+  --bundle "com.carlom.Klardrop=$APP/Contents/embedded.provisionprofile" \
+  --bundle "com.carlom.Klardrop.MacShare=$APP/Contents/PlugIns/KlardropMacShare.appex/Contents/embedded.provisionprofile"
+
+# --- resign WITH hardened runtime, from repo entitlements, sealing the profiles
 resign() {
   local bundle="$1" src="$2" ent; ent="$(mktemp)"
   sed "s/\$(AppIdentifierPrefix)/${TEAM_ID}./g" "$src" > "$ent"
@@ -91,10 +103,17 @@ done
 
 echo "== launch smoke test =="
 xattr -cr "$APP"  # local copy isn't notarized/quarantined; don't let Gatekeeper mask the result
+# Match by process name, not path: launchd runs it from the resolved /private/var path,
+# so a path substring (pgrep -f) won't match the /var symlink form we hold here.
+pkill -x Klardrop 2>/dev/null || true   # clear any leftover instance from a prior run
+sleep 1
 open "$APP"
-sleep 4
-if pgrep -f "$APP/Contents/MacOS/Klardrop" >/dev/null; then
-  echo "PASS: app launched and is running"; pkill -f "$APP/Contents/MacOS/Klardrop" || true; exit 0
-else
-  echo "FAIL: app did not stay running (likely the 163 spawn failure)"; exit 1
-fi
+# A 163 spawn failure means the process NEVER appears; a real launch shows up within
+# a few seconds (first launch validates the embedded profiles, so poll rather than sleep once).
+for i in $(seq 1 15); do
+  if pgrep -x Klardrop >/dev/null; then
+    echo "PASS: app spawned and is running (no 163)"; pkill -x Klardrop 2>/dev/null || true; exit 0
+  fi
+  sleep 1
+done
+echo "FAIL: app never spawned within 15s (163 spawn failure)"; exit 1
