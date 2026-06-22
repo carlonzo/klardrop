@@ -8,15 +8,21 @@
 # profile. The only check that catches it is starting the app. So we do that here.
 #
 # Usage:
-#   1. Copy scripts/macos-release-local.env.example -> scripts/macos-release-local.env
-#      and fill in the same secret values CI uses (gitignored).
+#   1. Create scripts/macos-release-local.env (gitignored) with the same secret
+#      values CI uses — base64 the .p12/.p8 with `base64 -i file | tr -d '\n'`:
+#        MACOS_CERTIFICATE_P12_BASE64=   # Developer ID Application cert .p12, base64
+#        MACOS_CERTIFICATE_PASSWORD=
+#        APPSTORE_API_KEY_P8_BASE64=     # ASC API key .p8, base64
+#        APPSTORE_API_KEY_ID=
+#        APPSTORE_API_ISSUER_ID=
+#        APPLE_TEAM_ID=D7T5425WSW        # optional, this is the default
 #   2. ./scripts/macos-release-local.sh            # archive (cached) + export + resign + launch test
 #      ./scripts/macos-release-local.sh --rebuild  # force a fresh archive
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 ENV_FILE="scripts/macos-release-local.env"
-[ -f "$ENV_FILE" ] || { echo "missing $ENV_FILE (see scripts/macos-release-local.env.example)"; exit 1; }
+[ -f "$ENV_FILE" ] || { echo "missing $ENV_FILE (see the header of this script for the keys it needs)"; exit 1; }
 set -a; . "$ENV_FILE"; set +a
 : "${MACOS_CERTIFICATE_P12_BASE64:?}" "${MACOS_CERTIFICATE_PASSWORD:?}"
 : "${APPSTORE_API_KEY_P8_BASE64:?}" "${APPSTORE_API_KEY_ID:?}" "${APPSTORE_API_ISSUER_ID:?}"
