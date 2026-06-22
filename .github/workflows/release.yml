@@ -380,12 +380,21 @@ jobs:
           resign "$APP/Contents/PlugIns/KlardropMacShare.appex" "iosApp/Klardrop Mac Share/KlardropMacShare.entitlements"
           resign "$APP" "iosApp/iosApp/KlardropMac.entitlements"
           codesign --verify --deep --strict --verbose=2 "$APP"
-          # don't ship a broken build: appex must stay sandboxed, app must keep its keychain group
+          # don't ship a broken build. These pass codesign/spctl/notarization yet die at launch
+          # with RunningBoard "Launchd job spawn failed" (POSIX 163):
+          #  - an app extension that isn't sandboxed, or
+          #  - a bundle declaring an App Group with no embedded provisioning profile to authorize it.
           codesign -d --entitlements - --xml "$APP/Contents/PlugIns/KlardropMacShare.appex" 2>/dev/null \
             | grep -q "com.apple.security.app-sandbox" \
             || { echo "::error::app-sandbox missing from KlardropMacShare.appex"; exit 1; }
           codesign -d --entitlements - --xml "$APP" 2>/dev/null | grep -q "${TEAM_ID}.com.carlom.Klardrop" \
             || { echo "::error::keychain-access-groups missing from signed Klardrop.app"; exit 1; }
+          for b in "$APP" "$APP/Contents/PlugIns/KlardropMacShare.appex"; do
+            codesign -d --entitlements - --xml "$b" 2>/dev/null \
+              | grep -q "com.apple.security.application-groups" || continue
+            test -f "$b/Contents/embedded.provisionprofile" \
+              || { echo "::error::$b declares an App Group but has no embedded.provisionprofile -> will fail to launch (163). Enable App Groups on the Developer ID App ID so exportArchive can embed a profile."; exit 1; }
+          done
 
       - name: Stage .app, notarize, build DMG
         env:

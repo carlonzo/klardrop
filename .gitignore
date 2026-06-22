@@ -70,3 +70,6 @@ iosApp/Pods/
 # shared debug key — well-known creds, safe to commit
 !android/debug.keystore
 keystore.properties
+
+# local macOS release signing secrets
+scripts/macos-release-local.env
