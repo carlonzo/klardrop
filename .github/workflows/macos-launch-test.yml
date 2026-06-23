@@ -113,13 +113,12 @@ jobs:
             --bundle "com.carlom.Klardrop=$APP/Contents/embedded.provisionprofile" \
             --bundle "com.carlom.Klardrop.MacShare=$APP/Contents/PlugIns/KlardropMacShare.appex/Contents/embedded.provisionprofile"
 
+          # CONTROL RUN: application-identifier injection intentionally DISABLED to confirm
+          # this reproduces #469's 163 (profile embedded but not bound). Expect launch to FAIL.
           resign() {
             local bundle="$1" src="$2" appid="$3" ent
             ent="$(mktemp)"
             sed "s/\$(AppIdentifierPrefix)/${TEAM_ID}./g" "$src" > "$ent"
-            /usr/libexec/PlistBuddy \
-              -c "Add :com.apple.application-identifier string ${TEAM_ID}.${appid}" \
-              -c "Add :com.apple.developer.team-identifier string ${TEAM_ID}" "$ent"
             codesign --force --options runtime --timestamp \
               --sign "Developer ID Application" --entitlements "$ent" "$bundle"
           }
