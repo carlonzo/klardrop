@@ -105,12 +105,17 @@ jobs:
           APP="$RUNNER_TEMP/export/Klardrop.app"
 
           CERT_SERIAL="$(openssl pkcs12 -legacy -in "$RUNNER_TEMP/cert.p12" -nokeys -passin pass:"$CERT_PW" 2>/dev/null | openssl x509 -noout -serial | cut -d= -f2)"
-          # DECISIVE CONTROL: reproduce #468's exact shipped state — app-groups present,
-          # NO embedded provisioning profile, NO application-identifier. The user reported
-          # THIS config as error 163. If it launches here, the GitHub runner does not
-          # enforce the amfi/Gatekeeper checks that cause 163 -> CI cannot reproduce the bug.
-          echo ":: skipping profile embed + application-identifier (reproducing #468 state)"
-          : "$CERT_SERIAL"
+          # REALISTIC RUN: reproduce exactly what main ships TODAY (#469 state) — embed the
+          # Developer ID provisioning profiles, resign WITHOUT application-identifier — then
+          # (in the next step) notarize + staple + quarantine + install, the real download
+          # path. Proves whether #469 alone fixes the user's 163.
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography
+          "$RUNNER_TEMP/venv/bin/python" scripts/embed_devid_profiles.py \
+            --p8 "$RUNNER_TEMP/keys/AuthKey.p8" --key-id "$API_KEY_ID" \
+            --issuer "$API_ISSUER" --team "$TEAM_ID" --cert-serial "$CERT_SERIAL" \
+            --bundle "com.carlom.Klardrop=$APP/Contents/embedded.provisionprofile" \
+            --bundle "com.carlom.Klardrop.MacShare=$APP/Contents/PlugIns/KlardropMacShare.appex/Contents/embedded.provisionprofile"
 
           resign() {
             local bundle="$1" src="$2" appid="$3" ent
@@ -144,18 +149,44 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Launch the app (the actual 163 reproduction)
+      - name: Notarize + staple + install to /Applications + quarantine, then launch
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
           set -uo pipefail
-          APP="$RUNNER_TEMP/export/Klardrop.app"
+          SRC="$RUNNER_TEMP/export/Klardrop.app"
+          AUTH=(--key "$RUNNER_TEMP/keys/AuthKey.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER")
+
+          # Notarize + staple the .app (mirrors release: app-level ticket so Gatekeeper
+          # validates offline once the app is copied out of the DMG into /Applications).
+          set -e
+          ditto -c -k --keepParent "$SRC" "$RUNNER_TEMP/Klardrop.app.zip"
+          out="$(xcrun notarytool submit "$RUNNER_TEMP/Klardrop.app.zip" "${AUTH[@]}" --wait --output-format json)"
+          echo "$out"
+          status="$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
+          id="$(echo "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+          if [ "$status" != "Accepted" ]; then
+            echo "::error::Notarization $status"; xcrun notarytool log "$id" "${AUTH[@]}" || true; exit 1
+          fi
+          xcrun stapler staple "$SRC"
+          set +e
+
+          # Mimic the real install path: Homebrew copies Klardrop.app from the DMG into
+          # /Applications, and the cask marks it quarantined (downloaded). This is the exact
+          # state the user launches — a stapled, notarized, *quarantined* app in /Applications.
+          APP="/Applications/Klardrop.app"
+          rm -rf "$APP"; cp -R "$SRC" "$APP"
+          xattr -w -r com.apple.quarantine "0083;00000000;Safari;" "$APP" 2>/dev/null || \
+            xattr -w com.apple.quarantine "0083;00000000;Safari;" "$APP" || true
           EXE="$APP/Contents/MacOS/Klardrop"
-          xattr -cr "$APP" || true
+
+          echo "quarantine attr:"; xattr -p com.apple.quarantine "$APP" 2>&1 || echo "(none)"
           echo "spctl assessment:"; spctl -a -t exec -vvv "$APP" 2>&1 || true
+          echo "stapler validate:"; xcrun stapler validate "$APP" 2>&1 || true
 
           echo "=== open $APP ==="
-          set +e
           OUT="$(open "$APP" 2>&1)"; RC=$?
-          set -e 2>/dev/null || true
           echo "open rc=$RC :: $OUT"
           sleep 12
 
@@ -166,7 +197,7 @@ jobs:
           echo "::endgroup::"
 
           if [ -n "$RUNNING" ]; then
-            echo "::notice::✅ LAUNCH OK — Klardrop is running (pid $RUNNING), no 163"
+            echo "::notice::✅ LAUNCH OK — notarized + stapled + quarantined Klardrop runs from /Applications (pid $RUNNING), no 163"
             kill "$RUNNING" 2>/dev/null || true
             exit 0
           fi
