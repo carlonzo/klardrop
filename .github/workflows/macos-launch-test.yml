@@ -105,16 +105,13 @@ jobs:
           APP="$RUNNER_TEMP/export/Klardrop.app"
 
           CERT_SERIAL="$(openssl pkcs12 -legacy -in "$RUNNER_TEMP/cert.p12" -nokeys -passin pass:"$CERT_PW" 2>/dev/null | openssl x509 -noout -serial | cut -d= -f2)"
-          python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography
-          "$RUNNER_TEMP/venv/bin/python" scripts/embed_devid_profiles.py \
-            --p8 "$RUNNER_TEMP/keys/AuthKey.p8" --key-id "$API_KEY_ID" \
-            --issuer "$API_ISSUER" --team "$TEAM_ID" --cert-serial "$CERT_SERIAL" \
-            --bundle "com.carlom.Klardrop=$APP/Contents/embedded.provisionprofile" \
-            --bundle "com.carlom.Klardrop.MacShare=$APP/Contents/PlugIns/KlardropMacShare.appex/Contents/embedded.provisionprofile"
+          # DECISIVE CONTROL: reproduce #468's exact shipped state — app-groups present,
+          # NO embedded provisioning profile, NO application-identifier. The user reported
+          # THIS config as error 163. If it launches here, the GitHub runner does not
+          # enforce the amfi/Gatekeeper checks that cause 163 -> CI cannot reproduce the bug.
+          echo ":: skipping profile embed + application-identifier (reproducing #468 state)"
+          : "$CERT_SERIAL"
 
-          # CONTROL RUN: application-identifier injection intentionally DISABLED to confirm
-          # this reproduces #469's 163 (profile embedded but not bound). Expect launch to FAIL.
           resign() {
             local bundle="$1" src="$2" appid="$3" ent
             ent="$(mktemp)"
