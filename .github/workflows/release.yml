@@ -385,24 +385,15 @@ jobs:
             --bundle "com.carlom.Klardrop.MacShare=$APP/Contents/PlugIns/KlardropMacShare.appex/Contents/embedded.provisionprofile"
 
           resign() {
-            local bundle="$1" src="$2" appid="$3" ent
+            local bundle="$1" src="$2" ent
             ent="$(mktemp)"
             sed "s/\$(AppIdentifierPrefix)/${TEAM_ID}./g" "$src" > "$ent"
-            # An embedded provisioning profile only authorizes restricted entitlements
-            # (application-groups, keychain) when the signed code ALSO declares the matching
-            # com.apple.application-identifier — that's the key macOS uses to bind the profile
-            # to the binary. Xcode injects it automatically; a manual --entitlements re-sign
-            # does not, so the profile never applies, the app group stays unauthorized and the
-            # app dies at launch (RunningBoard "Launchd job spawn failed", POSIX 163).
-            /usr/libexec/PlistBuddy \
-              -c "Add :com.apple.application-identifier string ${TEAM_ID}.${appid}" \
-              -c "Add :com.apple.developer.team-identifier string ${TEAM_ID}" "$ent"
             codesign --force --options runtime --timestamp \
               --sign "Developer ID Application" --entitlements "$ent" "$bundle"
           }
           # extension first so the app's outer signature seals the re-signed extension
-          resign "$APP/Contents/PlugIns/KlardropMacShare.appex" "iosApp/Klardrop Mac Share/KlardropMacShare.entitlements" "com.carlom.Klardrop.MacShare"
-          resign "$APP" "iosApp/iosApp/KlardropMac.entitlements" "com.carlom.Klardrop"
+          resign "$APP/Contents/PlugIns/KlardropMacShare.appex" "iosApp/Klardrop Mac Share/KlardropMacShare.entitlements"
+          resign "$APP" "iosApp/iosApp/KlardropMac.entitlements"
           codesign --verify --deep --strict --verbose=2 "$APP"
           # don't ship a broken build. These pass codesign/spctl/notarization yet die at launch
           # with RunningBoard "Launchd job spawn failed" (POSIX 163):
@@ -418,9 +409,6 @@ jobs:
               | grep -q "com.apple.security.application-groups" || continue
             test -f "$b/Contents/embedded.provisionprofile" \
               || { echo "::error::$b declares an App Group but has no embedded.provisionprofile -> will fail to launch (163). The embed_devid_profiles.py step did not embed it."; exit 1; }
-            codesign -d --entitlements - --xml "$b" 2>/dev/null \
-              | grep -q "com.apple.application-identifier" \
-              || { echo "::error::$b is missing com.apple.application-identifier -> the embedded profile won't bind, App Group stays unauthorized, app fails to launch (163)."; exit 1; }
           done
 
       - name: Stage .app, notarize, build DMG
