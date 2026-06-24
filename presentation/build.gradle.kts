@@ -5,7 +5,7 @@ plugins {
   alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
   kotlin("native.cocoapods")
-  id("co.touchlab.skie") version "0.10.12"
+  id("co.touchlab.skie") version "0.10.13"
 }
 
 kotlin {
