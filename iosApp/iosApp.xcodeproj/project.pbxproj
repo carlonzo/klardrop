@@ -1182,6 +1182,10 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lsqlite3",
+					"-Xlinker",
+					"-undefined",
+					"-Xlinker",
+					"dynamic_lookup",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.carlom.Klardrop;
 				PRODUCT_NAME = Klardrop;
@@ -1250,6 +1254,10 @@
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-lsqlite3",
+					"-Xlinker",
+					"-undefined",
+					"-Xlinker",
+					"dynamic_lookup",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.carlom.Klardrop;
 				PRODUCT_NAME = Klardrop;
