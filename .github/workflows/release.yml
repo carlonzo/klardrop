@@ -250,7 +250,7 @@ jobs:
       # Cache ~/.konan (Kotlin/Native compiler + Apple platform libs) — outside the
       # Gradle home setup-gradle caches. Keyed on the version catalog.
       - name: Cache Kotlin/Native (~/.konan)
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
