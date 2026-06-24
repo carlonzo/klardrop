@@ -46,42 +46,42 @@ def api(method, path, tok, body=None):
         sys.exit(f"ASC API {method} {path} -> {e.code}: {e.read().decode()}")
 
 
-def norm_serial(s):
-    return s.lower().lstrip("0")
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--p8", required=True)
     ap.add_argument("--key-id", required=True)
     ap.add_argument("--issuer", required=True)
     ap.add_argument("--team", required=True)
-    ap.add_argument("--cert-serial", required=True,
-                    help="serial of the Developer ID cert used for signing")
     ap.add_argument("--bundle", action="append", required=True, metavar="ID=PATH",
                     help="bundleId=embedded.provisionprofile output path")
     a = ap.parse_args()
     tok = make_token(open(a.p8).read(), a.key_id, a.issuer)
 
-    # the profile must reference the same cert we sign with, or it won't authorize the signature
-    certs = api("GET", "/v1/certificates?limit=200", tok)["data"]
-    cert_id = next((c["id"] for c in certs
-                    if c["attributes"].get("certificateType") == "DEVELOPER_ID_APPLICATION"
-                    and norm_serial(c["attributes"].get("serialNumber", "")) == norm_serial(a.cert_serial)), None)
-    if not cert_id:
-        sys.exit(f"no DEVELOPER_ID_APPLICATION certificate with serial {a.cert_serial} in the account")
+    # Reference ALL of the team's Developer ID Application certs, so the profile is valid
+    # whichever one ends up signing. This avoids having to identify the signing cert by
+    # serial (which meant parsing the .p12 with `openssl pkcs12 -legacy` — a flag LibreSSL,
+    # the openssl on the macOS CI runner, does not support: it silently produced nothing and
+    # the build failed before this step even ran).
+    cert_ids = [c["id"] for c in api("GET", "/v1/certificates?limit=200", tok)["data"]
+                if c["attributes"].get("certificateType") == "DEVELOPER_ID_APPLICATION"]
+    if not cert_ids:
+        sys.exit("no DEVELOPER_ID_APPLICATION certificate in the account")
+
+    # Map identifier -> db id with an EXACT match. filter[identifier] is a prefix match, so
+    # querying "com.carlom.Klardrop" also returns "...MacShare"/"...Share" — match exactly here
+    # or both profiles end up bound to the wrong bundle id.
+    bid_by_identifier = {b["attributes"]["identifier"]: b["id"]
+                         for b in api("GET", "/v1/bundleIds?limit=200", tok)["data"]}
 
     for spec in a.bundle:
         bundle_id, out = spec.split("=", 1)
         name = f"{bundle_id} DevID (managed)"
 
-        bids = api("GET", f"/v1/bundleIds?filter[identifier]={bundle_id}&filter[platform]=MAC_OS&limit=10", tok)["data"]
-        bids = bids or api("GET", f"/v1/bundleIds?filter[identifier]={bundle_id}&limit=10", tok)["data"]
-        if not bids:
+        bid_db = bid_by_identifier.get(bundle_id)
+        if not bid_db:
             sys.exit(f"bundle id {bundle_id} not registered in the account")
-        bid_db = bids[0]["id"]
 
-        # delete same-named profiles so we always recreate against the current cert
+        # delete same-named profiles so we always recreate against the current cert set
         for p in api("GET", f"/v1/profiles?filter[name]={urllib.parse.quote(name)}&limit=200", tok)["data"]:
             api("DELETE", f"/v1/profiles/{p['id']}", tok)
 
@@ -90,7 +90,7 @@ def main():
             "attributes": {"name": name, "profileType": "MAC_APP_DIRECT"},
             "relationships": {
                 "bundleId": {"data": {"type": "bundleIds", "id": bid_db}},
-                "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}}})
+                "certificates": {"data": [{"type": "certificates", "id": cid} for cid in cert_ids]}}}})
         content = created["data"]["attributes"]["profileContent"]
         open(out, "wb").write(base64.b64decode(content))
         print(f"embedded {name} -> {out}")
