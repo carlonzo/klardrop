@@ -453,7 +453,6 @@ jobs:
           API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
           API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}
           TEAM_ID:    ${{ secrets.APPLE_TEAM_ID }}
-          CERT_PW:    ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/keys"
@@ -499,12 +498,11 @@ jobs:
           # provisioning profile or macOS refuses to spawn it (RunningBoard 163).
           # exportArchive (method=developer-id) does NOT embed one, so create + embed the
           # Developer ID profiles ourselves (one per bundle id) BEFORE re-signing seals them.
-          CERT_SERIAL="$(openssl pkcs12 -legacy -in "$RUNNER_TEMP/cert.p12" -nokeys -passin pass:"$CERT_PW" 2>/dev/null | openssl x509 -noout -serial | cut -d= -f2)"
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography
           "$RUNNER_TEMP/venv/bin/python" scripts/embed_devid_profiles.py \
             --p8 "$RUNNER_TEMP/keys/AuthKey.p8" --key-id "$API_KEY_ID" \
-            --issuer "$API_ISSUER" --team "$TEAM_ID" --cert-serial "$CERT_SERIAL" \
+            --issuer "$API_ISSUER" --team "$TEAM_ID" \
             --bundle "com.carlom.Klardrop=$APP/Contents/embedded.provisionprofile" \
             --bundle "com.carlom.Klardrop.MacShare=$APP/Contents/PlugIns/KlardropMacShare.appex/Contents/embedded.provisionprofile"
 
