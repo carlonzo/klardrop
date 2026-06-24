@@ -275,9 +275,6 @@ struct KlardropNav: View {
             }
             .buttonStyle(.plain)
         }
-        // ponytail: no opaque background here — let NavigationSplitView's native
-        // sidebar column render its vibrancy material (the Finder "floating" look).
-        // Painting kd.bg1 over it was what made the pane flush/opaque.
         .scrollContentBackground(.hidden)
     }
 
