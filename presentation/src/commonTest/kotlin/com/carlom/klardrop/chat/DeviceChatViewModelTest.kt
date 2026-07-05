@@ -2,6 +2,9 @@ package com.carlom.klardrop.chat
 
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
+import com.carlom.klardrop.common.communication.Client
+import com.carlom.klardrop.common.communication.ConnectOutcome
+import com.carlom.klardrop.common.communication.ConnectionsPool
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.Reachability
@@ -90,6 +93,28 @@ class DeviceChatViewModelTest {
     override val messageReceivedNotifier: Flow<ReceiveMessageUpdate> = emptyFlow()
   }
 
+  /** Records every [connectTo] call so dial-on-open (docs/connection-review.md, F1/F11) can be asserted. */
+  private class FakeClient(private val outcome: ConnectOutcome = ConnectOutcome.Connected) : Client {
+    val connectToCalls = mutableListOf<String>()
+
+    override suspend fun connectTo(deviceId: String): ConnectOutcome {
+      connectToCalls += deviceId
+      return outcome
+    }
+  }
+
+  /** [isAvailable] is configurable per test; every other member is unused by these tests. */
+  private class FakeConnectionsPool(private val available: Boolean) : ConnectionsPool {
+    override val reachability: StateFlow<Map<String, Reachability>> = MutableStateFlow(emptyMap())
+    override suspend fun isAvailable(deviceId: String): Boolean = available
+    override suspend fun updateConnection(deviceId: String, connectionMessenger: com.carlom.klardrop.common.communication.ConnectionMessenger) = error("not used by this test")
+    override suspend fun getConnection(deviceId: String): com.carlom.klardrop.common.communication.ConnectionMessenger? = error("not used by this test")
+    override suspend fun closeAllConnections() = error("not used by this test")
+    override suspend fun closeConnection(deviceId: String) = error("not used by this test")
+    override fun markProbing(deviceId: String) = error("not used by this test")
+    override fun markUnreachable(deviceId: String) = error("not used by this test")
+  }
+
   private class FakeMessageRepository : MessageRepository {
     override suspend fun insertMessage(
       remoteDeviceId: String,
@@ -146,11 +171,15 @@ class DeviceChatViewModelTest {
     messenger: Messenger,
     messageReceiver: MessageReceiver,
     deviceId: String = "dev00001",
+    client: Client = FakeClient(),
+    connectionsPool: ConnectionsPool = FakeConnectionsPool(available = true),
   ) = DeviceChatViewModel(
     deviceId = deviceId,
     messageRepository = FakeMessageRepository(),
     messenger = messenger,
     messageReceiver = messageReceiver,
+    client = client,
+    connectionsPool = connectionsPool,
     coroutines = testCoroutines,
     fileManager = FakeFileManager(),
     platformFileSystem = FakePlatformFileSystem(fileSize = 1_000L),
@@ -243,5 +272,43 @@ class DeviceChatViewModelTest {
     advanceUntilIdle()
 
     assertNull(vm.uiState.value.fileTransferProgress)
+  }
+
+  /**
+   * Fix 6 (docs/connection-review.md, "dial-on-open", F1/F11): opening the chat screen for a
+   * device that isn't currently pooled should nudge exactly one connect attempt, so the user
+   * doesn't stare at "Connecting" until the eager connector's cooldown or some other trigger
+   * happens to fire.
+   */
+  @Test
+  fun init_unpooledDevice_triggersExactlyOneConnectAttempt() = runTest(dispatcher) {
+    val deviceId = "dev00001"
+    val client = FakeClient()
+    val vm = buildViewModel(
+      FakeMessenger(),
+      FakeMessageReceiver(),
+      deviceId = deviceId,
+      client = client,
+      connectionsPool = FakeConnectionsPool(available = false),
+    )
+    advanceUntilIdle()
+
+    assertEquals(listOf(deviceId), client.connectToCalls)
+    vm.onDispose()
+  }
+
+  @Test
+  fun init_pooledDevice_triggersNoConnectAttempt() = runTest(dispatcher) {
+    val client = FakeClient()
+    val vm = buildViewModel(
+      FakeMessenger(),
+      FakeMessageReceiver(),
+      client = client,
+      connectionsPool = FakeConnectionsPool(available = true),
+    )
+    advanceUntilIdle()
+
+    assertEquals(emptyList(), client.connectToCalls)
+    vm.onDispose()
   }
 }

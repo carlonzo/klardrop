@@ -1,6 +1,8 @@
 package com.carlom.klardrop.chat
 
 import com.carlom.klardrop.common.FileManager
+import com.carlom.klardrop.common.communication.Client
+import com.carlom.klardrop.common.communication.ConnectionsPool
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.Reachability
@@ -40,6 +42,8 @@ class DeviceChatViewModel(
   val messageRepository: MessageRepository,
   private val messenger: Messenger,
   private val messageReceiver: MessageReceiver,
+  private val client: Client,
+  private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
   private val fileManager: FileManager,
   private val platformFileSystem: PlatformFileSystem,
@@ -83,6 +87,20 @@ class DeviceChatViewModel(
     // Mark messages as read when chat screen is opened
     viewModelScope.launch {
       messageRepository.markMessagesAsRead(deviceId)
+    }
+
+    // Dial-on-open (docs/connection-review.md F1/F11): opening the chat screen is a strong
+    // "I want to talk to this device now" signal, but by itself it never dialed anything — only
+    // EagerReachabilityConnector (on discovery) and Messenger.send (on user send) do. If ERC's
+    // last probe failed, the 5s failure cooldown can leave the user staring at "Connecting" for
+    // no reason even though nothing else is stopping a fresh dial from succeeding. One
+    // fire-and-forget nudge per screen open — no retry loop here, Client.connectTo's per-device
+    // dial coalescing (F8) makes racing the eager connector's own probe safe.
+    viewModelScope.launch {
+      if (!connectionsPool.isAvailable(deviceId)) {
+        runCatching { client.connectTo(deviceId) }
+          .onFailure { log("DeviceChatViewModel", "Dial-on-open failed for $deviceId", it) }
+      }
     }
 
     // Mirror this device's incoming file-transfer progress into ui state so the chat bubble can
