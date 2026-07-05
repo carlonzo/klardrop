@@ -8,10 +8,14 @@ name: Release (nightly)
 #   - macOS   → rolling GitHub *prerelease* (DMG)
 #   - Linux   → rolling GitHub *prerelease* (universal tarball)
 #
-# A moving `nightly` git tag marks the commit of the last fully-successful nightly.
-# The `gate` job aborts the whole run when no commits have landed since that tag
-# (manual dispatch can override with `force: true`). The tag is only advanced by the
-# final `publish` job, so a failed nightly is retried on the next run.
+# A moving `nightly` git tag marks the commit of the last ATTEMPTED nightly. The `gate`
+# job aborts the whole run when no commits have landed since that tag (manual dispatch
+# can override with `force: true`) and advances the tag as soon as it decides to proceed —
+# BEFORE the builds run. This is deliberate: the nightly versionCode is derived from the
+# commit count, so re-running the same commit rebuilds an identical AAB that Play rejects
+# ("Version code N has already been used"). Advancing per-attempt means a failed nightly
+# is NOT silently retried against the same commit on the next schedule — it waits for the
+# next commit (typically the fix). Use `force: true` to re-run the same commit on purpose.
 
 on:
   schedule:
@@ -96,6 +100,17 @@ jobs:
           echo "semver=$SEMVER"    >> "$GITHUB_OUTPUT"
           echo "versionCode=$CODE" >> "$GITHUB_OUTPUT"
           echo "Nightly semver=$SEMVER base=$BASE versionCode=$CODE commits=$COMMITS (last stable: ${LAST:-none})"
+
+      # Advance the `nightly` tag to this commit BEFORE the builds run, so a failed nightly
+      # is not retried against the same commit on the next schedule (which would rebuild the
+      # same commit-derived versionCode and be rejected by Play). The tag is the gate's
+      # commit marker; on success `publish` recreates the GitHub release on top of it.
+      - name: Advance the `nightly` tag to this commit
+        if: steps.check.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          git tag -f nightly "$GITHUB_SHA"
+          git push -f origin nightly
 
   # Android AAB → Play `beta` (Open testing) track. versionName carries the full pre-release
   # semver (Android allows any string); versionCode is the integer ordering.
@@ -597,10 +612,10 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # Collect the desktop artifacts and (re)publish the rolling `nightly` prerelease.
-  # Runs only when every build job succeeded, so a partial failure leaves the tag in
-  # place and the next run retries. prerelease:true keeps it off `releases/latest`, so
-  # install.sh / Homebrew (which track the stable release) are unaffected.
+  # Collect the desktop artifacts and (re)publish the rolling `nightly` prerelease on top
+  # of the tag the `gate` already advanced to this commit. Runs only when every build job
+  # succeeded. prerelease:true keeps it off `releases/latest`, so install.sh / Homebrew
+  # (which track the stable release) are unaffected.
   publish:
     needs: [gate, android, ios, linux, macos]
     if: needs.gate.outputs.proceed == 'true'
@@ -665,19 +680,13 @@ jobs:
       # so only the latest nightly's binaries are ever stored (the version-stamped DMG
       # name changes whenever the base version bumps, so updating-in-place would otherwise
       # leave stale assets behind and grow GitHub storage without bound). The git tag is
-      # kept (re-pointed in the next step) since the gate uses it as the commit marker.
+      # kept (already advanced to this commit by the gate) and reused by the release below.
       - name: Delete the previous nightly release (keep only the latest binaries)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           gh release delete nightly --repo "${{ github.repository }}" --yes || true
-
-      - name: Advance the rolling `nightly` tag to this commit
-        run: |
-          set -euo pipefail
-          git tag -f nightly "$GITHUB_SHA"
-          git push -f origin nightly
 
       - uses: softprops/action-gh-release@v3
         with:

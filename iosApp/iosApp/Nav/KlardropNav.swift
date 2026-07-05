@@ -275,7 +275,6 @@ struct KlardropNav: View {
             }
             .buttonStyle(.plain)
         }
-        .background(kd.bg1)
         .scrollContentBackground(.hidden)
     }
 
