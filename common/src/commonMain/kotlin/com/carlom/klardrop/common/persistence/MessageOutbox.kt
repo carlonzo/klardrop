@@ -8,9 +8,12 @@ import kotlinx.coroutines.flow.update
 /**
  * An in-flight (sending) message entry held in the in-memory outbox.
  *
- * These entries are NEVER persisted to disk. A send in progress lives only here.
- * On send Completed: the outbox entry is removed (handleOutgoing already persisted the SENT row).
- * On send Error: the message is persisted as FAILED and the outbox entry is removed.
+ * NOTE: outgoing TEXT sends no longer populate this — [Messenger.send][com.carlom.klardrop.common.communication.Messenger]
+ * now persists a single SENDING row up front and flips it to SENT/FAILED itself (see
+ * docs/connection-review.md F12/F13), so the disk row alone drives the merged read's
+ * [DeliveryStatus] for text. This class is kept for the merge machinery in
+ * [MessageRepository.getMessagesForDevice] and any other caller that wants a purely
+ * in-memory, never-persisted optimistic entry.
  */
 data class OutboxEntry(
   val messageId: Long,

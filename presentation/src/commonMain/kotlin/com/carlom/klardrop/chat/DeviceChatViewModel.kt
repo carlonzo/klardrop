@@ -12,15 +12,10 @@ import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.persistence.ChatMessage
 import com.carlom.klardrop.common.features.ClipboardManager
-import com.carlom.klardrop.common.persistence.MessageOutbox
 import com.carlom.klardrop.common.persistence.MessageRepository
-import com.carlom.klardrop.common.persistence.MessageType
-import com.carlom.klardrop.common.persistence.OutboxEntry
-import com.carlom.klardrop.common.persistence.SendStatus
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
-import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
@@ -50,8 +45,6 @@ class DeviceChatViewModel(
   private val platformFileSystem: PlatformFileSystem,
   private val clipboardManager: ClipboardManager,
   reachabilitySource: StateFlow<Map<String, Reachability>>,
-  private val outbox: MessageOutbox = MessageOutbox(),
-  private val clock: Clock = Clock(),
 ) {
 
   // TODO we need to dispose this viewmodel
@@ -101,50 +94,21 @@ class DeviceChatViewModel(
         _uiState.value = _uiState.value.copy(error = null)
 
         val textMessage = TextMessage(text = text)
-        val messageId = textMessage.id.toLong()
 
-        // (1) Optimistic: add to in-memory outbox as SENDING BEFORE touching the network.
-        // This makes the bubble appear immediately without any disk write.
-        outbox.add(
-          OutboxEntry(
-            messageId = messageId,
-            remoteDeviceId = deviceId,
-            content = text,
-            timestamp = clock.currentTimeMillis(),
-          )
-        )
-
+        // Persistence (SENDING -> SENT/FAILED) is owned by Messenger.send: it inserts a
+        // single row up front and flips it to its terminal state exactly once, regardless of
+        // how many times the retry loop re-attempts the transport. The VM must not persist
+        // anything itself here — doing so would render a second, duplicate bubble alongside
+        // the row Messenger.send already owns (see docs/connection-review.md F12/F13).
         val finalStatus = messenger.send(deviceId, textMessage.toSimpleSendRequest())
           .untilCompleted()
           .lastOrNull()
 
-        when (finalStatus) {
-          is MessengerSendProgress.Completed -> {
-            // TextMessageHandler.handleOutgoing already persisted the SENT row to disk.
-            // The VM must NOT insert again — just drop the outbox entry.
-            outbox.remove(messageId)
-          }
-          is MessengerSendProgress.Error -> {
-            // Persist as FAILED so it survives restart and is retryable, then drop from outbox.
-            messageRepository.insertMessage(
-              remoteDeviceId = deviceId,
-              content = text,
-              isSender = true,
-              messageType = MessageType.TEXT,
-              isRead = true,
-              sendStatus = SendStatus.FAILED,
-            )
-            outbox.remove(messageId)
-            _uiState.update {
-              it.copy(error = "Failed to send message: ${finalStatus.message}")
-            }
-          }
-          else -> {
-            // Null / Pending — shouldn't happen after untilCompleted, but drop the outbox entry.
-            outbox.remove(messageId)
+        if (finalStatus is MessengerSendProgress.Error) {
+          _uiState.update {
+            it.copy(error = "Failed to send message: ${finalStatus.message}")
           }
         }
-
       } catch (e: Exception) {
         _uiState.value = _uiState.value.copy(
           error = "Failed to send message: ${e.message}"

@@ -57,17 +57,11 @@ class TextMessageHandler(
     val textMessage = request.message as TextMessage
     log("TextMessageHandler", "Sending text message: ${textMessage.text}")
 
-    // Insert the sent message into the database
-    messageRepository.insertMessage(
-      remoteDeviceId = toDeviceId,
-      content = textMessage.text,
-      isSender = true,
-      messageType = PersistenceMessageType.TEXT,
-      isRead = true, // Outgoing messages are read by default
-      mimeType = "text/plain"
-    )
-
-    // Send the message directly since it has no payload
+    // Persistence is owned by Messenger.send, not here: it inserts a single SENDING row up
+    // front (before any socket write) and flips it to SENT/FAILED once the whole logical send
+    // (including retries) reaches a terminal outcome. Inserting here would create a duplicate
+    // row per retry attempt and would mark the message SENT before the write — let alone the
+    // ACK — ever succeeded. See docs/connection-review.md F12/F13.
     writeChannel.sendMessage(textMessage, serializer, cipher)
   }
 }

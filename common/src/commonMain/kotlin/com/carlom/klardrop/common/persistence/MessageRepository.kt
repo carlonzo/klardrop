@@ -30,6 +30,20 @@ interface MessageRepository {
     sendStatus: SendStatus = SendStatus.SENT,
   )
 
+  /**
+   * Flips a previously-inserted outgoing row (correlated by [messageId], the wire `Message.id`
+   * passed to [insertMessage]) to its terminal delivery state. [Messenger][com.carlom.klardrop.common.communication.Messenger]
+   * calls this exactly once per logical send — on ACK_RECEIVED (-> SENT) or once retries are
+   * exhausted (-> FAILED) — regardless of how many transport attempts it took.
+   *
+   * Default no-op so fakes/stubs of this interface that don't care about outgoing-TEXT
+   * bookkeeping (most of them — see the various test [MessageRepository] stubs) don't need to
+   * implement it; only the real, DB-backed repository overrides it.
+   */
+  suspend fun updateMessageSendStatus(messageId: Long, status: SendStatus) {
+    // no-op default; see kdoc above.
+  }
+
   suspend fun insertFileTransfer(
     fileName: String,
     filePath: String,
@@ -53,9 +67,8 @@ interface MessageRepository {
    *
    * Merges the on-disk SQLDelight flow with the in-memory outbox flow (sorted by timestamp
    * descending). Deduplication: a disk row wins over an outbox entry with the same id.
-   * Outbox entries appear as [DeliveryStatus.SENDING]; disk rows with send_status='FAILED'
-   * appear as [DeliveryStatus.FAILED]; everything else (send_status NULL) appears as
-   * [DeliveryStatus.SENT].
+   * Disk rows map send_status straight to [DeliveryStatus] ('SENDING' -> SENDING, 'FAILED' ->
+   * FAILED, NULL/anything else -> SENT); any outbox entry appears as [DeliveryStatus.SENDING].
    */
   fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<ChatMessage>>
 
@@ -72,6 +85,13 @@ interface MessageRepository {
 
 enum class MessageType { TEXT, FILE }
 enum class FileTransferStatus { IN_PROGRESS, COMPLETED, FAILED, REJECTED }
+
+/** NULL is the legacy/default column value and reads back as SENT — see [SendStatus] kdoc. */
+private fun SendStatus.toColumnValue(): String? = when (this) {
+  SendStatus.SENT -> null
+  SendStatus.SENDING -> "SENDING"
+  SendStatus.FAILED -> "FAILED"
+}
 
 class MessageRepositoryImpl(
   private val database: AppDatabase,
@@ -92,7 +112,6 @@ class MessageRepositoryImpl(
     sendStatus: SendStatus,
   ) {
     withContext(ioDispatcher) {
-      val sendStatusString = if (sendStatus == SendStatus.FAILED) "FAILED" else null
       database.messageQueries.insert(
         remote_device_id = remoteDeviceId,
         content = content,
@@ -102,13 +121,25 @@ class MessageRepositoryImpl(
         file_transfer_id = fileTransferId,
         is_read = if (isRead) 1L else 0L,
         mime_type = mimeType,
-        send_status = sendStatusString,
+        send_status = sendStatus.toColumnValue(),
+        message_id = messageId,
       ).await().also {
         log(
           "MessageRepositoryImpl",
           "Inserted message for device $remoteDeviceId with type $messageType, " +
             "file transfer ID $fileTransferId, sendStatus=$sendStatus"
         )
+      }
+    }
+  }
+
+  override suspend fun updateMessageSendStatus(messageId: Long, status: SendStatus) {
+    withContext(ioDispatcher) {
+      database.messageQueries.updateSendStatusByMessageId(
+        send_status = status.toColumnValue(),
+        message_id = messageId,
+      ).await().also {
+        log("MessageRepositoryImpl", "Updated send status for wire message $messageId to $status")
       }
     }
   }
@@ -163,6 +194,7 @@ class MessageRepositoryImpl(
         rows.map { row ->
           val delivery = when (row.send_status) {
             "FAILED" -> DeliveryStatus.FAILED
+            "SENDING" -> DeliveryStatus.SENDING
             else -> DeliveryStatus.SENT
           }
           ChatMessage(

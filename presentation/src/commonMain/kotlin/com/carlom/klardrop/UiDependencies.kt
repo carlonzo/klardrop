@@ -27,7 +27,6 @@ class UiDependencies(private val commonComponent: CommonComponent) {
             platformFileSystem = commonComponent.platformFileSystem(),
             clipboardManager = commonComponent.clipboardManager(),
             reachabilitySource = commonComponent.reachability(),
-            outbox = commonComponent.messageOutbox(),
         )
     }
 }

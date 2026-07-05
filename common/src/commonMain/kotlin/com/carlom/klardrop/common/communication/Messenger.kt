@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.TransferRejectedException
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
@@ -11,6 +12,9 @@ import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
+import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
+import com.carlom.klardrop.common.persistence.SendStatus
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.trust.TrustChecker
@@ -47,6 +51,7 @@ class MessengerImpl(
   private val trustChecker: Lazy<TrustChecker>,
   private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
   private val messageSerializer: MessageSerializer,
+  private val messageRepository: MessageRepository,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
 ) : Messenger {
 
@@ -81,6 +86,28 @@ class MessengerImpl(
       }
 
       log("Messenger", "✅ Device $deviceId found in visible devices")
+
+      // Persist the outgoing TEXT exactly ONCE, up front, as SENDING — before any socket write
+      // or ACK. This is the single row for the whole logical send: handleKlardropTransfer below
+      // may retry the wire write several times, but the insert happens once here, and the row
+      // is flipped to its terminal SENT/FAILED state exactly once, further down, however many
+      // attempts it took. TextMessageHandler.handleOutgoing no longer persists anything itself
+      // (see docs/connection-review.md F12/F13 — the old design inserted a fresh SENT row on
+      // every retry attempt, before the write even happened).
+      val originalTextMessage = messageRequest.message as? TextMessage
+      val pendingTextMessageId = originalTextMessage?.id?.toLong()
+      if (originalTextMessage != null) {
+        messageRepository.insertMessage(
+          remoteDeviceId = deviceId,
+          content = originalTextMessage.text,
+          isSender = true,
+          messageType = PersistenceMessageType.TEXT,
+          isRead = true,
+          mimeType = "text/plain",
+          messageId = pendingTextMessageId,
+          sendStatus = SendStatus.SENDING,
+        )
+      }
 
       // Check if device is trusted and wrap message in TrustedMessage if needed.
       //
@@ -150,8 +177,18 @@ class MessengerImpl(
         null -> {
           log("Messenger", "Wanted to send a message to $deviceId but it has no connection")
           flow.emit(Error("$deviceId but it has no connection"))
-          return@launch
+          false
         }
+      }
+
+      // Terminal status for the row inserted above — exactly one flip, regardless of which
+      // branch above produced the result (including the exhausted-retries and no-connection
+      // paths, which is why "no connection" no longer short-circuits with return@launch).
+      if (pendingTextMessageId != null) {
+        messageRepository.updateMessageSendStatus(
+          pendingTextMessageId,
+          if (transferCompleted) SendStatus.SENT else SendStatus.FAILED,
+        )
       }
 
       if (transferCompleted)
