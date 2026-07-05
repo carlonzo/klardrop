@@ -4,6 +4,7 @@ import AVFoundation
 import ImageIO
 import Photos
 import UniformTypeIdentifiers
+import os
 #if os(iOS)
 import UIKit
 import QuickLook
@@ -446,33 +447,63 @@ private struct FileThumbnailView: View {
     }
 }
 
+private let thumbLog = Logger(subsystem: "com.carlom.Klardrop", category: "thumbnail")
+
+/// Resolves a persisted local path to a file URL. Plain paths and "file://" URLs both occur
+/// (FileKit hands back file:// on some platforms). The old code fell back to
+/// `URL(fileURLWithPath:)` on the raw "file://…" string when `URL(string:)` failed on an
+/// unencoded char (e.g. a space) — producing a URL for a file literally named "file:", so
+/// both ImageIO and AVAsset silently failed. Strip the scheme and decode instead.
+private func fileURL(from path: String) -> URL {
+    guard path.hasPrefix("file://") else { return URL(fileURLWithPath: path) }
+    if let u = URL(string: path), u.isFileURL { return u }
+    let tail = String(path.dropFirst("file://".count))
+    return URL(fileURLWithPath: tail.removingPercentEncoding ?? tail)
+}
+
 /// Loads a downsized thumbnail for a local file path — image via ImageIO, video via
 /// AVAssetImageGenerator. Returns nil on failure (missing/unsupported file).
 private func loadFileThumbnail(path: String, isVideo: Bool) async -> KdPlatformImage? {
-    let url: URL = path.hasPrefix("file://")
-        ? (URL(string: path) ?? URL(fileURLWithPath: path))
-        : URL(fileURLWithPath: path)
+    let url = fileURL(from: path)
+    if !FileManager.default.fileExists(atPath: url.path) {
+        thumbLog.error("thumb: file missing at \(url.path, privacy: .public) (raw: \(path, privacy: .public))")
+    }
 
     if isVideo {
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 640, height: 640)
         let time = CMTime(seconds: 0.1, preferredTimescale: 600)
-        guard let result = try? await generator.image(at: time) else { return nil }
-        return platformImage(from: result.image)
-    } else {
-        return await Task.detached(priority: .userInitiated) {
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceThumbnailMaxPixelSize: 640,
-            ]
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
-            else { return nil }
-            return platformImage(from: cg)
-        }.value
+        do {
+            return platformImage(from: try await generator.image(at: time).image)
+        } catch {
+            thumbLog.error("thumb: video frame failed for \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
+
+    // Fast path: ImageIO downsized thumbnail (bounded memory on large images).
+    let cg = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 640,
+        ]
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        else { return nil }
+        return cg
+    }.value
+    if let cg { return platformImage(from: cg) }
+
+    // Fallback: let the platform decode the full image. Handles formats/edge cases ImageIO's
+    // thumbnail generator rejects; only runs when the fast path already failed.
+    thumbLog.error("thumb: ImageIO failed for \(url.path, privacy: .public); trying native decode")
+    #if os(iOS)
+    return UIImage(contentsOfFile: url.path)
+    #elseif os(macOS)
+    return NSImage(contentsOf: url)
+    #endif
 }
 
 private func platformImage(from cg: CGImage) -> KdPlatformImage {
