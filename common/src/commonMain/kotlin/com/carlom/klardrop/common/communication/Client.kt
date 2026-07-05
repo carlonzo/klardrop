@@ -18,6 +18,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,6 +28,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.coroutineContext
 
@@ -165,8 +167,17 @@ class ClientImpl(
       }
       throw t
     } finally {
-      inFlightMutex.withLock {
-        if (inFlightConnects[deviceId] === inFlight) inFlightConnects.remove(deviceId)
+      // NonCancellable: this finally can run during cancellation-driven unwinding (e.g. the
+      // caller's withTimeoutOrNull expiring, or viewModelScope cancelling on screen close).
+      // Mutex.lock() only checks cancellation on its suspending (contended) path, so a plain
+      // withLock here would, if another connectTo held inFlightMutex at that instant, throw
+      // CancellationException before this body runs — skipping the map cleanup and leaking
+      // the completed deferred in inFlightConnects forever, permanently wedging this device's
+      // outbound dials onto the stale coalesced outcome.
+      withContext(NonCancellable) {
+        inFlightMutex.withLock {
+          if (inFlightConnects[deviceId] === inFlight) inFlightConnects.remove(deviceId)
+        }
       }
     }
   }
