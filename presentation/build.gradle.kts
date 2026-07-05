@@ -124,6 +124,14 @@ kotlin {
       }
     }
 
+    commonTest {
+      dependencies {
+        implementation(kotlin("test"))
+        implementation(deps.turbine)
+        implementation(deps.kotlinx.coroutines.test)
+      }
+    }
+
     all {
       languageSettings.optIn("kotlinx.coroutines.ExperimentalCoroutinesApi")
     }

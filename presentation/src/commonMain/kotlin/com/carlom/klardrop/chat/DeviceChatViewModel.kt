@@ -84,6 +84,31 @@ class DeviceChatViewModel(
     viewModelScope.launch {
       messageRepository.markMessagesAsRead(deviceId)
     }
+
+    // Mirror this device's incoming file-transfer progress into ui state so the chat bubble can
+    // show live progress instead of the DB-derived value, which is only ever 0 or done (see
+    // sendFileMessage below, and docs/connection-review.md F14). [latestUpdates] is keyed by
+    // device id, same source [pendingAuth] above reads.
+    //
+    // ponytail: one concurrent transfer per device assumed. [ReceiveMessageStatus.Progress] is
+    // itself per-device (not per-transfer), so a single fraction is the right shape here, not a
+    // map — there is nothing finer-grained upstream to key by.
+    viewModelScope.launch {
+      messageReceiver.latestUpdates.collect { updates ->
+        when (val status = updates[deviceId]?.status) {
+          is ReceiveMessageStatus.Progress -> {
+            val percentage = status.messages.lastOrNull()?.second
+            if (percentage != null) {
+              _uiState.update { it.copy(fileTransferProgress = percentage / 100f) }
+            }
+          }
+          is ReceiveMessageStatus.Completed, is ReceiveMessageStatus.Failed -> {
+            _uiState.update { it.copy(fileTransferProgress = null) }
+          }
+          else -> Unit
+        }
+      }
+    }
   }
 
   fun sendTextMessage(text: String) {
@@ -238,15 +263,38 @@ class DeviceChatViewModel(
     }
   }
 
-  /** Send a file message — persistence is handled by FileMessageHandler. */
+  /**
+   * Send a file message — persistence is handled by FileMessageHandler.
+   *
+   * Collects every [MessengerSendProgress] (not just the terminal one via `.lastOrNull()`) so the
+   * live [MessengerSendProgress.InProgress] percentages reach ui state as they're emitted — the
+   * chat bubble reads a stale, DB-derived transferred_size otherwise (docs/connection-review.md
+   * F14: the bar sat at 0% for the whole transfer then jumped straight to done).
+   *
+   * ponytail: same one-transfer-per-device ceiling as the incoming path above — [fileTransferProgress]
+   * is a single value, not a map keyed by file transfer id, because the sender-side row id created
+   * deep inside FileMessageHandler is never surfaced back to this call site to key by.
+   */
   private suspend fun sendFileMessage(sendRequest: SendMessageRequest) {
-    val finalStatus = messenger.send(deviceId, sendRequest)
-      .untilCompleted()
-      .lastOrNull()
+    var finalStatus: MessengerSendProgress? = null
 
-    if (finalStatus is MessengerSendProgress.Error) {
+    messenger.send(deviceId, sendRequest)
+      .untilCompleted()
+      .collect { progress ->
+        finalStatus = progress
+        when (progress) {
+          is MessengerSendProgress.InProgress ->
+            _uiState.update { it.copy(fileTransferProgress = progress.percentage / 100f) }
+          is MessengerSendProgress.Completed, is MessengerSendProgress.Error ->
+            _uiState.update { it.copy(fileTransferProgress = null) }
+          MessengerSendProgress.Pending -> Unit
+        }
+      }
+
+    val error = finalStatus as? MessengerSendProgress.Error
+    if (error != null) {
       _uiState.update {
-        it.copy(error = "Failed to send message: ${finalStatus.message}")
+        it.copy(error = "Failed to send message: ${error.message}")
       }
     }
   }
@@ -255,4 +303,10 @@ class DeviceChatViewModel(
 data class ChatUiState(
   val error: String? = null,
   val notice: String? = null,
+  /**
+   * Live fraction (0f..1f) of the in-flight file transfer for this device, from whichever
+   * direction is currently active (send or receive) — null when nothing is transferring. See
+   * [DeviceChatViewModel.sendFileMessage] and the receive-side collector in [DeviceChatViewModel.init].
+   */
+  val fileTransferProgress: Float? = null,
 )
