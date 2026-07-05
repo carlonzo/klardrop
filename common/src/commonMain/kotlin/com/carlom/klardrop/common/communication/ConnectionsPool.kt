@@ -146,29 +146,8 @@ internal class ConnectionsPoolImpl(
 
   override suspend fun isAvailable(deviceId: String): Boolean {
     mutex.withLock {
-      log("ConnectionPool", "[DEBUG] isAvailable() called for $deviceId")
-      val connection = connections[deviceId]
-      if (connection == null) {
-        log("ConnectionPool", "[DEBUG] isAvailable() = false (no connection) for $deviceId")
-        return false
-      }
-      
-      val isClosed = connection.isClosed()
-      val isAvailable = !isClosed
-      log("ConnectionPool", "[DEBUG] isAvailable() = $isAvailable (isClosed=$isClosed) for $deviceId")
-      
-//      TODO check if connection is closed. below looks like was not working
-//      val connection = connections[deviceId]?.connection ?: return false
-//
-//      if (!connection.session.isClosed()) {
-//        log("ConnectionPool: Connection with $deviceId is closed, removing")
-//
-//        connections[deviceId]?.connection?.session?.close()
-//        connections.remove(deviceId)
-//        return false
-//      } else {
-      return isAvailable
-//      }
+      val connection = connections[deviceId] ?: return false
+      return !connection.isClosed()
     }
   }
 

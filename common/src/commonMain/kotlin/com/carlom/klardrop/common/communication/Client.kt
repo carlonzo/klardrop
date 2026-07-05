@@ -15,11 +15,18 @@ import com.carlom.klardrop.common.utils.logLocal
 import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.invoke
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 
 /**
@@ -111,6 +118,15 @@ class ClientImpl(
 
   private val selectorManager = SelectorManager(coroutines.ioDispatcher)
 
+  // Per-device dial coalescing (F8): EagerReachabilityConnector and Messenger.send can both call
+  // connectTo() for the same device concurrently. Both would pass the isAvailable() check below
+  // and dial independently; whichever handshake completes second then looks like a "reconnect" to
+  // ConnectionsPool.updateConnection and closes the first — already-Connected — socket out from
+  // under whoever obtained it. Only the first concurrent caller for a given deviceId actually
+  // dials; later callers await that in-flight attempt's outcome instead.
+  private val inFlightMutex = Mutex()
+  private val inFlightConnects = mutableMapOf<String, CompletableDeferred<ConnectOutcome>>()
+
   override suspend fun connectTo(deviceId: String): ConnectOutcome = coroutines.ioDispatcher {
 
     if (connectionsPool.isAvailable(deviceId)) {
@@ -118,9 +134,47 @@ class ClientImpl(
       return@ioDispatcher ConnectOutcome.Connected
     }
 
+    val (inFlight, isOwner) = obtainInFlightDeferred(deviceId)
+    if (!isOwner) {
+      log("Client", "Dial already in flight for $deviceId; awaiting its outcome")
+      return@ioDispatcher inFlight.await()
+    }
+
+    try {
+      performDial(deviceId, inFlight)
+    } catch (t: Throwable) {
+      // Make sure any coalesced waiter unblocks even if this owner attempt throws (e.g. the
+      // "no TCP or BLE connection available" precondition below) rather than completing normally.
+      if (!inFlight.isCompleted) inFlight.completeExceptionally(t)
+      throw t
+    } finally {
+      inFlightMutex.withLock {
+        if (inFlightConnects[deviceId] === inFlight) inFlightConnects.remove(deviceId)
+      }
+    }
+  }
+
+  /** Returns the in-flight deferred for [deviceId] plus whether THIS call created it (i.e. must dial). */
+  private suspend fun obtainInFlightDeferred(deviceId: String): Pair<CompletableDeferred<ConnectOutcome>, Boolean> =
+    inFlightMutex.withLock {
+      val existing = inFlightConnects[deviceId]
+      if (existing != null) {
+        existing to false
+      } else {
+        val created = CompletableDeferred<ConnectOutcome>()
+        inFlightConnects[deviceId] = created
+        created to true
+      }
+    }
+
+  // Extension on CoroutineScope so the `launch` below runs as a structured child of the calling
+  // connectTo() invocation's own scope (coroutines.ioDispatcher { ... }), matching the original
+  // (pre-coalescing) code's cancellation semantics.
+  private suspend fun CoroutineScope.performDial(deviceId: String, connectionJob: CompletableDeferred<ConnectOutcome>): ConnectOutcome {
     val discoveryDevice = visibleDevicesFlow.value[deviceId] ?: kotlin.run {
       log("Client", "cant connect. Device $deviceId cant be found")
-      return@ioDispatcher ConnectOutcome.Failed
+      connectionJob.complete(ConnectOutcome.Failed)
+      return ConnectOutcome.Failed
     }
 
     val tcpConnections = discoveryDevice.getKlardropConnection()
@@ -130,41 +184,15 @@ class ClientImpl(
       "Cant connect to $deviceId. No Klardrop TCP or BLE connection is available"
     }
 
-    val connectionJob = CompletableDeferred<ConnectOutcome>()
-
     // launch coroutine to connect and await for the connection to stay alive. TCP is
     // preferred (higher throughput); BLE is only tried if no TCP path worked, and only
     // when this device is the lex-smaller initiator per BleRoleSelector.
     launch {
-      for (connection in tcpConnections) {
-        log("Client", "Connecting to $deviceId with address ${connection.address} port ${connection.port}")
-        establishConnection(connection.address, connection.port, deviceId, connectionJob)
-          // TCP dial failures (peer not listening, connection refused, peer closed
-          // mid-handshake) are routine on a flaky LAN. Keep the on-device log,
-          // skip Bugsnag.
-          .onFailure { cause ->
-            logLocal("Client", "Failed TCP connect to $deviceId @ ${connection.address}", cause)
-            // If the dial was actively refused (peer's port is dead — e.g. peer restarted
-            // on a new ephemeral port), remove the stale endpoint from the visible-device
-            // cache immediately. This prevents every subsequent send attempt from retrying
-            // the dead address+port until mDNS delivers a fresh SRV record.
-            // Also invalidate on a per-address connect/handshake TIMEOUT: a peer that
-            // moved ports/networks causes SYN black-holing (no RST), so the
-            // TimeoutCancellationException thrown by the withTimeout(TCP_CONNECT_TIMEOUT_MS)
-            // blocks in establishConnection signals the same "stale cached endpoint" condition
-            // as a refused connection. mDNS re-delivers the fresh SRV quickly after invalidation.
-            val refused = cause.isConnectionRefused()
-            val timedOut = cause is kotlinx.coroutines.TimeoutCancellationException
-            if (refused || timedOut) {
-              val reason = if (refused) "connection refused" else "connect/handshake timeout"
-              log("Client", "Dial to $deviceId @ ${connection.address}:${connection.port} failed ($reason) — invalidating stale endpoint")
-              visibleDevices.invalidateKlardropEndpoint(deviceId, connection.address, connection.port)
-            }
-          }
-        if (connectionJob.isCompleted) return@launch
+      if (tcpConnections.isNotEmpty()) {
+        raceTcpConnections(tcpConnections, deviceId, connectionJob)
       }
 
-      if (bleTransport != null && bleConnections.isNotEmpty()) {
+      if (!connectionJob.isCompleted && bleTransport != null && bleConnections.isNotEmpty()) {
         val selfId = currentDeviceProvider.get().shortDeviceId
         if (!BleRoleSelector.shouldInitiate(selfShortDeviceId = selfId, peerShortDeviceId = deviceId)) {
           log("Client", "Not the initiator for BLE to $deviceId (self=$selfId); awaiting inbound GATT")
@@ -188,10 +216,78 @@ class ClientImpl(
     // await for the connection to be established and connectionpool to be updated
     val outcome = connectionJob.await()
     log("Client", "On client connection completed with $deviceId: outcome: $outcome")
-    outcome
+    return outcome
   }
 
-  private suspend fun establishConnection(address: String, port: Int, deviceId: String, connectionJob: CompletableDeferred<ConnectOutcome>) =
+  /**
+   * F7: races every advertised TCP endpoint concurrently instead of dialing them one at a time.
+   * Sequentially, N bad addresses cost up to N x TCP_CONNECT_TIMEOUT_MS before a good one is even
+   * tried; racing bounds the wait to a single TCP_CONNECT_TIMEOUT_MS regardless of how many stale
+   * addresses are mixed in.
+   *
+   * [winnerGate] arbitrates which attempt — of possibly several that complete a full handshake —
+   * gets to register itself with [ConnectionsPool] via [establishConnection]; the rest close their
+   * redundant sockets. Once a winner is known the remaining in-flight attempts are cancelled so
+   * they don't keep burning connect/handshake timeouts for no reason.
+   */
+  private suspend fun raceTcpConnections(
+    tcpConnections: List<DeviceConnection.KlardropConnection>,
+    deviceId: String,
+    connectionJob: CompletableDeferred<ConnectOutcome>,
+  ) = coroutineScope {
+    val winnerGate = CompletableDeferred<Unit>()
+    // Built fully (LAZY, not yet running) before any of them start, so the cancellation watcher
+    // below always sees the complete list — no self-referential race on a partially-built list.
+    val jobs: List<Job> = tcpConnections.map { connection ->
+      launch(start = CoroutineStart.LAZY) {
+        log("Client", "Connecting to $deviceId with address ${connection.address} port ${connection.port}")
+        establishConnection(connection.address, connection.port, deviceId, connectionJob, winnerGate)
+          // TCP dial failures (peer not listening, connection refused, peer closed
+          // mid-handshake) are routine on a flaky LAN. Keep the on-device log,
+          // skip Bugsnag.
+          .onFailure { cause ->
+            logLocal("Client", "Failed TCP connect to $deviceId @ ${connection.address}", cause)
+            // If the dial was actively refused (peer's port is dead — e.g. peer restarted
+            // on a new ephemeral port), remove the stale endpoint from the visible-device
+            // cache immediately. This prevents every subsequent send attempt from retrying
+            // the dead address+port until mDNS delivers a fresh SRV record.
+            // Also invalidate on a per-address connect/handshake TIMEOUT: a peer that
+            // moved ports/networks causes SYN black-holing (no RST), so the
+            // TimeoutCancellationException thrown by the withTimeout(TCP_CONNECT_TIMEOUT_MS)
+            // blocks in establishConnection signals the same "stale cached endpoint" condition
+            // as a refused connection. mDNS re-delivers the fresh SRV quickly after invalidation.
+            // NOTE: a loser cancelled by the watcher below throws a plain CancellationException,
+            // not TimeoutCancellationException, so a winning sibling never causes this endpoint
+            // to be wrongly invalidated.
+            val refused = cause.isConnectionRefused()
+            val timedOut = cause is kotlinx.coroutines.TimeoutCancellationException
+            if (refused || timedOut) {
+              val reason = if (refused) "connection refused" else "connect/handshake timeout"
+              log("Client", "Dial to $deviceId @ ${connection.address}:${connection.port} failed ($reason) — invalidating stale endpoint")
+              visibleDevices.invalidateKlardropEndpoint(deviceId, connection.address, connection.port)
+            }
+          }
+      }
+    }
+    jobs.forEach { it.start() }
+
+    val watcher = launch {
+      winnerGate.await()
+      jobs.forEach { it.cancel() }
+    }
+    jobs.joinAll()
+    // If nobody won (all addresses failed), the watcher is still awaiting winnerGate — cancel it
+    // so this coroutineScope can return instead of hanging on that last child.
+    watcher.cancel()
+  }
+
+  private suspend fun establishConnection(
+    address: String,
+    port: Int,
+    deviceId: String,
+    connectionJob: CompletableDeferred<ConnectOutcome>,
+    winnerGate: CompletableDeferred<Unit>,
+  ) =
     runCatching {
 
     // withTimeout caps the per-address connect phase.  Ktor's NIO-based
@@ -248,32 +344,48 @@ class ClientImpl(
 
     if (serverHandshakeMessage.deviceId != deviceId) {
       log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
-      connectionJob.complete(ConnectOutcome.Failed)
       socket.close()
-      return@runCatching
+      // Thrown (not a direct connectionJob.complete) so a sibling endpoint still racing (F7) isn't
+      // aborted by this one's failure — connectionJob only resolves Failed once every address is
+      // exhausted (see raceTcpConnections / performDial). CompletableDeferred discards a losing
+      // Failed anyway if a sibling already won, so this stays correct even without the guard.
+      error("Device id mismatch for $deviceId: peer identified itself as ${serverHandshakeMessage.deviceId}")
     }
 
     // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
     // than silently falling back to cleartext.
     if (!serverHandshakeMessage.supportsEncryption) {
       log("Client", "Device $deviceId does not support encrypted transport; refusing (encryption required)")
-      connectionJob.complete(ConnectOutcome.Failed)
       socket.close()
-      return@runCatching
+      error("Peer $deviceId does not support encrypted transport")
     }
 
     log("Client", "Connection established with ${serverHandshakeMessage.deviceId}; starting UKEY2 handshake")
 
     // Run the UKEY2 handshake (initiator role) over the same socket and bind it to the peer's
     // device identity. Done before any ConnectionMessenger exists so every subsequent frame is
-    // encrypted.
-    val cipher = KlardropEncryptedTransport.runInitiatorHandshake(
-      readChannel = readChannel,
-      writeChannel = writeChannel,
-      selfDeviceId = self.shortDeviceId,
-      peerDeviceId = deviceId,
-      trustManager = trustManager,
-    )
+    // encrypted. Bounded (F9): an untimed handshake would hang until the outer 15s
+    // CONNECTION_WAIT_TIMEOUT if the peer stalls mid-UKEY2 instead of failing this one attempt.
+    val cipher = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+      KlardropEncryptedTransport.runInitiatorHandshake(
+        readChannel = readChannel,
+        writeChannel = writeChannel,
+        selfDeviceId = self.shortDeviceId,
+        peerDeviceId = deviceId,
+        trustManager = trustManager,
+      )
+    }
+
+    // Winner-takes-all (F7): every advertised TCP endpoint is raced concurrently, so more than one
+    // attempt can reach here with a fully authenticated socket. Only the first to flip winnerGate
+    // may register itself with ConnectionsPool; every other attempt — even one with a perfectly
+    // good handshake — backs off and closes its own socket instead of fighting the winner for the
+    // pool slot (which is what used to close an already-Connected socket out from under a caller).
+    if (!winnerGate.complete(Unit)) {
+      log("Client", "Lost the endpoint race for $deviceId @ $address:$port; closing redundant socket")
+      socket.close()
+      return@runCatching
+    }
 
     // Check if client and server have the same device ID (test scenario). The UKEY2 handshake
     // above still ran so the server side completes; we just don't create a competing
