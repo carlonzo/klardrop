@@ -134,9 +134,20 @@ class NearbyShareDiscoveryUtilsTest {
     assertTrue("192.168.1.1".isReachableAddress())
     assertTrue("10.0.0.5".isReachableAddress())
     assertTrue("169.254.1.2".isReachableAddress()) // link-local IPv4 is still on-link reachable
-    assertTrue("fe80::1".isReachableAddress())
-    assertTrue("fe80::1%eth0".isReachableAddress())
-    assertTrue("2001:db8::1".isReachableAddress())
+  }
+
+  @Test
+  fun reachableAddressHelperRejectsAllIpv6() {
+    // The Klardrop server only binds 0.0.0.0 (IPv4); no IPv6 endpoint is ever dialable, and
+    // Android API 34+ resolvers surface link-local fe80:: addresses with no zone id that would
+    // otherwise burn a full connect timeout per peer.
+    assertFalse("fe80::1".isReachableAddress())
+    assertFalse("fe80::1%wlan0".isReachableAddress())
+    assertFalse("[fe80::1]".isReachableAddress())
+    assertFalse("2001:db8::1".isReachableAddress()) // global IPv6 unicast, still not dialable
+
+    // IPv4 still passes through untouched.
+    assertTrue("192.168.1.1".isReachableAddress())
   }
 
   // ---------- helpers ----------

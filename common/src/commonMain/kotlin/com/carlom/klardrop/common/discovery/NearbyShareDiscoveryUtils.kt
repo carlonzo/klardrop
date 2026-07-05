@@ -182,13 +182,15 @@ internal fun String.isReachableAddress(): Boolean {
   if (isBlank()) return false
   if (this == "0.0.0.0" || this == "::" || this == "::0") return false
   if (startsWith("127.")) return false
-  // IPv6 loopback, tolerating an optional zone id like "::1%eth0".
-  if (substringBefore('%').equals("::1", ignoreCase = true)) return false
-  // Tailscale / CGNAT: 100.64.0.0/10 (IPv4) and Tailscale's fd7a:115c:a1e0::/48 (IPv6 ULA). These
-  // are only reachable over the tailnet, never on the LAN — dialing a peer's tailnet address just
-  // wastes connect attempts and can introduce asymmetric-routing resets on multi-homed peers.
+  // The Klardrop server only binds 0.0.0.0 (IPv4), so no IPv6 address is ever dialable — reject
+  // all of them (loopback, link-local fe80:: without a zone id, global unicast, etc.) rather than
+  // burning a connect timeout per advertised endpoint. IPv6 literals contain ':'; strip an
+  // optional zone id ("%eth0") and surrounding brackets ("[fe80::1]") before checking.
+  if (trim('[', ']').substringBefore('%').contains(':')) return false
+  // Tailscale / CGNAT: 100.64.0.0/10 (IPv4). Only reachable over the tailnet, never on the LAN —
+  // dialing a peer's tailnet address just wastes connect attempts and can introduce
+  // asymmetric-routing resets on multi-homed peers.
   if (isCgnatIpv4()) return false
-  if (substringBefore('%').lowercase().startsWith("fd7a:115c:a1e0")) return false
   return true
 }
 
