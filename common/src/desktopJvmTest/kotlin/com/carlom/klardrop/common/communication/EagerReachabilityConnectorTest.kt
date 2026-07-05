@@ -10,14 +10,22 @@ import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.persistence.KlardropProperties
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
+import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import io.ktor.network.sockets.InetSocketAddress
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlin.coroutines.CoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -244,6 +252,68 @@ class EagerReachabilityConnectorTest {
         message = "ConnectOutcome.Connected must NOT mark device Unreachable. Got: $reachability",
       )
     }
+
+    connector.stop()
+  }
+
+  /**
+   * V4 (a) / F2 regression: [ConnectOutcome.NotInitiated] leaves reachability at
+   * [Reachability.Probing] (see [probeNotInitiated_doesNotMarkUnreachable] above), but nothing
+   * in [EagerReachabilityConnector] itself ever moves it further. Using the REAL
+   * [ConnectionsPoolImpl] (not [FakeConnectionPool], which has no watchdog) and a shared virtual
+   * clock, advance past the Probing watchdog window and assert the state does NOT stay wedged
+   * on Probing — it must fall back to [Reachability.Unknown].
+   */
+  @OptIn(ExperimentalCoroutinesApi::class)
+  @Test
+  fun probeNotInitiated_doesNotStayProbingForever() = runTest(timeout = 10.seconds) {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val coroutines: Coroutines = object : Coroutines {
+      override val ioDispatcher: CoroutineDispatcher = dispatcher
+      override val mainDispatcher: CoroutineDispatcher = dispatcher
+      override val cpuDispatcher: CoroutineDispatcher = dispatcher
+      override val appScope: CoroutineScope = this@runTest
+      override fun newScope(): CoroutineScope = CoroutineScope(dispatcher)
+      override fun newScope(context: CoroutineContext): CoroutineScope = CoroutineScope(dispatcher + context)
+    }
+
+    val peerId = "peerWWWW"
+    val selfId = "aaaaaaaa"
+    val repo = FixedIdPropertiesRepository(selfId)
+    val currentDeviceProvider = com.carlom.klardrop.common.discovery.CurrentDeviceProvider(repo)
+    val pool = ConnectionsPoolImpl(coroutines = coroutines)
+
+    val connector = EagerReachabilityConnector(
+      coroutines = coroutines,
+      visibleDevices = SinglePeerVisibleDevices(peerId),
+      currentDeviceProvider = currentDeviceProvider,
+      client = FixedOutcomeClient(ConnectOutcome.NotInitiated),
+      connectionsPool = pool,
+      networkLifecycleMonitor = NetworkLifecycleMonitor(),
+    )
+
+    connector.start()
+    runCurrent()
+    assertEquals(
+      Reachability.Probing,
+      pool.reachability.value[peerId],
+      "expected Probing right after the probe starts",
+    )
+
+    // Advance well past the Probing watchdog window.
+    advanceTimeBy(16.seconds)
+    runCurrent()
+
+    assertNotEquals(
+      illegal = Reachability.Probing,
+      actual = pool.reachability.value[peerId],
+      message = "NotInitiated must not wedge Probing forever — the watchdog must fall back to Unknown",
+    )
+    assertEquals(
+      Reachability.Unknown,
+      pool.reachability.value[peerId],
+      "wedge must resolve to Unknown specifically, not Unreachable",
+    )
 
     connector.stop()
   }

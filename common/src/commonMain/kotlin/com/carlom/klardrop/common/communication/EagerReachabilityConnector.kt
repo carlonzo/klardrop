@@ -114,7 +114,9 @@ class EagerReachabilityConnector(
             ConnectOutcome.NotInitiated -> {
               // We deliberately did not initiate (e.g. BLE non-initiator role, or already
               // connected). The peer may dial us — leave reachability as Probing so the UI
-              // does not show Unreachable for an inbound-only peer.
+              // does not show Unreachable for an inbound-only peer. Nothing else will ever
+              // move this off Probing, so ConnectionsPool's own watchdog (armed by
+              // markProbing) falls it back to Unknown if no terminal call lands in time.
               log(TAG, "Probe inconclusive for $deviceId (not initiator); leaving as Probing")
             }
             ConnectOutcome.Failed -> {

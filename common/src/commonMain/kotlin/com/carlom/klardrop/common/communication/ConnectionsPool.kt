@@ -7,6 +7,7 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.network.sockets.Socket
 import io.ktor.network.sockets.isClosed
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
@@ -88,6 +90,20 @@ internal class ConnectionsPoolImpl(
   // Our own short device id, resolved once and cached, used to break simultaneous-open ties.
   private var cachedSelfShortId: String? = null
 
+  // Scope for the per-device Probing watchdog (see [armProbingWatchdog]). Null when no
+  // [Coroutines] was supplied (test constructions that never call [markProbing]) — the
+  // watchdog is simply not armed in that case.
+  private val watchdogScope: CoroutineScope? = coroutines?.newScope(SupervisorJob() + coroutines.ioDispatcher)
+
+  // markProbing/markUnreachable are non-suspend (see the ConnectionsPool interface), so this
+  // can't be guarded by the suspend [mutex] used for [connections]. A plain MutableMap would be
+  // unsafe here: setReachability (which touches this map) is reachable both from those
+  // non-suspend calls AND from suspend paths (updateConnection/closeConnection) that can resume
+  // on a different real IO-dispatcher thread, i.e. genuinely concurrent mutation from different
+  // devices' probes. A MutableStateFlow gives lock-free, CAS-based updates — the same pattern
+  // [reachabilityFlow] already uses for the same reason.
+  private val probingWatchdogJobs = MutableStateFlow<Map<String, Job>>(emptyMap())
+
   override val reachability: StateFlow<Map<String, Reachability>> = reachabilityFlow.asStateFlow()
 
   init {
@@ -142,6 +158,9 @@ internal class ConnectionsPoolImpl(
   private companion object {
     /** Debounce window in milliseconds for network-change events. See [subscribeToNetworkEvents]. */
     const val NETWORK_EVENT_DEBOUNCE_MS = 500L
+
+    /** Watchdog window in milliseconds for [Reachability.Probing]. See [armProbingWatchdog]. */
+    const val PROBING_WATCHDOG_MS = 15_000L
   }
 
   override suspend fun isAvailable(deviceId: String): Boolean {
@@ -292,13 +311,51 @@ internal class ConnectionsPoolImpl(
 
   override fun markProbing(deviceId: String) {
     setReachability(deviceId, Reachability.Probing)
+    armProbingWatchdog(deviceId)
   }
 
   override fun markUnreachable(deviceId: String) {
     setReachability(deviceId, Reachability.Unreachable)
   }
 
+  /**
+   * Arms a delayed fallback for a probe that may never reach a terminal call. Two paths land
+   * here:
+   *  - [ConnectOutcome.NotInitiated] (e.g. BLE non-initiator role) is deliberately left as
+   *    [Reachability.Probing] by [EagerReachabilityConnector] — the peer may still dial us —
+   *    but nothing else ever moves it off Probing.
+   *  - Any other probe path that forgets to call [updateConnection]/[markUnreachable] (F3).
+   *
+   * After [PROBING_WATCHDOG_MS] the job checks whether the device is STILL [Reachability.Probing]
+   * (i.e. unchanged since armed — a terminal call in the meantime already replaced the map entry)
+   * and if so falls back to [Reachability.Unknown]. Unknown, not Unreachable: we only know we
+   * couldn't confirm reachability within the window, not that the peer is actually down — Unknown
+   * renders as "no dot" in the UI instead of a false-negative red.
+   *
+   * Any previous pending watchdog for the same device is cancelled first so repeated probing
+   * (e.g. cooldown re-probes) re-arms a fresh window rather than firing early.
+   */
+  private fun armProbingWatchdog(deviceId: String) {
+    val scope = watchdogScope ?: return
+    val job = scope.launch {
+      delay(PROBING_WATCHDOG_MS)
+      reachabilityFlow.update { current ->
+        if (current[deviceId] == Reachability.Probing) {
+          current.toMutableMap().apply { put(deviceId, Reachability.Unknown) }
+        } else {
+          current
+        }
+      }
+    }
+    // Atomically swap in the new job and cancel whatever was previously armed for this device.
+    probingWatchdogJobs.getAndUpdate { it + (deviceId to job) }[deviceId]?.cancel()
+  }
+
   private fun setReachability(deviceId: String, state: Reachability) {
+    if (state != Reachability.Probing) {
+      // Terminal call (or a flush) — the pending watchdog no longer has anything to do.
+      probingWatchdogJobs.getAndUpdate { it - deviceId }[deviceId]?.cancel()
+    }
     reachabilityFlow.update { current ->
       if (current[deviceId] == state) current
       else current.toMutableMap().apply { put(deviceId, state) }
