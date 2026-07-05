@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.coroutineContext
 
 /**
  * Per-address TCP connect timeout (milliseconds), enforced via [withTimeout].
@@ -228,14 +229,18 @@ class ClientImpl(
    * [winnerGate] arbitrates which attempt — of possibly several that complete a full handshake —
    * gets to register itself with [ConnectionsPool] via [establishConnection]; the rest close their
    * redundant sockets. Once a winner is known the remaining in-flight attempts are cancelled so
-   * they don't keep burning connect/handshake timeouts for no reason.
+   * they don't keep burning connect/handshake timeouts for no reason. [winnerGate] is completed
+   * with the winning attempt's own [Job] (rather than [Unit]) so the cancellation sweep below can
+   * exclude it: the winner still has to run `ConnectionsPool.updateConnection` (which can suspend
+   * on a contended pool mutex) and `connectionJob.complete` AFTER flipping the gate, and cancelling
+   * it mid-registration would both leak its socket and spuriously fail a dial that actually won.
    */
   private suspend fun raceTcpConnections(
     tcpConnections: List<DeviceConnection.KlardropConnection>,
     deviceId: String,
     connectionJob: CompletableDeferred<ConnectOutcome>,
   ) = coroutineScope {
-    val winnerGate = CompletableDeferred<Unit>()
+    val winnerGate = CompletableDeferred<Job>()
     // Built fully (LAZY, not yet running) before any of them start, so the cancellation watcher
     // below always sees the complete list — no self-referential race on a partially-built list.
     val jobs: List<Job> = tcpConnections.map { connection ->
@@ -272,8 +277,11 @@ class ClientImpl(
     jobs.forEach { it.start() }
 
     val watcher = launch {
-      winnerGate.await()
-      jobs.forEach { it.cancel() }
+      val winnerJob = winnerGate.await()
+      // Exclude the winner itself: it still has to register with ConnectionsPool and complete
+      // connectionJob after flipping the gate (see kdoc above) — cancelling it here would abort
+      // that in-flight registration.
+      jobs.forEach { if (it !== winnerJob) it.cancel() }
     }
     jobs.joinAll()
     // If nobody won (all addresses failed), the watcher is still awaiting winnerGate — cancel it
@@ -286,139 +294,168 @@ class ClientImpl(
     port: Int,
     deviceId: String,
     connectionJob: CompletableDeferred<ConnectOutcome>,
-    winnerGate: CompletableDeferred<Unit>,
-  ) =
-    runCatching {
+    winnerGate: CompletableDeferred<Job>,
+  ): Result<Unit> {
+    // Tracks the socket across the whole attempt so the `finally` below can always close it
+    // on any non-success exit — including a plain CancellationException thrown mid-suspend
+    // (e.g. the watcher cancelling a losing attempt while it's parked in the greeting-read or
+    // UKEY2 withTimeout blocks below). `runCatching` would otherwise swallow that cancellation
+    // as a Result.failure and the socket, already open, would never be closed: a real fd leak
+    // under repeated dials. `handedOff` is set true only once the socket has been registered
+    // with ConnectionsPool (or explicitly closed by one of the losing-branch checks below) —
+    // i.e. once *something* else owns its lifecycle.
+    var socket: io.ktor.network.sockets.Socket? = null
+    var handedOff = false
+    try {
+      return runCatching {
 
-    // withTimeout caps the per-address connect phase.  Ktor's NIO-based
-    // connect waits for the OS to complete the TCP 3-way handshake; if the
-    // remote address is black-holed (SYN packets silently dropped — not
-    // refused) this wait has no OS-level upper bound and can block for tens
-    // of seconds, consuming the entire CONNECTION_WAIT_TIMEOUT budget before
-    // any other advertised address is tried.  socketTimeout only applies to
-    // read/write I/O, not to connect, so withTimeout is the correct mechanism.
-    val socket = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
-      aSocket(selectorManager).tcp().connect(address, port) {
-        // Coarse OS-level backstop. The application-level heartbeat is the
-        // primary liveness mechanism; keep-alive only helps if the heartbeat
-        // coroutine is itself wedged.
-        keepAlive = true
+      // withTimeout caps the per-address connect phase.  Ktor's NIO-based
+      // connect waits for the OS to complete the TCP 3-way handshake; if the
+      // remote address is black-holed (SYN packets silently dropped — not
+      // refused) this wait has no OS-level upper bound and can block for tens
+      // of seconds, consuming the entire CONNECTION_WAIT_TIMEOUT budget before
+      // any other advertised address is tried.  socketTimeout only applies to
+      // read/write I/O, not to connect, so withTimeout is the correct mechanism.
+      socket = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+        aSocket(selectorManager).tcp().connect(address, port) {
+          // Coarse OS-level backstop. The application-level heartbeat is the
+          // primary liveness mechanism; keep-alive only helps if the heartbeat
+          // coroutine is itself wedged.
+          keepAlive = true
+        }
       }
-    }
-    log("Client", "Connected to $address:$port. Sending greetings")
+      val activeSocket = checkNotNull(socket)
+      log("Client", "Connected to $address:$port. Sending greetings")
 
-    val self = currentDeviceProvider.get()
-    val handshakeMessage = HandshakeMessage(
-      deviceId = self.shortDeviceId,
-      deviceName = self.deviceName,
-      osType = self.osType,
-      deviceType = self.deviceType,
-      supportsEncryption = true,
-    )
-    val writeChannel = socket.openWriteChannel(autoFlush = true)
-    // Bound the handshake write to match the connect and read phases.  On most
-    // JVM / Ktor stacks a single small write is heap-buffered and returns
-    // immediately, but on platforms where flush awaits the kernel drain a peer
-    // that accepts the TCP handshake then never reads can stall this write
-    // indefinitely — consuming the whole connection budget before any other
-    // address is tried.
-    withTimeout(TCP_CONNECT_TIMEOUT_MS) {
-      writeChannel.sendMessage(handshakeMessage, serializer)
-    }
-
-    log("Client", "Waiting for response greetings from $deviceId")
-
-    val readChannel = socket.openReadChannel()
-    // Bound the wait for the peer's greeting too. A peer can complete the TCP
-    // 3-way handshake — satisfying the connect withTimeout above — yet never send
-    // its HandshakeMessage: e.g. a connection the peer's kernel queued but the app
-    // never accepted (backlog-stalled), a half-open/black-holed socket, or a peer
-    // that died right after accept. socketTimeout only covers post-handshake I/O on
-    // an established channel and would not fire here, so without this explicit bound
-    // that silent peer stalls the whole dial indefinitely — the same black-hole
-    // symptom we already cap at the connect phase. Reuse the connect budget: a real
-    // peer sends its greeting immediately after accept, well inside this window.
-    val serverHandshakeMessage = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
-      readChannel.readMessage(serializer) as HandshakeMessage
-    }
-
-    if (serverHandshakeMessage.deviceId != deviceId) {
-      log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
-      socket.close()
-      // Thrown (not a direct connectionJob.complete) so a sibling endpoint still racing (F7) isn't
-      // aborted by this one's failure — connectionJob only resolves Failed once every address is
-      // exhausted (see raceTcpConnections / performDial). CompletableDeferred discards a losing
-      // Failed anyway if a sibling already won, so this stays correct even without the guard.
-      error("Device id mismatch for $deviceId: peer identified itself as ${serverHandshakeMessage.deviceId}")
-    }
-
-    // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
-    // than silently falling back to cleartext.
-    if (!serverHandshakeMessage.supportsEncryption) {
-      log("Client", "Device $deviceId does not support encrypted transport; refusing (encryption required)")
-      socket.close()
-      error("Peer $deviceId does not support encrypted transport")
-    }
-
-    log("Client", "Connection established with ${serverHandshakeMessage.deviceId}; starting UKEY2 handshake")
-
-    // Run the UKEY2 handshake (initiator role) over the same socket and bind it to the peer's
-    // device identity. Done before any ConnectionMessenger exists so every subsequent frame is
-    // encrypted. Bounded (F9): an untimed handshake would hang until the outer 15s
-    // CONNECTION_WAIT_TIMEOUT if the peer stalls mid-UKEY2 instead of failing this one attempt.
-    val cipher = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
-      KlardropEncryptedTransport.runInitiatorHandshake(
-        readChannel = readChannel,
-        writeChannel = writeChannel,
-        selfDeviceId = self.shortDeviceId,
-        peerDeviceId = deviceId,
-        trustManager = trustManager,
+      val self = currentDeviceProvider.get()
+      val handshakeMessage = HandshakeMessage(
+        deviceId = self.shortDeviceId,
+        deviceName = self.deviceName,
+        osType = self.osType,
+        deviceType = self.deviceType,
+        supportsEncryption = true,
       )
-    }
-
-    // Winner-takes-all (F7): every advertised TCP endpoint is raced concurrently, so more than one
-    // attempt can reach here with a fully authenticated socket. Only the first to flip winnerGate
-    // may register itself with ConnectionsPool; every other attempt — even one with a perfectly
-    // good handshake — backs off and closes its own socket instead of fighting the winner for the
-    // pool slot (which is what used to close an already-Connected socket out from under a caller).
-    if (!winnerGate.complete(Unit)) {
-      log("Client", "Lost the endpoint race for $deviceId @ $address:$port; closing redundant socket")
-      socket.close()
-      return@runCatching
-    }
-
-    // Check if client and server have the same device ID (test scenario). The UKEY2 handshake
-    // above still ran so the server side completes; we just don't create a competing
-    // client-side messenger — the server already manages this socket.
-    val clientDeviceId = self.shortDeviceId
-    if (clientDeviceId == deviceId) {
-      log("Client", "Client and server have same device ID - server will manage the connection")
-    } else {
-      // Create a ConnectionMessenger for the client side to send messages to the server
-      val connection = Connection.Tcp(socket, deviceId)
-      val connectionMessenger = ConnectionMessenger(
-        coroutines = coroutines,
-        connection = connection,
-        messagesRouter = messagesRouter,
-        readChannel = readChannel,
-        writeChannel = writeChannel,
-        ackTimeoutConfig = ackTimeoutConfig,
-        heartbeatConfig = heartbeatConfig,
-        messageSerializer = serializer,
-        cipher = cipher,
-        initiatedByUs = true,
-      )
-
-      // Store the connection in the client's pool keyed by the server's device ID
-      connectionsPool.updateConnection(deviceId, connectionMessenger)
-
-      // Start listening for incoming messages (including ACKs) in a separate coroutine
-      clientScope.launch {
-        connectionMessenger.acceptIncomingMessages()
+      val writeChannel = activeSocket.openWriteChannel(autoFlush = true)
+      // Bound the handshake write to match the connect and read phases.  On most
+      // JVM / Ktor stacks a single small write is heap-buffered and returns
+      // immediately, but on platforms where flush awaits the kernel drain a peer
+      // that accepts the TCP handshake then never reads can stall this write
+      // indefinitely — consuming the whole connection budget before any other
+      // address is tried.
+      withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+        writeChannel.sendMessage(handshakeMessage, serializer)
       }
-    }
 
-    connectionJob.complete(ConnectOutcome.Connected)
+      log("Client", "Waiting for response greetings from $deviceId")
+
+      val readChannel = activeSocket.openReadChannel()
+      // Bound the wait for the peer's greeting too. A peer can complete the TCP
+      // 3-way handshake — satisfying the connect withTimeout above — yet never send
+      // its HandshakeMessage: e.g. a connection the peer's kernel queued but the app
+      // never accepted (backlog-stalled), a half-open/black-holed socket, or a peer
+      // that died right after accept. socketTimeout only covers post-handshake I/O on
+      // an established channel and would not fire here, so without this explicit bound
+      // that silent peer stalls the whole dial indefinitely — the same black-hole
+      // symptom we already cap at the connect phase. Reuse the connect budget: a real
+      // peer sends its greeting immediately after accept, well inside this window.
+      val serverHandshakeMessage = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+        readChannel.readMessage(serializer) as HandshakeMessage
+      }
+
+      if (serverHandshakeMessage.deviceId != deviceId) {
+        log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
+        activeSocket.close()
+        handedOff = true
+        // Thrown (not a direct connectionJob.complete) so a sibling endpoint still racing (F7) isn't
+        // aborted by this one's failure — connectionJob only resolves Failed once every address is
+        // exhausted (see raceTcpConnections / performDial). CompletableDeferred discards a losing
+        // Failed anyway if a sibling already won, so this stays correct even without the guard.
+        error("Device id mismatch for $deviceId: peer identified itself as ${serverHandshakeMessage.deviceId}")
+      }
+
+      // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
+      // than silently falling back to cleartext.
+      if (!serverHandshakeMessage.supportsEncryption) {
+        log("Client", "Device $deviceId does not support encrypted transport; refusing (encryption required)")
+        activeSocket.close()
+        handedOff = true
+        error("Peer $deviceId does not support encrypted transport")
+      }
+
+      log("Client", "Connection established with ${serverHandshakeMessage.deviceId}; starting UKEY2 handshake")
+
+      // Run the UKEY2 handshake (initiator role) over the same socket and bind it to the peer's
+      // device identity. Done before any ConnectionMessenger exists so every subsequent frame is
+      // encrypted. Bounded (F9): an untimed handshake would hang until the outer 15s
+      // CONNECTION_WAIT_TIMEOUT if the peer stalls mid-UKEY2 instead of failing this one attempt.
+      val cipher = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+        KlardropEncryptedTransport.runInitiatorHandshake(
+          readChannel = readChannel,
+          writeChannel = writeChannel,
+          selfDeviceId = self.shortDeviceId,
+          peerDeviceId = deviceId,
+          trustManager = trustManager,
+        )
+      }
+
+      // Winner-takes-all (F7): every advertised TCP endpoint is raced concurrently, so more than one
+      // attempt can reach here with a fully authenticated socket. Only the first to flip winnerGate
+      // may register itself with ConnectionsPool; every other attempt — even one with a perfectly
+      // good handshake — backs off and closes its own socket instead of fighting the winner for the
+      // pool slot (which is what used to close an already-Connected socket out from under a caller).
+      // winnerGate carries the winning attempt's own Job (see raceTcpConnections) so the
+      // cancellation watcher can spare it once it wins.
+      if (!winnerGate.complete(coroutineContext[Job] ?: error("establishConnection must run inside a Job"))) {
+        log("Client", "Lost the endpoint race for $deviceId @ $address:$port; closing redundant socket")
+        activeSocket.close()
+        handedOff = true
+        return@runCatching
+      }
+
+      // Check if client and server have the same device ID (test scenario). The UKEY2 handshake
+      // above still ran so the server side completes; we just don't create a competing
+      // client-side messenger — the server already manages this socket.
+      val clientDeviceId = self.shortDeviceId
+      if (clientDeviceId == deviceId) {
+        log("Client", "Client and server have same device ID - server will manage the connection")
+      } else {
+        // Create a ConnectionMessenger for the client side to send messages to the server
+        val connection = Connection.Tcp(activeSocket, deviceId)
+        val connectionMessenger = ConnectionMessenger(
+          coroutines = coroutines,
+          connection = connection,
+          messagesRouter = messagesRouter,
+          readChannel = readChannel,
+          writeChannel = writeChannel,
+          ackTimeoutConfig = ackTimeoutConfig,
+          heartbeatConfig = heartbeatConfig,
+          messageSerializer = serializer,
+          cipher = cipher,
+          initiatedByUs = true,
+        )
+
+        // Store the connection in the client's pool keyed by the server's device ID. From this
+        // point on the socket is owned by the pool/messenger, not by this attempt.
+        connectionsPool.updateConnection(deviceId, connectionMessenger)
+
+        // Start listening for incoming messages (including ACKs) in a separate coroutine
+        clientScope.launch {
+          connectionMessenger.acceptIncomingMessages()
+        }
+      }
+
+      handedOff = true
+      connectionJob.complete(ConnectOutcome.Connected)
+      }
+    } finally {
+      // Backstop for any exit that didn't already close/hand off the socket — most notably a
+      // CancellationException thrown by one of the withTimeout blocks above when the watcher in
+      // raceTcpConnections cancels this attempt (loser) while it's suspended mid-handshake.
+      // runCatching only catches synchronously-thrown exceptions that already unwound past this
+      // point; it does NOT prevent this finally from running, so this still closes the socket even
+      // though runCatching's Result ends up a Failure wrapping the CancellationException.
+      if (!handedOff) socket?.close()
+    }
   }
 
   private suspend fun establishBleConnection(

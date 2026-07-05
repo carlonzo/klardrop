@@ -148,6 +148,41 @@ class SentStatusReliabilityTest {
     }
   }
 
+  @Test
+  fun deviceNotVisible_singleRowPersistedAndEndsFailed() = runReliabilityTest {
+    val ctx = it
+    // Deliberately skip ctx.setupServerAndClient(): serverDeviceId is never added to the
+    // client's visible-devices fake, reproducing a peer that drops out of the mDNS visible set
+    // between the user hitting send and Messenger.send's coroutine actually running. Regression
+    // coverage for the "not visible" early-return silently dropping the typed message with zero
+    // persisted rows (docs/connection-review.md F12/F13 follow-up).
+    turbineScope(timeout = 10.seconds) {
+      val clientMessenger = ctx.clientCommunicationModule.messenger()
+      val sendRequest = SimpleSendMessageRequest(TextMessage(text = "offline peer"))
+
+      val senderChannel = clientMessenger.send(serverDeviceId, sendRequest).testIn(this)
+      val terminal = ctx.awaitTerminal(senderChannel)
+
+      assertTrue(terminal is Error, "send to a not-visible device should end in Error, was $terminal")
+
+      val rows = ctx.clientRows(serverDeviceId)
+      assertEquals(
+        1,
+        rows.size,
+        "a send to a not-visible device must still persist exactly one durable, retryable row",
+      )
+      assertEquals("FAILED", rows.first().send_status, "the row must end FAILED, not vanish silently")
+
+      assertEquals(
+        listOf("insertMessage(SENDING)", "updateMessageSendStatus(FAILED)"),
+        ctx.repositoryCallKinds(),
+        "must insert once as SENDING then flip once to FAILED even when the device isn't visible",
+      )
+
+      senderChannel.cancelAndIgnoreRemainingEvents()
+    }
+  }
+
   /** Test-only fixture: a real client+server loopback pair, mirroring MessagesRouterReliabilityTest.Ctx. */
   inner class Ctx {
     private val driver = createTestDriver()

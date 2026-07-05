@@ -44,6 +44,20 @@ interface MessageRepository {
     // no-op default; see kdoc above.
   }
 
+  /**
+   * Marks every outgoing (`is_sender`) row still flagged SENDING as FAILED. Intended to run once
+   * at app start, alongside [markStaleInProgressAsFailed]: the process just came up, so nothing
+   * can actually still be mid-send, and a row left SENDING by a prior crash/kill (in the window
+   * between [insertMessage]'s SENDING insert and [updateMessageSendStatus]'s terminal flip) would
+   * otherwise render as a permanent "sending…" spinner with no way to retry.
+   *
+   * Default no-op so fakes/stubs of this interface don't need to implement it; only the real,
+   * DB-backed repository overrides it.
+   */
+  suspend fun markStaleSendingAsFailed() {
+    // no-op default; see kdoc above.
+  }
+
   suspend fun insertFileTransfer(
     fileName: String,
     filePath: String,
@@ -182,6 +196,12 @@ class MessageRepositoryImpl(
   override suspend fun markStaleInProgressAsFailed() {
     withContext(ioDispatcher) {
       database.fileTransferQueries.markStaleInProgressAsFailed().await()
+    }
+  }
+
+  override suspend fun markStaleSendingAsFailed() {
+    withContext(ioDispatcher) {
+      database.messageQueries.markStaleSendingAsFailed().await()
     }
   }
 

@@ -1,0 +1,7 @@
+-- Migration from schema v1 (pre message_id) to v2.
+--
+-- Adds the message_id column introduced alongside sent-status tracking (see Message.sq). Without
+-- this migration file the schema version never advances past 1, so an existing on-disk database
+-- (already at user_version 1) opens successfully but lacks this column — the first outgoing send
+-- then crashes with "table messages has no column named message_id".
+ALTER TABLE messages ADD COLUMN message_id INTEGER;

@@ -40,6 +40,14 @@ UPDATE messages
 SET send_status = ?
 WHERE message_id = ?;
 
+-- Startup reconciliation (see MessageRepository.markStaleSendingAsFailed): a row can only be left
+-- SENDING by a process kill/crash between the up-front insert and the terminal SENT/FAILED flip.
+-- Since we just started, nothing is actually still in flight, so every such row is stale.
+markStaleSendingAsFailed:
+UPDATE messages
+SET send_status = 'FAILED'
+WHERE is_sender = 1 AND send_status = 'SENDING';
+
 markMessagesAsRead:
 UPDATE messages
 SET is_read = 1

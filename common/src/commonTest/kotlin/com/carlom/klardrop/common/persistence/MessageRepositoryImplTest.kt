@@ -205,4 +205,51 @@ class MessageRepositoryImplTest {
             assertEquals(updatedStatus.name, fileTransfer.status)
         }
     }
+
+    // Coverage for the startup reconciliation sweep (docs/connection-review.md "row stuck
+    // SENDING forever"): a row can only be left SENDING by a crash/kill between Messenger's
+    // up-front insert and its single terminal SENT/FAILED flip. On next launch that row must be
+    // swept to FAILED instead of rendering a permanent "sending..." spinner with no retry.
+    @Test
+    fun testMarkStaleSendingAsFailedFlipsOnlyOutgoingSendingRows() = runTest(testDispatcher) {
+        val remoteDeviceId = "device-stale-sending"
+
+        // Simulates the crash window: SENDING inserted, never flipped.
+        messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "stuck sending",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            messageId = 1L,
+            sendStatus = SendStatus.SENDING,
+        )
+        // An already-terminal outgoing row must be left alone.
+        messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "already sent",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            messageId = 2L,
+            sendStatus = SendStatus.SENT,
+        )
+        // An INCOMING row is never SENDING in practice, but must not be touched by this sweep
+        // regardless (it isn't ours to have started sending).
+        messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "incoming",
+            isSender = false,
+            messageType = MessageType.TEXT,
+        )
+
+        messageRepository.markStaleSendingAsFailed()
+
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(3, messages.size)
+            val byContent = messages.associateBy { it.content }
+            assertEquals(DeliveryStatus.FAILED, byContent.getValue("stuck sending").deliveryStatus)
+            assertEquals(DeliveryStatus.SENT, byContent.getValue("already sent").deliveryStatus)
+            assertEquals(DeliveryStatus.SENT, byContent.getValue("incoming").deliveryStatus)
+        }
+    }
 }

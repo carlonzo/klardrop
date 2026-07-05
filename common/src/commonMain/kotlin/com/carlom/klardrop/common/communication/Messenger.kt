@@ -70,30 +70,17 @@ class MessengerImpl(
       flow.emit(Pending)
       log("Messenger", "Emitted Pending status for $deviceId")
 
-      val device = visibleDevices.getDevice(deviceId)
-
-      //    skip if not visible
-      if (device == null) {
-        log("Messenger", "❌ Device $deviceId is not visible in device list")
-        log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
-        // The user-facing string never includes the raw deviceId — that's an internal
-        // identifier (random hex shortId) and is meaningless to a person. Prefer the
-        // cached friendly name; fall back to a generic label so the chat error banner
-        // reads like English.
-        val friendlyName = visibleDevices.cachedNameFor(deviceId) ?: "Device"
-        flow.emit(Error("$friendlyName is not visible"))
-        return@launch
-      }
-
-      log("Messenger", "✅ Device $deviceId found in visible devices")
-
-      // Persist the outgoing TEXT exactly ONCE, up front, as SENDING — before any socket write
-      // or ACK. This is the single row for the whole logical send: handleKlardropTransfer below
-      // may retry the wire write several times, but the insert happens once here, and the row
-      // is flipped to its terminal SENT/FAILED state exactly once, further down, however many
-      // attempts it took. TextMessageHandler.handleOutgoing no longer persists anything itself
-      // (see docs/connection-review.md F12/F13 — the old design inserted a fresh SENT row on
-      // every retry attempt, before the write even happened).
+      // Persist the outgoing TEXT exactly ONCE, up front, as SENDING — before any socket write,
+      // any ACK, and before the device-visibility check below. This is the single row for the
+      // whole logical send: handleKlardropTransfer below may retry the wire write several times,
+      // but the insert happens once here, and the row is flipped to its terminal SENT/FAILED
+      // state exactly once, further down, however many attempts it took (or immediately, if the
+      // device isn't even visible). TextMessageHandler.handleOutgoing no longer persists anything
+      // itself (see docs/connection-review.md F12/F13 — the old design inserted a fresh SENT row
+      // on every retry attempt, before the write even happened). Doing this before the visibility
+      // check matters: a device that drops out of the visible set between the user hitting send
+      // and this coroutine running must still leave a durable, retryable row instead of silently
+      // dropping the typed message (F12/F13 follow-up — a flaky-LAN dropout must not lose text).
       val originalTextMessage = messageRequest.message as? TextMessage
       val pendingTextMessageId = originalTextMessage?.id?.toLong()
       if (originalTextMessage != null) {
@@ -108,6 +95,26 @@ class MessengerImpl(
           sendStatus = SendStatus.SENDING,
         )
       }
+
+      val device = visibleDevices.getDevice(deviceId)
+
+      //    skip if not visible
+      if (device == null) {
+        log("Messenger", "❌ Device $deviceId is not visible in device list")
+        log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
+        // The user-facing string never includes the raw deviceId — that's an internal
+        // identifier (random hex shortId) and is meaningless to a person. Prefer the
+        // cached friendly name; fall back to a generic label so the chat error banner
+        // reads like English.
+        val friendlyName = visibleDevices.cachedNameFor(deviceId) ?: "Device"
+        if (pendingTextMessageId != null) {
+          messageRepository.updateMessageSendStatus(pendingTextMessageId, SendStatus.FAILED)
+        }
+        flow.emit(Error("$friendlyName is not visible"))
+        return@launch
+      }
+
+      log("Messenger", "✅ Device $deviceId found in visible devices")
 
       // Check if device is trusted and wrap message in TrustedMessage if needed.
       //
