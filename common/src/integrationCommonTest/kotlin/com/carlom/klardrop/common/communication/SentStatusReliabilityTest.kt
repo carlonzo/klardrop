@@ -336,9 +336,9 @@ private class SendStatusRecordingRepository(
     mimeType: String,
     messageId: Long?,
     sendStatus: SendStatus,
-  ) {
+  ): Long {
     calls.add("insertMessage($sendStatus)")
-    delegate.insertMessage(remoteDeviceId, content, isSender, messageType, fileTransferId, isRead, mimeType, messageId, sendStatus)
+    return delegate.insertMessage(remoteDeviceId, content, isSender, messageType, fileTransferId, isRead, mimeType, messageId, sendStatus)
   }
 
   override suspend fun updateMessageSendStatus(messageId: Long, status: SendStatus) {

@@ -18,6 +18,13 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 interface MessageRepository {
+  /**
+   * Inserts a message row and returns its DB autoincrement id (`last_insert_rowid()`) — the
+   * only identifier [updateMessageSendStatus] should be correlated by. [messageId] (the wire
+   * `Message.id`) is still stored on the row for reference/debugging, but it is
+   * `Random.nextInt()` with no uniqueness enforcement (see `TextMessage.kt`), so it must never be
+   * used as a lookup key: two outgoing rows across the whole table can collide on it.
+   */
   suspend fun insertMessage(
     remoteDeviceId: String,
     content: String,
@@ -28,13 +35,14 @@ interface MessageRepository {
     mimeType: String = "text/plain",
     messageId: Long? = null,
     sendStatus: SendStatus = SendStatus.SENT,
-  )
+  ): Long
 
   /**
-   * Flips a previously-inserted outgoing row (correlated by [messageId], the wire `Message.id`
-   * passed to [insertMessage]) to its terminal delivery state. [Messenger][com.carlom.klardrop.common.communication.Messenger]
-   * calls this exactly once per logical send — on ACK_RECEIVED (-> SENT) or once retries are
-   * exhausted (-> FAILED) — regardless of how many transport attempts it took.
+   * Flips a previously-inserted outgoing row (correlated by [messageId], the DB row id returned
+   * by [insertMessage] — NOT the wire `Message.id`) to its terminal delivery state.
+   * [Messenger][com.carlom.klardrop.common.communication.Messenger] calls this exactly once per
+   * logical send — on ACK_RECEIVED (-> SENT) or once retries are exhausted (-> FAILED) —
+   * regardless of how many transport attempts it took.
    *
    * Default no-op so fakes/stubs of this interface that don't care about outgoing-TEXT
    * bookkeeping (most of them — see the various test [MessageRepository] stubs) don't need to
@@ -124,8 +132,11 @@ class MessageRepositoryImpl(
     mimeType: String,
     messageId: Long?,
     sendStatus: SendStatus,
-  ) {
-    withContext(ioDispatcher) {
+  ): Long = withContext(ioDispatcher) {
+    // insert + lastInsertRowId run inside one transaction so they're guaranteed to observe the
+    // same underlying connection: last_insert_rowid() is connection-scoped, and without a
+    // transaction a pooled driver could interleave another write between the two statements.
+    database.transactionWithResult {
       database.messageQueries.insert(
         remote_device_id = remoteDeviceId,
         content = content,
@@ -137,23 +148,24 @@ class MessageRepositoryImpl(
         mime_type = mimeType,
         send_status = sendStatus.toColumnValue(),
         message_id = messageId,
-      ).await().also {
-        log(
-          "MessageRepositoryImpl",
-          "Inserted message for device $remoteDeviceId with type $messageType, " +
-            "file transfer ID $fileTransferId, sendStatus=$sendStatus"
-        )
-      }
+      ).value
+      database.messageQueries.lastInsertRowId().executeAsOne()
+    }.also { rowId ->
+      log(
+        "MessageRepositoryImpl",
+        "Inserted message for device $remoteDeviceId with type $messageType, " +
+          "file transfer ID $fileTransferId, sendStatus=$sendStatus, rowId=$rowId"
+      )
     }
   }
 
   override suspend fun updateMessageSendStatus(messageId: Long, status: SendStatus) {
     withContext(ioDispatcher) {
-      database.messageQueries.updateSendStatusByMessageId(
+      database.messageQueries.updateSendStatusById(
         send_status = status.toColumnValue(),
-        message_id = messageId,
+        id = messageId,
       ).await().also {
-        log("MessageRepositoryImpl", "Updated send status for wire message $messageId to $status")
+        log("MessageRepositoryImpl", "Updated send status for message row $messageId to $status")
       }
     }
   }

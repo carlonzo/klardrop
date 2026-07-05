@@ -146,7 +146,23 @@ class ClientImpl(
     } catch (t: Throwable) {
       // Make sure any coalesced waiter unblocks even if this owner attempt throws (e.g. the
       // "no TCP or BLE connection available" precondition below) rather than completing normally.
-      if (!inFlight.isCompleted) inFlight.completeExceptionally(t)
+      //
+      // A CancellationException here means THIS owner's own coroutine was cancelled (e.g. its
+      // caller's coroutine was cancelled) — it says nothing about whether the dial itself would
+      // have succeeded. That cancellation must not be transported across the coalescing boundary:
+      // every coalesced waiter is an unrelated, independent caller (typically wrapped in
+      // runCatching by Messenger/ERC/dial-on-open), and runCatching would swallow a propagated
+      // CancellationException and misreport it as a failed connect. Resolve waiters to a normal
+      // Failed outcome instead so they see an ordinary "connect failed", not a foreign
+      // cancellation. Genuine dial errors (non-cancellation) are still reported via
+      // completeExceptionally so waiters observe the real failure.
+      if (!inFlight.isCompleted) {
+        if (t is kotlinx.coroutines.CancellationException) {
+          inFlight.complete(ConnectOutcome.Failed)
+        } else {
+          inFlight.completeExceptionally(t)
+        }
+      }
       throw t
     } finally {
       inFlightMutex.withLock {

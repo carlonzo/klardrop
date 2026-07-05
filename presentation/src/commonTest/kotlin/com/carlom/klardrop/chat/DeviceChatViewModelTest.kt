@@ -126,7 +126,7 @@ class DeviceChatViewModelTest {
       mimeType: String,
       messageId: Long?,
       sendStatus: SendStatus,
-    ) = Unit
+    ): Long = 0L
 
     override suspend fun insertFileTransfer(
       fileName: String,

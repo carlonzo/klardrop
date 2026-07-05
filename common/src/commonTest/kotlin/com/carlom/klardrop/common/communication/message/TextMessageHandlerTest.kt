@@ -114,8 +114,9 @@ private class RecordingMessageRepository : MessageRepository {
     mimeType: String,
     messageId: Long?,
     sendStatus: SendStatus,
-  ) {
+  ): Long {
     calls.add("insertMessage($sendStatus)")
+    return 0L
   }
 
   override suspend fun updateMessageSendStatus(messageId: Long, status: SendStatus) {

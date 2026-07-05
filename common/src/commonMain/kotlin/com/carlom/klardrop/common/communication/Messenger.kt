@@ -82,8 +82,11 @@ class MessengerImpl(
       // and this coroutine running must still leave a durable, retryable row instead of silently
       // dropping the typed message (F12/F13 follow-up — a flaky-LAN dropout must not lose text).
       val originalTextMessage = messageRequest.message as? TextMessage
-      val pendingTextMessageId = originalTextMessage?.id?.toLong()
-      if (originalTextMessage != null) {
+      // The wire id is Random.nextInt() (TextMessage.kt) with no uniqueness enforcement — stored
+      // on the row for reference, but NEVER used to correlate the later SENT/FAILED flip (two
+      // outgoing rows across the whole table could collide on it). The flip below is instead
+      // correlated by insertMessage's returned DB row id, which is collision-free by construction.
+      val pendingRowId: Long? = if (originalTextMessage != null) {
         messageRepository.insertMessage(
           remoteDeviceId = deviceId,
           content = originalTextMessage.text,
@@ -91,9 +94,11 @@ class MessengerImpl(
           messageType = PersistenceMessageType.TEXT,
           isRead = true,
           mimeType = "text/plain",
-          messageId = pendingTextMessageId,
+          messageId = originalTextMessage.id.toLong(),
           sendStatus = SendStatus.SENDING,
         )
+      } else {
+        null
       }
 
       val device = visibleDevices.getDevice(deviceId)
@@ -107,8 +112,8 @@ class MessengerImpl(
         // cached friendly name; fall back to a generic label so the chat error banner
         // reads like English.
         val friendlyName = visibleDevices.cachedNameFor(deviceId) ?: "Device"
-        if (pendingTextMessageId != null) {
-          messageRepository.updateMessageSendStatus(pendingTextMessageId, SendStatus.FAILED)
+        if (pendingRowId != null) {
+          messageRepository.updateMessageSendStatus(pendingRowId, SendStatus.FAILED)
         }
         flow.emit(Error("$friendlyName is not visible"))
         return@launch
@@ -191,9 +196,9 @@ class MessengerImpl(
       // Terminal status for the row inserted above — exactly one flip, regardless of which
       // branch above produced the result (including the exhausted-retries and no-connection
       // paths, which is why "no connection" no longer short-circuits with return@launch).
-      if (pendingTextMessageId != null) {
+      if (pendingRowId != null) {
         messageRepository.updateMessageSendStatus(
-          pendingTextMessageId,
+          pendingRowId,
           if (transferCompleted) SendStatus.SENT else SendStatus.FAILED,
         )
       }

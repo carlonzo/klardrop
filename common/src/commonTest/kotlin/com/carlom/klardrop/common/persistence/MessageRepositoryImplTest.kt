@@ -252,4 +252,75 @@ class MessageRepositoryImplTest {
             assertEquals(DeliveryStatus.SENT, byContent.getValue("incoming").deliveryStatus)
         }
     }
+
+    // Regression for connection-review.md round 2 finding 2: insertMessage() must hand back the
+    // DB's own collision-free autoincrement row id so callers (Messenger) can correlate the
+    // later SENDING -> terminal flip by it, instead of by the wire `message_id`
+    // (Random.nextInt(), no uniqueness enforcement).
+    @Test
+    fun testInsertMessageReturnsRowIdThatFlipsOnlyThatRow() = runTest(testDispatcher) {
+        val remoteDeviceId = "device-rowid"
+
+        val rowId = messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "hello",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            sendStatus = SendStatus.SENDING,
+        )
+        assertTrue(rowId > 0, "insertMessage must return a positive DB row id")
+
+        messageRepository.updateMessageSendStatus(rowId, SendStatus.SENT)
+
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(1, messages.size)
+            assertEquals(DeliveryStatus.SENT, messages.first().deliveryStatus)
+        }
+    }
+
+    // Repro/regression for connection-review.md round 2 finding 2: message_id is
+    // `Random.nextInt()` (TextMessage.kt) with no uniqueness enforcement, so two independent
+    // outgoing rows CAN share the same wire message_id. Before the fix, updateMessageSendStatus
+    // correlated by message_id alone, so failing the second (colliding) send would have flipped
+    // the FIRST — already-delivered — row's status too, re-rendering it as FAILED.
+    @Test
+    fun testCollidingWireMessageIdDoesNotCrossFlipUnrelatedRow() = runTest(testDispatcher) {
+        val remoteDeviceId = "device-collision"
+        val collidingWireId = 4242L
+
+        val firstRowId = messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "already delivered",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            messageId = collidingWireId,
+            sendStatus = SendStatus.SENDING,
+        )
+        messageRepository.updateMessageSendStatus(firstRowId, SendStatus.SENT)
+
+        val secondRowId = messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "currently sending",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            messageId = collidingWireId, // same wire id as the first row -- a genuine collision
+            sendStatus = SendStatus.SENDING,
+        )
+        assertTrue(secondRowId != firstRowId, "DB row ids must be distinct even when message_id collides")
+
+        messageRepository.updateMessageSendStatus(secondRowId, SendStatus.FAILED)
+
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(2, messages.size)
+            val byContent = messages.associateBy { it.content }
+            assertEquals(
+                DeliveryStatus.SENT,
+                byContent.getValue("already delivered").deliveryStatus,
+                "A row sharing message_id with a later, unrelated failed send must not be cross-flipped to FAILED",
+            )
+            assertEquals(DeliveryStatus.FAILED, byContent.getValue("currently sending").deliveryStatus)
+        }
+    }
 }

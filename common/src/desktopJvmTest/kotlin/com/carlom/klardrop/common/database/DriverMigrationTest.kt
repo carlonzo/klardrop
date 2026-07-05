@@ -10,8 +10,8 @@ import kotlin.test.assertFailsWith
  * Repro/regression for issues 6/7 (docs/connection-review.md remediation round 1): the
  * `message_id` column was added to `Message.sq`'s `messages` table with no `.sqm` migration and
  * no schema-version bump, so an existing on-disk database (from before that column existed)
- * would open successfully at the same schema version and then crash on the first `insert` /
- * `updateSendStatusByMessageId` with "table messages has no column named message_id".
+ * would open successfully at the same schema version and then crash on the first `insert` with
+ * "table messages has no column named message_id".
  *
  * This test hand-builds a database exactly as an existing install's on-disk file would look —
  * the schema BEFORE `message_id` existed, at `PRAGMA user_version = 1` — then drives it through

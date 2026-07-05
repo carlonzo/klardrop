@@ -985,8 +985,7 @@ internal class FakeMessageRepository : com.carlom.klardrop.common.persistence.Me
     mimeType: String,
     messageId: Long?,
     sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
-  ) {
-  }
+  ): Long = 0L
 
   override suspend fun insertFileTransfer(
     fileName: String,
@@ -1040,6 +1039,7 @@ internal class RecordingMessageRepository : com.carlom.klardrop.common.persisten
   val insertedMessages = mutableListOf<InsertedMessage>()
   val insertedFileTransfers = mutableListOf<InsertedFileTransfer>()
   private var nextFileTransferId = 1L
+  private var nextMessageRowId = 1L
 
   override suspend fun insertMessage(
     remoteDeviceId: String,
@@ -1051,7 +1051,7 @@ internal class RecordingMessageRepository : com.carlom.klardrop.common.persisten
     mimeType: String,
     messageId: Long?,
     sendStatus: com.carlom.klardrop.common.persistence.SendStatus,
-  ) {
+  ): Long {
     insertedMessages.add(
       InsertedMessage(
         remoteDeviceId = remoteDeviceId,
@@ -1062,6 +1062,7 @@ internal class RecordingMessageRepository : com.carlom.klardrop.common.persisten
         mimeType = mimeType,
       )
     )
+    return nextMessageRowId++
   }
 
   override suspend fun insertFileTransfer(
