@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.TransferRejectedException
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
@@ -11,6 +12,9 @@ import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyClient
+import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
+import com.carlom.klardrop.common.persistence.SendStatus
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.trust.TrustChecker
@@ -47,6 +51,7 @@ class MessengerImpl(
   private val trustChecker: Lazy<TrustChecker>,
   private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
   private val messageSerializer: MessageSerializer,
+  private val messageRepository: MessageRepository,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
 ) : Messenger {
 
@@ -65,6 +70,37 @@ class MessengerImpl(
       flow.emit(Pending)
       log("Messenger", "Emitted Pending status for $deviceId")
 
+      // Persist the outgoing TEXT exactly ONCE, up front, as SENDING — before any socket write,
+      // any ACK, and before the device-visibility check below. This is the single row for the
+      // whole logical send: handleKlardropTransfer below may retry the wire write several times,
+      // but the insert happens once here, and the row is flipped to its terminal SENT/FAILED
+      // state exactly once, further down, however many attempts it took (or immediately, if the
+      // device isn't even visible). TextMessageHandler.handleOutgoing no longer persists anything
+      // itself (see docs/connection-review.md F12/F13 — the old design inserted a fresh SENT row
+      // on every retry attempt, before the write even happened). Doing this before the visibility
+      // check matters: a device that drops out of the visible set between the user hitting send
+      // and this coroutine running must still leave a durable, retryable row instead of silently
+      // dropping the typed message (F12/F13 follow-up — a flaky-LAN dropout must not lose text).
+      val originalTextMessage = messageRequest.message as? TextMessage
+      // The wire id is Random.nextInt() (TextMessage.kt) with no uniqueness enforcement — stored
+      // on the row for reference, but NEVER used to correlate the later SENT/FAILED flip (two
+      // outgoing rows across the whole table could collide on it). The flip below is instead
+      // correlated by insertMessage's returned DB row id, which is collision-free by construction.
+      val pendingRowId: Long? = if (originalTextMessage != null) {
+        messageRepository.insertMessage(
+          remoteDeviceId = deviceId,
+          content = originalTextMessage.text,
+          isSender = true,
+          messageType = PersistenceMessageType.TEXT,
+          isRead = true,
+          mimeType = "text/plain",
+          messageId = originalTextMessage.id.toLong(),
+          sendStatus = SendStatus.SENDING,
+        )
+      } else {
+        null
+      }
+
       val device = visibleDevices.getDevice(deviceId)
 
       //    skip if not visible
@@ -76,6 +112,9 @@ class MessengerImpl(
         // cached friendly name; fall back to a generic label so the chat error banner
         // reads like English.
         val friendlyName = visibleDevices.cachedNameFor(deviceId) ?: "Device"
+        if (pendingRowId != null) {
+          messageRepository.updateMessageSendStatus(pendingRowId, SendStatus.FAILED)
+        }
         flow.emit(Error("$friendlyName is not visible"))
         return@launch
       }
@@ -150,8 +189,18 @@ class MessengerImpl(
         null -> {
           log("Messenger", "Wanted to send a message to $deviceId but it has no connection")
           flow.emit(Error("$deviceId but it has no connection"))
-          return@launch
+          false
         }
+      }
+
+      // Terminal status for the row inserted above — exactly one flip, regardless of which
+      // branch above produced the result (including the exhausted-retries and no-connection
+      // paths, which is why "no connection" no longer short-circuits with return@launch).
+      if (pendingRowId != null) {
+        messageRepository.updateMessageSendStatus(
+          pendingRowId,
+          if (transferCompleted) SendStatus.SENT else SendStatus.FAILED,
+        )
       }
 
       if (transferCompleted)

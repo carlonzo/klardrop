@@ -264,6 +264,7 @@ fun DeviceChatScreen(
                     onRetryFile = viewModel::retryFileTransfer,
                     isOffline = isOffline,
                     isLargeScreen = mode == DeviceChatMode.Pane,
+                    liveFileTransferProgress = uiState.fileTransferProgress,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -394,6 +395,7 @@ private fun MessagesList(
     onRetryFile: (fileTransferId: Long) -> Unit,
     isOffline: Boolean,
     isLargeScreen: Boolean,
+    liveFileTransferProgress: Float?,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -439,6 +441,7 @@ private fun MessagesList(
                 onRetryFile = onRetryFile,
                 isFirstOfGroup = isFirstOfGroup,
                 isLargeScreen = isLargeScreen,
+                liveFileTransferProgress = liveFileTransferProgress,
             )
 
             if (showDayDivider) {
@@ -462,6 +465,7 @@ private fun MessageRow(
     onRetryFile: (fileTransferId: Long) -> Unit,
     isFirstOfGroup: Boolean,
     isLargeScreen: Boolean,
+    liveFileTransferProgress: Float?,
 ) {
     val isSender = message.isSender
     val direction = if (isSender) KdBubbleDirection.Out else KdBubbleDirection.In
@@ -478,6 +482,7 @@ private fun MessageRow(
                     timestamp = timestamp,
                     onOpenFileRequest = onOpenFileRequest,
                     onRetryFile = onRetryFile,
+                    liveProgress = liveFileTransferProgress,
                 )
             }
             message.messageType == MessageType.TEXT.name -> {
@@ -602,6 +607,19 @@ private fun FileMessageBubble(
     timestamp: String,
     onOpenFileRequest: (filePath: String) -> Unit,
     onRetryFile: (fileTransferId: Long) -> Unit,
+    /**
+     * Live in-flight fraction (0f..1f) from [DeviceChatViewModel.uiState], fed by the sender's
+     * [com.carlom.klardrop.common.communication.MessengerSendProgress.InProgress] events and the
+     * receiver's [com.carlom.klardrop.common.receiver.ReceiveMessageStatus.Progress] events —
+     * null when nothing is transferring. `transferred_size` in the DB is written 0 at insert and
+     * never updated (docs/connection-review.md F14), so this is preferred over the DB-derived
+     * fraction while the transfer is IN_PROGRESS; done/failed states are unaffected.
+     *
+     * ponytail: one concurrent transfer per device assumed — this is a single value scoped to
+     * the whole chat, not keyed per file transfer id, so it's only meaningful for whichever
+     * bubble is currently IN_PROGRESS.
+     */
+    liveProgress: Float?,
 ) {
     val fileTransferState by messageRepository.getFileTransferById(
         message.fileTransferId ?: return
@@ -616,7 +634,8 @@ private fun FileMessageBubble(
 
     val fileState: KdFileState = when (currentStatus) {
         FileTransferStatus.IN_PROGRESS.name -> {
-            val progress = if (totalSize > 0) transferredSize.toFloat() / totalSize else 0f
+            val dbProgress = if (totalSize > 0) transferredSize.toFloat() / totalSize else 0f
+            val progress = liveProgress ?: dbProgress
             if (isSender) KdFileState.Sending(progress) else KdFileState.Receiving(progress)
         }
         FileTransferStatus.COMPLETED.name -> KdFileState.Done

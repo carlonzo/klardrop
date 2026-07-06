@@ -1,18 +1,22 @@
 package com.carlom.klardrop.common.persistence
 
 /**
- * Final delivery state stored on disk.
- * NEVER persisted as SENDING — that state is memory-only (in-flight outbox).
- * NULL in the database means SENT (successful delivery, already persisted by handleOutgoing).
+ * Delivery state stored on disk.
+ *
+ * SENDING IS persisted (deliberately, unlike the old design): a single row is written as
+ * SENDING before any socket write or ACK, and flipped to its terminal state (SENT/FAILED)
+ * exactly once — so a crash mid-send shows SENDING/FAILED on restart, never a false SENT.
+ * NULL in the database means SENT (legacy rows predate this column; kept for read-compat).
  */
 enum class SendStatus {
+  SENDING,
   SENT,
   FAILED,
 }
 
 /**
- * UI-facing delivery state for a merged chat message.
- * SENDING comes from the in-memory outbox; SENT/FAILED come from disk.
+ * UI-facing delivery state for a merged chat message. Mirrors [SendStatus] read back from disk
+ * (SENDING/FAILED are explicit column values; NULL/anything else reads as SENT).
  */
 enum class DeliveryStatus {
   SENDING,
@@ -24,9 +28,9 @@ enum class DeliveryStatus {
  * Merged chat message model — the UI-facing type returned by
  * [MessageRepository.getMessagesForDevice].
  *
- * Combines both in-memory outbox entries (SENDING state) and persisted disk rows
- * (SENT or FAILED state). The repository merges and deduplicates them: a disk
- * row always wins over an outbox entry with the same [id].
+ * Combines the persisted disk rows (SENDING/SENT/FAILED) with any legacy in-memory outbox
+ * entries. The repository merges and deduplicates them: a disk row always wins over an
+ * outbox entry with the same [id].
  */
 data class ChatMessage(
   /** Stable unique id — matches the DB row id for persisted messages, or the

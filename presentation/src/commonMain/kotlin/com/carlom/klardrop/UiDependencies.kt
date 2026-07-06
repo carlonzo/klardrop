@@ -22,12 +22,13 @@ class UiDependencies(private val commonComponent: CommonComponent) {
             messageRepository = commonComponent.messageRepository(),
             messenger = commonComponent.messenger(),
             messageReceiver = commonComponent.messageReceiver(),
+            client = commonComponent.client(),
+            connectionsPool = commonComponent.connectionsPool(),
             coroutines = commonComponent.coroutines(),
             fileManager = commonComponent.fileManager(),
             platformFileSystem = commonComponent.platformFileSystem(),
             clipboardManager = commonComponent.clipboardManager(),
             reachabilitySource = commonComponent.reachability(),
-            outbox = commonComponent.messageOutbox(),
         )
     }
 }

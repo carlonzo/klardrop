@@ -13,9 +13,10 @@ actual class DriverFactory(private val databaseFolderPath: Path, private val dis
       driver
     } else {
       val dbPath = Path(databaseFolderPath, "AppDatabase.db")
+      val dbAlreadyExisted = SystemFileSystem.exists(dbPath)
 
       val driver = JdbcSqliteDriver("jdbc:sqlite:$dbPath")
-      if (!SystemFileSystem.exists(dbPath)) {
+      if (!dbAlreadyExisted) {
         SystemFileSystem.createDirectories(databaseFolderPath, mustCreate = false)
 
         AppDatabase.Schema.create(driver)
@@ -24,6 +25,12 @@ actual class DriverFactory(private val databaseFolderPath: Path, private val dis
         require(SystemFileSystem.exists(dbPath)) {
           "Database file was not created successfully at $dbPath"
         }
+      } else {
+        // JdbcSqliteDriver doesn't compare user_version against the schema on open the way
+        // AndroidSqliteDriver/NativeSqliteDriver do — an existing file just opens as-is however
+        // stale its schema. Run any pending migrations explicitly so a schema change (e.g. a new
+        // column) doesn't crash the first query that touches it on an existing install.
+        migrateIfNeeded(driver, AppDatabase.Schema)
       }
 
       driver

@@ -96,6 +96,16 @@ kotlin {
     simBugsnagPaths.forEach { linkerOpts("-F", it) }
     if (isMacOsHost) linkerOpts("-F", simSdkSubFrameworks)
     linkerOpts("-lsqlite3")
+    // Bugsnag is a dynamic framework, so the linked binary records
+    // `@rpath/Bugsnag.framework/Bugsnag` and dyld needs a matching LC_RPATH to
+    // resolve it at run time. The shipped app framework embeds Bugsnag via
+    // CocoaPods, but the Gradle-run simulator test .kexe has no such embedding,
+    // so it aborts with "Library not loaded". Point an rpath at the synthetic
+    // framework dir for test executables only (the shipped framework must not
+    // carry a CI build-dir rpath).
+    if (this is org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable) {
+      simBugsnagPaths.forEach { linkerOpts("-rpath", it) }
+    }
   }
 
   // macOS inherits the same `-framework Bugsnag` linker option from the
@@ -111,6 +121,11 @@ kotlin {
   macosArm64().binaries.all {
     macosBugsnagPaths.forEach { linkerOpts("-F", it) }
     linkerOpts("-lsqlite3")
+    // Same dynamic-Bugsnag rpath fix as iOS simulator: the macOS test .kexe run
+    // by Gradle needs an LC_RPATH to resolve @rpath/Bugsnag.framework/Bugsnag.
+    if (this is org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable) {
+      macosBugsnagPaths.forEach { linkerOpts("-rpath", it) }
+    }
   }
 
   sourceSets {
@@ -121,6 +136,14 @@ kotlin {
         api(deps.kotlinx.coroutines.core)
         api(deps.filekit.core)
         api(deps.kotlinx.io.core)
+      }
+    }
+
+    commonTest {
+      dependencies {
+        implementation(kotlin("test"))
+        implementation(deps.turbine)
+        implementation(deps.kotlinx.coroutines.test)
       }
     }
 

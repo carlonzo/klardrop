@@ -8,14 +8,20 @@ CREATE TABLE messages (
     file_transfer_id INTEGER,
     is_read INTEGER NOT NULL DEFAULT 0, -- 0 = unread, 1 = read
     mime_type TEXT NOT NULL DEFAULT 'text/plain',
-    send_status TEXT DEFAULT NULL, -- final delivery state: NULL=SENT, 'FAILED'=FAILED (NEVER 'SENDING')
+    send_status TEXT DEFAULT NULL, -- delivery state: NULL=SENT, 'SENDING'=in flight, 'FAILED'=terminal failure
+    -- Wire Message.id (the sender-generated correlation id also used for ACK matching). Stored
+    -- for reference only — it is `Random.nextInt()` with no uniqueness enforcement, so it must
+    -- NOT be used to correlate the SENDING -> terminal-state flip (see `updateSendStatusById`
+    -- below, which uses the DB's own collision-free autoincrement `id` instead). NULL for inbound
+    -- rows and legacy rows written before this column existed.
+    message_id INTEGER,
     FOREIGN KEY(file_transfer_id) REFERENCES file_transfers(id)
 );
 
 -- Queries for messages table
 insert:
-INSERT INTO messages (remote_device_id, content, timestamp, is_sender, message_type, file_transfer_id, is_read, mime_type, send_status)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO messages (remote_device_id, content, timestamp, is_sender, message_type, file_transfer_id, is_read, mime_type, send_status, message_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 lastInsertRowId:
 SELECT last_insert_rowid();
@@ -26,6 +32,28 @@ FROM messages
 WHERE remote_device_id = ?
 ORDER BY timestamp DESC
 LIMIT ?;
+
+-- Flips a single outgoing row, identified by its DB autoincrement id (returned by `insert` via
+-- `lastInsertRowId`), to its terminal delivery state. Used exactly once per logical send,
+-- regardless of how many times the transport retry loop re-attempted the wire write.
+--
+-- Deliberately NOT keyed by `message_id` (the wire Message.id): that id is `Random.nextInt()`
+-- (see TextMessage.kt) with no uniqueness enforcement, so two outgoing rows across the whole
+-- table can collide. A collision would flip EVERY row sharing that message_id, including
+-- unrelated already-SENT rows, re-rendering a delivered message as FAILED. The DB row id has
+-- no such collision risk.
+updateSendStatusById:
+UPDATE messages
+SET send_status = ?
+WHERE id = ?;
+
+-- Startup reconciliation (see MessageRepository.markStaleSendingAsFailed): a row can only be left
+-- SENDING by a process kill/crash between the up-front insert and the terminal SENT/FAILED flip.
+-- Since we just started, nothing is actually still in flight, so every such row is stale.
+markStaleSendingAsFailed:
+UPDATE messages
+SET send_status = 'FAILED'
+WHERE is_sender = 1 AND send_status = 'SENDING';
 
 markMessagesAsRead:
 UPDATE messages

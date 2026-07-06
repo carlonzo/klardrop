@@ -91,6 +91,14 @@ jobs:
         # only android + desktopJvm targets now, so it has no Apple test task and
         # is fully covered by the Linux job. The old :common-ui (renamed :compose-ui)
         # and :macos (vestigial KN stub removed in SwiftUI migration) tasks are gone.
+        #
+        # Step-level timeout (NOT job-level): a wedged native test — e.g. a
+        # real-socket integration test whose runTest watchdog can't preempt a
+        # blocked Kotlin/Native worker — otherwise runs to the 6h job default.
+        # A step timeout fails just this step, so the "Publish Test Report" step
+        # below (guarded on !cancelled(), which a job cancel would skip) still
+        # runs and surfaces the per-test results that did complete.
+        timeout-minutes: 30
         run: |
           ./gradlew \
             :klardrop-common:iosSimulatorArm64Test \

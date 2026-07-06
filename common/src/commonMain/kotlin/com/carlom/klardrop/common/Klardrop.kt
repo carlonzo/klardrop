@@ -31,6 +31,14 @@ class Klardrop(
         .onFailure { log("Klardrop", "Failed to sweep stale IN_PROGRESS transfers", it) }
     }
 
+    // Same recovery, for outgoing TEXT: a row can only be left SENDING by a crash/kill between
+    // Messenger's up-front insert and its single terminal SENT/FAILED flip. Without this a message
+    // sent right before a kill would show a permanent "sending…" spinner on next launch.
+    appScope.launch(commonComponent.coroutines().ioDispatcher) {
+      runCatching { commonComponent.messageRepository().markStaleSendingAsFailed() }
+        .onFailure { log("Klardrop", "Failed to sweep stale SENDING messages", it) }
+    }
+
     val discoveryNetwork = commonComponent.discoveryNetwork()
 
     // start unified server for both protocols

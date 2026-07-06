@@ -230,7 +230,7 @@ internal fun createTestServer(
       coroutines,
       authorizer,
       messageRepository = object : com.carlom.klardrop.common.persistence.MessageRepository {
-        override suspend fun insertMessage(remoteDeviceId: String, content: String, isSender: Boolean, messageType: com.carlom.klardrop.common.persistence.MessageType, fileTransferId: Long?, isRead: Boolean, mimeType: String, messageId: Long?, sendStatus: com.carlom.klardrop.common.persistence.SendStatus) {}
+        override suspend fun insertMessage(remoteDeviceId: String, content: String, isSender: Boolean, messageType: com.carlom.klardrop.common.persistence.MessageType, fileTransferId: Long?, isRead: Boolean, mimeType: String, messageId: Long?, sendStatus: com.carlom.klardrop.common.persistence.SendStatus): Long = 0L
         override suspend fun insertFileTransfer(fileName: String, filePath: String, totalSize: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus, mimeType: String): Long = 0L
         override suspend fun updateFileTransferStatus(id: Long, status: com.carlom.klardrop.common.persistence.FileTransferStatus) {}
         override suspend fun updateFileTransferFilePath(id: Long, filePath: String) {}

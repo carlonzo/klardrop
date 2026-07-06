@@ -244,14 +244,24 @@ class Server(
     writeChannel.sendMessage(intro, serializer)
 
     // Run the UKEY2 handshake (responder role) and bind it to the peer's device identity before
-    // any ConnectionMessenger exists, so every subsequent frame is encrypted.
-    val cipher = KlardropEncryptedTransport.runResponderHandshake(
-      readChannel = readChannel,
-      writeChannel = writeChannel,
-      selfDeviceId = self.shortDeviceId,
-      peerDeviceId = request.deviceId,
-      trustManager = trustManager,
-    )
+    // any ConnectionMessenger exists, so every subsequent frame is encrypted. Bounded (F9) so a
+    // peer that stalls mid-handshake can't hold this connection/coroutine open indefinitely —
+    // mirrors the protocol-detection read timeout above and the client-side initiator bound.
+    val cipher = try {
+      withTimeout(UKEY2_HANDSHAKE_TIMEOUT_MS) {
+        KlardropEncryptedTransport.runResponderHandshake(
+          readChannel = readChannel,
+          writeChannel = writeChannel,
+          selfDeviceId = self.shortDeviceId,
+          peerDeviceId = request.deviceId,
+          trustManager = trustManager,
+        )
+      }
+    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+      log("Server", "UKEY2 responder handshake with ${request.deviceId} timed out — closing stalled peer")
+      socket.close()
+      return
+    }
 
     val connection = Connection.Tcp(socket, request.deviceId)
     val connectionMessenger = ConnectionMessenger(

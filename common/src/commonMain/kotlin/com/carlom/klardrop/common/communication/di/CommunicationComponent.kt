@@ -236,6 +236,7 @@ class CommunicationModule(
       lazy { trustChecker },
       trustManager,
       serializer,
+      messageRepository,
       ackTimeoutConfig,
     )
   }

@@ -28,7 +28,7 @@ final class ChatModel {
     // MARK: - Observable state
 
     private(set) var messages: [ChatMessage] = []
-    private(set) var uiState: ChatUiState = ChatUiState(error: nil, notice: nil)
+    private(set) var uiState: ChatUiState = ChatUiState(error: nil, notice: nil, fileTransferProgress: nil)
     private(set) var pendingAuth: ReceiveMessageUpdate? = nil
     private(set) var reachability: Reachability = ReachabilityUnknown()
 
@@ -72,7 +72,7 @@ final class ChatModel {
         vmStorage = vm
 
         // Seed from current StateFlow values now that the VM exists (one-time).
-        uiState = vm.uiState.value as? ChatUiState ?? ChatUiState(error: nil, notice: nil)
+        uiState = vm.uiState.value as? ChatUiState ?? ChatUiState(error: nil, notice: nil, fileTransferProgress: nil)
         reachability = vm.reachability.value as? Reachability ?? ReachabilityUnknown()
         pendingAuth = vm.pendingAuth.value as? ReceiveMessageUpdate
         // Cast to [ChatMessage] — the repo returns ChatMessage, not the raw Messages row.

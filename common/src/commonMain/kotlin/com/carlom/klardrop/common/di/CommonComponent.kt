@@ -9,6 +9,8 @@ import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.update.UpdateChecker
 import com.carlom.klardrop.common.update.createUpdateManifestFetcher
 import com.carlom.klardrop.common.update.detectInstallChannel
+import com.carlom.klardrop.common.communication.Client
+import com.carlom.klardrop.common.communication.ConnectionsPool
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
@@ -116,6 +118,8 @@ class CommonComponent(
   fun messenger() = communicationModule.messenger()
   fun messageReceiver() = communicationModule.messageReceiver()
   fun reachability() = communicationModule.reachability()
+  fun client(): Client = communicationModule.client()
+  fun connectionsPool(): ConnectionsPool = communicationModule.connectionsPool()
 
   fun platformFileSystem() = platformFileSystem
 

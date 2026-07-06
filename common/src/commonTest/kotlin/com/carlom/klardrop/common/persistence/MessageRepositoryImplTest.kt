@@ -205,4 +205,122 @@ class MessageRepositoryImplTest {
             assertEquals(updatedStatus.name, fileTransfer.status)
         }
     }
+
+    // Coverage for the startup reconciliation sweep (docs/connection-review.md "row stuck
+    // SENDING forever"): a row can only be left SENDING by a crash/kill between Messenger's
+    // up-front insert and its single terminal SENT/FAILED flip. On next launch that row must be
+    // swept to FAILED instead of rendering a permanent "sending..." spinner with no retry.
+    @Test
+    fun testMarkStaleSendingAsFailedFlipsOnlyOutgoingSendingRows() = runTest(testDispatcher) {
+        val remoteDeviceId = "device-stale-sending"
+
+        // Simulates the crash window: SENDING inserted, never flipped.
+        messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "stuck sending",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            messageId = 1L,
+            sendStatus = SendStatus.SENDING,
+        )
+        // An already-terminal outgoing row must be left alone.
+        messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "already sent",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            messageId = 2L,
+            sendStatus = SendStatus.SENT,
+        )
+        // An INCOMING row is never SENDING in practice, but must not be touched by this sweep
+        // regardless (it isn't ours to have started sending).
+        messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "incoming",
+            isSender = false,
+            messageType = MessageType.TEXT,
+        )
+
+        messageRepository.markStaleSendingAsFailed()
+
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(3, messages.size)
+            val byContent = messages.associateBy { it.content }
+            assertEquals(DeliveryStatus.FAILED, byContent.getValue("stuck sending").deliveryStatus)
+            assertEquals(DeliveryStatus.SENT, byContent.getValue("already sent").deliveryStatus)
+            assertEquals(DeliveryStatus.SENT, byContent.getValue("incoming").deliveryStatus)
+        }
+    }
+
+    // Regression for connection-review.md round 2 finding 2: insertMessage() must hand back the
+    // DB's own collision-free autoincrement row id so callers (Messenger) can correlate the
+    // later SENDING -> terminal flip by it, instead of by the wire `message_id`
+    // (Random.nextInt(), no uniqueness enforcement).
+    @Test
+    fun testInsertMessageReturnsRowIdThatFlipsOnlyThatRow() = runTest(testDispatcher) {
+        val remoteDeviceId = "device-rowid"
+
+        val rowId = messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "hello",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            sendStatus = SendStatus.SENDING,
+        )
+        assertTrue(rowId > 0, "insertMessage must return a positive DB row id")
+
+        messageRepository.updateMessageSendStatus(rowId, SendStatus.SENT)
+
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(1, messages.size)
+            assertEquals(DeliveryStatus.SENT, messages.first().deliveryStatus)
+        }
+    }
+
+    // Repro/regression for connection-review.md round 2 finding 2: message_id is
+    // `Random.nextInt()` (TextMessage.kt) with no uniqueness enforcement, so two independent
+    // outgoing rows CAN share the same wire message_id. Before the fix, updateMessageSendStatus
+    // correlated by message_id alone, so failing the second (colliding) send would have flipped
+    // the FIRST — already-delivered — row's status too, re-rendering it as FAILED.
+    @Test
+    fun testCollidingWireMessageIdDoesNotCrossFlipUnrelatedRow() = runTest(testDispatcher) {
+        val remoteDeviceId = "device-collision"
+        val collidingWireId = 4242L
+
+        val firstRowId = messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "already delivered",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            messageId = collidingWireId,
+            sendStatus = SendStatus.SENDING,
+        )
+        messageRepository.updateMessageSendStatus(firstRowId, SendStatus.SENT)
+
+        val secondRowId = messageRepository.insertMessage(
+            remoteDeviceId = remoteDeviceId,
+            content = "currently sending",
+            isSender = true,
+            messageType = MessageType.TEXT,
+            messageId = collidingWireId, // same wire id as the first row -- a genuine collision
+            sendStatus = SendStatus.SENDING,
+        )
+        assertTrue(secondRowId != firstRowId, "DB row ids must be distinct even when message_id collides")
+
+        messageRepository.updateMessageSendStatus(secondRowId, SendStatus.FAILED)
+
+        messageRepository.getMessagesForDevice(remoteDeviceId, 10).test {
+            val messages = awaitItem()
+            assertEquals(2, messages.size)
+            val byContent = messages.associateBy { it.content }
+            assertEquals(
+                DeliveryStatus.SENT,
+                byContent.getValue("already delivered").deliveryStatus,
+                "A row sharing message_id with a later, unrelated failed send must not be cross-flipped to FAILED",
+            )
+            assertEquals(DeliveryStatus.FAILED, byContent.getValue("currently sending").deliveryStatus)
+        }
+    }
 }
