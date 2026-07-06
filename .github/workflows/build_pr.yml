@@ -91,8 +91,27 @@ jobs:
         # only android + desktopJvm targets now, so it has no Apple test task and
         # is fully covered by the Linux job. The old :common-ui (renamed :compose-ui)
         # and :macos (vestigial KN stub removed in SwiftUI migration) tasks are gone.
+        #
+        # Step-level timeout (NOT job-level): a wedged native test — e.g. a
+        # real-socket integration test whose runTest watchdog can't preempt a
+        # blocked Kotlin/Native worker — otherwise runs to the 6h job default.
+        # A step timeout fails just this step, so the "Publish Test Report" step
+        # below (guarded on !cancelled(), which a job cancel would skip) still
+        # runs and surfaces the per-test results that did complete.
+        timeout-minutes: 40
+        # --max-workers=1: the klardrop-common integration tests bridge virtual
+        # time (StandardTestDispatcher) with real socket I/O (Dispatchers.IO), and
+        # only have a ~1.5s real-time budget for a Klardrop ACK round-trip to beat
+        # the virtual-time ACK withTimeout. This runner has just 3 CPUs, and Gradle
+        # would otherwise run the iosSimulatorArm64 and macosArm64 test binaries
+        # (two live test.kexe processes, each with its own socket + selector
+        # threads) concurrently — starving those threads so ACKs land after the
+        # deadline and every timing-sensitive Klardrop send test flakes out. Run
+        # the native test tasks one at a time so only one test.kexe competes for
+        # the 3 cores at a time. (Nearby-protocol tests have no such ACK race and
+        # already pass either way.)
         run: |
-          ./gradlew \
+          ./gradlew --max-workers=1 \
             :klardrop-common:iosSimulatorArm64Test \
             :presentation:iosSimulatorArm64Test \
             :protos:iosSimulatorArm64Test \
