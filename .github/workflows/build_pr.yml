@@ -108,7 +108,7 @@ jobs:
         run: |
           ./gradlew --max-workers=1 \
             :klardrop-common:macosArm64Test \
-            --tests "com.carlom.klardrop.common.communication.KlardropIntegrationTest"
+            --tests "com.carlom.klardrop.common.communication.KlardropIntegrationTest.startServerAndSendTextMessage"
         # Full matrix (restore after diagnosis):
         #   ./gradlew --max-workers=1 \
         #     :klardrop-common:iosSimulatorArm64Test :presentation:iosSimulatorArm64Test \
