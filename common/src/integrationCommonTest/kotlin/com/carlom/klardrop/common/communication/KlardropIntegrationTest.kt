@@ -869,26 +869,21 @@ internal class KlardropTestContext(
           val item = result.getOrThrow()
           seenCount++
           lastSeen = item
-          // DIAGKD (temporary): NSLog (log()) is swallowed on the iOS simulator, but println
-          // reaches process stdout which the KN test runner forwards to Gradle. Trace every
-          // emitted item so a failing Klardrop send shows its real progression on Apple CI.
-          println("DIAGKD awaitForPumping item #$seenCount: $item")
           if (block(item)) return item
         } else if (result.isClosed) {
-          val msg = "Channel closed before predicate matched after $seenCount items " +
-            "(last=$lastSeen): ${result.exceptionOrNull()}"
-          println("DIAGKD awaitForPumping CLOSED: $msg")
-          error(msg)
+          error(
+            "Channel closed before predicate matched after $seenCount items (last=$lastSeen): " +
+              "${result.exceptionOrNull()}"
+          )
         } else {
           break
         }
       }
     }
-    val timeoutMsg =
+    error(
       "awaitForPumping timed out after ${maxRealTimeMs}ms; saw $seenCount items, " +
         "last=$lastSeen, none matched predicate"
-    println("DIAGKD awaitForPumping TIMEOUT: $timeoutMsg")
-    error(timeoutMsg)
+    )
   }
 
 

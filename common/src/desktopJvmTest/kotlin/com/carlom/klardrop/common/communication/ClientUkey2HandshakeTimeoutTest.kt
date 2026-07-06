@@ -50,7 +50,7 @@ import kotlin.time.TimeSource
  * Klardrop greeting exchange (exactly like [Server.handleKlardropConnection] does), and then goes
  * silent forever — never sending UKEY2 Message 2. It drives the PRODUCTION [ClientImpl.connectTo]
  * against that peer and asserts the dial fails within a bound close to
- * [TCP_CONNECT_TIMEOUT_MS], not after the outer test timeout.
+ * [UKEY2_HANDSHAKE_TIMEOUT_MS], not after the outer test timeout.
  */
 class ClientUkey2HandshakeTimeoutTest {
 
@@ -140,15 +140,16 @@ class ClientUkey2HandshakeTimeoutTest {
 
     val mark = TimeSource.Monotonic.markNow()
     val outcome = try {
-      withTimeout(10_000L) { client.connectTo(serverId) }
+      withTimeout(UKEY2_HANDSHAKE_TIMEOUT_MS + 5_000L) { client.connectTo(serverId) }
     } catch (e: TimeoutCancellationException) {
       acceptJob.cancel()
       serverSocket.close()
       selectorManager.close()
       fail(
-        "connectTo did not return within 10s — a peer that completes the greeting exchange and " +
-          "then stalls mid-UKEY2 must not hang the whole connection attempt. Wrap " +
-          "KlardropEncryptedTransport.runInitiatorHandshake in withTimeout(TCP_CONNECT_TIMEOUT_MS).",
+        "connectTo did not return within ${UKEY2_HANDSHAKE_TIMEOUT_MS + 5_000L}ms — a peer that " +
+          "completes the greeting exchange and then stalls mid-UKEY2 must not hang the whole " +
+          "connection attempt. Wrap KlardropEncryptedTransport.runInitiatorHandshake in " +
+          "withTimeout(UKEY2_HANDSHAKE_TIMEOUT_MS).",
       )
     }
     val elapsedMs = mark.elapsedNow().inWholeMilliseconds
@@ -163,8 +164,8 @@ class ClientUkey2HandshakeTimeoutTest {
       "A peer that stalls mid-UKEY2 must resolve to Failed once the bounded handshake times out",
     )
     assertTrue(
-      elapsedMs < TCP_CONNECT_TIMEOUT_MS + 4_000L,
-      "connectTo took ${elapsedMs}ms; expected ~TCP_CONNECT_TIMEOUT_MS (${TCP_CONNECT_TIMEOUT_MS}ms) " +
+      elapsedMs < UKEY2_HANDSHAKE_TIMEOUT_MS + 4_000L,
+      "connectTo took ${elapsedMs}ms; expected ~UKEY2_HANDSHAKE_TIMEOUT_MS (${UKEY2_HANDSHAKE_TIMEOUT_MS}ms) " +
         "+ slack — the UKEY2 handshake phase against a stalled peer should be bounded.",
     )
     Unit

@@ -175,18 +175,3 @@ val generateKlardropVersion by tasks.registering {
 kotlin.sourceSets.commonMain {
   kotlin.srcDir(generateKlardropVersion)
 }
-// DIAGNOSTIC (temporary — remove with the DIAGKD printlns once the Klardrop native
-// regression is understood): Gradle captures a Kotlin/Native test binary's stdout+stderr
-// but does NOT echo it to the console by default, so println()/NSLog output and the real
-// failure message are invisible in CI. Surface both, plus full exception detail.
-tasks.withType<org.gradle.api.tasks.testing.AbstractTestTask>().configureEach {
-  testLogging {
-    showStandardStreams = true
-    exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-    events(
-      org.gradle.api.tasks.testing.logging.TestLogEvent.PASSED,
-      org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED,
-      org.gradle.api.tasks.testing.logging.TestLogEvent.SKIPPED,
-    )
-  }
-}

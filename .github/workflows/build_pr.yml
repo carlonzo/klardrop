@@ -98,22 +98,15 @@ jobs:
         # A step timeout fails just this step, so the "Publish Test Report" step
         # below (guarded on !cancelled(), which a job cancel would skip) still
         # runs and surfaces the per-test results that did complete.
-        timeout-minutes: 25
-        # TEMPORARY DIAGNOSTIC RUN (revert to the full serialized matrix below once
-        # the Klardrop native regression is understood): run ONLY KlardropIntegrationTest
-        # on the macOS host target. The host captures both println (process stdout) and
-        # NSLog (stderr), so the DIAGKD traces + send-path log() output are visible —
-        # unlike the iOS simulator, which swallows NSLog. Scoping to this one class also
-        # avoids the reliability-suite hang so we get a fast, complete failure log.
+        timeout-minutes: 30
         run: |
-          ./gradlew --max-workers=1 \
+          ./gradlew \
+            :klardrop-common:iosSimulatorArm64Test \
+            :presentation:iosSimulatorArm64Test \
+            :protos:iosSimulatorArm64Test \
             :klardrop-common:macosArm64Test \
-            --tests "com.carlom.klardrop.common.communication.KlardropIntegrationTest.startServerAndSendTextMessage"
-        # Full matrix (restore after diagnosis):
-        #   ./gradlew --max-workers=1 \
-        #     :klardrop-common:iosSimulatorArm64Test :presentation:iosSimulatorArm64Test \
-        #     :protos:iosSimulatorArm64Test :klardrop-common:macosArm64Test \
-        #     :presentation:macosArm64Test :protos:macosArm64Test
+            :presentation:macosArm64Test \
+            :protos:macosArm64Test
 
       - name: Publish Test Report
         uses: dorny/test-reporter@v3

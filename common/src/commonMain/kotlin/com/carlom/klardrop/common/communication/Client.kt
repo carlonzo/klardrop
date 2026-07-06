@@ -48,6 +48,19 @@ import kotlin.coroutines.coroutineContext
 internal const val TCP_CONNECT_TIMEOUT_MS = 3_000L
 
 /**
+ * Bound (F9) for the UKEY2 handshake phase, enforced via [withTimeout] on both the initiator
+ * ([ClientImpl]) and responder ([Server]) side. Distinct from — and much larger than —
+ * [TCP_CONNECT_TIMEOUT_MS]: the handshake is not a single TCP connect but a full mutual
+ * key-agreement (P256 keygen + multi-message exchange + ECDSA identity binding). On Apple
+ * targets that crypto measures ~3.7s (macOS/iOS-sim arm64) versus a few ms on the JVM, so
+ * reusing the 3s connect timeout here made every Klardrop dial time out mid-UKEY2 on native.
+ * 10s gives ~2.7x headroom over the measured native cost while still failing a genuinely
+ * stalled peer well before the 15s outer CONNECTION_WAIT_TIMEOUT, so a raced sibling endpoint
+ * can still take over.
+ */
+internal const val UKEY2_HANDSHAKE_TIMEOUT_MS = 10_000L
+
+/**
  * Result of a [Client.connectTo] call. The connector uses this to distinguish a
  * genuine dial failure from a deliberate decision not to initiate (e.g. BLE
  * role-selection means the peer will dial *us*), so reachability is not
@@ -415,7 +428,7 @@ class ClientImpl(
       // device identity. Done before any ConnectionMessenger exists so every subsequent frame is
       // encrypted. Bounded (F9): an untimed handshake would hang until the outer 15s
       // CONNECTION_WAIT_TIMEOUT if the peer stalls mid-UKEY2 instead of failing this one attempt.
-      val cipher = withTimeout(60_000L) { // DIAGKD: was TCP_CONNECT_TIMEOUT_MS — measure real native UKEY2 duration
+      val cipher = withTimeout(UKEY2_HANDSHAKE_TIMEOUT_MS) {
         KlardropEncryptedTransport.runInitiatorHandshake(
           readChannel = readChannel,
           writeChannel = writeChannel,
