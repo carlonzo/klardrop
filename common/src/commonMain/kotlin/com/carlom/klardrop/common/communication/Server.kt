@@ -248,7 +248,7 @@ class Server(
     // peer that stalls mid-handshake can't hold this connection/coroutine open indefinitely —
     // mirrors the protocol-detection read timeout above and the client-side initiator bound.
     val cipher = try {
-      withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+      withTimeout(60_000L) { // DIAGKD: was TCP_CONNECT_TIMEOUT_MS — measure real native UKEY2 duration
         KlardropEncryptedTransport.runResponderHandshake(
           readChannel = readChannel,
           writeChannel = writeChannel,

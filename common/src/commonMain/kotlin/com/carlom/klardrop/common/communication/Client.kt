@@ -415,7 +415,7 @@ class ClientImpl(
       // device identity. Done before any ConnectionMessenger exists so every subsequent frame is
       // encrypted. Bounded (F9): an untimed handshake would hang until the outer 15s
       // CONNECTION_WAIT_TIMEOUT if the peer stalls mid-UKEY2 instead of failing this one attempt.
-      val cipher = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
+      val cipher = withTimeout(60_000L) { // DIAGKD: was TCP_CONNECT_TIMEOUT_MS — measure real native UKEY2 duration
         KlardropEncryptedTransport.runInitiatorHandshake(
           readChannel = readChannel,
           writeChannel = writeChannel,
