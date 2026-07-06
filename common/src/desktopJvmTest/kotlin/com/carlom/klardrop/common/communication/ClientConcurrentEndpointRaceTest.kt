@@ -89,13 +89,19 @@ class ClientConcurrentEndpointRaceTest {
 
   @Test
   fun connectToRacesEndpointsInsteadOfDialingSequentially() = runBlocking(Dispatchers.IO) {
-    // Black-holed endpoint: backlog=1, pre-filled, so a further connect's SYN is dropped by the
-    // OS rather than RST'd (same technique as ClientConnectTimeoutTest).
-    val blackHoleServerSocket = ServerSocket()
-    blackHoleServerSocket.bind(java.net.InetSocketAddress("127.0.0.1", 0), /* backlog = */ 1)
-    val blackHolePort = blackHoleServerSocket.localPort
-    val filler = Socket()
-    filler.connect(java.net.InetSocketAddress("127.0.0.1", blackHolePort), 500)
+    // Black-holed endpoints: backlog=1, pre-filled, so a further connect's SYN is dropped by the
+    // OS rather than RST'd (same technique as ClientConnectTimeoutTest). Three of them: on the OLD
+    // sequential dial path each one burns a full TCP_CONNECT_TIMEOUT_MS (3s) before the next
+    // address is even tried, so the sequential worst case is ~9s. That wide gap is what keeps the
+    // timing assertion below robust on a heavily-contended CI runner, where the good endpoint's own
+    // real handshake (TCP + greeting + UKEY2 ECDH/ECDSA) can be starved for a few seconds.
+    val blackHoles = List(3) {
+      val socket = ServerSocket()
+      socket.bind(java.net.InetSocketAddress("127.0.0.1", 0), /* backlog = */ 1)
+      val filler = Socket()
+      filler.connect(java.net.InetSocketAddress("127.0.0.1", socket.localPort), 500)
+      socket to filler
+    }
 
     // Good endpoint: a real production Server that completes the full handshake. Device ids must
     // be <= 8 chars: CurrentDevice.shortDeviceId truncates to 8, and the client's mismatch check
@@ -111,10 +117,11 @@ class ClientConcurrentEndpointRaceTest {
     val coroutines = TestCoroutines()
     val visibleDevices = MultiKlardropPeer(
       serverId,
-      listOf(
-        DeviceConnection.KlardropConnection("127.0.0.1", blackHolePort), // black-holed, listed FIRST
-        DeviceConnection.KlardropConnection("127.0.0.1", goodServerConfig.port), // good, listed SECOND
-      ),
+      // All black-holed endpoints listed FIRST, the good one LAST — the worst possible ordering for
+      // a sequential dialer (it would exhaust every 3s timeout before reaching the good endpoint).
+      blackHoles.map { (socket, _) ->
+        DeviceConnection.KlardropConnection("127.0.0.1", socket.localPort)
+      } + DeviceConnection.KlardropConnection("127.0.0.1", goodServerConfig.port),
     )
     val currentDeviceProvider = CurrentDeviceProvider(FixedIdPropertiesRepository("racecli1"))
     val trustManager = TrustManager(TrustCrypto(), InMemoryTrustStorage(), Clock(), currentDeviceProvider)
@@ -148,14 +155,17 @@ class ClientConcurrentEndpointRaceTest {
         "The good second endpoint must win the race even though the first endpoint is black-holed",
       )
 
-      // Generous bound (avoids flakiness) — the point is this must be well under the OLD
-      // sequential worst case of TCP_CONNECT_TIMEOUT_MS (3s) just for the black-holed FIRST
-      // endpoint, plus whatever the good endpoint then took on top of that.
+      // The racing path returns as soon as the good endpoint's handshake finishes; the black-holed
+      // endpoints just time out in the background and never add to this measurement. So the bound
+      // only needs to sit comfortably below the OLD sequential worst case (~3 x TCP_CONNECT_TIMEOUT_MS
+      // = 9s) while leaving generous headroom for a CI-starved good handshake (observed as high as
+      // ~4.2s). 6s satisfies both: racing passes even when badly starved, yet a regression back to
+      // sequential dialing (>= 9s, capped by the 10s outer withTimeout) still fails decisively.
       assertTrue(
-        elapsedMs < 3_000L,
-        "connectTo took ${elapsedMs}ms racing a black-holed + a good endpoint; expected well under " +
-          "3000ms (TCP_CONNECT_TIMEOUT_MS) since the good endpoint should win concurrently instead " +
-          "of waiting for the black-holed one to time out first.",
+        elapsedMs < 6_000L,
+        "connectTo took ${elapsedMs}ms racing 3 black-holed + 1 good endpoint; expected well under " +
+          "6000ms (<< ~9s sequential worst case of 3 x TCP_CONNECT_TIMEOUT_MS) since the good " +
+          "endpoint should win concurrently instead of waiting for the black-holed ones to time out.",
       )
     } finally {
       // Both sides' acceptIncomingMessages() read loops spin on FakeMessagesRouter's no-op
@@ -164,8 +174,10 @@ class ClientConcurrentEndpointRaceTest {
       // `!readChannel.isClosedForRead` guard trip so it exits.
       clientPool.closeAllConnections()
       serverPool.closeAllConnections()
-      filler.close()
-      blackHoleServerSocket.close()
+      blackHoles.forEach { (socket, filler) ->
+        filler.close()
+        socket.close()
+      }
       goodServer.stopServer()
     }
     Unit
