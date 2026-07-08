@@ -9,9 +9,18 @@ import kotlin.coroutines.CoroutineContext
 
 actual class CoroutinesImpl actual constructor() : Coroutines {
 
+  // Last-resort handler for uncaught failures in the top-level coroutines of the app's
+  // SupervisorJob scopes. It runs on the failing coroutine's own thread. Rethrowing here
+  // pushes the exception to the thread's uncaught handler for no benefit (and aborts the
+  // process outright on the Apple targets that share this logic) — so we don't. Expected
+  // network churn is logged locally, everything else is reported to Bugsnag, and the
+  // process keeps running, matching Server.kt and Throwable.isExpectedNetworkNoise().
   private val handler = CoroutineExceptionHandler { _, exception ->
-    log("CoroutinesImpl", "CoroutineExceptionHandler got ${exception.message}", exception)
-    throw exception
+    if (exception.isExpectedNetworkNoise()) {
+      logLocal("CoroutinesImpl", "coroutine ended (${exception.message})", exception)
+    } else {
+      log("CoroutinesImpl", "uncaught coroutine exception (${exception.message})", exception)
+    }
   }
 
   private val scope by lazy { CoroutineScope(SupervisorJob() + mainDispatcher + handler) }
