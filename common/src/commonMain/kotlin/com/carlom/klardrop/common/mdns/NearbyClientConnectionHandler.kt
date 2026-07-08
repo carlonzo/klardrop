@@ -123,9 +123,9 @@ class NearbyClientConnectionHandler(
       when (val request = it.value) {
 
         is SimpleSendMessageRequest -> {
-          val textMessage = request.message as TextMessage
+          val text = textContentForNearby(request)
           sendEncryptedWrappedPayload(
-            payload = textMessage.text.toByteArray(),
+            payload = text.toByteArray(),
             payloadType = PayloadTransferFrame.PayloadHeader.PayloadType.BYTES,
             payloadId = id,
             writeChannel = writeChannel,
@@ -222,7 +222,7 @@ class NearbyClientConnectionHandler(
         id = id,
         text_title = null,
         type = TextMetadata.Type.TEXT,
-        size = (request.message as TextMessage).text.length.toLong()
+        size = textContentForNearby(request).length.toLong()
       )
     }
 
@@ -363,4 +363,21 @@ class NearbyClientConnectionHandler(
   }
 
 
+}
+
+/**
+ * Nearby Share only transports raw text/file bytes — not Klardrop [com.carlom.klardrop.common.communication.message.TrustedMessage]
+ * envelopes. [com.carlom.klardrop.common.communication.MessengerImpl] strips trust wrapping before
+ * this path, but we still reject non-text payloads with a clear error instead of a ClassCastException.
+ *
+ * Visible for unit tests (same module).
+ */
+internal fun textContentForNearby(request: SimpleSendMessageRequest): String {
+  return when (val message = request.message) {
+    is TextMessage -> message.text
+    else -> throw IllegalArgumentException(
+      "Nearby Share text transfer requires TextMessage, got ${message::class.simpleName}. " +
+        "Trust envelopes must be stripped before the Nearby path.",
+    )
+  }
 }
