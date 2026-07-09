@@ -10,13 +10,20 @@ import kotlin.coroutines.CoroutineContext
 
 actual class CoroutinesImpl actual constructor() : Coroutines {
 
-  // CEH is the terminal sink for uncaught coroutine failures. Do NOT rethrow:
-  // on Kotlin/Native a throw from CEH aborts the process (Bugsnag SIGABRT after
-  // IndexOutOfBoundsException / ArrayIndexOutOfBounds during mDNS browse). log()
-  // already breadcrumb+notify Bugsnag; noise is filtered in isExpectedNetworkNoise.
+  // Last-resort handler for uncaught failures in the top-level coroutines of the app's
+  // SupervisorJob scopes (Client, Server, DiscoveryNetwork, ConnectionsPool, …). It runs
+  // on the failing coroutine's own thread, which for the ioDispatcher scopes is a
+  // background worker. On Kotlin/Native an exception that escapes this handler propagates
+  // to the top of that thread and terminates the whole process with abort()/SIGABRT — so
+  // we must NOT rethrow. Instead we mirror Server.kt's per-connection handler and the
+  // contract documented on Throwable.isExpectedNetworkNoise(): expected network churn is
+  // logged locally, everything else is reported to Bugsnag, and the process keeps running.
   private val handler = CoroutineExceptionHandler { _, exception ->
-    if (exception is kotlinx.coroutines.CancellationException) return@CoroutineExceptionHandler
-    log("CoroutinesImpl", "CoroutineExceptionHandler got ${exception.message}", exception)
+    if (exception.isExpectedNetworkNoise()) {
+      logLocal("CoroutinesImpl", "coroutine ended (${exception.message})", exception)
+    } else {
+      log("CoroutinesImpl", "uncaught coroutine exception (${exception.message})", exception)
+    }
   }
 
   private val scope by lazy { CoroutineScope(SupervisorJob() + mainDispatcher + handler) }
