@@ -32,9 +32,11 @@ internal class KlardropDiscoveryUtils {
 
   fun toDeviceInfo(serviceInfo: ServiceInfo): DeviceInfo = with(serviceInfo) {
 
-    val deviceName = urlSafeBase64DecodeString(attributes.getValue(ATTRIBUTE_DEVICE_NAME)).decodeToString()
-    val deviceInfo = attributes.getValue(ATTRIBUTE_DEVICE).toInt()
+    val deviceName = attributes[ATTRIBUTE_DEVICE_NAME]?.let { encoded ->
+      runCatching { urlSafeBase64DecodeString(encoded).decodeToString() }.getOrNull()
+    } ?: "unknown device name"
 
+    val deviceInfo = attributes[ATTRIBUTE_DEVICE]?.toIntOrNull() ?: 0
 
     val deviceType = DeviceType.fromId(deviceInfo.shr(4))
     val osType = OsType.fromId(deviceInfo.and(0x0F))

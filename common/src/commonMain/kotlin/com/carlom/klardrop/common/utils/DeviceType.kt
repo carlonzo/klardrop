@@ -14,12 +14,12 @@ enum class DeviceType(val nearbyId: Byte) {
 
   companion object {
     fun fromId(id: Byte): DeviceType {
-      return entries.first { it.nearbyId == id }
+      return entries.firstOrNull { it.nearbyId == id } ?: UNKNOWN
     }
 
     fun fromId(id: Int): DeviceType {
       val b = id.toByte()
-      return entries.first { it.nearbyId == b }
+      return entries.firstOrNull { it.nearbyId == b } ?: UNKNOWN
     }
   }
 }

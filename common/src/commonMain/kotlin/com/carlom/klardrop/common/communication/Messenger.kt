@@ -180,12 +180,18 @@ class MessengerImpl(
       //     with sustained writes, and Nearby is fine once the (slower) handshake is done.
       //   - Lightweight messages (text/control): TCP > BLE > Nearby
       //     For tiny chunks BLE is faster end-to-end than spinning up a Nearby session.
-      val preference = transportPreferenceFor(finalMessageRequest)
+      // Preference is based on the *application* message shape (file vs lightweight), not
+      // the trust envelope. TrustedMessage wrapping only applies to the Klardrop wire path.
+      val preference = transportPreferenceFor(messageRequest)
       val chosen = preference.firstOrNull { it.isAvailable(device) }
       val transferCompleted = when (chosen) {
         TransportChoice.KLARDROP_TCP, TransportChoice.KLARDROP_BLE ->
           handleKlardropTransfer(deviceId, finalMessageRequest, flow, preferBle = chosen == TransportChoice.KLARDROP_BLE)
-        TransportChoice.NEARBY -> handleNearbyTransfer(deviceId, finalMessageRequest, flow)
+        // Nearby Share is not the Klardrop protocol — it only carries raw text/file bytes
+        // (see NearbyClientConnectionHandler's `as TextMessage` / file paths). A TrustedMessage
+        // envelope is a Klardrop wire concern and must not be handed to Nearby: that ClassCast
+        // blocked trusted-device text sends in production (Bugsnag 6a4dee0c / 6a4de86e).
+        TransportChoice.NEARBY -> handleNearbyTransfer(deviceId, messageRequest, flow)
         null -> {
           log("Messenger", "Wanted to send a message to $deviceId but it has no connection")
           flow.emit(Error("$deviceId but it has no connection"))

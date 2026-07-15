@@ -45,11 +45,23 @@ internal class NearbyShareDiscoveryUtils {
 
   fun toDeviceInfo(serviceInfo: ServiceInfo): DeviceInfo = with(serviceInfo) {
 
-    val endpointInfo = attributes.getValue("n")
-    val endpointInfoBytes = urlSafeBase64DecodeString(endpointInfo)
+    val endpointInfo = attributes["n"]
+    val endpointInfoBytes = endpointInfo?.let {
+      runCatching { urlSafeBase64DecodeString(it) }.getOrNull()
+    }
+
+    // Empty/malformed endpoint info must not throw (empty [0] was ArrayIndexOutOfBounds).
+    if (endpointInfoBytes == null || endpointInfoBytes.isEmpty()) {
+      return DeviceInfo(
+        name = "unknown device name",
+        deviceId = getDeviceId(serviceInfo),
+        deviceType = DeviceType.UNKNOWN,
+        osType = OsType.UNKNOWN,
+      )
+    }
 
     // 1 byte: Version(3 bits)|Visibility(1 bit)|Device Type(3 bits)|Reserved(1 bits)
-    val deviceInfoByte = endpointInfoBytes[0].toInt()
+    val deviceInfoByte = endpointInfoBytes[0].toInt() and 0xFF
     val hasPlaintextName = (deviceInfoByte and 0x10) == 0
 
     val deviceTypeId = (deviceInfoByte and 0b0000_1110) shr 1
@@ -214,7 +226,9 @@ fun ServiceInfo.serviceNameClean(): String {
 
   return if (name.endsWith(")")) {
     val index = name.lastIndexOf("(")
-    name.substring(0, index).trimEnd()
+    // Bonjour collision suffix is " (2)"; if '(' is missing, leave the name as-is
+    // rather than substring(0, -1) which throws StringIndexOutOfBoundsException.
+    if (index <= 0) name else name.substring(0, index).trimEnd()
   } else {
     name
   }

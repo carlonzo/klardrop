@@ -157,11 +157,16 @@ actual class ServiceDiscoveryMdns {
   private fun createTXTRecordData(attributes: Map<String, String>): NSData {
     val txtRecordData = NSMutableData()
     attributes.forEach { (key, value) ->
-
-      val record = "$key=$value"
-
-      txtRecordData.appendData(byteArrayOf(record.length.toByte()).toNSData())
-      txtRecordData.appendData(record.encodeToByteArray().toNSData())
+      // DNS-SD length is UTF-8 byte count, not String.length (UTF-16 code units).
+      // Using String.length for multi-byte names produced a short length prefix and
+      // made peers (and our own txtByteToMap) read past the buffer → OOB on resolve.
+      val record = "$key=$value".encodeToByteArray()
+      if (record.size > 255) {
+        log("ServiceDiscoveryMdns", "TXT entry too long for $key (${record.size} bytes); skipping")
+        return@forEach
+      }
+      txtRecordData.appendData(byteArrayOf(record.size.toByte()).toNSData())
+      txtRecordData.appendData(record.toNSData())
     }
 
     return txtRecordData.copy() as NSData
@@ -184,10 +189,13 @@ actual class ServiceDiscoveryMdns {
     val txtRecord = this.TXTRecordData()?.toByteArray() ?: ByteArray(0)
     val attributes = txtByteToMap(txtRecord)
 
+    // Darwin sockaddr_in: sa_len, sa_family (AF_INET=2), sin_port, sin_addr at offset 4.
+    // Do not assume every 16-byte blob is IPv4 — check family and bounds (matches desktop Bonjour).
     val addresses = (addresses ?: emptyList<NSData>())
-      .map { (it as NSData).toByteArray() }
-      .filter { it.size == 16 }
-      .map { it.copyOfRange(4, 8).map { it.toUByte().toInt() }.joinToString(separator = ".") }
+      .mapNotNull { data ->
+        val bytes = (data as? NSData)?.toByteArray() ?: return@mapNotNull null
+        parseSockaddrIpv4(bytes)
+      }
 
     return ServiceInfo(
       port = this.port.toInt(),
@@ -196,6 +204,22 @@ actual class ServiceDiscoveryMdns {
       attributes = attributes,
       addresses = addresses
     )
+  }
+
+  /**
+   * Extract dotted-quad IPv4 from a Darwin [sockaddr_in] byte blob, or null if not AF_INET /
+   * too short. Never throws on short buffers (Bugsnag OOB during resolve).
+   */
+  private fun parseSockaddrIpv4(bytes: ByteArray): String? {
+    if (bytes.size < 8) return null
+    val family = bytes[1].toInt() and 0xFF
+    if (family != AF_INET) return null
+    return (4 until 8).joinToString(".") { i -> (bytes[i].toInt() and 0xFF).toString() }
+  }
+
+  private companion object {
+    /** Darwin / BSD AF_INET */
+    const val AF_INET = 2
   }
 
   /**
@@ -258,8 +282,13 @@ actual class ServiceDiscoveryMdns {
     }
 
     override fun netServiceDidResolveAddress(sender: NSNetService) {
-      log("ServiceDiscoveryMdns","netServiceDidResolveAddress ${sender.toServiceInfo()}")
-      producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(sender.toServiceInfo()))
+      runCatching {
+        val info = sender.toServiceInfo()
+        log("ServiceDiscoveryMdns", "netServiceDidResolveAddress $info")
+        producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(info))
+      }.onFailure {
+        log("ServiceDiscoveryMdns", "netServiceDidResolveAddress failed for ${sender.name}: ${it.message}", it)
+      }
     }
 
     override fun netServiceDidStop(sender: NSNetService) {
@@ -287,17 +316,19 @@ actual class ServiceDiscoveryMdns {
 
     @ObjCSignatureOverride
     override fun netServiceBrowser(browser: NSNetServiceBrowser, didFindService: NSNetService, moreComing: Boolean) {
-      log("ServiceDiscoveryMdns","netServiceBrowser found service: $didFindService - (${didFindService.toServiceInfo()})")
+      runCatching {
+        log("ServiceDiscoveryMdns", "netServiceBrowser found service: $didFindService")
 
-      if (didFindService.addresses.isNullOrEmpty()) {
-        log("ServiceDiscoveryMdns","netServiceBrowser resolving service: $didFindService")
-        didFindService.delegate = serviceDelegate
-        didFindService.resolveWithTimeout(10.0)
-      } else {
-        producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(didFindService.toServiceInfo()))
+        if (didFindService.addresses.isNullOrEmpty()) {
+          log("ServiceDiscoveryMdns", "netServiceBrowser resolving service: $didFindService")
+          didFindService.delegate = serviceDelegate
+          didFindService.resolveWithTimeout(10.0)
+        } else {
+          producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(didFindService.toServiceInfo()))
+        }
+      }.onFailure {
+        log("ServiceDiscoveryMdns", "netServiceBrowser didFindService failed: ${it.message}", it)
       }
-
-
     }
 
     @ObjCSignatureOverride
@@ -311,8 +342,12 @@ actual class ServiceDiscoveryMdns {
       didRemoveService: NSNetService,
       moreComing: Boolean
     ) {
-      log("ServiceDiscoveryMdns","netServiceBrowser didRemoveService: $didRemoveService")
-      producerScope.trySend(ServiceDiscoveryEvent.ServiceLost(didRemoveService.toServiceInfo()))
+      runCatching {
+        log("ServiceDiscoveryMdns", "netServiceBrowser didRemoveService: $didRemoveService")
+        producerScope.trySend(ServiceDiscoveryEvent.ServiceLost(didRemoveService.toServiceInfo()))
+      }.onFailure {
+        log("ServiceDiscoveryMdns", "netServiceBrowser didRemoveService failed: ${it.message}", it)
+      }
     }
 
     @ObjCSignatureOverride

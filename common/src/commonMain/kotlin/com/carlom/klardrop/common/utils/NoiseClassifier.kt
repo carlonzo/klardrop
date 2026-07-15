@@ -33,8 +33,15 @@ private fun Throwable.matchesKnownNoise(): Boolean {
   val name = this::class.simpleName ?: return false
   val msg = message.orEmpty()
   return when (name) {
+    // Coroutine cancelled because the parent scope/connection closed — expected lifecycle,
+    // not a product bug. Bugsnag was flooded with "StandaloneCoroutine was cancelled"
+    // (ConnectionMessenger read loop after heartbeat close / explicit close).
+    "CancellationException",
+    "JobCancellationException" -> true
+
     // Peer closed the channel / OS aborted the connection.
     "ClosedByteChannelException",
+    "ClosedWriteChannelException",
     "ClosedSendChannelException",
     "ClosedReceiveChannelException" -> true
 
@@ -67,6 +74,10 @@ private fun Throwable.matchesKnownNoise(): Boolean {
     "IllegalStateException" ->
       msg.startsWith("disconnected during handshake", ignoreCase = true) ||
         msg.startsWith("connect failed:", ignoreCase = true)
+
+    // Dial-on-open / chat open when no transport is ready — UX failure, not a crash.
+    "IllegalArgumentException" ->
+      msg.contains("No Klardrop TCP or BLE connection is available", ignoreCase = true)
 
     else -> false
   }

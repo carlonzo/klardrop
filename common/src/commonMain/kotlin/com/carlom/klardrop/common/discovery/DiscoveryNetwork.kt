@@ -183,29 +183,31 @@ class DiscoveryNetwork internal constructor(
     nearbyDiscoveryJob?.cancel()
     nearbyDiscoveryJob = serviceDiscoveryMdns.discoverServices(NEARBY_SERVICE_TYPE)
       .onCompletion { log("DiscoveryNetwork", "Discovery completed for Nearby discovery") }
-      .onEach {
+      .onEach { event ->
+        runCatching {
+//        log("DiscoveryNetwork", "New discovery event for NearbyShare: $event")
 
-//        log("DiscoveryNetwork", "New discovery event for NearbyShare: $it")
+          val deviceId = nearbyShareDiscoveryUtils.getDeviceId(event.serviceInfo)
 
-        val deviceId = nearbyShareDiscoveryUtils.getDeviceId(it.serviceInfo)
-
-        if (deviceId == currentDevice.await().shortDeviceId) {
-//          log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
-          return@onEach
-        }
-
-        when (it) {
-
-          is ServiceDiscoveryEvent.ServiceFound -> if (nearbyShareDiscoveryUtils.isValidService(it.serviceInfo)) {
-            onDiscoveredService(it.serviceInfo, DeviceConnectionType.NEARBY)
-          } else {
-            log("DiscoveryNetwork", "Invalid service found for Nearby: ${it.serviceInfo}")
+          if (deviceId == currentDevice.await().shortDeviceId) {
+//          log("DiscoveryNetwork", "Ignoring own service: ${event.serviceInfo}")
+            return@onEach
           }
 
-          is ServiceDiscoveryEvent.ServiceLost -> onLostService(deviceId, it.serviceInfo, DeviceConnectionType.NEARBY)
+          when (event) {
 
+            is ServiceDiscoveryEvent.ServiceFound -> if (nearbyShareDiscoveryUtils.isValidService(event.serviceInfo)) {
+              onDiscoveredService(event.serviceInfo, DeviceConnectionType.NEARBY)
+            } else {
+              log("DiscoveryNetwork", "Invalid service found for Nearby: ${event.serviceInfo}")
+            }
+
+            is ServiceDiscoveryEvent.ServiceLost -> onLostService(deviceId, event.serviceInfo, DeviceConnectionType.NEARBY)
+
+          }
+        }.onFailure {
+          log("DiscoveryNetwork", "Failed handling Nearby discovery event: ${it.message}", it)
         }
-
       }
       .launchIn(discoveryScope)
 
@@ -219,32 +221,37 @@ class DiscoveryNetwork internal constructor(
 
     klardropDiscoveryJob = serviceDiscoveryMdns.discoverServices(KLARDROP_SERVICE_TYPE)
       .onCompletion { log("DiscoveryNetwork", "Discovery completed for Klardrop discovery") }
-      .onEach {
-        log("DiscoveryNetwork", "New discovery event for Klardrop: $it")
+      .onEach { event ->
+        // One bad peer TXT/name must not cancel the whole browse job (that hit CEH → SIGABRT).
+        runCatching {
+          log("DiscoveryNetwork", "New discovery event for Klardrop: $event")
 
-        val deviceId = klardropDiscoveryUtils.getDeviceId(it.serviceInfo)
+          val deviceId = klardropDiscoveryUtils.getDeviceId(event.serviceInfo)
 
-        if (deviceId == currentDevice.await().shortDeviceId) {
-//            log("DiscoveryNetwork", "Ignoring own service: ${it.serviceInfo}")
-          return@onEach
-        }
-
-        when (it) {
-
-          is ServiceDiscoveryEvent.ServiceFound -> if (klardropDiscoveryUtils.isValidService(it.serviceInfo)) {
-            onDiscoveredService(it.serviceInfo, DeviceConnectionType.KLARDROP)
-          } else {
-            log("DiscoveryNetwork", "Invalid service found for Klardrop: ${it.serviceInfo}")
+          if (deviceId == currentDevice.await().shortDeviceId) {
+//            log("DiscoveryNetwork", "Ignoring own service: ${event.serviceInfo}")
+            return@onEach
           }
 
-          is ServiceDiscoveryEvent.ServiceLost -> {
-            onLostService(deviceId, it.serviceInfo, DeviceConnectionType.KLARDROP)
-            // A ServiceLost from mDNS may indicate the peer dropped to Wi-Fi power-save.
-            // Restart the browse so NsdManager re-evaluates the peer when it wakes
-            // (wedged 'found' sessions are cleared by re-subscribe).
-            requestKlardropDiscoveryRefresh("ServiceLost for $deviceId")
-          }
+          when (event) {
 
+            is ServiceDiscoveryEvent.ServiceFound -> if (klardropDiscoveryUtils.isValidService(event.serviceInfo)) {
+              onDiscoveredService(event.serviceInfo, DeviceConnectionType.KLARDROP)
+            } else {
+              log("DiscoveryNetwork", "Invalid service found for Klardrop: ${event.serviceInfo}")
+            }
+
+            is ServiceDiscoveryEvent.ServiceLost -> {
+              onLostService(deviceId, event.serviceInfo, DeviceConnectionType.KLARDROP)
+              // A ServiceLost from mDNS may indicate the peer dropped to Wi-Fi power-save.
+              // Restart the browse so NsdManager re-evaluates the peer when it wakes
+              // (wedged 'found' sessions are cleared by re-subscribe).
+              requestKlardropDiscoveryRefresh("ServiceLost for $deviceId")
+            }
+
+          }
+        }.onFailure {
+          log("DiscoveryNetwork", "Failed handling Klardrop discovery event: ${it.message}", it)
         }
 
       }.launchIn(discoveryScope)
