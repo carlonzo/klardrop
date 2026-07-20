@@ -1,5 +1,5 @@
 [versions]
-agp = "9.2.1"
+agp = "9.3.0"
 # Pinned to 2.3.21 (not main's 2.4.0): SKIE 0.10.12 — the latest — does not yet
 # support Kotlin 2.4.0 and rejects it at Gradle configuration time. Bump back once
 # SKIE ships 2.4.0 support, or once SKIE is removed in favor of native swift-export.
@@ -10,7 +10,7 @@ jetbrains-compose = "1.11.1"
 okio = "3.17.0"
 ktor = "3.5.1"
 datastore = "1.2.1"
-dagger = "2.60"
+dagger = "2.60.1"
 androidx-activity = "1.13.0"
 kotlinx-io = "0.9.1"
 bugsnag-kmp = "1.0.0"
@@ -49,7 +49,7 @@ kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.re
 dagger = { module = "com.google.dagger:dagger", version.ref = "dagger" }
 dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = "dagger" }
 
-simplestorage = { module = "com.anggrayudi:storage", version = "2.2.0" }
+simplestorage = { module = "com.anggrayudi:storage", version = "2.3.0" }
 
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.3" }
 jna = { module = "net.java.dev.jna:jna", version = "5.19.1" }
@@ -92,4 +92,4 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 
 squareup-wire = { id = "com.squareup.wire", version = "6.4.5" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
-ksp = { id = "com.google.devtools.ksp", version = "2.3.9" }
+ksp = { id = "com.google.devtools.ksp", version = "2.3.10" }
