@@ -133,6 +133,15 @@ class KlardropIntegrationTest {
     turbineScope {
       with(testContext) {
         sendAndVerifyMessage("klardrop protocol test")
+
+        // A text send is one frame plus an ack, so it must not anchor anything: on Android that
+        // would flash a foreground-service notification for nothing, and it would add a subscriber
+        // to a progress flow most text callers never collect.
+        assertEquals(
+          emptyList(),
+          transferAnchor.events,
+          "a text send must not touch the transfer anchor",
+        )
       }
     }
   }
@@ -352,6 +361,24 @@ class KlardropIntegrationTest {
       with(testContext) {
         val testData = ByteArray(1024) { (it % 256).toByte() }
         sendAndVerifyFile("test-document.txt", testData, "text/plain")
+
+        // A file send must tell the platform to keep this process alive for the whole transfer:
+        // on Android the anchor is a foreground service, and without it a send started in-app dies
+        // the moment the user switches away. Released exactly once, or the notification pins
+        // forever; released too early, or the process is free to be killed mid-stream.
+        val events = transferAnchor.events
+        val begins = events.filterIsInstance<RecordingOutgoingTransferAnchor.Event.Begin>()
+        val ends = events.filterIsInstance<RecordingOutgoingTransferAnchor.Event.End>()
+
+        assertEquals(1, begins.size, "expected exactly one anchor begin, got $events")
+        assertEquals(1, ends.size, "expected exactly one anchor end, got $events")
+        assertEquals("test-document.txt", begins.first().label)
+        assertEquals(begins.first().transferId, ends.first().transferId)
+        assertEquals(events.first(), begins.first(), "anchor begin must come first, got $events")
+        assertTrue(
+          events.indexOf(begins.first()) < events.indexOf(ends.first()),
+          "anchor begin must precede end, got $events",
+        )
       }
     }
   }
@@ -708,6 +735,9 @@ internal class KlardropTestContext(
     ): Boolean = true
   }
 
+  /** Records the sending side's anchor traffic so a test can assert file sends are bracketed. */
+  val transferAnchor = RecordingOutgoingTransferAnchor()
+
   val clientCommunicationModule = CommunicationModule(
     coroutines = coroutines,
     visibleDevices = clientVisibleDevices,
@@ -721,6 +751,7 @@ internal class KlardropTestContext(
     ackTimeoutConfig = testAckTimeoutConfig,
     heartbeatConfig = testHeartbeatConfig,
     incomingAuthorizerOverride = autoAcceptAuthorizer,
+    outgoingTransferAnchor = transferAnchor,
   )
 
   val serverCommunicationModule = CommunicationModule(
