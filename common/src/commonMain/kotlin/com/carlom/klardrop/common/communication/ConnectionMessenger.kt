@@ -13,6 +13,7 @@ import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.logLocal
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -20,6 +21,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
@@ -104,9 +106,28 @@ class ConnectionMessenger internal constructor(
   }
 
   //  activates read from socket
+  /**
+   * Read loop. Runs until the peer hangs up, the transport is closed, or we're cancelled.
+   *
+   * Loop-exit conditions are deliberately broader than "the read channel reported EOF":
+   *  - `isActive` — [runCatching] below catches [Throwable], which INCLUDES
+   *    [CancellationException]. Without this check a cancelled loop swallowed its own
+   *    cancellation, logged "disconnected cleanly", called [close], and immediately went
+   *    round again — a hot spin that pegged a core for the life of the process. It shows up
+   *    in CI logs as an endless `Listening… / disconnected cleanly: StandaloneCoroutine was
+   *    cancelled / closing / Listening…` cycle.
+   *  - `!connection.isClosed` — [close] closes the TRANSPORT. For [Connection.Tcp] that also
+   *    tears down the ktor channels, so `isClosedForRead` flips and the old condition
+   *    terminated. For [Connection.Ble] it only closes the [BleSession]; the bridged
+   *    ByteChannel stays open, so the loop never saw its exit condition and spun forever
+   *    after the first failure.
+   *
+   * Cancellation is rethrown rather than treated as a peer disconnect so it unwinds the
+   * caller instead of being absorbed here.
+   */
   suspend fun acceptIncomingMessages() = coroutines.ioDispatcher {
     startHeartbeat()
-    while (!readChannel.isClosedForRead) {
+    while (isActive && !readChannel.isClosedForRead && !connection.isClosed) {
       log("ConnectionMessenger: Listening for new messages from ${connection.deviceId}")
 
       runCatching {
@@ -127,6 +148,13 @@ class ConnectionMessenger internal constructor(
           cipher = cipher,
         )
       }.onFailure {
+        // runCatching swallows CancellationException too. Never absorb it: rethrow so the
+        // loop unwinds and the caller's cancellation actually takes effect.
+        if (it is CancellationException) {
+          log("ConnectionMessenger: Read loop for ${connection.deviceId} cancelled; stopping")
+          stopHeartbeat()
+          throw it
+        }
         if (it.isExpectedNetworkNoise()) {
           log("ConnectionMessenger: Peer ${connection.deviceId} disconnected cleanly: ${it.message}")
         } else {

@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.communication
 
 import TestCoroutines
 import com.carlom.klardrop.common.FakeMessagesRouter
+import com.carlom.klardrop.common.ble.BleSession
 import com.carlom.klardrop.common.communication.message.AckType
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.MessageAcknowledgment
@@ -19,10 +20,13 @@ import io.ktor.network.sockets.Socket
 import io.ktor.network.sockets.aSocket
 import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
+import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
@@ -573,6 +577,123 @@ class ConnectionMessengerTest {
     )
     opened += handle
     return handle
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Read-loop termination.
+  //
+  // acceptIncomingMessages() used to loop on `!readChannel.isClosedForRead` alone, with the
+  // body wrapped in runCatching. Two ways that spun a core forever — on the REAL
+  // Dispatchers.IO the loop runs on, not on virtual time:
+  //
+  //   1. BLE transport: close() shuts the BleSession, but the bridged ktor ByteChannel stays
+  //      open, so the exit condition never became true after the first failure.
+  //   2. Cancellation: runCatching catches Throwable, CancellationException included, so a
+  //      cancelled loop logged "disconnected cleanly" and immediately went round again.
+  //
+  // A leaked spinner degrades every later test in the same binary; on CI's 3-core macOS
+  // runner that was enough to blow the 30-minute step budget.
+  //
+  // Both tests bound themselves: acceptIncomingMessages runs on a real dispatcher, so a
+  // regression trips runTest's wall-clock watchdog and FAILS rather than wedging the suite.
+  // ---------------------------------------------------------------------------------------
+
+  @Test
+  fun readLoopStopsOnceBleTransportIsClosed() = runTest(coroutines.dispatcher, timeout = 20.seconds) {
+    val session = FakeBleSession("peer-ble")
+    var invocations = 0
+
+    val router = object : FakeMessagesRouter() {
+      override suspend fun onMessageIncoming(
+        fromDeviceId: String,
+        writeChannel: ByteWriteChannel,
+        readChannel: ByteReadChannel,
+        ackCallback: (suspend (MessageAcknowledgment) -> Unit),
+        pongCallback: (suspend (PongMessage) -> Unit),
+        writeLock: kotlinx.coroutines.sync.Mutex,
+        cipher: FrameCipher,
+      ) {
+        invocations++
+        throw RuntimeException("read failed")
+      }
+    }
+
+    val messenger = ConnectionMessenger(
+      coroutines = coroutines,
+      connection = Connection.Ble(session, "peer-ble"),
+      messagesRouter = router,
+      readChannel = ByteChannel(autoFlush = true),
+      writeChannel = ByteChannel(autoFlush = true),
+      ackTimeoutMs = 1_000L,
+    )
+
+    // Must RETURN. Before the fix this never terminated for a BLE connection.
+    messenger.acceptIncomingMessages()
+
+    assertEquals(
+      1, invocations,
+      "read loop must stop once close() shut the transport — closing a BleSession never closes " +
+        "the ktor channel, so looping on isClosedForRead alone spun forever",
+    )
+    assertFalse(session.isOpen, "the failing read must have closed the transport")
+  }
+
+  @Test
+  fun readLoopUnwindsOnCancellationInsteadOfRetrying() = runTest(coroutines.dispatcher, timeout = 20.seconds) {
+    val session = FakeBleSession("peer-cancel")
+    val entered = CompletableDeferred<Unit>()
+    var invocations = 0
+
+    val router = object : FakeMessagesRouter() {
+      override suspend fun onMessageIncoming(
+        fromDeviceId: String,
+        writeChannel: ByteWriteChannel,
+        readChannel: ByteReadChannel,
+        ackCallback: (suspend (MessageAcknowledgment) -> Unit),
+        pongCallback: (suspend (PongMessage) -> Unit),
+        writeLock: kotlinx.coroutines.sync.Mutex,
+        cipher: FrameCipher,
+      ) {
+        invocations++
+        entered.complete(Unit)
+        awaitCancellation()
+      }
+    }
+
+    val messenger = ConnectionMessenger(
+      coroutines = coroutines,
+      connection = Connection.Ble(session, "peer-cancel"),
+      messagesRouter = router,
+      readChannel = ByteChannel(autoFlush = true),
+      writeChannel = ByteChannel(autoFlush = true),
+      ackTimeoutMs = 1_000L,
+    )
+
+    val job = launch(coroutines.ioDispatcher) { messenger.acceptIncomingMessages() }
+    entered.await()
+
+    // Must complete. Before the fix the CancellationException was swallowed by runCatching
+    // and the loop immediately re-entered, so join() never returned.
+    job.cancelAndJoin()
+
+    assertEquals(
+      1, invocations,
+      "cancellation must unwind the read loop, not be swallowed and retried",
+    )
+  }
+
+  private class FakeBleSession(override val deviceId: String) : BleSession {
+    override var isOpen: Boolean = true
+      private set
+
+    override val mtu: Int get() = 512
+
+    override suspend fun sendChunk(chunk: ByteArray) = Unit
+    override suspend fun receiveChunk(): ByteArray? = null
+
+    override fun close() {
+      isOpen = false
+    }
   }
 
   private interface AutoCloseableHandle { fun close() }
