@@ -133,6 +133,15 @@ class KlardropIntegrationTest {
     turbineScope {
       with(testContext) {
         sendAndVerifyMessage("klardrop protocol test")
+
+        // A text send is one frame plus an ack, so it must not anchor anything: on Android that
+        // would flash a foreground-service notification for nothing, and it would add a subscriber
+        // to a progress flow most text callers never collect.
+        assertEquals(
+          emptyList(),
+          transferAnchor.events,
+          "a text send must not touch the transfer anchor",
+        )
       }
     }
   }
@@ -157,54 +166,6 @@ class KlardropIntegrationTest {
       with(testContext) {
         sendAndVerifyMessage("This is the first message")
         sendAndVerifyMessage("This is a second message!")
-      }
-    }
-  }
-
-  // A file send must tell the platform to keep this process alive for the whole transfer, from
-  // before the first byte until the terminal state — on Android that anchor is a foreground
-  // service, and without it a send started in-app dies the moment the user switches away.
-  @Test
-  fun fileSendIsBracketedByTheTransferAnchor() = integrationTest(timeout = 60.seconds) {
-    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
-
-    turbineScope(timeout = 30.seconds) {
-      with(testContext) {
-        sendAndVerifyFile("anchored.bin", ByteArray(64 * 1024) { (it % 256).toByte() })
-
-        val events = transferAnchor.events
-        val begins = events.filterIsInstance<RecordingOutgoingTransferAnchor.Event.Begin>()
-        val ends = events.filterIsInstance<RecordingOutgoingTransferAnchor.Event.End>()
-
-        assertEquals(1, begins.size, "expected exactly one anchor begin, got $events")
-        assertEquals(1, ends.size, "expected exactly one anchor end, got $events")
-        assertEquals("anchored.bin", begins.first().label)
-        assertEquals(begins.first().transferId, ends.first().transferId)
-
-        // Everything the anchor hears has to fall inside the bracket — an anchor released early
-        // (or never released) is exactly the bug this guards: the first frees the process to be
-        // killed mid-stream, the second pins a foreground notification up forever.
-        assertEquals(events.first(), begins.first(), "anchor begin must come first, got $events")
-        assertEquals(events.last(), ends.first(), "anchor end must come last, got $events")
-      }
-    }
-  }
-
-  // The flip side: a text send is one frame plus an ack. Anchoring it would flash a foreground
-  // notification for nothing, and would add a subscriber to a flow most text callers never collect.
-  @Test
-  fun textSendDoesNotTouchTheTransferAnchor() = integrationTest(timeout = 60.seconds) {
-    testContext.setupServerAndClient(DeviceConnectionType.KLARDROP)
-
-    turbineScope(timeout = 30.seconds) {
-      with(testContext) {
-        sendAndVerifyMessage("text needs no anchor")
-
-        assertEquals(
-          emptyList(),
-          transferAnchor.events,
-          "a text send must not anchor anything",
-        )
       }
     }
   }
@@ -400,6 +361,24 @@ class KlardropIntegrationTest {
       with(testContext) {
         val testData = ByteArray(1024) { (it % 256).toByte() }
         sendAndVerifyFile("test-document.txt", testData, "text/plain")
+
+        // A file send must tell the platform to keep this process alive for the whole transfer:
+        // on Android the anchor is a foreground service, and without it a send started in-app dies
+        // the moment the user switches away. Released exactly once, or the notification pins
+        // forever; released too early, or the process is free to be killed mid-stream.
+        val events = transferAnchor.events
+        val begins = events.filterIsInstance<RecordingOutgoingTransferAnchor.Event.Begin>()
+        val ends = events.filterIsInstance<RecordingOutgoingTransferAnchor.Event.End>()
+
+        assertEquals(1, begins.size, "expected exactly one anchor begin, got $events")
+        assertEquals(1, ends.size, "expected exactly one anchor end, got $events")
+        assertEquals("test-document.txt", begins.first().label)
+        assertEquals(begins.first().transferId, ends.first().transferId)
+        assertEquals(events.first(), begins.first(), "anchor begin must come first, got $events")
+        assertTrue(
+          events.indexOf(begins.first()) < events.indexOf(ends.first()),
+          "anchor begin must precede end, got $events",
+        )
       }
     }
   }
