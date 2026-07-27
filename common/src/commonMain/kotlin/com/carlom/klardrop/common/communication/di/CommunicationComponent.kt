@@ -13,6 +13,7 @@ import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerImpl
+import com.carlom.klardrop.common.communication.OutgoingTransferAnchor
 import com.carlom.klardrop.common.communication.Server
 import com.carlom.klardrop.common.communication.message.AckMessageHandler
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessageHandler
@@ -66,6 +67,12 @@ class CommunicationModule(
    */
   private val incomingAuthorizerOverride: IncomingAuthorizer? = null,
   private val networkLifecycleMonitor: NetworkLifecycleMonitor? = null,
+  /**
+   * Platform hook that keeps the host process alive for the length of an outbound file transfer.
+   * Only Android supplies a real one (a foreground service); everything else stays
+   * [OutgoingTransferAnchor.None].
+   */
+  private val outgoingTransferAnchor: OutgoingTransferAnchor = OutgoingTransferAnchor.None,
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -238,6 +245,7 @@ class CommunicationModule(
       serializer,
       messageRepository,
       ackTimeoutConfig,
+      outgoingTransferAnchor,
     )
   }
 

@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.update.createUpdateManifestFetcher
 import com.carlom.klardrop.common.update.detectInstallChannel
 import com.carlom.klardrop.common.communication.Client
 import com.carlom.klardrop.common.communication.ConnectionsPool
+import com.carlom.klardrop.common.communication.OutgoingTransferAnchor
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
@@ -32,6 +33,11 @@ class CommonComponent(
   private val applicationInfo: ApplicationInfo,
   private val utilsModule: UtilsModule,
   private val internalPlatformDependency: InternalPlatformDependencies,
+  /**
+   * Keeps the host process alive while an outbound file transfer is in flight. Supplied by the
+   * platform app (Android backs it with a foreground service); defaults to a no-op everywhere else.
+   */
+  private val outgoingTransferAnchor: OutgoingTransferAnchor = OutgoingTransferAnchor.None,
 ) {
 
   private val storageModule: StorageModule by lazy {
@@ -75,6 +81,7 @@ class CommonComponent(
       trustStorage = internalPlatformDependency.trustStorage(),
       bleTransport = internalPlatformDependency.bleTransport(),
       networkLifecycleMonitor = internalPlatformDependency.networkLifecycleMonitor(),
+      outgoingTransferAnchor = outgoingTransferAnchor,
     )
   }
 

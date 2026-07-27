@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common
 
+import com.carlom.klardrop.common.communication.OutgoingTransferAnchor
 import com.carlom.klardrop.common.di.CommonComponent
 
 import com.klardrop.common.BugsnagWrapper
@@ -10,7 +11,12 @@ import kotlinx.coroutines.launch
 class Klardrop(
   private val applicationInfo: ApplicationInfo = ApplicationInfo(),
   private val utilsModule: UtilsModule = UtilsModule(),
-  private val internalPlatformDependency: InternalPlatformDependencies
+  private val internalPlatformDependency: InternalPlatformDependencies,
+  /**
+   * Platform hook that keeps this process alive while an outbound file transfer is in flight.
+   * Android passes a foreground-service-backed anchor; the other targets leave it as a no-op.
+   */
+  private val outgoingTransferAnchor: OutgoingTransferAnchor = OutgoingTransferAnchor.None,
 ) {
 
   lateinit var commonComponent: CommonComponent
@@ -21,7 +27,8 @@ class Klardrop(
 
     log("Starting Klardrop with ApplicationInfo: $applicationInfo")
 
-    commonComponent = CommonComponent(applicationInfo, utilsModule, internalPlatformDependency)
+    commonComponent =
+      CommonComponent(applicationInfo, utilsModule, internalPlatformDependency, outgoingTransferAnchor)
 
     // Recover from a prior crash/kill: nothing is actually transferring at boot, so any
     // file_transfers row left as IN_PROGRESS is stale. Without this, those rows render

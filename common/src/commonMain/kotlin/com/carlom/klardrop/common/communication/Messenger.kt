@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.communication
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
+import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.TransferRejectedException
@@ -53,6 +54,7 @@ class MessengerImpl(
   private val messageSerializer: MessageSerializer,
   private val messageRepository: MessageRepository,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
+  private val transferAnchor: OutgoingTransferAnchor = OutgoingTransferAnchor.None,
 ) : Messenger {
 
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -66,7 +68,55 @@ class MessengerImpl(
     val flow = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 1)
 
     messengerScope.launch {
+      // Anchor payload-bearing sends only. A file send waits on the receiver accepting and then
+      // streams — minutes, all of it a window in which the platform may freeze or kill us out from
+      // under the socket (see OutgoingTransferAnchor). Text/control messages are a single frame
+      // plus an ack; anchoring one would flash a progress notification for nothing — and would add
+      // a subscriber to `flow`, which for an uncollected send turns dropped emissions into ones
+      // that have to be delivered.
+      val anchored = messageRequest.message.hasPayload
+      val anchorId = "$deviceId:${messageRequest.message.id}"
 
+      val anchorProgressJob = if (!anchored) null else {
+        val label = (messageRequest.message as? FileMessage)?.fileName ?: "file"
+        runCatching { transferAnchor.begin(anchorId, label) }
+          .onFailure { log("Messenger", "Transfer anchor begin failed for $anchorId", it) }
+        // Mirror live progress into the anchor off the same flow the callers read. Cancelled in
+        // the finally below — `flow` is a hot SharedFlow that never completes on its own, so this
+        // collector would otherwise keep the send coroutine alive forever.
+        launch {
+          flow.collect { progress ->
+            if (progress is MessengerSendProgress.InProgress) {
+              runCatching { transferAnchor.progress(anchorId, progress.percentage) }
+            }
+          }
+        }
+      }
+
+      try {
+        runSend(deviceId, messageRequest, flow)
+      } finally {
+        if (anchored) {
+          anchorProgressJob?.cancel()
+          runCatching { transferAnchor.end(anchorId) }
+            .onFailure { log("Messenger", "Transfer anchor end failed for $anchorId", it) }
+        }
+      }
+    }
+
+    return flow
+  }
+
+  /**
+   * The actual send. Split out of [send] so the anchor's begin/end can bracket it with a plain
+   * try/finally — the body below returns early from several branches, and every one of them must
+   * still release the anchor.
+   */
+  private suspend fun runSend(
+    deviceId: String,
+    messageRequest: SendMessageRequest,
+    flow: MutableSharedFlow<MessengerSendProgress>,
+  ) {
       flow.emit(Pending)
       log("Messenger", "Emitted Pending status for $deviceId")
 
@@ -116,7 +166,7 @@ class MessengerImpl(
           messageRepository.updateMessageSendStatus(pendingRowId, SendStatus.FAILED)
         }
         flow.emit(Error("$friendlyName is not visible"))
-        return@launch
+        return
       }
 
       log("Messenger", "✅ Device $deviceId found in visible devices")
@@ -136,7 +186,7 @@ class MessengerImpl(
         val message = messageRequest.message
         val isPairingMessage = message is TrustPairingRequest || message is TrustPairingResponse
         val isRevocation = message is TrustRevocationMessage
-        val isFileMessage = message is com.carlom.klardrop.common.communication.message.FileMessage
+        val isFileMessage = message is FileMessage
 
         if (!isPairingMessage && !isRevocation && !isFileMessage && trustChecker.value.isTrusted(deviceId)) {
           log("Messenger", "Device $deviceId is trusted, creating TrustedMessage")
@@ -201,7 +251,7 @@ class MessengerImpl(
 
       // Terminal status for the row inserted above — exactly one flip, regardless of which
       // branch above produced the result (including the exhausted-retries and no-connection
-      // paths, which is why "no connection" no longer short-circuits with return@launch).
+      // paths, which is why "no connection" no longer short-circuits with an early return).
       if (pendingRowId != null) {
         messageRepository.updateMessageSendStatus(
           pendingRowId,
@@ -211,9 +261,6 @@ class MessengerImpl(
 
       if (transferCompleted)
         flow.emit(Completed)
-    }
-
-    return flow
   }
 
   override fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>> { // Changed
