@@ -146,7 +146,11 @@ class FileSendService : Service() {
               is MessengerSendProgress.InProgress -> updateProgress(file.name, index, files.size, progress.percentage)
               is Error -> log("FileSendService", "Send of ${file.name} errored: ${progress.message}")
               Completed -> log("FileSendService", "Sent ${file.name} to $deviceId")
-              MessengerSendProgress.Pending -> {}
+              // Both phases are already mirrored to the share sheet by the publish above,
+              // which renders them as "Waiting for receiver to accept…". The foreground
+              // notification only tracks byte progress, so there's nothing to update here.
+              MessengerSendProgress.Pending,
+              MessengerSendProgress.AwaitingRecipient -> {}
             }
           }
       }

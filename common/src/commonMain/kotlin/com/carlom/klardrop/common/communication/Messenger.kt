@@ -63,7 +63,12 @@ class MessengerImpl(
       "send() called: deviceId=$deviceId, messageType=${messageRequest.message.type}, messageId=${messageRequest.message.id}"
     )
 
-    val flow = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 1)
+    // replay = 1 so the caller can't lose the early emissions to a subscription race: the
+    // producer below is launched immediately (on [messengerScope]/ioDispatcher) while the
+    // caller only subscribes once `send()` has returned and `.collect` runs. A replay-less
+    // SharedFlow drops anything emitted in that window — which is exactly Pending and, on a
+    // fast local send, InProgress(0) too, so the UI never learned a transfer had begun.
+    val flow = MutableSharedFlow<MessengerSendProgress>(replay = 1, extraBufferCapacity = 1)
 
     messengerScope.launch {
 
@@ -512,6 +517,15 @@ fun Flow<MessengerSendProgress>.untilCompleted(): Flow<MessengerSendProgress> {
 sealed interface MessengerSendProgress {
   data object Pending : MessengerSendProgress
   data class InProgress(val percentage: Int) : MessengerSendProgress
+
+  /**
+   * The file header is on the wire and we're blocked on the recipient's ACK_READY — which for
+   * an untrusted peer means a human has to tap Accept. No bytes flow during this window, so a
+   * percentage would be a lie; the UI shows an indeterminate bar instead of a dead 0%.
+   *
+   * Not terminal: [isCompleted] stays false so `untilCompleted()` keeps collecting.
+   */
+  data object AwaitingRecipient : MessengerSendProgress
   data object Completed : MessengerSendProgress
   data class Error(val message: String = "") : MessengerSendProgress
 

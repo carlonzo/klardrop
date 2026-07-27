@@ -181,6 +181,12 @@ fun KdGallery() {
                     state = KdFileState.Receiving(0.80f),
                 )
                 FileCard(
+                    fileName = "waiting-on-peer.iso",
+                    fileSize = "4.0 GB",
+                    // null fraction = live but not yet measurable → indeterminate bar
+                    state = KdFileState.Sending(null),
+                )
+                FileCard(
                     fileName = "design-assets.zip",
                     fileSize = "220 MB",
                     state = KdFileState.Done,
