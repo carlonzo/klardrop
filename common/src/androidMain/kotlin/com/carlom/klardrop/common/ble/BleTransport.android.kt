@@ -160,32 +160,20 @@ actual class BleTransport(private val context: Context) {
     val callback = object : ScanCallback() {
       override fun onScanResult(callbackType: Int, result: ScanResult) {
         val record = result.scanRecord ?: return
-        // Both peer types may encode `<shortId>|<friendlyName>` when possible:
-        // Android peers carry the bare shortId in service-data (no friendly name
-        // — the AD packet is full); Apple peers carry the combined string in the
-        // local name (CB auto-spills to scan response when long).
-        val rawServiceData = record.serviceData?.get(serviceUuid)?.decodeToString()
-        val rawName = record.deviceName
-        val combined = listOfNotNull(rawServiceData, rawName).firstOrNull { it.contains('|') }
-        val shortDeviceId: String
-        val friendlyName: String?
-        if (combined != null) {
-          val parts = combined.split('|', limit = 2)
-          shortDeviceId = parts[0]
-          friendlyName = parts.getOrNull(1)
-        } else {
-          // No combined payload — use whichever bare identifier is present. We do
-          // NOT fall back to the BT MAC here because that would surface the same
-          // peer twice (once with MAC, once with shortId once a scan response with
-          // the local name arrives).
-          shortDeviceId = rawServiceData ?: rawName ?: return
-          friendlyName = rawName
-        }
+        // Identity decoding lives in commonMain so Android, Apple and the macOS helper
+        // can't disagree about what counts as a Klardrop peer. Android peers carry the
+        // id as service-data, Apple peers as the local name; the codec takes both.
+        // Packets carrying neither are dropped — notably we never fall back to the BT
+        // MAC, which would surface the same peer twice once its scan response lands.
+        val advertisement = BleAdvertisementCodec.decode(
+          serviceData = record.serviceData?.get(serviceUuid),
+          localName = record.deviceName,
+        ) ?: return
         trySend(
           BlePeerEvent.Found(
             address = result.device.address,
-            shortDeviceId = shortDeviceId,
-            localName = friendlyName,
+            shortDeviceId = advertisement.shortDeviceId,
+            localName = advertisement.friendlyName,
             rssi = result.rssi,
           )
         )
@@ -666,6 +654,15 @@ private class AndroidPeripheralBleSession(
 }
 
 
+/**
+ * Translate the shared advertisement description into Android's `AdvertiseData`.
+ *
+ * [BleAdvertisePayload.AdRecords.localName] is intentionally not carried: Android's
+ * builder exposes only `setIncludeDeviceName`, which broadcasts the *system* Bluetooth
+ * name ("Pixel 9 Pro XL"), not a value we choose. Including it would both leak the user's
+ * device name to every scanner in range and blow the 31-byte budget, so Android relies on
+ * the service-data record for its identity and leaves the name to the GATT handshake.
+ */
 private fun BleAdvertisePayload.AdRecords.toAndroid(): AdvertiseData {
   val builder = AdvertiseData.Builder().setIncludeDeviceName(false)
   serviceUuids.forEach { builder.addServiceUuid(ParcelUuid(UUID.fromString(it))) }

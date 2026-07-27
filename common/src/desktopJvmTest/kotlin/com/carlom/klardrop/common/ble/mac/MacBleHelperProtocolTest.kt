@@ -108,4 +108,63 @@ class MacBleHelperProtocolTest {
     assertEquals("x", ok.id)
     assertEquals("value", ok.obj.string("unknown"))
   }
+
+  // ── peer_found decoding ────────────────────────────────────────────────────────────
+
+  private fun peerFound(line: String) = decodePeerFound(
+    assertIs<HelperLine.Event>(assertNotNull(HelperProtocol.parseLine(line))).obj
+  )
+
+  @Test
+  fun decodesPeerFoundFromServiceData() {
+    // An Android peer seen by the helper: id in the service-data AD field.
+    val found = assertNotNull(
+      peerFound("""{"event":"peer_found","peerId":"P-1","rssi":-52,"serviceData":"YWJjZDEyMzQ="}""")
+    )
+    assertEquals("P-1", found.address)
+    assertEquals("abcd1234", found.shortDeviceId)
+    assertEquals(-52, found.rssi)
+    assertNull(found.localName)
+  }
+
+  @Test
+  fun decodesPeerFoundFromLocalName() {
+    // Another Apple peer: id in the local name, since CoreBluetooth drops service-data.
+    val found = assertNotNull(
+      peerFound("""{"event":"peer_found","peerId":"P-2","rssi":-70,"localName":"beefcafe"}""")
+    )
+    assertEquals("beefcafe", found.shortDeviceId)
+    assertNull(found.localName)
+  }
+
+  @Test
+  fun decodesPeerFoundFromLegacyHelperBinary() {
+    // Regression guard for the prebuilt helper checked into the repo, which decodes the
+    // advertisement itself and reports the peer's GAP device name as `localName`. That
+    // name must not be mistaken for the identity, and the peer must still be surfaced.
+    val found = assertNotNull(
+      peerFound(
+        """{"event":"peer_found","peerId":"P-3","rssi":-40,""" +
+          """"shortDeviceId":"abcd1234","localName":"Carlo's MacBook Pro"}"""
+      )
+    )
+    assertEquals("abcd1234", found.shortDeviceId)
+    assertNull(found.localName, "the GAP device name must not leak in as a friendly name")
+  }
+
+  @Test
+  fun dropsPeerFoundWithoutAnyKlardropIdentity() {
+    assertNull(peerFound("""{"event":"peer_found","peerId":"P-4","rssi":-40}"""))
+    assertNull(peerFound("""{"event":"peer_found","peerId":"P-5","localName":"Galaxy A32"}"""))
+    // Missing peerId — nothing to key the peer on.
+    assertNull(peerFound("""{"event":"peer_found","serviceData":"YWJjZDEyMzQ="}"""))
+  }
+
+  @Test
+  fun ignoresUndecodableServiceDataAndFallsBackToLocalName() {
+    val found = assertNotNull(
+      peerFound("""{"event":"peer_found","peerId":"P-6","serviceData":"!!not base64!!","localName":"abcd1234"}""")
+    )
+    assertEquals("abcd1234", found.shortDeviceId)
+  }
 }

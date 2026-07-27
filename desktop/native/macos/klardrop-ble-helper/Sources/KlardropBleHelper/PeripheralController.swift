@@ -206,16 +206,11 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
     var data: [String: Any] = [
       CBAdvertisementDataServiceUUIDsKey: [serviceUUID],
     ]
-    // Carry short device id as the local name so iOS/macOS centrals can read it
-    // straight from the scan callback. Apple's CB does not let us add custom
-    // service-data to advertisements, so this is the lowest-friction channel.
-    //
-    // Truncated to the short-id length on purpose: flags (3) + 128-bit service UUID
-    // (2 + 16) + local name (2 + n) has to fit the 31-byte legacy advertisement, and
-    // n = 8 lands on exactly 31. A longer name pushes the service UUID into Apple's
-    // proprietary "overflow area", where only other Apple devices can decode it —
-    // Android scanners filtering on the service UUID would stop seeing us entirely.
-    let advertisedName = String((pendingLocalName ?? shortId).prefix(BleConstants.maxShortDeviceIdLength))
+    // The local name is chosen on the Kotlin side from the shared klardropAdvertisePayload
+    // (which keeps it inside the 31-byte legacy advertisement); we broadcast it verbatim.
+    // Apple's CB does not let us add custom service-data to advertisements, so the local
+    // name is the only channel this helper can carry the short device id on.
+    let advertisedName = pendingLocalName ?? shortId
     data[CBAdvertisementDataLocalNameKey] = advertisedName
     if manager.isAdvertising { manager.stopAdvertising() }
     manager.startAdvertising(data)

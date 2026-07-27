@@ -1,13 +1,16 @@
 import Foundation
 
 // Constants kept in sync with common/src/commonMain/kotlin/com/carlom/klardrop/common/ble/BleConstants.kt.
+//
+// This is the only Klardrop protocol knowledge the helper holds. What to advertise and
+// how to read a peer's identity back out of an advertisement lives in commonMain
+// (klardropAdvertisePayload / BleAdvertisementCodec) so the macOS, iOS and Android
+// radios can't drift apart; the helper just makes the CoreBluetooth calls and forwards
+// raw advertisement fields for the Kotlin side to decode.
 enum BleConstants {
   static let serviceUUID = "a5b7c3e1-7f5a-4b62-9a3c-1d8e2f4b6c8a"
   static let txCharacteristicUUID = "a5b7c3e2-7f5a-4b62-9a3c-1d8e2f4b6c8a"
   static let rxCharacteristicUUID = "a5b7c3e3-7f5a-4b62-9a3c-1d8e2f4b6c8a"
-  /// Mirrors `MAX_SHORT_DEVICE_ID_LEN` in BleAdvertisePayload.kt. Also the cap on the
-  /// advertised local name — see PeripheralController.actuallyStartAdvertising().
-  static let maxShortDeviceIdLength = 8
 }
 
 // Newline-delimited JSON. Commands carry an `id` for response correlation. Events

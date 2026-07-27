@@ -29,6 +29,7 @@ import platform.CoreBluetooth.CBAttributePermissionsWriteable
 import platform.CoreBluetooth.CBCentral
 import platform.CoreBluetooth.CBCentralManager
 import platform.CoreBluetooth.CBCentralManagerDelegateProtocol
+import platform.CoreBluetooth.CBCentralManagerScanOptionAllowDuplicatesKey
 import platform.CoreBluetooth.CBCharacteristic
 import platform.CoreBluetooth.CBCharacteristicPropertyNotify
 import platform.CoreBluetooth.CBCharacteristicPropertyWrite
@@ -141,29 +142,39 @@ actual class BleTransport {
     // of our advertisement must find the Klardrop service already there.
     installPeripheralService()
 
-    val serviceUUID = CBUUID.UUIDWithString(BleConstants.SERVICE_UUID)
-    // Byte budget: flags (3) + 128-bit service UUID (2 + 16) + local name (2 + n) must
-    // fit the 31-byte legacy advertisement. An 8-char shortDeviceId lands on exactly 31.
-    // Anything longer and CoreBluetooth silently moves the service UUID into Apple's
-    // proprietary "overflow area", which only other Apple devices can decode — we'd stay
-    // visible to iOS/macOS peers while becoming invisible to every Android scanner
-    // filtering on the service UUID.
-    val localName = shortId.take(MAX_SHORT_DEVICE_ID_LEN)
-    val data = mapOf<Any?, Any?>(
-      CBAdvertisementDataServiceUUIDsKey to listOf(serviceUUID),
-      // Apple does not allow custom service-data on advertisements; carry the
-      // short id in the local name so peers see it from the scan callback alone.
-      CBAdvertisementDataLocalNameKey to localName,
-    )
+    // What we advertise is decided in commonMain; this only translates the records
+    // CoreBluetooth is able to express. `startAdvertising` supports exactly two keys —
+    // service UUIDs and local name — and silently drops everything else, so the
+    // payload's service-data records are Android's to carry.
+    val payload = klardropAdvertisePayload(shortId)
+    val data = buildMap<Any?, Any?> {
+      put(
+        CBAdvertisementDataServiceUUIDsKey,
+        payload.primary.serviceUuids.map { CBUUID.UUIDWithString(it) },
+      )
+      // Conditional because the dict bridges to an NSDictionary, which cannot hold a nil.
+      payload.primary.localName?.let { put(CBAdvertisementDataLocalNameKey, it) }
+    }
     if (peripheralManager.isAdvertising) peripheralManager.stopAdvertising()
     peripheralManager.startAdvertising(data)
-    log(TAG, "BLE advertising as '$localName'")
+    log(TAG, "BLE advertising as '${payload.primary.localName}'")
   }
 
   actual fun scanForPeers(): Flow<BlePeerEvent> = callbackFlow {
     val serviceUUID = CBUUID.UUIDWithString(BleConstants.SERVICE_UUID)
     if (centralManager.state == CBManagerStatePoweredOn) {
-      centralManager.scanForPeripheralsWithServices(listOf(serviceUUID), options = null)
+      centralManager.scanForPeripheralsWithServices(
+        listOf(serviceUUID),
+        // Duplicates ON, matching Android's CALLBACK_TYPE_ALL_MATCHES. With CoreBluetooth's
+        // default de-duplication we get roughly one didDiscover per peer per scan, which
+        // breaks two things: a peer whose first packet arrives without the scan-response
+        // service-data is dropped by the decoder and never re-offered, and a peer that
+        // stays put never refreshes its VisibleDevices lastSeenTimestamp, so the 5-minute
+        // staleness sweep evicts a device that is sitting right there advertising.
+        options = mapOf<Any?, Any?>(
+          CBCentralManagerScanOptionAllowDuplicatesKey to true,
+        ),
+      )
     }
     val pumpJob = scope.launch {
       for (event in peerEvents) trySend(event)
@@ -243,22 +254,22 @@ actual class BleTransport {
     ) {
       val peerId = didDiscoverPeripheral.identifier.UUIDString
       discovered[peerId] = didDiscoverPeripheral
-      // Without the Klardrop service-data we can't know the peer's real shortDeviceId.
-      // Falling back to peripheral.name (the system Bluetooth name like "Galaxy A32")
-      // synthesised a bogus deviceId that wouldn't merge with the same peer's mDNS
-      // entry — the user saw the Samsung listed twice on iPad: once under the marketing
-      // name (bogus deviceId), once under the real mDNS deviceId. Drop the event; the
-      // scan callback will fire again as the peer keeps advertising and the next packet
-      // typically carries the service data we need.
-      val shortId = decodeShortDeviceId(advertisementData)
-      if (shortId == null) {
-        return
-      }
+      // Identity comes from the advertisement alone, via the shared codec. Peers whose
+      // packet carries no Klardrop id are dropped rather than falling back to
+      // peripheral.name (the system Bluetooth name like "Galaxy A32"): that synthesised
+      // a bogus deviceId that wouldn't merge with the same peer's mDNS entry — the user
+      // saw the Samsung listed twice on iPad, once under the marketing name and once
+      // under the real id. Scanning allows duplicates, so a peer whose first packet was
+      // incomplete is re-offered on the next one.
+      val advertisement = BleAdvertisementCodec.decode(
+        serviceData = serviceDataBytes(advertisementData),
+        localName = advertisementData[CBAdvertisementDataLocalNameKey] as? String,
+      ) ?: return
       peerEvents.trySend(
         BlePeerEvent.Found(
           address = peerId,
-          shortDeviceId = shortId,
-          localName = didDiscoverPeripheral.name,
+          shortDeviceId = advertisement.shortDeviceId,
+          localName = advertisement.friendlyName,
           rssi = RSSI.intValue,
         )
       )
@@ -467,13 +478,12 @@ actual class BleTransport {
     centralManager.cancelPeripheralConnection(peripheral)
   }
 
-  private fun decodeShortDeviceId(advertisementData: Map<Any?, *>): String? {
+  /** Lift the Klardrop service-data bytes out of a CoreBluetooth advertisement dict. */
+  private fun serviceDataBytes(advertisementData: Map<Any?, *>): ByteArray? {
     val serviceUUID = CBUUID.UUIDWithString(BleConstants.SERVICE_UUID)
     @Suppress("UNCHECKED_CAST")
     val serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? Map<CBUUID, NSData>
-    val bytes = serviceData?.get(serviceUUID)
-    if (bytes != null) return bytes.toByteArray().decodeToString()
-    return advertisementData[CBAdvertisementDataLocalNameKey] as? String
+    return serviceData?.get(serviceUUID)?.toByteArray()
   }
 
   private companion object {

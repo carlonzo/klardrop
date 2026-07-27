@@ -67,6 +67,30 @@ class BleAdvertisePayloadTest {
   }
 
   @Test
+  fun primaryAdvertisementCarriesShortDeviceIdAsLocalName() {
+    // Apple's only writable channel: CBPeripheralManager supports exactly two
+    // advertisement keys (service UUIDs and local name) and silently drops
+    // service-data, so the id has to ride along in the primary AD as the name.
+    val payload = klardropAdvertisePayload("abcd1234")
+    assertEquals("abcd1234", payload.primary.localName)
+  }
+
+  @Test
+  fun primaryAdWithLocalNameStillFitsTheLegacyBudget() {
+    // The tightest constraint in the whole BLE path, and a silent one: service UUID
+    // (2 + 16) + local name (2 + 8) = 28, exactly the budget once the stack's 3-byte
+    // flags AD is accounted for. Overflow doesn't fail loudly — CoreBluetooth moves the
+    // service UUID into Apple's proprietary overflow area, where Apple peers still see
+    // it and every Android scanner filtering on that UUID stops seeing us at all.
+    val payload = klardropAdvertisePayload("abcd1234")
+    assertEquals(
+      BleAdvertisePayload.LEGACY_AD_BUDGET_BYTES,
+      payload.primary.approxBytes,
+      "Primary AD must sit exactly on the legacy budget; any growth breaks Android discovery"
+    )
+  }
+
+  @Test
   fun rejectsShortDeviceIdLongerThanEightChars() {
     // Defensive contract: the AD budget can't accommodate longer ids, so the
     // builder rejects them rather than silently producing oversized payloads
@@ -74,6 +98,6 @@ class BleAdvertisePayloadTest {
     val ex = assertFailsWith<IllegalArgumentException> {
       klardropAdvertisePayload("abcd12345678abcd")
     }
-    assertTrue(ex.message!!.contains("exceeds"), "message: ${ex.message}")
+    assertTrue(ex.message!!.contains("valid Klardrop short device id"), "message: ${ex.message}")
   }
 }

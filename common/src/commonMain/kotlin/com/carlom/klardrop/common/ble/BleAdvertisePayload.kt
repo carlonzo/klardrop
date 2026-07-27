@@ -40,7 +40,12 @@ data class BleAdvertisePayload(
      * read short app-specific payloads without opening a GATT connection.
      */
     val serviceData: Map<String, ByteArray> = emptyMap(),
-    /** Local name to include (Apple-style; Android's API doesn't allow custom names). */
+    /**
+     * Local name (AD type `0x09`). Apple's only writable channel for app data, since
+     * `CBPeripheralManager` refuses custom service-data. Android adapters ignore this:
+     * `AdvertiseData.Builder` can only include the *system* Bluetooth name, never a
+     * custom one.
+     */
     val localName: String? = null,
   ) {
     /**
@@ -72,27 +77,41 @@ data class BleAdvertisePayload(
 }
 
 /**
- * Builds the canonical Klardrop BLE advertisement: primary carries the service
- * UUID (so scanners filtering by UUID find us), scan response carries the
- * shortDeviceId as service-data (so Android peers can read it without a GATT
- * round-trip — Apple peers can't read service-data, but the BLE handshake
- * fills that gap).
+ * Builds the canonical Klardrop BLE advertisement — the one description of what we
+ * broadcast, shared by every platform so no radio can drift from the others.
+ *
+ *  - **primary**: the service UUID (so scanners filtering by UUID find us at all) plus
+ *    the shortDeviceId as the local name.
+ *  - **scan response**: the shortDeviceId as service-data.
+ *
+ * The id is deliberately in *both* AD fields because neither platform family can write
+ * both, and each reads what the other writes — see [BleAdvertisementCodec.decode]:
+ *
+ * | Field         | Android write            | Apple write | Android read | Apple read |
+ * |---------------|--------------------------|-------------|--------------|------------|
+ * | service UUID  | yes                      | yes         | scan filter  | scan filter|
+ * | service-data  | yes (scan response)      | **no**      | yes          | yes        |
+ * | local name    | **no**                   | yes         | yes          | yes        |
+ *
+ * Platform adapters publish the records their native API can express and ignore the
+ * rest; the two "no" cells are hard API limits, not choices:
+ * `AdvertiseData.Builder` has no custom-local-name setter (only
+ * `setIncludeDeviceName`, which sends the *system* Bluetooth name), and
+ * `CBPeripheralManager.startAdvertising` documents exactly two supported keys —
+ * service UUIDs and local name — silently dropping anything else.
+ *
+ * @throws IllegalArgumentException if [shortDeviceId] isn't a well-formed short device id.
  */
-/** Maximum length for the shortDeviceId carried in scan-response service-data. */
-const val MAX_SHORT_DEVICE_ID_LEN = 8
-
 fun klardropAdvertisePayload(shortDeviceId: String): BleAdvertisePayload {
-  require(shortDeviceId.length <= MAX_SHORT_DEVICE_ID_LEN) {
-    "shortDeviceId '$shortDeviceId' exceeds $MAX_SHORT_DEVICE_ID_LEN chars; " +
-      "would overflow the BLE scan-response budget"
-  }
+  val serviceDataBytes = BleAdvertisementCodec.encodeShortDeviceId(shortDeviceId)
   return BleAdvertisePayload(
     primary = BleAdvertisePayload.AdRecords(
       serviceUuids = listOf(BleConstants.SERVICE_UUID),
+      localName = shortDeviceId,
     ),
     scanResponse = BleAdvertisePayload.AdRecords(
       serviceData = mapOf(
-        BleConstants.SERVICE_UUID to shortDeviceId.encodeToByteArray(),
+        BleConstants.SERVICE_UUID to serviceDataBytes,
       ),
     ),
   )

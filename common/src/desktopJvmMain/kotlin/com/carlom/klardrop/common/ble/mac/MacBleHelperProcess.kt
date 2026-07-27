@@ -147,8 +147,10 @@ internal class MacBleHelperProcess(
   fun isPoweredOn(): Boolean = _state.value == HelperState.POWERED_ON
 
   /**
-   * Start advertising. The shortDeviceId carries the peer identity; localName is a
-   * human-readable hint (defaults to the short id on the helper if omitted).
+   * Start advertising. [localName] is the AD local-name record chosen by
+   * `klardropAdvertisePayload` — the only channel CoreBluetooth lets a peripheral use to
+   * carry the id, since it drops custom service-data. The helper broadcasts it verbatim;
+   * [shortDeviceId] is kept for replay bookkeeping across helper restarts.
    */
   suspend fun startAdvertising(shortDeviceId: String, localName: String?) {
     if (!ensureStarted()) return
@@ -462,11 +464,7 @@ internal class MacBleHelperProcess(
         log(TAG, "helper state: $newState")
       }
       HelperEvents.PEER_FOUND -> {
-        val address = event.obj.string("peerId") ?: return
-        val shortDeviceId = event.obj.string("shortDeviceId") ?: return
-        val rssi = event.obj.int("rssi") ?: 0
-        val localName = event.obj.string("localName")
-        peerEvents.tryEmit(BlePeerEvent.Found(address, shortDeviceId, localName, rssi))
+        decodePeerFound(event.obj)?.let { peerEvents.tryEmit(it) }
       }
       HelperEvents.PEER_LOST -> {
         val address = event.obj.string("peerId") ?: return

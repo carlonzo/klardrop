@@ -34,12 +34,18 @@ actual class BleTransport internal constructor(
     val h = helper ?: return
     if (!h.ensureStarted()) return
     runCatching {
-      // BLE advertisements are public — anyone within range with a BLE scanner can
-      // read the local name. We only broadcast the 8-char shortDeviceId (which is
-      // app-specific and not user-identifying). The friendly device name, OS type,
-      // and device type are exchanged inside the encrypted Klardrop handshake
-      // after the GATT connection opens, so non-Klardrop scanners never see them.
-      h.startAdvertising(currentDevice.shortDeviceId, currentDevice.shortDeviceId)
+      // What goes on the air is decided by the shared payload builder; the helper only
+      // makes the CoreBluetooth calls. CBPeripheralManager can express the service UUID
+      // (a constant the helper already mirrors) and the local name, so that is all we
+      // hand it — the payload's service-data record is Android's to carry.
+      //
+      // BLE advertisements are public: anyone in range with a scanner can read the local
+      // name. It is only the 8-char shortDeviceId, which is app-specific and not
+      // user-identifying. The friendly device name, OS type and device type are exchanged
+      // inside the encrypted Klardrop handshake after the GATT connection opens, so
+      // non-Klardrop scanners never see them.
+      val payload = klardropAdvertisePayload(currentDevice.shortDeviceId)
+      h.startAdvertising(currentDevice.shortDeviceId, payload.primary.localName)
     }.onFailure { log(TAG, "startAdvertising failed", it) }
   }
 

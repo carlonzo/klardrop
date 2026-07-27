@@ -42,8 +42,12 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
     }
     let serviceUUID = CBUUID(string: BleConstants.serviceUUID)
     if scanning { manager.stopScan() }
+    // Duplicates ON, matching Android's CALLBACK_TYPE_ALL_MATCHES. De-duplicated scanning
+    // gives roughly one didDiscover per peer per scan, which drops a peer whose first
+    // packet arrives before its scan-response service-data and never refreshes the
+    // liveness timestamp of a peer that is sitting still and advertising.
     manager.scanForPeripherals(withServices: [serviceUUID], options: [
-      CBCentralManagerScanOptionAllowDuplicatesKey: false
+      CBCentralManagerScanOptionAllowDuplicatesKey: true
     ])
     scanning = true
     writer.sendOk(id: requestId)
@@ -123,18 +127,26 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
   func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
     let peerId = peripheral.identifier.uuidString
     discovered[peerId] = peripheral
-    // Skip packets that don't carry a Klardrop-shaped short device id. CoreBluetooth
-    // delivers many didDiscover callbacks per peer with varying advertisementData;
-    // if we accept the BT peripheral name as a fallback we end up emitting two
-    // distinct "peers" (e.g. "unknown" then "Pixel 9 Pro XL") for the same device,
-    // which the discovery layer keys separately and surfaces as duplicate rows.
-    guard let shortId = decodeShortDeviceId(advertisementData: advertisementData) else { return }
+    // Forward the raw advertisement fields and let the Kotlin side decode them with the
+    // shared BleAdvertisementCodec. Deciding here what counts as a Klardrop peer is how
+    // this helper drifted from the Android and iOS transports in the first place; the
+    // rule now lives in commonMain where one test covers every platform.
+    //
+    // Note we deliberately do NOT send peripheral.name (the GAP device name). Only the
+    // advertisement is identity: adopting the BT name produced two rows for one device,
+    // "unknown" and then "Pixel 9 Pro XL", keyed separately by the discovery layer.
     var fields: [String: Any] = [
       "peerId": peerId,
-      "shortDeviceId": shortId,
       "rssi": RSSI.intValue,
     ]
-    if let name = peripheral.name { fields["localName"] = name }
+    let serviceUUID = CBUUID(string: BleConstants.serviceUUID)
+    if let serviceData = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data],
+       let bytes = serviceData[serviceUUID] {
+      fields["serviceData"] = bytes.base64EncodedString()
+    }
+    if let localName = advertisementData[CBAdvertisementDataLocalNameKey] as? String {
+      fields["localName"] = localName
+    }
     writer.sendEvent("peer_found", fields)
   }
 
@@ -239,32 +251,6 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
     manager.cancelPeripheralConnection(peripheral)
   }
 
-  // Pull the short device id from advertisement data. Android peers carry it as
-  // service-data under our service UUID. Apple peers may also advertise the same
-  // service-data when running through this helper or the iOS app.
-  private func decodeShortDeviceId(advertisementData: [String: Any]) -> String? {
-    let serviceUUID = CBUUID(string: BleConstants.serviceUUID)
-    if let data = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data],
-       let bytes = data[serviceUUID],
-       let s = String(data: bytes, encoding: .utf8),
-       isKlardropShortDeviceId(s) {
-      return s
-    }
-    // macOS peripherals advertise the short id as the local name (Apple's CB
-    // does not expose the service-data slot to apps). Only accept it when it
-    // matches the Klardrop short-id shape, otherwise BT names from non-Klardrop
-    // peers leak in as fake peer identities.
-    if let local = advertisementData[CBAdvertisementDataLocalNameKey] as? String,
-       isKlardropShortDeviceId(local) {
-      return local
-    }
-    return nil
-  }
-
-  private func isKlardropShortDeviceId(_ s: String) -> Bool {
-    guard s.count == 8 else { return false }
-    return s.allSatisfy { $0.isHexDigit }
-  }
 }
 
 private struct PendingConnect {
