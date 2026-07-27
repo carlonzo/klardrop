@@ -19,6 +19,11 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
   private var pendingLocalName: String?
   private var pendingAdvertiseRequestId: String?
   private var serviceAdded = false
+  // Whether the app wants us advertising, independent of `pendingAdvertiseRequestId`
+  // (which is consumed by the first didStartAdvertising callback). CoreBluetooth stops
+  // advertising and drops published services whenever the radio power-cycles and never
+  // restores either, so we need our own record of the intent to re-arm from.
+  private var advertisingDesired = false
 
   // Active peripheral-role sessions keyed by central identifier UUID string.
   private var sessions: [String: PeripheralSession] = [:]
@@ -37,6 +42,7 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
     pendingShortDeviceId = shortDeviceId
     pendingLocalName = localName
     pendingAdvertiseRequestId = requestId
+    advertisingDesired = true
 
     if !serviceAdded {
       installService()
@@ -50,6 +56,7 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
   }
 
   func stopAdvertising(requestId: String) {
+    advertisingDesired = false
     if manager.isAdvertising {
       manager.stopAdvertising()
     }
@@ -76,6 +83,7 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
   }
 
   func shutdown() {
+    advertisingDesired = false
     if manager.isAdvertising { manager.stopAdvertising() }
     sessions.removeAll()
     if serviceAdded {
@@ -89,7 +97,10 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
   func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
     if peripheral.state == .poweredOn {
       if !serviceAdded { installService() }
-      if pendingAdvertiseRequestId != nil { actuallyStartAdvertising() }
+      // Re-arm on every power-up, not just the first: `pendingAdvertiseRequestId` is
+      // cleared by the didStartAdvertising callback, so keying off it would leave us
+      // silently non-discoverable after the radio comes back.
+      if advertisingDesired { actuallyStartAdvertising() }
     } else {
       // Sessions tied to the peripheral manager are now invalid.
       for (_, session) in sessions {
@@ -97,6 +108,9 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
         writer.sendEvent("session_closed", ["sessionId": session.sessionId, "reason": "manager_off"])
       }
       sessions.removeAll()
+      // CoreBluetooth drops published services when the radio goes down; force a
+      // re-install on the next power-up rather than trusting the stale flag.
+      serviceAdded = false
     }
   }
 
@@ -195,7 +209,13 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
     // Carry short device id as the local name so iOS/macOS centrals can read it
     // straight from the scan callback. Apple's CB does not let us add custom
     // service-data to advertisements, so this is the lowest-friction channel.
-    let advertisedName = pendingLocalName ?? shortId
+    //
+    // Truncated to the short-id length on purpose: flags (3) + 128-bit service UUID
+    // (2 + 16) + local name (2 + n) has to fit the 31-byte legacy advertisement, and
+    // n = 8 lands on exactly 31. A longer name pushes the service UUID into Apple's
+    // proprietary "overflow area", where only other Apple devices can decode it —
+    // Android scanners filtering on the service UUID would stop seeing us entirely.
+    let advertisedName = String((pendingLocalName ?? shortId).prefix(BleConstants.maxShortDeviceIdLength))
     data[CBAdvertisementDataLocalNameKey] = advertisedName
     if manager.isAdvertising { manager.stopAdvertising() }
     manager.startAdvertising(data)

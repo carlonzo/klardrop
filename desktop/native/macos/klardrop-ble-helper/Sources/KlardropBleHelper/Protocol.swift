@@ -5,6 +5,9 @@ enum BleConstants {
   static let serviceUUID = "a5b7c3e1-7f5a-4b62-9a3c-1d8e2f4b6c8a"
   static let txCharacteristicUUID = "a5b7c3e2-7f5a-4b62-9a3c-1d8e2f4b6c8a"
   static let rxCharacteristicUUID = "a5b7c3e3-7f5a-4b62-9a3c-1d8e2f4b6c8a"
+  /// Mirrors `MAX_SHORT_DEVICE_ID_LEN` in BleAdvertisePayload.kt. Also the cap on the
+  /// advertised local name — see PeripheralController.actuallyStartAdvertising().
+  static let maxShortDeviceIdLength = 8
 }
 
 // Newline-delimited JSON. Commands carry an `id` for response correlation. Events

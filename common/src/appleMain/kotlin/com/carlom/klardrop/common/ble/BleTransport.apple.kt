@@ -47,6 +47,7 @@ import platform.Foundation.NSError
 import platform.Foundation.NSNumber
 import platform.darwin.NSObject
 import platform.darwin.dispatch_queue_create
+import kotlin.concurrent.Volatile
 
 /**
  * Apple (iOS) BLE transport using CoreBluetooth cinterop.
@@ -82,16 +83,31 @@ actual class BleTransport {
   private val centralSessions = mutableMapOf<String, AppleBleSession>()
   private val peripheralSessions = mutableMapOf<String, AppleBleSession>()
   private var rxCharacteristic: CBMutableCharacteristic? = null
-  private var pendingService: CBMutableService? = null
   private var serviceInstalled = false
+
+  /**
+   * Short device id we want to be advertising, or null when advertising is off.
+   *
+   * CoreBluetooth only accepts `addService` / `startAdvertising` once the **peripheral**
+   * manager reports `poweredOn`, and that arrives on its own delegate callback,
+   * independently of the central manager's. [isSupported] — the gate the discovery layer
+   * runs before calling [startAdvertising] — only awaits the *central* manager, so
+   * [startAdvertising] is routinely reached while the peripheral manager is still
+   * `.unknown`. Recording the intent here and re-applying it from
+   * `peripheralManagerDidUpdateState` makes advertising survive both that startup race
+   * and a later Bluetooth power cycle (CoreBluetooth silently drops published services
+   * and stops advertising when the radio goes down, and never restores either).
+   */
+  @Volatile private var desiredAdvertiseShortId: String? = null
 
   private val inboundSessions = Channel<BleSession>(capacity = Channel.UNLIMITED)
   private val peerEvents = Channel<BlePeerEvent>(capacity = Channel.UNLIMITED)
   private val connectPending = mutableMapOf<String, ConnectPending>()
 
-  init {
-    installPeripheralService()
-  }
+  // No service install here: a CBPeripheralManager's state is always `.unknown`
+  // immediately after construction, so `addService` would be dropped. The service is
+  // published from `peripheralManagerDidUpdateState` (and re-published after a power
+  // cycle) instead.
 
   actual suspend fun isSupported(): Boolean {
     val current = centralState.filterNotNull().first()
@@ -101,23 +117,47 @@ actual class BleTransport {
   }
 
   actual suspend fun startAdvertising(currentDevice: CurrentDevice) {
+    desiredAdvertiseShortId = currentDevice.shortDeviceId
+    applyAdvertisingState()
+  }
+
+  actual suspend fun stopAdvertising() {
+    desiredAdvertiseShortId = null
+    if (peripheralManager.isAdvertising) peripheralManager.stopAdvertising()
+  }
+
+  /**
+   * Push [desiredAdvertiseShortId] into CoreBluetooth. Safe to call as often as we like:
+   * it no-ops while the peripheral manager is down, and the poweredOn callback calls it
+   * again once the manager comes up.
+   */
+  private fun applyAdvertisingState() {
+    val shortId = desiredAdvertiseShortId ?: return
     if (peripheralManager.state != CBManagerStatePoweredOn) {
-      log(TAG, "Cannot start advertising: peripheral manager not powered on")
+      log(TAG, "Peripheral manager not powered on (state=${peripheralManager.state}); advertising deferred")
       return
     }
+    // Publish the GATT service before advertising: a peer that connects on the strength
+    // of our advertisement must find the Klardrop service already there.
+    installPeripheralService()
+
     val serviceUUID = CBUUID.UUIDWithString(BleConstants.SERVICE_UUID)
+    // Byte budget: flags (3) + 128-bit service UUID (2 + 16) + local name (2 + n) must
+    // fit the 31-byte legacy advertisement. An 8-char shortDeviceId lands on exactly 31.
+    // Anything longer and CoreBluetooth silently moves the service UUID into Apple's
+    // proprietary "overflow area", which only other Apple devices can decode — we'd stay
+    // visible to iOS/macOS peers while becoming invisible to every Android scanner
+    // filtering on the service UUID.
+    val localName = shortId.take(MAX_SHORT_DEVICE_ID_LEN)
     val data = mapOf<Any?, Any?>(
       CBAdvertisementDataServiceUUIDsKey to listOf(serviceUUID),
       // Apple does not allow custom service-data on advertisements; carry the
       // short id in the local name so peers see it from the scan callback alone.
-      CBAdvertisementDataLocalNameKey to currentDevice.shortDeviceId,
+      CBAdvertisementDataLocalNameKey to localName,
     )
     if (peripheralManager.isAdvertising) peripheralManager.stopAdvertising()
     peripheralManager.startAdvertising(data)
-  }
-
-  actual suspend fun stopAdvertising() {
-    if (peripheralManager.isAdvertising) peripheralManager.stopAdvertising()
+    log(TAG, "BLE advertising as '$localName'")
   }
 
   actual fun scanForPeers(): Flow<BlePeerEvent> = callbackFlow {
@@ -153,8 +193,15 @@ actual class BleTransport {
 
   // ──────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Publish the Klardrop GATT service. No-op until the peripheral manager is powered on
+   * (CoreBluetooth ignores `addService` before that) and idempotent afterwards;
+   * `peripheralManagerDidUpdateState` clears [serviceInstalled] on power-down so the
+   * service is re-published on the next power-up.
+   */
   private fun installPeripheralService() {
     if (serviceInstalled) return
+    if (peripheralManager.state != CBManagerStatePoweredOn) return
     val serviceUUID = CBUUID.UUIDWithString(BleConstants.SERVICE_UUID)
     val txUuid = CBUUID.UUIDWithString(BleConstants.TX_CHARACTERISTIC_UUID)
     val rxUuid = CBUUID.UUIDWithString(BleConstants.RX_CHARACTERISTIC_UUID)
@@ -174,12 +221,8 @@ actual class BleTransport {
     val service = CBMutableService(type = serviceUUID, primary = true)
     service.setCharacteristics(listOf(tx, rx))
     rxCharacteristic = rx
-    if (peripheralManager.state == CBManagerStatePoweredOn) {
-      peripheralManager.addService(service)
-      serviceInstalled = true
-    } else {
-      pendingService = service
-    }
+    peripheralManager.addService(service)
+    serviceInstalled = true
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -347,11 +390,17 @@ actual class BleTransport {
       peripheralState.value = peripheral.state
       log(TAG, "peripheral manager state: ${peripheral.state}")
       if (peripheral.state == CBManagerStatePoweredOn) {
-        pendingService?.let {
-          peripheral.addService(it)
-          serviceInstalled = true
-          pendingService = null
-        }
+        // Covers both the startup race (isSupported() gates on the *central* manager,
+        // so startAdvertising can land before we get here) and a Bluetooth power cycle,
+        // after which CoreBluetooth has dropped our service and stopped advertising.
+        installPeripheralService()
+        applyAdvertisingState()
+      } else {
+        // The radio went down: published services and every subscribed central are gone.
+        serviceInstalled = false
+        rxCharacteristic = null
+        peripheralSessions.values.forEach { it.markRemoteClosed() }
+        peripheralSessions.clear()
       }
     }
 
