@@ -32,8 +32,9 @@ import com.carlom.klardrop.theme.KdTheme
 // ---------------------------------------------------------------------------
 
 sealed class KdFileState {
-    data class Sending(val progress: Float) : KdFileState()
-    data class Receiving(val progress: Float) : KdFileState()
+    /** [progress] null = transfer is live but has no percentage yet → indeterminate bar. */
+    data class Sending(val progress: Float?) : KdFileState()
+    data class Receiving(val progress: Float?) : KdFileState()
     object Done : KdFileState()
     object Failed : KdFileState()
 }
@@ -125,18 +126,31 @@ fun FileCard(
                         val progress = when (state) {
                             is KdFileState.Sending   -> state.progress
                             is KdFileState.Receiving -> state.progress
-                            else -> 0f
                         }
                         Spacer(Modifier.height(spacing.s1))
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp),
-                            color = colors.accent,
-                            trackColor = colors.text.copy(alpha = 0.08f),
-                            strokeCap = StrokeCap.Round,
-                        )
+                        val barModifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                        // A null fraction means the transfer is live but hasn't got a
+                        // percentage yet (connecting, waiting for the recipient to accept,
+                        // opening the sink). Animate rather than pinning the bar at 0% —
+                        // a motionless bar is indistinguishable from a stalled transfer.
+                        if (progress == null) {
+                            LinearProgressIndicator(
+                                modifier = barModifier,
+                                color = colors.accent,
+                                trackColor = colors.text.copy(alpha = 0.08f),
+                                strokeCap = StrokeCap.Round,
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = barModifier,
+                                color = colors.accent,
+                                trackColor = colors.text.copy(alpha = 0.08f),
+                                strokeCap = StrokeCap.Round,
+                            )
+                        }
                     }
                     is KdFileState.Failed -> {
                         Spacer(Modifier.height(2.dp))

@@ -187,6 +187,13 @@ class FileReceivePipeline internal constructor(
    * at completion time.
    */
   private val verifyChunkMac: (suspend (chunk: FileChunkMessage) -> Boolean)? = null,
+  /**
+   * True when this connection is an authenticated-encrypted (UKEY2/AEAD) link. The sender
+   * legitimately omits both the per-chunk MAC and the header's content hash in that case
+   * (the transport already authenticates every frame), so "no MAC and no contentHash" is
+   * expected rather than a downgrade worth warning about.
+   */
+  private val linkAuthenticated: Boolean = false,
 ) {
   private val sink = fileTransfer.bufferedSink
   private var totalReceived = 0L
@@ -299,7 +306,7 @@ class FileReceivePipeline internal constructor(
           }
           return false
         }
-      } else {
+      } else if (!linkAuthenticated) {
         log(
           "FileReceivePipeline",
           "WARN: no MAC and no contentHash for ${header.fileName} from $fromDeviceId — accepting without integrity check (legacy or untrusted)",
@@ -414,6 +421,8 @@ class FileMessageHandler(
     fromDeviceId: String,
     receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
     verifyChunkMac: (suspend (chunk: FileChunkMessage) -> Boolean)? = null,
+    /** See [FileReceivePipeline.linkAuthenticated]. */
+    linkAuthenticated: Boolean = false,
   ): FileReceivePipeline {
     log("FileMessageHandler", "beginReceive ${header.fileName} (${header.fileSize} bytes) from $fromDeviceId")
 
@@ -457,34 +466,34 @@ class FileMessageHandler(
       clock = clock,
       crypto = crypto,
       verifyChunkMac = verifyChunkMac,
+      linkAuthenticated = linkAuthenticated,
     )
   }
 
   /**
-   * Read the entire file into memory so we can compute SHA-256 of the content. We rely on
-   * [FileMessage.fileSize] for the allocation; if the actual stream returns more bytes the
-   * extra are appended (paranoid guard against fileSize being stale). For LAN-share file
-   * sizes this is fine; if Klardrop ever wants to support multi-GB transfers we'd switch to
-   * an incremental hasher and stream-once instead.
+   * SHA-256 of the file's content, hashed incrementally in [FILE_CHUNK_SIZE] slices.
+   *
+   * This used to slurp the whole file into a single `ByteArray(fileSize.toInt())` before the
+   * header could go on the wire, which broke badly at scale: a multi-GB send either OOM'd or —
+   * at exactly 4 GB, where `4294967296.toInt()` truncates to 0 — hashed an empty array and
+   * produced a header the receiver would reject as corrupt. Either way the UI sat frozen at 0%
+   * for the whole read because nothing had been sent yet. Streaming keeps memory at one chunk
+   * regardless of file size and never truncates.
    */
-  private suspend fun readFileBytes(request: FileMessage.FileSendRequest): ByteArray = coroutines.ioDispatcher.invoke {
-    val size = request.message.fileSize
-    if (size == 0L) return@invoke ByteArray(0)
-
-    fileManager.getReadStreamFrom(request.file).buffered().use { source ->
-      val buffer = ByteArray(size.toInt().coerceAtLeast(0))
-      var read = 0
-      while (read < buffer.size) {
-        // kotlinx.io's RawSource.readAtMostTo takes (sink, startIndex, endIndex), NOT
-        // (sink, offset, length) — passing a length here would compute a startIndex past
-        // endIndex once `read > 0` and explode with IllegalArgumentException.
-        val n = source.readAtMostTo(buffer, read, buffer.size)
-        if (n <= 0) break
-        read += n
+  private suspend fun computeContentHash(request: FileMessage.FileSendRequest): ByteArray =
+    coroutines.ioDispatcher.invoke {
+      val accumulator = crypto.sha256Accumulator()
+      fileManager.getReadStreamFrom(request.file).buffered().use { source ->
+        val buffer = ByteArray(FILE_CHUNK_SIZE)
+        while (true) {
+          // kotlinx.io's RawSource.readAtMostTo takes (sink, startIndex, endIndex).
+          val read = source.readAtMostTo(buffer, 0, buffer.size)
+          if (read <= 0) break
+          accumulator.update(buffer, 0, read)
+        }
       }
-      if (read == buffer.size) buffer else buffer.copyOf(read)
+      accumulator.digest()
     }
-  }
 
   /**
    * Sends a chunked file transfer.
@@ -515,6 +524,15 @@ class FileMessageHandler(
      * header. Default is "no MAC" so direct unit-test invocations don't have to plumb it.
      */
     chunkMacFn: suspend (chunk: FileChunkMessage) -> ByteArray? = { null },
+    /**
+     * True when this connection is an authenticated-encrypted (UKEY2/AEAD) link. The transport
+     * already authenticates every frame end-to-end, so both the per-chunk HMAC (skipped by the
+     * router, see [chunkMacFn]) and the per-file SHA-256 content hash are redundant. Skipping
+     * the hash matters for more than CPU: computing it costs a FULL extra read pass over the
+     * source before the header can even be written, which on a multi-GB file leaves the sender
+     * with no bytes on the wire — and the UI with a motionless bar — for minutes.
+     */
+    linkAuthenticated: Boolean = false,
   ) {
     val fileTransferId = messageRepository.insertFileTransfer(
       fileName = request.message.fileName,
@@ -552,17 +570,22 @@ class FileMessageHandler(
         FileChunkMessage(fileMessageId = request.message.id, seq = -1, data = ByteArray(0), isLast = false),
       ) != null
 
-      val outgoingHeader = if (canMacChunks) {
-        request.message
-      } else {
-        val fileBytes = readFileBytes(request)
-        val contentHash = crypto.sha256(fileBytes)
-        request.message.copy(contentHash = contentHash)
+      val outgoingHeader = when {
+        // Per-chunk MAC covers every byte as it arrives — no whole-file digest needed.
+        canMacChunks -> request.message
+        // AEAD transport authenticates every frame — likewise redundant, and skipping it
+        // avoids a full extra read pass before the first byte reaches the wire.
+        linkAuthenticated -> request.message
+        else -> request.message.copy(contentHash = computeContentHash(request))
       }
 
       val start = clock.currentTimeMillis()
       try {
         sendFramed(outgoingHeader)
+        // The header is on the wire and nothing else moves until the peer ACKs READY — which
+        // for an untrusted peer means waiting on a human to tap Accept. Tell the UI so it can
+        // show an indeterminate bar for this window instead of a 0% one that looks stuck.
+        progressFlow.emit(MessengerSendProgress.AwaitingRecipient)
         // awaitReady() can now throw TransferRejectedException if the receiver declined
         // the transfer before any bytes were streamed — handled distinctly below so the
         // file_transfers row is marked REJECTED instead of FAILED.

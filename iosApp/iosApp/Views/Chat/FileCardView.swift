@@ -9,9 +9,14 @@ import SwiftUI
 // ---------------------------------------------------------------------------
 
 /// State of a file transfer for the FileCardView.
+///
+/// The associated fraction is optional: `nil` means the transfer is live but has no
+/// measurable percentage yet (connecting, waiting for the recipient to accept, opening the
+/// receive sink). Those phases render an indeterminate bar — painting them as a hard 0%
+/// is indistinguishable from a stalled transfer.
 enum KdFileState {
-    case sending(Double)
-    case receiving(Double)
+    case sending(Double?)
+    case receiving(Double?)
     case done
     case failed
 }
@@ -88,18 +93,52 @@ struct FileCardView: View {
     // MARK: - Progress bar
 
     @ViewBuilder
-    private func progressBar(value: Double) -> some View {
+    private func progressBar(value: Double?) -> some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
                     .fill(kd.text.opacity(0.08))
                     .frame(height: 4)
-                Capsule()
-                    .fill(kd.accent)
-                    .frame(width: geo.size.width * CGFloat(max(0, min(1, value))), height: 4)
+
+                if let value {
+                    Capsule()
+                        .fill(kd.accent)
+                        .frame(width: geo.size.width * CGFloat(max(0, min(1, value))), height: 4)
+                } else {
+                    IndeterminateBar(trackWidth: geo.size.width, color: kd.accent)
+                }
             }
         }
         .frame(height: 4)
+    }
+}
+
+// MARK: - IndeterminateBar
+
+/// Continuously sweeping segment used while a transfer is live but unmeasurable — mirrors
+/// Compose's `LinearProgressIndicator` without a `progress` argument.
+private struct IndeterminateBar: View {
+    let trackWidth: CGFloat
+    let color: Color
+
+    @State private var sweeping = false
+
+    private var segmentWidth: CGFloat { max(24, trackWidth * 0.35) }
+
+    var body: some View {
+        Capsule()
+            .fill(color)
+            .frame(width: segmentWidth, height: 4)
+            // Start fully off the leading edge, finish fully off the trailing edge.
+            .offset(x: sweeping ? trackWidth : -segmentWidth)
+            .animation(
+                .easeInOut(duration: 1.1).repeatForever(autoreverses: false),
+                value: sweeping
+            )
+            .onAppear { sweeping = true }
+            // The bar is clipped to the track so the segment doesn't paint past the card.
+            .frame(width: trackWidth, height: 4, alignment: .leading)
+            .clipShape(Capsule())
     }
 }
 
@@ -109,6 +148,7 @@ struct FileCardView: View {
     VStack(spacing: KdSpacing.s4) {
         FileCardView(fileName: "presentation.pdf", fileSize: "2.4 MB", state: .sending(0.45))
         FileCardView(fileName: "photo.jpg", fileSize: "1.1 MB", state: .receiving(0.8))
+        FileCardView(fileName: "waiting-on-peer.iso", fileSize: "4.0 GB", state: .sending(nil))
         FileCardView(fileName: "archive.zip", fileSize: "15.0 MB", state: .done)
         FileCardView(fileName: "broken_file.mp4", fileSize: "80 MB", state: .failed, onRetry: {})
     }

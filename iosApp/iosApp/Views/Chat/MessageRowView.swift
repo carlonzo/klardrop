@@ -193,22 +193,46 @@ private struct FileMessageBubble: View {
 
     private var isSender: Bool { message.isSender }
 
+    /// Live fraction (0...1) of the in-flight transfer, published by DeviceChatViewModel from
+    /// the sender's `MessengerSendProgress.InProgress` and the receiver's
+    /// `ReceiveMessageStatus.Progress` events. Nil when no fraction is available yet.
+    private var liveProgress: Double? {
+        // Kotlin's Float? arrives as KotlinFloat? — same NSNumber bridging as
+        // `message.fileTransferId?.int64Value` above.
+        model.uiState.fileTransferProgress.map { Double($0.floatValue) }
+    }
+
+    /// True while a transfer for this chat is in flight in either direction, including the
+    /// phases that carry no percentage.
+    private var liveTransferActive: Bool { model.uiState.fileTransferActive }
+
     private var fileState: KdFileState {
         guard let ft = fileTransfer else {
-            return isSender ? .sending(0) : .receiving(0)
+            return isSender ? .sending(nil) : .receiving(nil)
         }
         switch ft.status {
         case "IN_PROGRESS":
-            let progress: Double = ft.total_size > 0
-                ? Double(ft.transferred_size) / Double(ft.total_size)
-                : 0
+            // `transferred_size` is written 0 at insert and never updated, so reading it was
+            // why this bar sat at 0% for the entire transfer and then jumped to done. Prefer
+            // the live fraction from the view model (which is what Compose already did); fall
+            // back to the DB only when nothing is in flight for this chat.
+            let progress: Double?
+            if let live = liveProgress {
+                progress = live
+            } else if liveTransferActive {
+                progress = nil                       // active, not yet measurable
+            } else if ft.total_size > 0 {
+                progress = Double(ft.transferred_size) / Double(ft.total_size)
+            } else {
+                progress = 0
+            }
             return isSender ? .sending(progress) : .receiving(progress)
         case "COMPLETED":
             return .done
         case "FAILED", "REJECTED":
             return .failed
         default:
-            return isSender ? .sending(0) : .receiving(0)
+            return isSender ? .sending(nil) : .receiving(nil)
         }
     }
 

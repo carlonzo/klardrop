@@ -491,7 +491,13 @@ internal class MessagesRouterImpl(
       }
 
     val pipeline = runCatching {
-      fileMessageHandler.beginReceive(header, fromDeviceId, receiveFlow, verifyChunkMac)
+      fileMessageHandler.beginReceive(
+        header,
+        fromDeviceId,
+        receiveFlow,
+        verifyChunkMac,
+        linkAuthenticated = cipher.authenticated,
+      )
     }.getOrElse { error ->
       log("MessagesRouter", "beginReceive failed for ${header.fileName}: ${error.message}", error)
       return
@@ -644,6 +650,7 @@ internal class MessagesRouterImpl(
           progressFlow = progress,
           awaitReady = awaitReadyAck,
           chunkMacFn = chunkMacFn,
+          linkAuthenticated = cipher.authenticated,
         )
         return@ioDispatcher
       }

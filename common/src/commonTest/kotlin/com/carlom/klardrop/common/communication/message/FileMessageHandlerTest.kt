@@ -544,6 +544,112 @@ class FileMessageHandlerTest {
     assertEquals(header.id, sentHeader.id)
   }
 
+  /**
+   * The content hash used to be computed by slurping the whole file into a single
+   * `ByteArray(fileSize.toInt())`. That truncated at 2 GB and produced a 0-length array at
+   * exactly 4 GB, so a large send shipped a header the receiver rejected as corrupt — after
+   * sitting at 0% for however long the read took. The hash is now streamed in chunk-sized
+   * slices; this pins that a payload spanning several slices still hashes to the same digest
+   * as hashing the bytes in one go.
+   */
+  @Test
+  fun handleOutgoingChunkedStreamsContentHashAcrossMultipleChunks() = runTest(testDispatcher) {
+    val realCrypto = com.carlom.klardrop.common.trust.TrustCrypto()
+    // 2.5 chunks — forces the accumulator to be fed more than once, including a partial tail.
+    val payload = ByteArray(FILE_CHUNK_SIZE * 2 + 12_345) { (it % 251).toByte() }
+    val expectedHash = realCrypto.sha256(payload)
+
+    val platformFile = PlatformFile(Path("/tmp", "big.bin"))
+    mockFileManager.fileDataToServe[platformFile.path] = payload
+
+    val header = FileMessage("big.bin", payload.size.toLong(), "application/octet-stream", contentHash = null)
+    val sentMessages = mutableListOf<Message>()
+
+    fileMessageHandler.handleOutgoingChunked(
+      toDeviceId = "peer-out",
+      request = header.toSendRequest(platformFile),
+      sendFramed = { sentMessages.add(it) },
+      progressFlow = MutableSharedFlow(extraBufferCapacity = 64),
+      awaitReady = {},
+    )
+
+    assertContentEquals(
+      expectedHash,
+      (sentMessages.first() as FileMessage).contentHash,
+      "streaming hash over multiple slices must equal the single-shot digest",
+    )
+  }
+
+  /**
+   * On an authenticated-encrypted link the AEAD transport already authenticates every frame, so
+   * the per-file hash is redundant — and computing it costs a full extra read pass before the
+   * header can even be written, which is dead time the UI renders as a motionless bar. Assert
+   * the hash is skipped and that no extra read of the source happened.
+   */
+  @Test
+  fun handleOutgoingChunkedSkipsContentHashOnAuthenticatedLink() = runTest(testDispatcher) {
+    val payload = ByteArray(1024) { (it % 256).toByte() }
+    val platformFile = PlatformFile(Path("/tmp", "aead.bin"))
+    mockFileManager.fileDataToServe[platformFile.path] = payload
+
+    val header = FileMessage("aead.bin", payload.size.toLong(), "application/octet-stream", contentHash = null)
+    val sentMessages = mutableListOf<Message>()
+
+    fileMessageHandler.handleOutgoingChunked(
+      toDeviceId = "peer-out",
+      request = header.toSendRequest(platformFile),
+      sendFramed = { sentMessages.add(it) },
+      progressFlow = MutableSharedFlow(extraBufferCapacity = 16),
+      awaitReady = {},
+      linkAuthenticated = true,
+    )
+
+    assertEquals(
+      null,
+      (sentMessages.first() as FileMessage).contentHash,
+      "an authenticated link must not pay for a whole-file digest",
+    )
+    assertEquals(
+      1, mockFileManager.readStreamRequests,
+      "only the streaming send should read the source — no separate hashing pass",
+    )
+  }
+
+  /**
+   * Between writing the header and the recipient's ACK_READY nothing moves — for an untrusted
+   * peer that window is however long a human takes to tap Accept. The handler must announce it
+   * so the UI can show an indeterminate bar instead of a 0% one that reads as stalled.
+   */
+  @Test
+  fun handleOutgoingChunkedSignalsAwaitingRecipientBeforeWaitingForReady() = runTest(testDispatcher) {
+    val payload = ByteArray(1024) { (it % 256).toByte() }
+    val platformFile = PlatformFile(Path("/tmp", "await.bin"))
+    mockFileManager.fileDataToServe[platformFile.path] = payload
+
+    val header = FileMessage("await.bin", payload.size.toLong(), "application/octet-stream")
+
+    val progress = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 32)
+    val collected = mutableListOf<MessengerSendProgress>()
+    val collectJob = CoroutineScope(testDispatcher).launch { progress.collect { collected.add(it) } }
+
+    var seenWhenReadyAwaited: List<MessengerSendProgress> = emptyList()
+    fileMessageHandler.handleOutgoingChunked(
+      toDeviceId = "peer-out",
+      request = header.toSendRequest(platformFile),
+      sendFramed = {},
+      progressFlow = progress,
+      awaitReady = { seenWhenReadyAwaited = collected.toList() },
+    )
+    collectJob.cancel()
+
+    assertTrue(
+      seenWhenReadyAwaited.contains(MessengerSendProgress.AwaitingRecipient),
+      "AwaitingRecipient must be emitted before the handler blocks on ACK_READY, got $seenWhenReadyAwaited",
+    )
+    // …and the transfer still runs to completion afterwards.
+    assertTrue(collected.any { it is MessengerSendProgress.InProgress && it.percentage == 100 })
+  }
+
   private fun newReceiveFlow(deviceId: String) = MutableStateFlow(
     ReceiveMessageUpdate(
       device = DeviceInfo(deviceId, "peer", DeviceType.DESKTOP),
@@ -612,7 +718,12 @@ private open class MockFileManager : FileManager {
     return MockFileTransfer(completeError).also { preparedFile = it }
   }
 
+  /** Number of times a read stream was opened — lets tests assert how many passes over the source happened. */
+  var readStreamRequests = 0
+    private set
+
   override fun getReadStreamFrom(file: PlatformFile): RawSource {
+    readStreamRequests++
     val data = fileDataToServe[file.path] ?: ByteArray(0)
     return Buffer().apply { write(data) }
   }

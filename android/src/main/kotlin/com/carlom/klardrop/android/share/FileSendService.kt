@@ -194,7 +194,13 @@ class FileSendService : Service() {
           when (progress) {
             is Error -> log("FileSendService", "Send of ${file.name} errored: ${progress.message}")
             Completed -> log("FileSendService", "Sent ${file.name} to $deviceId")
+            // Nothing to do for the non-terminal states. The share sheet already got them from
+            // the publish above (it renders AwaitingRecipient as "Waiting for receiver to
+            // accept…"), and the notification is driven off OutgoingTransfers, which leaves the
+            // bar indeterminate until a real byte percentage arrives — which is exactly what
+            // AwaitingRecipient means: header on the wire, no bytes flowing yet.
             is MessengerSendProgress.InProgress,
+            MessengerSendProgress.AwaitingRecipient,
             MessengerSendProgress.Pending -> {}
           }
         }

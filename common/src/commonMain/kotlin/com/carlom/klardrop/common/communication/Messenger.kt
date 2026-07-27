@@ -65,15 +65,19 @@ class MessengerImpl(
       "send() called: deviceId=$deviceId, messageType=${messageRequest.message.type}, messageId=${messageRequest.message.id}"
     )
 
-    val flow = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 1)
+    // replay = 1 so the caller can't lose the early emissions to a subscription race: the
+    // producer below is launched immediately (on [messengerScope]/ioDispatcher) while the
+    // caller only subscribes once `send()` has returned and `.collect` runs. A replay-less
+    // SharedFlow drops anything emitted in that window — which is exactly Pending and, on a
+    // fast local send, InProgress(0) too, so the UI never learned a transfer had begun.
+    val flow = MutableSharedFlow<MessengerSendProgress>(replay = 1, extraBufferCapacity = 1)
 
     messengerScope.launch {
       // Anchor payload-bearing sends only. A file send waits on the receiver accepting and then
       // streams — minutes, all of it a window in which the platform may freeze or kill us out from
       // under the socket (see OutgoingTransferAnchor). Text/control messages are a single frame
-      // plus an ack; anchoring one would flash a progress notification for nothing — and would add
-      // a subscriber to `flow`, which for an uncollected send turns dropped emissions into ones
-      // that have to be delivered.
+      // plus an ack; anchoring one would spin up a foreground service and flash a progress
+      // notification for something already over by the time the user could read it.
       val anchored = messageRequest.message.hasPayload
       val anchorId = "$deviceId:${messageRequest.message.id}"
 
@@ -559,6 +563,15 @@ fun Flow<MessengerSendProgress>.untilCompleted(): Flow<MessengerSendProgress> {
 sealed interface MessengerSendProgress {
   data object Pending : MessengerSendProgress
   data class InProgress(val percentage: Int) : MessengerSendProgress
+
+  /**
+   * The file header is on the wire and we're blocked on the recipient's ACK_READY — which for
+   * an untrusted peer means a human has to tap Accept. No bytes flow during this window, so a
+   * percentage would be a lie; the UI shows an indeterminate bar instead of a dead 0%.
+   *
+   * Not terminal: [isCompleted] stays false so `untilCompleted()` keeps collecting.
+   */
+  data object AwaitingRecipient : MessengerSendProgress
   data object Completed : MessengerSendProgress
   data class Error(val message: String = "") : MessengerSendProgress
 

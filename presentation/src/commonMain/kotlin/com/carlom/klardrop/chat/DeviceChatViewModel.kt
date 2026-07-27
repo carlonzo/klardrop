@@ -114,14 +114,19 @@ class DeviceChatViewModel(
     viewModelScope.launch {
       messageReceiver.latestUpdates.collect { updates ->
         when (val status = updates[deviceId]?.status) {
+          // Deliberately no [ReceiveMessageStatus.Started] branch: that status is minted for
+          // every inbound message including plain text, and it has no terminal counterpart if
+          // opening the sink fails — treating it as "transfer in flight" would flash the status
+          // strip on text receives and could pin it on permanently. [beginReceive] follows it
+          // with Progress(0) immediately anyway.
           is ReceiveMessageStatus.Progress -> {
             val percentage = status.messages.lastOrNull()?.second
             if (percentage != null) {
-              _uiState.update { it.copy(fileTransferProgress = percentage / 100f) }
+              _uiState.update { it.transferring(fraction = percentage / 100f) }
             }
           }
           is ReceiveMessageStatus.Completed, is ReceiveMessageStatus.Failed -> {
-            _uiState.update { it.copy(fileTransferProgress = null) }
+            _uiState.update { it.transferIdle() }
           }
           else -> Unit
         }
@@ -223,7 +228,11 @@ class DeviceChatViewModel(
 
     viewModelScope.launch {
       try {
-        _uiState.update { it.copy(error = null) }
+        // Feedback from the instant the user hits send. Nothing is on screen yet — the chat
+        // bubble only appears once FileMessageHandler inserts its rows, which happens after
+        // the connection has been dialed and established, and that gap is seconds of dead UI
+        // on a cold link. Mark the transfer active immediately so the screen says so.
+        _uiState.update { it.copy(error = null).transferring(fraction = null, statusText = "Preparing to send…") }
 
         // Send each file - persistence is handled by FileMessageHandler
         files.forEach { file ->
@@ -249,6 +258,12 @@ class DeviceChatViewModel(
         _uiState.value = _uiState.value.copy(
           error = "Failed to send files: ${e.message}"
         )
+      } finally {
+        // sendFileMessage clears the transfer state per file, but the optimistic "Preparing"
+        // state set above outlives every path that never reaches it — an unresolvable file,
+        // an empty resolve, or a throw before the first send. Without this the banner would
+        // stay up forever.
+        _uiState.update { it.transferIdle() }
       }
     }
   }
@@ -302,10 +317,13 @@ class DeviceChatViewModel(
         finalStatus = progress
         when (progress) {
           is MessengerSendProgress.InProgress ->
-            _uiState.update { it.copy(fileTransferProgress = progress.percentage / 100f) }
+            _uiState.update { it.transferring(fraction = progress.percentage / 100f) }
+          is MessengerSendProgress.AwaitingRecipient ->
+            _uiState.update { it.transferring(fraction = null, statusText = "Waiting for the recipient to accept…") }
+          MessengerSendProgress.Pending ->
+            _uiState.update { it.transferring(fraction = null, statusText = "Connecting…") }
           is MessengerSendProgress.Completed, is MessengerSendProgress.Error ->
-            _uiState.update { it.copy(fileTransferProgress = null) }
-          MessengerSendProgress.Pending -> Unit
+            _uiState.update { it.transferIdle() }
         }
       }
 
@@ -323,8 +341,39 @@ data class ChatUiState(
   val notice: String? = null,
   /**
    * Live fraction (0f..1f) of the in-flight file transfer for this device, from whichever
-   * direction is currently active (send or receive) — null when nothing is transferring. See
-   * [DeviceChatViewModel.sendFileMessage] and the receive-side collector in [DeviceChatViewModel.init].
+   * direction is currently active (send or receive). Null means "no fraction to show" — which
+   * is NOT the same as "nothing is happening": check [fileTransferActive] for that. A transfer
+   * is active-but-fractionless while connecting, while the sender waits for the recipient to
+   * accept, and while the receiver opens its sink. See [DeviceChatViewModel.sendFileMessage]
+   * and the receive-side collector in [DeviceChatViewModel.init].
    */
   val fileTransferProgress: Float? = null,
+  /**
+   * True while a file transfer for this device is in flight in either direction, including the
+   * phases that have no percentage yet. UIs render an indeterminate bar when this is true and
+   * [fileTransferProgress] is null — the old behaviour (fraction-only) painted those phases as
+   * a motionless 0% bar, which read as "nothing is happening".
+   */
+  val fileTransferActive: Boolean = false,
+  /**
+   * Short human label for the current non-streaming phase ("Connecting…", "Waiting for the
+   * recipient to accept…"), or null once bytes are actually flowing. Surfaced as a banner so
+   * there is visible feedback even before the message bubble exists — the bubble is only
+   * created once the transfer's DB rows are inserted, which is after the connection is up.
+   */
+  val fileTransferStatusText: String? = null,
+)
+
+/** Mark a transfer as in flight. [fraction] null = active but no percentage to show yet. */
+private fun ChatUiState.transferring(fraction: Float?, statusText: String? = null) = copy(
+  fileTransferProgress = fraction,
+  fileTransferActive = true,
+  fileTransferStatusText = statusText,
+)
+
+/** Clear every trace of an in-flight transfer. */
+private fun ChatUiState.transferIdle() = copy(
+  fileTransferProgress = null,
+  fileTransferActive = false,
+  fileTransferStatusText = null,
 )

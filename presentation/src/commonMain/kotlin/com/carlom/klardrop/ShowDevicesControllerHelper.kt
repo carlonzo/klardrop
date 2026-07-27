@@ -75,7 +75,11 @@ class ShowDevicesControllerHelper(
           MessengerSendProgress.Completed -> ActivityState.SentCompleted()
           is MessengerSendProgress.Error -> ActivityState.SentCompleted(error = true)
           is MessengerSendProgress.InProgress -> ActivityState.Sending(progress.percentage)
-          MessengerSendProgress.Pending -> ActivityState.Sending(0)
+          // The discovery row renders a "Sending…" label and ignores the number, so the
+          // pre-transfer phases (dialing, waiting on the recipient's accept) map to the same
+          // state as Pending — the row is honestly "busy with this device" throughout.
+          MessengerSendProgress.Pending,
+          MessengerSendProgress.AwaitingRecipient -> ActivityState.Sending(0)
         }
 
         newDevices[deviceId] = device.copy(
