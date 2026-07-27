@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -246,6 +249,16 @@ fun DeviceChatScreen(
                 )
             }
 
+            // Transfer phases that have no percentage and, early on, no bubble either: the
+            // file's chat row is only inserted once the connection is up, so between "user
+            // hit send" and "bytes flowing" there would otherwise be no feedback at all.
+            uiState.fileTransferStatusText?.let { statusText ->
+                TransferStatusStrip(
+                    text = statusText,
+                    modifier = Modifier.padding(horizontal = spacing.s3, vertical = spacing.s2),
+                )
+            }
+
             if (sortedMessages.isEmpty()) {
                 ChatEmptyState(
                     deviceName = deviceName,
@@ -265,6 +278,7 @@ fun DeviceChatScreen(
                     isOffline = isOffline,
                     isLargeScreen = mode == DeviceChatMode.Pane,
                     liveFileTransferProgress = uiState.fileTransferProgress,
+                    liveFileTransferActive = uiState.fileTransferActive,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -301,6 +315,44 @@ fun DeviceChatScreen(
                 )
             }
         }
+    }
+}
+
+/**
+ * Slim "something is happening" strip for the transfer phases that carry no percentage —
+ * connecting, waiting for the recipient to accept, opening the receive sink. Deliberately
+ * not a [Banner]: those are ok/warn/err verdicts, and this is neutral in-progress chatter.
+ */
+@Composable
+private fun TransferStatusStrip(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+    val radii = KdTheme.radii
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(radii.shapeMd)
+            .background(colors.accent.copy(alpha = 0.10f))
+            .padding(horizontal = spacing.s3, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(14.dp),
+            color = colors.accent,
+            strokeWidth = 2.dp,
+        )
+        Spacer(Modifier.width(spacing.s2))
+        Text(
+            text = text,
+            style = typography.caption.copy(color = colors.text2),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -396,6 +448,7 @@ private fun MessagesList(
     isOffline: Boolean,
     isLargeScreen: Boolean,
     liveFileTransferProgress: Float?,
+    liveFileTransferActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -442,6 +495,7 @@ private fun MessagesList(
                 isFirstOfGroup = isFirstOfGroup,
                 isLargeScreen = isLargeScreen,
                 liveFileTransferProgress = liveFileTransferProgress,
+                liveFileTransferActive = liveFileTransferActive,
             )
 
             if (showDayDivider) {
@@ -466,6 +520,7 @@ private fun MessageRow(
     isFirstOfGroup: Boolean,
     isLargeScreen: Boolean,
     liveFileTransferProgress: Float?,
+    liveFileTransferActive: Boolean,
 ) {
     val isSender = message.isSender
     val direction = if (isSender) KdBubbleDirection.Out else KdBubbleDirection.In
@@ -483,6 +538,7 @@ private fun MessageRow(
                     onOpenFileRequest = onOpenFileRequest,
                     onRetryFile = onRetryFile,
                     liveProgress = liveFileTransferProgress,
+                    liveTransferActive = liveFileTransferActive,
                 )
             }
             message.messageType == MessageType.TEXT.name -> {
@@ -620,6 +676,12 @@ private fun FileMessageBubble(
      * bubble is currently IN_PROGRESS.
      */
     liveProgress: Float?,
+    /**
+     * True while a transfer for this chat is in flight but has no percentage yet — connecting,
+     * waiting for the recipient to accept, or opening the receive sink. Drives the card's
+     * indeterminate bar so those windows read as "working", not "stuck at 0%".
+     */
+    liveTransferActive: Boolean,
 ) {
     val fileTransferState by messageRepository.getFileTransferById(
         message.fileTransferId ?: return
@@ -634,13 +696,23 @@ private fun FileMessageBubble(
 
     val fileState: KdFileState = when (currentStatus) {
         FileTransferStatus.IN_PROGRESS.name -> {
-            val dbProgress = if (totalSize > 0) transferredSize.toFloat() / totalSize else 0f
-            val progress = liveProgress ?: dbProgress
+            val progress: Float? = when {
+                // Live fraction wins whenever we have one.
+                liveProgress != null -> liveProgress
+                // Active but fractionless (connecting / awaiting the recipient / opening the
+                // sink): null drives the indeterminate bar. Falling back to the DB value here
+                // would paint a hard 0% — transferred_size is written 0 at insert and never
+                // updated (docs/connection-review.md F14) — which is precisely the "bar that
+                // never moves" this whole path exists to avoid.
+                liveTransferActive -> null
+                totalSize > 0 -> transferredSize.toFloat() / totalSize
+                else -> 0f
+            }
             if (isSender) KdFileState.Sending(progress) else KdFileState.Receiving(progress)
         }
         FileTransferStatus.COMPLETED.name -> KdFileState.Done
         FileTransferStatus.FAILED.name, FileTransferStatus.REJECTED.name -> KdFileState.Failed
-        else -> if (isSender) KdFileState.Sending(0f) else KdFileState.Receiving(0f)
+        else -> if (isSender) KdFileState.Sending(null) else KdFileState.Receiving(null)
     }
 
     val openablePath = filePath?.takeIf {

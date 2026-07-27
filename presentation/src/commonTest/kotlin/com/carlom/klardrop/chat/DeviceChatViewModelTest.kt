@@ -43,7 +43,10 @@ import kotlinx.io.files.Path
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * V8 (docs/connection-review.md, F14): the chat file bubble used to read `transferred_size` from
@@ -167,6 +170,21 @@ class DeviceChatViewModelTest {
     override suspend fun openUrl(url: String): Boolean = true
   }
 
+  /** Resolving the picked file blows up — simulates a revoked content:// grant or a deleted file. */
+  private class ThrowingPlatformFileSystem : PlatformFileSystem {
+    override fun getReadStreamFrom(platformFile: PlatformFile): RawSource = error("not used by this test")
+    override fun getWriteStreamTo(path: Path): RawSink = error("not used by this test")
+    override fun getResolvedFileData(platformFile: PlatformFile): ResolvedFileData =
+      throw IllegalStateException("file is gone")
+    override suspend fun prepareFileForSending(platformFile: PlatformFile) = error("not used by this test")
+    override suspend fun delete(path: Path) = Unit
+    override suspend fun moveToStorage(path: Path, mimeType: String): Path? = null
+    override fun getTempStoragePath(): Path = Path("/tmp")
+    override fun getInternalStoragePath(): Path = Path("/tmp")
+    override suspend fun openFile(filePath: String): Boolean = true
+    override suspend fun openUrl(url: String): Boolean = true
+  }
+
   private fun buildViewModel(
     messenger: Messenger,
     messageReceiver: MessageReceiver,
@@ -259,6 +277,78 @@ class DeviceChatViewModelTest {
       vm.uiState.value.fileTransferProgress,
       "fileTransferProgress must clear once the receive completes",
     )
+  }
+
+  /**
+   * The phases with no percentage — dialing the peer, and waiting for the recipient to accept —
+   * must still read as "a transfer is happening". Reporting them as a 0% fraction is what made
+   * the bar look frozen; they are now `fileTransferActive` with a null fraction, which the UIs
+   * render as an indeterminate bar plus a status strip.
+   */
+  @Test
+  fun sendFileMessage_fractionlessPhases_stayActiveWithStatusText() = runTest(dispatcher) {
+    val messenger = FakeMessenger()
+    val vm = buildViewModel(messenger, FakeMessageReceiver())
+
+    vm.sendFiles(listOf(PlatformFile(Path("/tmp", "movie.mp4"))))
+    advanceUntilIdle()
+
+    // Optimistic state set the instant the user hits send — before any bubble exists.
+    assertTrue(vm.uiState.value.fileTransferActive)
+    assertNull(vm.uiState.value.fileTransferProgress)
+    assertNotNull(vm.uiState.value.fileTransferStatusText)
+
+    messenger.progress.emit(MessengerSendProgress.Pending)
+    advanceUntilIdle()
+    assertTrue(vm.uiState.value.fileTransferActive)
+    assertNull(vm.uiState.value.fileTransferProgress)
+    assertEquals("Connecting…", vm.uiState.value.fileTransferStatusText)
+
+    messenger.progress.emit(MessengerSendProgress.AwaitingRecipient)
+    advanceUntilIdle()
+    assertTrue(vm.uiState.value.fileTransferActive)
+    assertNull(vm.uiState.value.fileTransferProgress)
+    assertEquals("Waiting for the recipient to accept…", vm.uiState.value.fileTransferStatusText)
+
+    // Once bytes flow the status strip goes away and the fraction takes over.
+    messenger.progress.emit(MessengerSendProgress.InProgress(30))
+    advanceUntilIdle()
+    assertEquals(0.3f, vm.uiState.value.fileTransferProgress)
+    assertNull(vm.uiState.value.fileTransferStatusText)
+
+    messenger.progress.emit(MessengerSendProgress.Completed)
+    advanceUntilIdle()
+    assertFalse(vm.uiState.value.fileTransferActive)
+    assertNull(vm.uiState.value.fileTransferStatusText)
+  }
+
+  /**
+   * The optimistic "Preparing to send…" state is set before the file is even resolved, so every
+   * early-out has to clear it — otherwise the status strip stays up forever on a file that was
+   * never sent.
+   */
+  @Test
+  fun sendFiles_unresolvableFile_clearsOptimisticTransferState() = runTest(dispatcher) {
+    val vm = DeviceChatViewModel(
+      deviceId = "dev00001",
+      messageRepository = FakeMessageRepository(),
+      messenger = FakeMessenger(),
+      messageReceiver = FakeMessageReceiver(),
+      client = FakeClient(),
+      connectionsPool = FakeConnectionsPool(available = true),
+      coroutines = testCoroutines,
+      fileManager = FakeFileManager(),
+      platformFileSystem = ThrowingPlatformFileSystem(),
+      clipboardManager = ClipboardManager(testCoroutines, ClipboardReaderWriter()),
+      reachabilitySource = MutableStateFlow(emptyMap()),
+    )
+
+    vm.sendFiles(listOf(PlatformFile(Path("/tmp", "gone.mp4"))))
+    advanceUntilIdle()
+
+    assertFalse(vm.uiState.value.fileTransferActive, "a file that never sends must not leave the UI 'transferring'")
+    assertNull(vm.uiState.value.fileTransferStatusText)
+    assertNull(vm.uiState.value.fileTransferProgress)
   }
 
   @Test

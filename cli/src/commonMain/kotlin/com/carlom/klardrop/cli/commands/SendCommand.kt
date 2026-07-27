@@ -134,6 +134,7 @@ class SendCommand : CliktCommand(
     messenger.send(deviceId, messageRequest).untilCompleted().collect { progress ->
       when (progress) {
         is MessengerSendProgress.Pending -> echo("Preparing to send...")
+        is MessengerSendProgress.AwaitingRecipient -> echo("Waiting for the recipient to accept...")
         is MessengerSendProgress.InProgress -> echo("Progress: ${progress.percentage}%")
         is MessengerSendProgress.Completed -> {
           echo("Successfully sent!")

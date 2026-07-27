@@ -125,6 +125,15 @@ struct DeviceChatScreen: View {
                     .padding(.vertical, KdSpacing.s2)
                 }
 
+                // Transfer phases that carry no percentage and, early on, no bubble either:
+                // the file's chat row is only inserted once the connection is up, so between
+                // "user hit send" and "bytes flowing" there would otherwise be no feedback.
+                if let statusText = model.uiState.fileTransferStatusText {
+                    TransferStatusStripView(text: statusText)
+                        .padding(.horizontal, KdSpacing.s3)
+                        .padding(.vertical, KdSpacing.s2)
+                }
+
                 // Message list or empty state
                 if sortedMessages.isEmpty {
                     ChatEmptyStateView(
@@ -330,6 +339,43 @@ private struct IncomingAuthBannerView: View {
                 onDecline: { status.acceptTransfer(false) }
             )
         )
+    }
+}
+
+// MARK: - TransferStatusStripView
+
+/// Slim "something is happening" strip for the transfer phases that carry no percentage —
+/// connecting, waiting for the recipient to accept, opening the receive sink. Deliberately not
+/// a BannerView: those are ok/warn/err verdicts, this is neutral in-progress chatter.
+/// Mirrors: compose-ui/.../chat/DeviceChatScreen.kt  TransferStatusStrip
+private struct TransferStatusStripView: View {
+
+    let text: String
+
+    @Environment(\.kdColors) private var kd
+
+    var body: some View {
+        HStack(spacing: KdSpacing.s2) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                #if os(iOS)
+                .scaleEffect(0.6)
+                #else
+                .scaleEffect(0.5)
+                #endif
+                .frame(width: 14, height: 14)
+
+            Text(text)
+                .kdStyle(.caption, color: kd.text2)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, KdSpacing.s3)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(kd.accent.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: KdRadii.md, style: .continuous))
     }
 }
 
