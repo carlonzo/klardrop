@@ -14,6 +14,7 @@ import com.carlom.klardrop.common.utils.logLocal
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -106,6 +107,25 @@ class ConnectionMessenger internal constructor(
   //  activates read from socket
   suspend fun acceptIncomingMessages() = coroutines.ioDispatcher {
     startHeartbeat()
+    try {
+      readLoop()
+    } finally {
+      log("ConnectionMessenger: Stop listening for messages from ${connection.deviceId}")
+      stopHeartbeat()
+      // The read loop is the only source of file chunks, so anything still being received from
+      // this peer can never finish now. Tell the router so it fails those transfers instead of
+      // leaving them — and the foreground service / wake locks anchoring them — hanging forever.
+      // NonCancellable because the common way to get here is the enclosing scope being cancelled
+      // (a reconnect, a network flush), and the cleanup does suspending DB work that would
+      // otherwise be cancelled before it ran.
+      withContext(NonCancellable) {
+        runCatching { messagesRouter.onPeerDisconnected(connection.deviceId) }
+          .onFailure { log("ConnectionMessenger: Failed to clean up receives for ${connection.deviceId}", it) }
+      }
+    }
+  }
+
+  private suspend fun readLoop() {
     while (!readChannel.isClosedForRead) {
       log("ConnectionMessenger: Listening for new messages from ${connection.deviceId}")
 
@@ -136,9 +156,6 @@ class ConnectionMessenger internal constructor(
         close()
       }
     }
-
-    log("ConnectionMessenger: Stop listening for messages from ${connection.deviceId}")
-    stopHeartbeat()
   }
 
   /**

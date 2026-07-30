@@ -13,7 +13,7 @@ import com.carlom.klardrop.common.communication.ConnectionsPoolImpl
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerImpl
-import com.carlom.klardrop.common.communication.OutgoingTransferAnchor
+import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.communication.Server
 import com.carlom.klardrop.common.communication.message.AckMessageHandler
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessageHandler
@@ -68,11 +68,11 @@ class CommunicationModule(
   private val incomingAuthorizerOverride: IncomingAuthorizer? = null,
   private val networkLifecycleMonitor: NetworkLifecycleMonitor? = null,
   /**
-   * Platform hook that keeps the host process alive for the length of an outbound file transfer.
-   * Only Android supplies a real one (a foreground service); everything else stays
-   * [OutgoingTransferAnchor.None].
+   * Platform hook that keeps the host process alive and awake for the length of a file transfer,
+   * outbound (via [MessengerImpl]) and inbound (via [MessagesRouterImpl] for Klardrop transfers
+   * and [NearbyReceiverConnectionHandlerFactory] for Nearby ones) alike.
    */
-  private val outgoingTransferAnchor: OutgoingTransferAnchor = OutgoingTransferAnchor.None,
+  private val transferAnchor: TransferAnchor = TransferAnchor.None,
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -142,6 +142,7 @@ class CommunicationModule(
       trustManager,
       incomingAuthorizer,
       onPeerLiveness = visibleDevices::touchLastSeen,
+      transferAnchor = transferAnchor,
     )
   }
 
@@ -214,7 +215,7 @@ class CommunicationModule(
       messagesRouter,
       serializer,
       currentDeviceProvider,
-      NearbyReceiverConnectionHandlerFactory(fileManager, coroutines, incomingAuthorizer, messageRepository, clock),
+      NearbyReceiverConnectionHandlerFactory(fileManager, coroutines, incomingAuthorizer, messageRepository, clock, transferAnchor),
       visibleDevices,
       messageReceiver,
       protoBuf,
@@ -245,7 +246,7 @@ class CommunicationModule(
       serializer,
       messageRepository,
       ackTimeoutConfig,
-      outgoingTransferAnchor,
+      transferAnchor,
     )
   }
 

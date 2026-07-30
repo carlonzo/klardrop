@@ -367,8 +367,8 @@ class KlardropIntegrationTest {
         // the moment the user switches away. Released exactly once, or the notification pins
         // forever; released too early, or the process is free to be killed mid-stream.
         val events = transferAnchor.events
-        val begins = events.filterIsInstance<RecordingOutgoingTransferAnchor.Event.Begin>()
-        val ends = events.filterIsInstance<RecordingOutgoingTransferAnchor.Event.End>()
+        val begins = events.filterIsInstance<RecordingTransferAnchor.Event.Begin>()
+        val ends = events.filterIsInstance<RecordingTransferAnchor.Event.End>()
 
         assertEquals(1, begins.size, "expected exactly one anchor begin, got $events")
         assertEquals(1, ends.size, "expected exactly one anchor end, got $events")
@@ -378,6 +378,27 @@ class KlardropIntegrationTest {
         assertTrue(
           events.indexOf(begins.first()) < events.indexOf(ends.first()),
           "anchor begin must precede end, got $events",
+        )
+        assertEquals(TransferAnchor.Direction.OUTGOING, begins.first().direction)
+
+        // The receiving side needs the same protection, and needs it more: the user taps Accept
+        // and puts the phone down, so the whole transfer runs backgrounded with the screen off.
+        val receiveEvents = serverTransferAnchor.events
+        val receiveBegins = receiveEvents.filterIsInstance<RecordingTransferAnchor.Event.Begin>()
+        val receiveEnds = receiveEvents.filterIsInstance<RecordingTransferAnchor.Event.End>()
+
+        assertEquals(1, receiveBegins.size, "expected exactly one receive anchor begin, got $receiveEvents")
+        assertEquals(1, receiveEnds.size, "expected exactly one receive anchor end, got $receiveEvents")
+        assertEquals("test-document.txt", receiveBegins.first().label)
+        assertEquals(TransferAnchor.Direction.INCOMING, receiveBegins.first().direction)
+        assertEquals(receiveBegins.first().transferId, receiveEnds.first().transferId)
+        assertEquals(
+          receiveEvents.first(), receiveBegins.first(),
+          "receive anchor begin must come first — it has to cover the authorization wait too, got $receiveEvents",
+        )
+        assertTrue(
+          receiveEvents.indexOf(receiveBegins.first()) < receiveEvents.indexOf(receiveEnds.first()),
+          "receive anchor begin must precede end, got $receiveEvents",
         )
       }
     }
@@ -736,7 +757,10 @@ internal class KlardropTestContext(
   }
 
   /** Records the sending side's anchor traffic so a test can assert file sends are bracketed. */
-  val transferAnchor = RecordingOutgoingTransferAnchor()
+  val transferAnchor = RecordingTransferAnchor()
+
+  /** Same, for the receiving side — a receive has to be anchored just as a send does. */
+  val serverTransferAnchor = RecordingTransferAnchor()
 
   val clientCommunicationModule = CommunicationModule(
     coroutines = coroutines,
@@ -751,7 +775,7 @@ internal class KlardropTestContext(
     ackTimeoutConfig = testAckTimeoutConfig,
     heartbeatConfig = testHeartbeatConfig,
     incomingAuthorizerOverride = autoAcceptAuthorizer,
-    outgoingTransferAnchor = transferAnchor,
+    transferAnchor = transferAnchor,
   )
 
   val serverCommunicationModule = CommunicationModule(
@@ -767,6 +791,7 @@ internal class KlardropTestContext(
     ackTimeoutConfig = testAckTimeoutConfig,
     heartbeatConfig = testHeartbeatConfig,
     incomingAuthorizerOverride = autoAcceptAuthorizer,
+    transferAnchor = serverTransferAnchor,
   )
 
   data class ServerContext(

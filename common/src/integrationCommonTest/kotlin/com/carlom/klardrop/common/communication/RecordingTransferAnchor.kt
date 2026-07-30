@@ -4,17 +4,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * [OutgoingTransferAnchor] that just records what it was told, in order.
+ * [TransferAnchor] that just records what it was told, in order.
  *
- * Backed by a [MutableStateFlow] rather than a plain list because the messenger drives the anchor
- * from its own IO scope — in this harness that's real threads, so appends have to be atomic.
+ * Backed by a [MutableStateFlow] rather than a plain list because the messenger (sending side) and
+ * the router (receiving side) drive the anchor from their own IO scopes — in this harness that's
+ * real threads, so appends have to be atomic.
  */
-internal class RecordingOutgoingTransferAnchor : OutgoingTransferAnchor {
+internal class RecordingTransferAnchor : TransferAnchor {
 
   sealed interface Event {
     val transferId: String
 
-    data class Begin(override val transferId: String, val label: String) : Event
+    data class Begin(
+      override val transferId: String,
+      val label: String,
+      val direction: TransferAnchor.Direction,
+    ) : Event
+
     data class Progress(override val transferId: String, val percentage: Int) : Event
     data class End(override val transferId: String) : Event
   }
@@ -23,8 +29,8 @@ internal class RecordingOutgoingTransferAnchor : OutgoingTransferAnchor {
 
   val events: List<Event> get() = _events.value
 
-  override fun begin(transferId: String, label: String) {
-    _events.update { it + Event.Begin(transferId, label) }
+  override fun begin(transferId: String, label: String, direction: TransferAnchor.Direction) {
+    _events.update { it + Event.Begin(transferId, label, direction) }
   }
 
   override fun progress(transferId: String, percentage: Int) {

@@ -3,12 +3,15 @@
 
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-    <!-- Large outgoing file transfers run in a foreground service so they survive the share
-         sheet closing and aren't killed mid-transfer; POST_NOTIFICATIONS lets it show progress. -->
+    <!-- File transfers (both directions) run under a foreground service so they survive the share
+         sheet closing, and aren't frozen or killed mid-transfer once the app is backgrounded;
+         POST_NOTIFICATIONS lets it show progress. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- WifiLock during a file transfer keeps WiFi at full power so power-save doesn't drop it. -->
+    <!-- Two locks held for the length of a transfer so it keeps running with the screen off: a
+         WifiLock so power-save doesn't drop the radio, and a partial wake lock so the CPU doesn't
+         suspend out from under the socket. -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <!-- Opt-in "stay discoverable" foreground service keeps the app reachable in the background. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
@@ -57,7 +60,7 @@
         </activity>
 
         <service
-                android:name=".share.FileSendService"
+                android:name=".share.FileTransferService"
                 android:exported="false"
                 android:foregroundServiceType="dataSync"/>
 

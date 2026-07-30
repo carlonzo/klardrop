@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
 import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
@@ -172,7 +173,8 @@ data class FileChunkMessage(
  */
 class FileReceivePipeline internal constructor(
   val header: FileMessage,
-  private val fromDeviceId: String,
+  /** Peer this transfer is coming from; the router uses it to clean up orphans on disconnect. */
+  val fromDeviceId: String,
   private val fileTransferId: Long,
   private val fileTransfer: FileTransfer,
   private val receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
@@ -194,6 +196,14 @@ class FileReceivePipeline internal constructor(
    * expected rather than a downgrade worth warning about.
    */
   private val linkAuthenticated: Boolean = false,
+  /**
+   * Keeps the process alive and the device awake until this receive reaches a terminal state.
+   * The router [TransferAnchor.begin]s it when the header arrives (so the window where the user
+   * hasn't tapped Accept yet is covered too) and hands it here; the pipeline owns the matching
+   * [TransferAnchor.end] because only it knows when the last byte landed.
+   */
+  private val transferAnchor: TransferAnchor = TransferAnchor.None,
+  private val transferAnchorId: String = "",
 ) {
   private val sink = fileTransfer.bufferedSink
   private var totalReceived = 0L
@@ -254,7 +264,19 @@ class FileReceivePipeline internal constructor(
       receiveFlow.update {
         it.copy(status = ReceiveMessageStatus.Progress(listOf(header to progressValue)))
       }
+      // Same throttle as the UI flow: on Android this drives a notification rebuild, which is far
+      // too expensive to do per 256 KB chunk.
+      runCatching { transferAnchor.progress(transferAnchorId, progressValue) }
     }
+  }
+
+  /**
+   * Release the anchor. Called from both terminal paths, and safe to call twice — the platform
+   * anchors ignore an id they aren't holding.
+   */
+  private fun releaseAnchor() {
+    runCatching { transferAnchor.end(transferAnchorId) }
+      .onFailure { log("FileReceivePipeline", "Transfer anchor end failed for $transferAnchorId", it) }
   }
 
   /**
@@ -271,6 +293,16 @@ class FileReceivePipeline internal constructor(
   suspend fun complete(): Boolean {
     if (isFinished) return false
     isFinished = true
+    // finally, not a trailing call: every branch below returns, and each one is a terminal state
+    // that must let the device sleep again.
+    return try {
+      finalizeReceive()
+    } finally {
+      releaseAnchor()
+    }
+  }
+
+  private suspend fun finalizeReceive(): Boolean {
     runCatching { sink.close() }
 
     // Integrity verdict:
@@ -350,11 +382,15 @@ class FileReceivePipeline internal constructor(
   suspend fun fail(error: Throwable) {
     if (isFinished) return
     isFinished = true
-    runCatching { sink.close() }
-    fileTransfer.onTransferFailed()
-    messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
-    receiveFlow.update {
-      it.copy(status = ReceiveMessageStatus.Failed(error.message ?: "Unknown error"))
+    try {
+      runCatching { sink.close() }
+      fileTransfer.onTransferFailed()
+      messageRepository.updateFileTransferStatus(fileTransferId, FileTransferStatus.FAILED)
+      receiveFlow.update {
+        it.copy(status = ReceiveMessageStatus.Failed(error.message ?: "Unknown error"))
+      }
+    } finally {
+      releaseAnchor()
     }
   }
 }
@@ -423,6 +459,12 @@ class FileMessageHandler(
     verifyChunkMac: (suspend (chunk: FileChunkMessage) -> Boolean)? = null,
     /** See [FileReceivePipeline.linkAuthenticated]. */
     linkAuthenticated: Boolean = false,
+    /**
+     * Anchor the router already opened for this receive, handed to the returned pipeline so it
+     * can release it on completion or failure. Defaults to a no-op for direct unit-test calls.
+     */
+    transferAnchor: TransferAnchor = TransferAnchor.None,
+    transferAnchorId: String = "",
   ): FileReceivePipeline {
     log("FileMessageHandler", "beginReceive ${header.fileName} (${header.fileSize} bytes) from $fromDeviceId")
 
@@ -467,6 +509,8 @@ class FileMessageHandler(
       crypto = crypto,
       verifyChunkMac = verifyChunkMac,
       linkAuthenticated = linkAuthenticated,
+      transferAnchor = transferAnchor,
+      transferAnchorId = transferAnchorId,
     )
   }
 
