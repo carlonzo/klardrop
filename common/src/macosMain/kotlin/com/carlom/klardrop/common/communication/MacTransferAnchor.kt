@@ -4,6 +4,11 @@ import com.carlom.klardrop.common.utils.log
 import platform.Foundation.NSActivityUserInitiated
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSProcessInfo
+// beginActivityWithOptions/endActivity come from the NSProcessInfoActivity *category*, and
+// Kotlin/Native maps ObjC category methods to extension functions rather than members — so they
+// have to be imported by name on top of the class itself, or they don't resolve.
+import platform.Foundation.beginActivityWithOptions
+import platform.Foundation.endActivity
 import platform.darwin.NSObjectProtocol
 
 /**
