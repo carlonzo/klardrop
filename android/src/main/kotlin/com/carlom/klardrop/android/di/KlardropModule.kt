@@ -1,11 +1,11 @@
 package com.carlom.klardrop.android.di
 
 import android.content.Context
-import com.carlom.klardrop.android.share.AndroidOutgoingTransferAnchor
+import com.carlom.klardrop.android.share.AndroidTransferAnchor
 import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
-import com.carlom.klardrop.common.communication.OutgoingTransferAnchor
+import com.carlom.klardrop.common.communication.TransferAnchor
 import dagger.Module
 import dagger.Provides
 import javax.inject.Singleton
@@ -20,19 +20,19 @@ class KlardropModule {
 
   @Singleton
   @Provides
-  fun providesOutgoingTransferAnchor(context: Context): OutgoingTransferAnchor {
-    return AndroidOutgoingTransferAnchor(context)
+  fun providesTransferAnchor(context: Context): TransferAnchor {
+    return AndroidTransferAnchor(context)
   }
 
   @Singleton
   @Provides
   fun providesKlardrop(
     internalPlatformDependencies: InternalPlatformDependencies,
-    outgoingTransferAnchor: OutgoingTransferAnchor,
+    transferAnchor: TransferAnchor,
   ): Klardrop {
     return Klardrop(
       internalPlatformDependency = internalPlatformDependencies,
-      outgoingTransferAnchor = outgoingTransferAnchor,
+      transferAnchor = transferAnchor,
     )
   }
 

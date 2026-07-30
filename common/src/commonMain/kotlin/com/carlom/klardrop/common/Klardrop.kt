@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common
 
-import com.carlom.klardrop.common.communication.OutgoingTransferAnchor
+import com.carlom.klardrop.common.communication.TransferAnchor
+import com.carlom.klardrop.common.communication.platformTransferAnchor
 import com.carlom.klardrop.common.di.CommonComponent
 
 import com.klardrop.common.BugsnagWrapper
@@ -13,10 +14,12 @@ class Klardrop(
   private val utilsModule: UtilsModule = UtilsModule(),
   private val internalPlatformDependency: InternalPlatformDependencies,
   /**
-   * Platform hook that keeps this process alive while an outbound file transfer is in flight.
-   * Android passes a foreground-service-backed anchor; the other targets leave it as a no-op.
+   * Platform hook that keeps this process alive and awake while a file transfer is in flight, in
+   * either direction. Android passes a foreground-service-backed anchor because that one needs a
+   * manifest-declared service; the Apple targets build their own from `common` (see
+   * [platformTransferAnchor]) and desktop doesn't need one.
    */
-  private val outgoingTransferAnchor: OutgoingTransferAnchor = OutgoingTransferAnchor.None,
+  private val transferAnchor: TransferAnchor = platformTransferAnchor(),
 ) {
 
   lateinit var commonComponent: CommonComponent
@@ -28,7 +31,7 @@ class Klardrop(
     log("Starting Klardrop with ApplicationInfo: $applicationInfo")
 
     commonComponent =
-      CommonComponent(applicationInfo, utilsModule, internalPlatformDependency, outgoingTransferAnchor)
+      CommonComponent(applicationInfo, utilsModule, internalPlatformDependency, transferAnchor)
 
     // Recover from a prior crash/kill: nothing is actually transferring at boot, so any
     // file_transfers row left as IN_PROGRESS is stale. Without this, those rows render

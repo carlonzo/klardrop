@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.communication.router
 import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.communication.message.AckType
 import com.carlom.klardrop.common.communication.message.FileChunkMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
@@ -33,6 +34,7 @@ import kotlinx.coroutines.invoke
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.random.Random
 
 interface MessagesRouter {
   /**
@@ -77,6 +79,19 @@ interface MessagesRouter {
     writeLock: Mutex = Mutex(),
     cipher: FrameCipher = FrameCipher.Plain,
   )
+
+  /**
+   * The link to [deviceId] is gone. Any file receive from that peer that hadn't finished is now
+   * unfinishable — no more chunks will ever arrive — so the router fails it here.
+   *
+   * Without this the pipeline is simply orphaned: its `file_transfers` row stays IN_PROGRESS
+   * forever (rendering as a stuck bubble in chat until the next app start sweeps it), and — worse
+   * on mobile — the [com.carlom.klardrop.common.communication.TransferAnchor] it opened is never
+   * released, leaving Android's foreground service, wake lock and WifiLock held indefinitely.
+   *
+   * Default no-op so test fakes don't have to implement it.
+   */
+  suspend fun onPeerDisconnected(deviceId: String) = Unit
 }
 
 internal class MessagesRouterImpl(
@@ -97,14 +112,23 @@ internal class MessagesRouterImpl(
    * have to wire it.
    */
   private val onPeerLiveness: (deviceId: String) -> Unit = {},
+  /**
+   * Keeps the process alive and the device awake while an inbound file transfer is in flight —
+   * the receive-side counterpart to the anchoring [com.carlom.klardrop.common.communication.MessengerImpl]
+   * does for sends. Receiving is the direction that needs it most: the user hits Accept and puts
+   * the phone down, so the whole transfer happens with the app backgrounded and the screen off.
+   */
+  private val transferAnchor: TransferAnchor = TransferAnchor.None,
 ) : MessagesRouter {
 
   /**
    * In-flight chunked file receives, keyed by FILE header id. Populated when a [FileMessage]
    * header arrives, drained when the corresponding [FileChunkMessage] with isLast=true arrives.
    *
-   * Scoped per router instance which is per-connection (via the DI graph), so id collisions
-   * only matter within one peer's stream — and FILE header ids are random Int so that's fine.
+   * The router is a process singleton (one instance serves every connection), so this map spans
+   * peers; FILE header ids are random Ints, which makes a cross-peer collision vanishingly
+   * unlikely. Each pipeline carries its own [FileReceivePipeline.fromDeviceId] so
+   * [onPeerDisconnected] can pick out the ones belonging to a link that just died.
    */
   private val receivePipelines = mutableMapOf<Int, FileReceivePipeline>()
   private val receiveMutex = Mutex()
@@ -431,6 +455,12 @@ internal class MessagesRouterImpl(
    * If [FileMessageHandler.beginReceive] throws (permission denied, disk full), we drop the
    * transfer silently — no ACK_READY, sender will time out on its readyAck wait and report
    * the error.
+   *
+   * The [transferAnchor] opens here rather than in [FileMessageHandler.beginReceive] so it also
+   * covers the authorization wait: the sender is parked on ACK_READY while we wait for the user to
+   * tap Accept, and on mobile that window is exactly when the screen locks and the process gets
+   * frozen. Ownership then transfers to the pipeline, which releases it on the terminal state;
+   * every path that returns before the pipeline exists releases it here instead.
    */
   private suspend fun handleFileHeader(
     header: FileMessage,
@@ -439,6 +469,35 @@ internal class MessagesRouterImpl(
     writeChannel: ByteWriteChannel,
     writeLock: Mutex,
     cipher: FrameCipher,
+  ) {
+    val anchorId = incomingAnchorId(fromDeviceId, header.id)
+    var anchorHandedOff = false
+    runCatching { transferAnchor.begin(anchorId, header.fileName, TransferAnchor.Direction.INCOMING) }
+      .onFailure { log("MessagesRouter", "Transfer anchor begin failed for $anchorId", it) }
+    try {
+      receiveFileHeader(header, ackId, fromDeviceId, writeChannel, writeLock, cipher, anchorId) {
+        anchorHandedOff = true
+      }
+    } finally {
+      // Once a pipeline exists it owns the anchor (it's the only thing that knows when the last
+      // chunk lands). Everything else — rejection, beginReceive failure, a throw out of the
+      // authorizer — has to release it right here or the device never sleeps again.
+      if (!anchorHandedOff) {
+        runCatching { transferAnchor.end(anchorId) }
+          .onFailure { log("MessagesRouter", "Transfer anchor end failed for $anchorId", it) }
+      }
+    }
+  }
+
+  private suspend fun receiveFileHeader(
+    header: FileMessage,
+    ackId: Int,
+    fromDeviceId: String,
+    writeChannel: ByteWriteChannel,
+    writeLock: Mutex,
+    cipher: FrameCipher,
+    anchorId: String,
+    onAnchorHandedOff: () -> Unit,
   ) {
     val receiveFlow = messengeReceiver.onReceiveMessage(fromDeviceId)
 
@@ -497,11 +556,16 @@ internal class MessagesRouterImpl(
         receiveFlow,
         verifyChunkMac,
         linkAuthenticated = cipher.authenticated,
+        transferAnchor = transferAnchor,
+        transferAnchorId = anchorId,
       )
     }.getOrElse { error ->
       log("MessagesRouter", "beginReceive failed for ${header.fileName}: ${error.message}", error)
       return
     }
+    // From here on the pipeline releases the anchor — including on the ACK_READY failure path
+    // below, which fails the pipeline rather than returning silently.
+    onAnchorHandedOff()
 
     receiveMutex.withLock {
       receivePipelines[header.id]?.let { existing ->
@@ -670,6 +734,35 @@ internal class MessagesRouterImpl(
       }
     }
   }
+
+  override suspend fun onPeerDisconnected(deviceId: String) {
+    // Identity is the device, not the connection, so in principle a reconnect that re-sent its
+    // header before this ran would have its fresh pipeline failed here too. In practice the read
+    // loop reaches this within microseconds of the socket closing while a reconnect is a dial plus
+    // a handshake, and the worst case is a transfer that restarts from zero rather than one that
+    // silently corrupts — the same outcome the duplicate-header path in receiveFileHeader gives.
+    val orphans = receiveMutex.withLock {
+      val matching = receivePipelines.filterValues { it.fromDeviceId == deviceId }
+      matching.keys.forEach { receivePipelines.remove(it) }
+      matching.values.toList()
+    }
+    if (orphans.isEmpty()) return
+    log("MessagesRouter", "Connection to $deviceId dropped with ${orphans.size} receive(s) in flight; failing them")
+    orphans.forEach { pipeline ->
+      // fail() marks the DB row FAILED, updates the receive flow and — the part that matters for
+      // battery — releases the transfer anchor this receive was holding.
+      runCatching { pipeline.fail(IllegalStateException("Connection to $deviceId was lost mid-transfer")) }
+        .onFailure { log("MessagesRouter", "Failed to clean up orphaned receive from $deviceId", it) }
+    }
+  }
+
+  /**
+   * Anchor ids have to be unique per header *arrival*, not per header id. A duplicate header
+   * replaces the in-flight pipeline and fails the old one; if both shared an anchor id, the
+   * replaced pipeline's release would pull the anchor out from under its replacement.
+   */
+  private fun incomingAnchorId(deviceId: String, headerId: Int): String =
+    "$deviceId:in:$headerId:${Random.nextInt()}"
 
   private companion object {
     /** Maximum number of processed inbound TEXT ids retained for dedup. */

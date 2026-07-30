@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Process-wide registry of in-flight outgoing sends so the share sheet (an Activity) and
- * [FileSendService] (a foreground service) can observe the *same* transfer without either owning
+ * [FileTransferService] (a foreground service) can observe the *same* transfer without either owning
  * it. The transfer itself runs inside the service; this is just the shared live-progress view.
  *
  * ponytail: in-memory only and never pruned — a transfer that outlives the process is already a

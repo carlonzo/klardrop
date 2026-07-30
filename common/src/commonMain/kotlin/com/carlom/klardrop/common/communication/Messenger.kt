@@ -54,7 +54,7 @@ class MessengerImpl(
   private val messageSerializer: MessageSerializer,
   private val messageRepository: MessageRepository,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
-  private val transferAnchor: OutgoingTransferAnchor = OutgoingTransferAnchor.None,
+  private val transferAnchor: TransferAnchor = TransferAnchor.None,
 ) : Messenger {
 
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -75,15 +75,17 @@ class MessengerImpl(
     messengerScope.launch {
       // Anchor payload-bearing sends only. A file send waits on the receiver accepting and then
       // streams — minutes, all of it a window in which the platform may freeze or kill us out from
-      // under the socket (see OutgoingTransferAnchor). Text/control messages are a single frame
+      // under the socket (see TransferAnchor). Text/control messages are a single frame
       // plus an ack; anchoring one would spin up a foreground service and flash a progress
       // notification for something already over by the time the user could read it.
       val anchored = messageRequest.message.hasPayload
-      val anchorId = "$deviceId:${messageRequest.message.id}"
+      // Direction is part of the id: a device can be sending us one file while we send it another,
+      // and both anchors have to coexist rather than one ending the other's.
+      val anchorId = "$deviceId:out:${messageRequest.message.id}"
 
       val anchorProgressJob = if (!anchored) null else {
         val label = (messageRequest.message as? FileMessage)?.fileName ?: "file"
-        runCatching { transferAnchor.begin(anchorId, label) }
+        runCatching { transferAnchor.begin(anchorId, label, TransferAnchor.Direction.OUTGOING) }
           .onFailure { log("Messenger", "Transfer anchor begin failed for $anchorId", it) }
         // Mirror live progress into the anchor off the same flow the callers read. Cancelled in
         // the finally below — `flow` is a hot SharedFlow that never completes on its own, so this

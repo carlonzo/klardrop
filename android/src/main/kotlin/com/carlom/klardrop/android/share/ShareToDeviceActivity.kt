@@ -76,7 +76,7 @@ class ShareToDeviceActivity : AppCompatActivity() {
     shareToDeviceController = ShareToDeviceController(klardrop.commonComponent)
 
     parseIntent()
-    // Large transfers post a progress notification from FileSendService; ask up-front so it can show.
+    // Large transfers post a progress notification from FileTransferService; ask up-front so it can show.
     maybeRequestNotificationPermission()
 
     setContent {
@@ -85,7 +85,7 @@ class ShareToDeviceActivity : AppCompatActivity() {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
         var selectedId by remember { mutableStateOf<String?>(null) }
         var dismissed by remember { mutableStateOf(false) }
-        // Non-null once a file transfer is handed to FileSendService; the sheet then shows live
+        // Non-null once a file transfer is handed to FileTransferService; the sheet then shows live
         // status off ActiveSends instead of the device list. The transfer lives in the service, so
         // dismissing the sheet just "minimizes" — the bytes keep flowing in the background.
         var transferId by remember { mutableStateOf<String?>(null) }
@@ -127,7 +127,7 @@ class ShareToDeviceActivity : AppCompatActivity() {
               onSelectDevice = { selectedId = it.id },
               onSend = { share ->
                 val target = share?.id?.let(byId::get) ?: return@ShareSheet
-                // Hand the payload to FileSendService (file) while we still hold the read grant, or
+                // Hand the payload to FileTransferService (file) while we still hold the read grant, or
                 // fire-and-forget the text. Files keep the sheet open to show status; text dismisses.
                 lifecycleScope.launch {
                   try {
@@ -173,7 +173,7 @@ class ShareToDeviceActivity : AppCompatActivity() {
 
   /**
    * Hand the shared payload off while we still hold the read grant. Text is fire-and-forget
-   * (returns null). Files of any size stream through [FileSendService] under the forwarded grant —
+   * (returns null). Files of any size stream through [FileTransferService] under the forwarded grant —
    * even a tiny file gates on the receiver accepting, so it needs the same foreground anchor as a
    * big one. Returns the [ActiveSends] transfer id to observe, or null for text/empty.
    */
@@ -191,18 +191,18 @@ class ShareToDeviceActivity : AppCompatActivity() {
     val files = withContext(ioDispatcher) {
       pendingUris.map { uri ->
         val data = fileSystem.getResolvedFileData(PlatformFile(uri))
-        FileSendService.SendFile(uri, data.fileName, data.fileSize, data.mimeType)
+        FileTransferService.SendFile(uri, data.fileName, data.fileSize, data.mimeType)
       }
     }
 
     val transferId = ActiveSends.create()
     // Forwards the grant into the service; safe to finish the Activity at any point after.
-    FileSendService.start(this, deviceId, files, transferId)
+    FileTransferService.start(this, deviceId, files, transferId)
     return transferId
   }
 
   private fun maybeRequestNotificationPermission() {
-    // Only file shares can spin up FileSendService (and its progress notification). A text share
+    // Only file shares can spin up FileTransferService (and its progress notification). A text share
     // never does, so don't pester the user with a permission prompt for one.
     if (pendingUris.isEmpty()) return
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return

@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.mdns
 import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
+import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -46,7 +47,17 @@ class NearbyReceiverConnectionHandler(
   coroutines: Coroutines,
   private val incomingAuthorizer: IncomingAuthorizer,
   private val messageRepository: MessageRepository,
+  /**
+   * Held for the whole session — from the moment a peer connects until the socket closes — so the
+   * device doesn't sleep (or, on Android, freeze the process) while a Nearby bundle streams in.
+   * Unlike the Klardrop path there's no per-file lifecycle to hook: one Nearby session delivers
+   * the whole bundle over a single socket, so one anchor covers it.
+   */
+  private val transferAnchor: TransferAnchor = TransferAnchor.None,
 ) {
+
+  /** Unique per handler instance — [NearbyReceiverConnectionHandlerFactory] makes one per session. */
+  private val transferAnchorId = "nearby:in:${Random.nextInt()}"
 
   private val messagesToReceive = mutableMapOf<Long, Message>()
   private val receiveProgress = mutableMapOf<Long, Int>()
@@ -62,6 +73,13 @@ class NearbyReceiverConnectionHandler(
   ) {
 
     this.receiveFlow = receiveFlow
+
+    // Anchor before the handshake, not just before the byte stream: the session also covers the
+    // key exchange and the wait for the user to accept, and the device sleeping during either
+    // kills the transfer just as dead as sleeping mid-stream.
+    runCatching {
+      transferAnchor.begin(transferAnchorId, "Nearby Share transfer", TransferAnchor.Direction.INCOMING)
+    }.onFailure { log("NearbyReceiverConnectionHandler", "Transfer anchor begin failed", it) }
 
     try {
       val writeChannel = connection.openWriteChannel(autoFlush = false)
@@ -148,6 +166,8 @@ class NearbyReceiverConnectionHandler(
       throw e
     } finally {
       connection.close()
+      runCatching { transferAnchor.end(transferAnchorId) }
+        .onFailure { log("NearbyReceiverConnectionHandler", "Transfer anchor end failed", it) }
     }
 
     require(receiveProgress.values.all { it == 100 }) { "Not all messages received $receiveProgress $messagesToReceive" }
@@ -529,6 +549,13 @@ class NearbyReceiverConnectionHandler(
     }
 
     log("NearbyReceiverConnectionHandler", "emitted progress $messagesProgress")
+
+    // Flat mean across the bundle's payloads — the anchor only needs a single number to render in
+    // a progress notification, and Nearby has no per-payload size breakdown handy here.
+    if (receiveProgress.isNotEmpty()) {
+      val overall = receiveProgress.values.sum() / receiveProgress.size
+      runCatching { transferAnchor.progress(transferAnchorId, overall) }
+    }
 
   }
 

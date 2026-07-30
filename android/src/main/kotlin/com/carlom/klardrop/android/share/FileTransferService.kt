@@ -21,6 +21,7 @@ import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
+import com.carlom.klardrop.common.communication.TransferAnchor.Direction
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
@@ -40,7 +41,7 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Foreground service that keeps outbound transfers alive, in two roles.
+ * Foreground service that keeps file transfers alive — in both directions — in two roles.
  *
  * **1. It runs share-sheet batches itself.** A transfer only streams its bytes *after* the receiver
  * accepts, which can be long after the share sheet closed. The `content://` read grant from the
@@ -51,21 +52,23 @@ import kotlin.time.Duration.Companion.seconds
  * [ActiveSends] so the (still-open) share sheet can show status off the same source.
  *
  * **2. It anchors transfers running elsewhere in the process.** Sends started from the app itself —
- * the chat screen, the discovery screen — run in `Messenger`'s own scope, which nothing in the app
- * cancels. But the *platform* will happily freeze or kill the process once no Activity is on
- * screen, taking the socket with it. `Messenger.send` therefore registers every file send in
- * [OutgoingTransfers] via [AndroidOutgoingTransferAnchor], which starts this service in
- * [ACTION_ANCHOR] mode: no work of its own, just the foreground component the process needs to
- * survive being backgrounded mid-transfer.
+ * the chat screen, the discovery screen — and *every* accepted receive run in the messenger's and
+ * the router's own scopes, which nothing in the app cancels. But the *platform* will happily freeze
+ * or kill the process once no Activity is on screen, taking the socket with it. `Messenger.send`
+ * and the receive pipeline therefore register every file transfer in [ActiveTransfers] via
+ * [AndroidTransferAnchor], which starts this service in [ACTION_ANCHOR] mode: no work of its own,
+ * just the foreground component the process needs to survive being backgrounded mid-transfer.
  *
- * Either way the service stays up while [OutgoingTransfers] is non-empty or a batch is in flight,
- * holds a [WifiTransferLock] so the radio doesn't power-save mid-stream, renders the registry into
- * one ongoing notification, and stops itself shortly after the last transfer drains.
+ * Either way the service stays up while [ActiveTransfers] is non-empty or a batch is in flight, and
+ * for that whole window holds the two locks that between them let the user turn the screen off and
+ * put the phone away without stalling a transfer: a [WifiTransferLock] so the radio doesn't
+ * power-save, and a [TransferCpuLock] so the CPU doesn't suspend. It renders the registry into one
+ * ongoing notification and stops itself shortly after the last transfer drains.
  *
- * Every file share routes through here regardless of size: a tiny file still gates on the receiver
+ * Every file transfer routes through here regardless of size: a tiny file still gates on the peer
  * accepting, so it needs the same foreground anchor as a big one.
  */
-class FileSendService : Service() {
+class FileTransferService : Service() {
 
   data class SendFile(val uri: Uri, val name: String, val size: Long, val mimeType: String)
 
@@ -75,6 +78,7 @@ class FileSendService : Service() {
     CoroutineScope(SupervisorJob() + coroutines.ioDispatcher)
   }
   private val wifiLock by lazy { WifiTransferLock(this) }
+  private val cpuLock by lazy { TransferCpuLock(this) }
   private val notificationManager by lazy {
     getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
   }
@@ -93,7 +97,7 @@ class FileSendService : Service() {
   private var batchContext: String? = null
 
   private var foregroundStarted = false
-  private var wifiLockHeld = false
+  private var locksHeld = false
   private var renderJob: Job? = null
 
   /** Volatile + [refreshIdleTimer]'s lock: armed from the main thread and from batch coroutines. */
@@ -106,7 +110,7 @@ class FileSendService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent?.action == ACTION_CANCEL) {
-      log("FileSendService", "Cancel requested; stopping batch transfers")
+      log("FileTransferService", "Cancel requested; stopping batch transfers")
       // Only the batches this service owns. Transfers running in the app process are not ours to
       // kill, and the notification only offers this action while a batch is actually in flight.
       batchJobs.toList().forEach { it.cancel() }
@@ -117,7 +121,7 @@ class FileSendService : Service() {
     ensureChannel()
     // Android requires startForeground() promptly after startForegroundService(); do it first.
     promoteToForeground()
-    acquireWifiLock()
+    acquireLocks()
     startRendering()
 
     if (intent?.action == ACTION_ANCHOR) {
@@ -131,7 +135,7 @@ class FileSendService : Service() {
     val deviceId = intent?.getStringExtra(EXTRA_DEVICE_ID)
     val transferId = intent?.getStringExtra(EXTRA_TRANSFER_ID)
     if (deviceId == null || batch.isEmpty()) {
-      log("FileSendService", "No work in start command; stopping if nothing else is running")
+      log("FileTransferService", "No work in start command; stopping if nothing else is running")
       refreshIdleTimer()
       return START_NOT_STICKY
     }
@@ -144,7 +148,7 @@ class FileSendService : Service() {
         sendBatch(deviceId, batch, transferId)
         transferId?.let { ActiveSends.publish(it, Completed) }
       } catch (e: Throwable) {
-        log("FileSendService", "Batch to $deviceId failed", e)
+        log("FileTransferService", "Batch to $deviceId failed", e)
         transferId?.let { ActiveSends.publish(it, Error(e.message ?: "Transfer failed")) }
       } finally {
         activeBatches.decrementAndGet()
@@ -180,10 +184,10 @@ class FileSendService : Service() {
 
   private suspend fun sendBatch(deviceId: String, files: List<SendFile>, transferId: String?) {
     files.forEachIndexed { index, file ->
-      log("FileSendService", "Sending ${file.name} (${file.size} bytes) to $deviceId [${index + 1}/${files.size}]")
+      log("FileTransferService", "Sending ${file.name} (${file.size} bytes) to $deviceId [${index + 1}/${files.size}]")
       batchContext = if (files.size > 1) "${index + 1} of ${files.size}" else null
       // Streams via ContentResolver.openInputStream under this service's forwarded read grant.
-      // The notification entry for this file comes from OutgoingTransfers — Messenger.send
+      // The notification entry for this file comes from ActiveTransfers — Messenger.send
       // registers one for every file send, wherever it was started from, including here.
       messenger.send(deviceId, FileMessage(file.name, file.size, file.mimeType).toSendRequest(PlatformFile(file.uri)))
         .untilCompleted()
@@ -192,11 +196,11 @@ class FileSendService : Service() {
           // batch-level terminal state is published once in onStartCommand after the whole loop.
           if (progress !is Completed) transferId?.let { ActiveSends.publish(it, progress) }
           when (progress) {
-            is Error -> log("FileSendService", "Send of ${file.name} errored: ${progress.message}")
-            Completed -> log("FileSendService", "Sent ${file.name} to $deviceId")
+            is Error -> log("FileTransferService", "Send of ${file.name} errored: ${progress.message}")
+            Completed -> log("FileTransferService", "Sent ${file.name} to $deviceId")
             // Nothing to do for the non-terminal states. The share sheet already got them from
             // the publish above (it renders AwaitingRecipient as "Waiting for receiver to
-            // accept…"), and the notification is driven off OutgoingTransfers, which leaves the
+            // accept…"), and the notification is driven off ActiveTransfers, which leaves the
             // bar indeterminate until a real byte percentage arrives — which is exactly what
             // AwaitingRecipient means: header on the wire, no bytes flowing yet.
             is MessengerSendProgress.InProgress,
@@ -208,13 +212,13 @@ class FileSendService : Service() {
   }
 
   /**
-   * Render [OutgoingTransfers] into the ongoing notification, and shut the service down once it
+   * Render [ActiveTransfers] into the ongoing notification, and shut the service down once it
    * drains. Idempotent — every start command calls it, only the first one starts the collector.
    */
   private fun startRendering() {
     if (renderJob != null) return
     renderJob = serviceScope.launch(coroutines.mainDispatcher) {
-      OutgoingTransfers.state.collect { entries ->
+      ActiveTransfers.state.collect { entries ->
         if (foregroundStarted) {
           notificationManager.notify(NOTIFICATION_ID, buildNotification(entries))
         }
@@ -223,13 +227,14 @@ class FileSendService : Service() {
     }
   }
 
-  private fun isIdle(): Boolean = OutgoingTransfers.isEmpty() && activeBatches.get() <= 0
+  private fun isIdle(): Boolean = ActiveTransfers.isEmpty() && activeBatches.get() <= 0
 
   /**
    * Arm the shutdown timer when nothing is transferring, disarm it when something is. Stopping is
-   * deferred by [IDLE_GRACE] because sends arrive back-to-back — a multi-file batch briefly empties
-   * the registry between files, and stopping on that gap would tear down the foreground component
-   * only to immediately rebuild it (which Android can refuse outright once the app is backgrounded).
+   * deferred by [IDLE_GRACE] because transfers arrive back-to-back — a multi-file batch briefly
+   * empties the registry between files, and stopping on that gap would tear down the foreground
+   * component only to immediately rebuild it (which Android can refuse outright once the app is
+   * backgrounded).
    */
   @Synchronized
   private fun refreshIdleTimer() {
@@ -239,7 +244,7 @@ class FileSendService : Service() {
       delay(IDLE_GRACE)
       // Re-check: a transfer may have started while we waited.
       if (isIdle()) {
-        log("FileSendService", "No transfers left; stopping")
+        log("FileTransferService", "No transfers left; stopping")
         stopForegroundAndSelf()
       }
     }
@@ -250,30 +255,45 @@ class FileSendService : Service() {
     ServiceCompat.startForeground(
       this,
       NOTIFICATION_ID,
-      buildNotification(OutgoingTransfers.state.value),
+      buildNotification(ActiveTransfers.state.value),
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
     )
     foregroundStarted = true
   }
 
-  private fun acquireWifiLock() {
-    if (wifiLockHeld) return
-    // Held for the service's whole lifetime rather than per batch: the service only exists while
-    // something is transferring, and in-app sends need the radio kept awake just as much.
+  /**
+   * Keep the radio and the CPU awake. Held for the service's whole lifetime rather than per batch:
+   * the service only exists while something is transferring, and transfers running in the app
+   * process need both just as much as the batches this service runs itself.
+   */
+  private fun acquireLocks() {
+    if (locksHeld) return
     wifiLock.acquire()
-    wifiLockHeld = true
+    cpuLock.acquire()
+    locksHeld = true
   }
 
-  private fun buildNotification(entries: Map<String, OutgoingTransfers.Entry>): Notification {
-    val title = when (entries.size) {
-      0 -> "Preparing transfer…"
-      1 -> "Sending ${entries.values.first().label}"
+  private fun buildNotification(entries: Map<String, ActiveTransfers.Entry>): Notification {
+    val incoming = entries.values.count { it.direction == Direction.INCOMING }
+    val outgoing = entries.size - incoming
+    val inboundOnly = entries.isNotEmpty() && outgoing == 0
+    val title = when {
+      entries.isEmpty() -> "Preparing transfer…"
+      entries.size == 1 -> {
+        val entry = entries.values.first()
+        val verb = if (entry.direction == Direction.INCOMING) "Receiving" else "Sending"
+        "$verb ${entry.label}"
+      }
+      // Both directions at once (sending one file while receiving another) has no natural verb,
+      // so use a neutral one rather than picking a side and being wrong about half of them.
+      incoming > 0 && outgoing > 0 -> "Transferring ${entries.size} files"
+      inboundOnly -> "Receiving ${entries.size} files"
       else -> "Sending ${entries.size} files"
     }
     val progress: Int? = when (entries.size) {
       0 -> null
       1 -> entries.values.first().percentage
-      // No per-file sizes here, so a flat mean across the in-flight files. Files not yet accepted
+      // No per-file sizes here, so a flat mean across the in-flight files. Files not yet moving
       // count as 0 rather than dropping out, so the bar can't jump backwards as one completes.
       else -> entries.values.map { it.percentage ?: 0 }.average().roundToInt()
     }
@@ -283,13 +303,18 @@ class FileSendService : Service() {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
     val cancelIntent = PendingIntent.getService(
-      this, 1, Intent(this, FileSendService::class.java).setAction(ACTION_CANCEL),
+      this, 1, Intent(this, FileTransferService::class.java).setAction(ACTION_CANCEL),
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
     return NotificationCompat.Builder(this, CHANNEL_TRANSFERS)
-      .setSmallIcon(android.R.drawable.stat_sys_upload)
+      // Download arrow only when everything in flight is inbound; anything else is at least
+      // partly an upload.
+      .setSmallIcon(if (inboundOnly) android.R.drawable.stat_sys_download else android.R.drawable.stat_sys_upload)
       .setContentTitle(title)
-      .setContentText(batchContext?.let { "Sending via Klardrop — $it" } ?: "Sending via Klardrop")
+      .setContentText(
+        if (inboundOnly) "Receiving via Klardrop"
+        else batchContext?.let { "Sending via Klardrop — $it" } ?: "Sending via Klardrop"
+      )
       .setOngoing(true)
       .setOnlyAlertOnce(true)
       .setContentIntent(openIntent)
@@ -308,7 +333,7 @@ class FileSendService : Service() {
     if (notificationManager.getNotificationChannel(CHANNEL_TRANSFERS) != null) return
     notificationManager.createNotificationChannel(
       NotificationChannel(CHANNEL_TRANSFERS, "File transfers", NotificationManager.IMPORTANCE_LOW).apply {
-        description = "Progress of files being sent to other devices."
+        description = "Progress of files being sent to and received from other devices."
       }
     )
   }
@@ -319,9 +344,10 @@ class FileSendService : Service() {
   }
 
   override fun onDestroy() {
-    if (wifiLockHeld) {
+    if (locksHeld) {
       wifiLock.release()
-      wifiLockHeld = false
+      cpuLock.release()
+      locksHeld = false
     }
     serviceScope.cancel()
     super.onDestroy()
@@ -331,7 +357,7 @@ class FileSendService : Service() {
     private const val CHANNEL_TRANSFERS = "klardrop_transfers"
     private const val NOTIFICATION_ID = 2001
     private const val ACTION_CANCEL = "com.carlom.klardrop.action.CANCEL_FILE_SEND"
-    private const val ACTION_ANCHOR = "com.carlom.klardrop.action.ANCHOR_FILE_SEND"
+    private const val ACTION_ANCHOR = "com.carlom.klardrop.action.ANCHOR_FILE_TRANSFER"
 
     private const val EXTRA_DEVICE_ID = "klardrop.device_id"
     private const val EXTRA_TRANSFER_ID = "klardrop.transfer_id"
@@ -345,15 +371,15 @@ class FileSendService : Service() {
 
     /**
      * Bring the service up as a pure foreground anchor for transfers running elsewhere in the
-     * process. Callers must register the transfer in [OutgoingTransfers] *first*, otherwise the
+     * process. Callers must register the transfer in [ActiveTransfers] *first*, otherwise the
      * service can start against an empty registry and immediately stop itself again.
      *
      * Throws if Android refuses a background foreground-service start (API 31+);
-     * [AndroidOutgoingTransferAnchor] is the only caller and handles that.
+     * [AndroidTransferAnchor] is the only caller and handles that.
      */
     fun anchor(context: Context) {
       ContextCompat.startForegroundService(
-        context, Intent(context, FileSendService::class.java).setAction(ACTION_ANCHOR),
+        context, Intent(context, FileTransferService::class.java).setAction(ACTION_ANCHOR),
       )
     }
 
@@ -365,7 +391,7 @@ class FileSendService : Service() {
      */
     fun start(context: Context, deviceId: String, files: List<SendFile>, transferId: String) {
       if (files.isEmpty()) return
-      val intent = Intent(context, FileSendService::class.java).apply {
+      val intent = Intent(context, FileTransferService::class.java).apply {
         putExtra(EXTRA_DEVICE_ID, deviceId)
         putExtra(EXTRA_TRANSFER_ID, transferId)
         putParcelableArrayListExtra(EXTRA_URIS, ArrayList(files.map { it.uri }))
