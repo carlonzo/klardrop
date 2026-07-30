@@ -78,12 +78,50 @@ jobs:
 
       # Cache ~/.konan (Kotlin/Native compiler + Apple platform libs) — outside the
       # Gradle home setup-gradle caches. Keyed on the version catalog.
-      - name: Cache Kotlin/Native (~/.konan)
-        uses: actions/cache@v6
+      #
+      # Split restore/save rather than actions/cache: the combined action's post
+      # step does not save when the job failed. On a Kotlin bump the catalog hash
+      # changes, so the exact key misses and restore-keys hands back the PREVIOUS
+      # Kotlin's ~/.konan — useless for the new compiler, which then downloads and
+      # rebuilds from scratch. That cold build is what pushes this job over its
+      # budget, and the resulting failure is precisely what stops the fresh cache
+      # from being written, so every retry pays the same cost again. Saving on
+      # always() breaks that loop: the first attempt seeds the new Kotlin's konan
+      # dir even though it went red, and the retry starts warm.
+      - name: Restore Kotlin/Native (~/.konan)
+        id: konan-cache
+        uses: actions/cache/restore@v6
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
           restore-keys: konan-${{ runner.os }}-
+
+      # Compile and link the native test binaries as their own step, before running
+      # them. These tests talk over real loopback sockets with multi-second connect
+      # and pumping deadlines, and Gradle will happily run one module's tests while
+      # another module is still linking — on a runner that reports as few as 3
+      # processors, that contention alone times the sockets out ("Could not connect
+      # to server..."). Building first means the test step starts on an idle box.
+      - name: Compile & link native tests
+        # Generous: on a Kotlin bump this is a from-scratch Kotlin/Native build of
+        # the compiler caches and Apple platform klibs, not an incremental one.
+        timeout-minutes: 60
+        run: |
+          ./gradlew \
+            :klardrop-common:linkDebugTestIosSimulatorArm64 \
+            :presentation:linkDebugTestIosSimulatorArm64 \
+            :protos:linkDebugTestIosSimulatorArm64 \
+            :klardrop-common:linkDebugTestMacosArm64 \
+            :presentation:linkDebugTestMacosArm64 \
+            :protos:linkDebugTestMacosArm64
+
+      # Save regardless of what the tests below do — see the restore step above.
+      - name: Save Kotlin/Native (~/.konan)
+        if: ${{ always() && steps.konan-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
 
       - name: Run macOS + iOS native tests
         # iOS Simulator + macOS native cover the shared KMP modules that Linux
@@ -98,6 +136,9 @@ jobs:
         # A step timeout fails just this step, so the "Publish Test Report" step
         # below (guarded on !cancelled(), which a job cancel would skip) still
         # runs and surfaces the per-test results that did complete.
+        #
+        # The binaries are already linked by the step above, so this budget now
+        # covers test execution alone — which has historically run ~12 minutes.
         timeout-minutes: 30
         run: |
           ./gradlew \
