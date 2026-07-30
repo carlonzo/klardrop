@@ -275,47 +275,122 @@ jobs:
           mkdir -p "$RUNNER_TEMP/keys"
           echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8"
 
-      # Automatic signing (-allowProvisioningUpdates + the API key) lets Xcode create
-      # the App Store provisioning profiles for the app + share extension on the fly.
-      # exportArchive with destination=upload ships straight to TestFlight.
-      - name: Archive + upload to TestFlight
+      # Archive WITHOUT code signing — signing happens once, at export (the same split the
+      # macOS job below uses).
+      #
+      # `xcodebuild archive` under automatic signing always resolves a *development*
+      # identity (the iosApp target even pins CODE_SIGN_IDENTITY = "Apple Development"),
+      # so archiving with -allowProvisioningUpdates made Xcode mint a fresh Apple
+      # Development certificate + "iOS App Development" profiles on every nightly. CI only
+      # holds the Apple Distribution cert, and once the account's certificate slots filled
+      # up every run died before building anything:
+      #   error: Choose a certificate to revoke. Your account has reached the maximum
+      #          number of certificates.
+      #   error: No profiles for 'com.carlom.Klardrop' were found: Xcode couldn't find any
+      #          iOS App Development provisioning profiles matching 'com.carlom.Klardrop'.
+      # With signing off, no development cert or profile is needed (or created) at all.
+      - name: Archive iosApp (unsigned)
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          VERSION: ${{ needs.gate.outputs.base }}
+          BUILD:   ${{ needs.gate.outputs.versionCode }}
+        run: |
+          set -euo pipefail
+          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme iosApp \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Klardrop.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
+
+      # Export to disk first (destination=export) rather than straight to upload, so the
+      # signed .ipa can be inspected before it ships. -allowProvisioningUpdates + the API
+      # key lets Xcode create the App Store *distribution* profiles for the app + share
+      # extension on the fly and sign with the Apple Distribution cert in the keychain;
+      # profiles are free to create, so this doesn't touch the certificate limit.
+      #
+      # manageAppVersionAndBuildNumber=false: Xcode otherwise rewrites CFBundleVersion on
+      # App Store exports, which would discard the gate's commit-derived versionCode.
+      - name: Export signed .ipa
         if: steps.signing.outputs.enabled == 'true'
         env:
           TEAM_ID:    ${{ secrets.APPLE_TEAM_ID }}
           API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
-          VERSION:    ${{ needs.gate.outputs.base }}
-          BUILD:      ${{ needs.gate.outputs.versionCode }}
         run: |
           set -euo pipefail
-          ARCHIVE="$RUNNER_TEMP/Klardrop.xcarchive"
-          KEY="$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8"
-
-          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme iosApp \
-            -configuration Release -destination 'generic/platform=iOS' \
-            -archivePath "$ARCHIVE" archive \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY" \
-            -authenticationKeyID "$API_KEY_ID" \
-            -authenticationKeyIssuerID "$API_ISSUER" \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
-
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
           <key>method</key><string>app-store-connect</string>
           <key>teamID</key><string>${TEAM_ID}</string>
-          <key>destination</key><string>upload</string>
+          <key>signingStyle</key><string>automatic</string>
+          <key>destination</key><string>export</string>
+          <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>
           PLIST
 
-          xcodebuild -exportArchive -archivePath "$ARCHIVE" \
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Klardrop.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY" \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER"
+
+      # The archive is unsigned, so the exported bundles get their entitlements from the
+      # App Store provisioning profile rather than from the built binaries. That's the
+      # intended behaviour, but it means a capability missing from the App ID would
+      # silently produce an app whose share extension can't reach the shared container.
+      # Fail here instead of shipping that to testers.
+      - name: Verify the exported app is distribution-signed and kept its App Group
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          IPA="$(ls "$RUNNER_TEMP/export"/*.ipa | head -1)"
+          echo "Exported: $IPA"
+          rm -rf "$RUNNER_TEMP/ipa" && mkdir -p "$RUNNER_TEMP/ipa"
+          unzip -q "$IPA" -d "$RUNNER_TEMP/ipa"
+          APP="$(ls -d "$RUNNER_TEMP/ipa/Payload"/*.app | head -1)"
+          APPEX="$(ls -d "$APP/PlugIns"/*.appex 2>/dev/null | head -1 || true)"
+          test -n "$APPEX" \
+            || { echo "::error::the exported app embeds no share extension — KlardropShare was dropped from the archive"; exit 1; }
+          codesign -dvv "$APP" 2>&1 | grep -q 'Authority=Apple Distribution' \
+            || { echo "::error::$APP is not signed with an Apple Distribution certificate"; exit 1; }
+          for b in "$APP" "$APPEX"; do
+            codesign -d --entitlements - --xml "$b" 2>/dev/null \
+              | grep -q 'group.com.carlom.Klardrop' \
+              || { echo "::error::$b is missing the group.com.carlom.Klardrop App Group entitlement — the share extension would not reach the app's shared container. Check that App Groups is enabled on the App ID."; exit 1; }
+          done
+
+      # xcodebuild can only upload from an archive, not from an .ipa, so the upload is a
+      # second export of the same archive with destination=upload. It re-signs identically
+      # from the same profiles — the export above is what gates it.
+      - name: Upload to TestFlight
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          TEAM_ID:    ${{ secrets.APPLE_TEAM_ID }}
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/UploadOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>method</key><string>app-store-connect</string>
+          <key>teamID</key><string>${TEAM_ID}</string>
+          <key>signingStyle</key><string>automatic</string>
+          <key>destination</key><string>upload</string>
+          <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Klardrop.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/UploadOptions.plist" \
+            -exportPath "$RUNNER_TEMP/upload" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8" \
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER"
 
