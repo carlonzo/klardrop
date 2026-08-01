@@ -22,7 +22,6 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
 import io.github.vinceglb.filekit.PlatformFile
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,7 +51,9 @@ class DeviceChatViewModel(
 ) {
 
   // TODO we need to dispose this viewmodel
-  private val viewModelScope = CoroutineScope(coroutines.mainDispatcher + SupervisorJob())
+  // newScope (rather than a raw CoroutineScope) so the scope carries the platform's last-resort
+  // CoroutineExceptionHandler: an uncaught throw in a UI job aborts the process on Kotlin/Native.
+  private val viewModelScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
 
   private val _uiState = MutableStateFlow(ChatUiState())
   val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()

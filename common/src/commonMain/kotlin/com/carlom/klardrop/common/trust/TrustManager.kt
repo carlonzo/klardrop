@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.nonFatalCoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,7 +52,11 @@ class TrustManager(
     private val UKEY2_BIND_CONTEXT = "klardrop-ukey2-bind-v1".encodeToByteArray()
   }
 
-  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+  // The handler is mandatory, not decorative: without it an uncaught throw from a session-timeout
+  // job reaches kotlinx.coroutines' final resort, which aborts the process on Kotlin/Native.
+  private val scope = CoroutineScope(
+    SupervisorJob() + Dispatchers.Default + nonFatalCoroutineExceptionHandler("TrustManager"),
+  )
 
   // Temporary storage for in-progress pairing sessions
   private val pairingSessions = mutableMapOf<String, PairingSession>()

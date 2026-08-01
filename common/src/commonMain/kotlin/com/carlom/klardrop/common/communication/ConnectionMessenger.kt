@@ -87,7 +87,11 @@ class ConnectionMessenger internal constructor(
   // Heartbeat correlation: ping id → channel signalled when the matching pong arrives.
   private val pendingPongs = mutableMapOf<Int, Channel<Unit>>()
   private val pongMutex = Mutex()
-  private val heartbeatScope: CoroutineScope = CoroutineScope(SupervisorJob() + coroutines.ioDispatcher)
+  // Built through Coroutines.newScope so it inherits the platform's last-resort
+  // CoroutineExceptionHandler: a raw CoroutineScope has none, and an uncaught throw out of the
+  // heartbeat loop would then abort the whole process on Kotlin/Native.
+  private val heartbeatScope: CoroutineScope =
+    coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
   private var heartbeatJob: Job? = null
 
   // Serializes every write through [writeChannel]. Ktor's ByteChannel rejects concurrent

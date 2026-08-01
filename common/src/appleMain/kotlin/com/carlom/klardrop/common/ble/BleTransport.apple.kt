@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.ble.apple.toByteArray
 import com.carlom.klardrop.common.ble.apple.toNSData
 import com.carlom.klardrop.common.discovery.CurrentDevice
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.nonFatalCoroutineExceptionHandler
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.coroutines.CompletableDeferred
@@ -62,7 +63,11 @@ import platform.darwin.dispatch_queue_create
 actual class BleTransport {
 
   private val cbQueue = dispatch_queue_create("com.carlom.klardrop.ble", null)
-  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+  // The handler is mandatory, not decorative: without it an uncaught throw from a chunk pump
+  // reaches kotlinx.coroutines' final resort, which aborts the process on Kotlin/Native.
+  private val scope = CoroutineScope(
+    SupervisorJob() + Dispatchers.Default + nonFatalCoroutineExceptionHandler("BleTransport"),
+  )
 
   // null until the first peripheralManagerDidUpdateState / centralManagerDidUpdateState
   // callback fires. We use `filterNotNull().first()` to await readiness.
