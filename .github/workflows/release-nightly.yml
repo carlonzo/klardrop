@@ -302,6 +302,30 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
 
+      # Upload the archive's dSYMs to Bugsnag straight after archiving. Bugsnag matches a
+      # dSYM to a crash by Mach-O UUID, and neither the export nor the re-sign below changes
+      # LC_UUID (codesign only rewrites the signature blob), so this covers the shipped app.
+      # Without it an Apple crash report reaches Bugsnag as bare load addresses with no Kotlin
+      # frames — the release binary is stripped and the DWARF only exists here on the runner.
+      # continue-on-error: symbolication must never be the reason a release fails to ship.
+      - name: Upload dSYMs to Bugsnag
+        if: steps.signing.outputs.enabled == 'true'
+        continue-on-error: true
+        env:
+          BUGSNAG_API_KEY: ${{ secrets.BUGSNAG_API_KEY }}
+        run: ./scripts/upload_dsyms.sh "$RUNNER_TEMP/Klardrop.xcarchive"
+
+      # Also keep them downloadable: the runner (and the archive) is gone within minutes, so
+      # a build whose upload failed would otherwise be permanently unsymbolicatable.
+      - name: Save dSYMs as a build artifact
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: dsyms-ios
+          path: ${{ runner.temp }}/Klardrop.xcarchive/dSYMs
+          if-no-files-found: warn
+          retention-days: 30
+
       # Export to disk first (destination=export) rather than straight to upload, so the
       # signed .ipa can be inspected before it ships. -allowProvisioningUpdates + the API
       # key lets Xcode create the App Store *distribution* profiles for the app + share
@@ -535,6 +559,28 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
+
+      # Upload the archive's dSYMs to Bugsnag straight after archiving. Bugsnag matches a
+      # dSYM to a crash by Mach-O UUID, and neither the export nor the re-sign below changes
+      # LC_UUID (codesign only rewrites the signature blob), so this covers the shipped app.
+      # Without it an Apple crash report reaches Bugsnag as bare load addresses with no Kotlin
+      # frames — the release binary is stripped and the DWARF only exists here on the runner.
+      # continue-on-error: symbolication must never be the reason a release fails to ship.
+      - name: Upload dSYMs to Bugsnag
+        continue-on-error: true
+        env:
+          BUGSNAG_API_KEY: ${{ secrets.BUGSNAG_API_KEY }}
+        run: ./scripts/upload_dsyms.sh "$RUNNER_TEMP/KlardropMac.xcarchive"
+
+      # Also keep them downloadable: the runner (and the archive) is gone within minutes, so
+      # a build whose upload failed would otherwise be permanently unsymbolicatable.
+      - name: Save dSYMs as a build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dsyms-macos
+          path: ${{ runner.temp }}/KlardropMac.xcarchive/dSYMs
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Export signed .app (signed builds only)
         if: steps.signing.outputs.signed == 'true'
