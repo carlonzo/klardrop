@@ -7,6 +7,7 @@ import com.carlom.klardrop.common.communication.message.TrustPairingResponse
 import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.nonFatalCoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -35,7 +36,13 @@ class PairingProtocolCoordinator(
     private val trustManager: TrustManager,
     private val messenger: Messenger
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // The handler is mandatory, not decorative: without it an uncaught throw from the pairing
+    // event collector or an accept/reject job reaches kotlinx.coroutines' final resort, which
+    // aborts the process on Kotlin/Native.
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default +
+            nonFatalCoroutineExceptionHandler("PairingProtocolCoordinator"),
+    )
 
     // Callback for when pairing is completed (for UI updates)
     var onPairingCompleted: ((deviceId: String, deviceName: String, success: Boolean) -> Unit)? = null

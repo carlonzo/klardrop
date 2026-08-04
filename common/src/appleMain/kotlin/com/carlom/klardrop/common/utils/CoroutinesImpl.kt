@@ -15,16 +15,8 @@ actual class CoroutinesImpl actual constructor() : Coroutines {
   // on the failing coroutine's own thread, which for the ioDispatcher scopes is a
   // background worker. On Kotlin/Native an exception that escapes this handler propagates
   // to the top of that thread and terminates the whole process with abort()/SIGABRT — so
-  // we must NOT rethrow. Instead we mirror Server.kt's per-connection handler and the
-  // contract documented on Throwable.isExpectedNetworkNoise(): expected network churn is
-  // logged locally, everything else is reported to Bugsnag, and the process keeps running.
-  private val handler = CoroutineExceptionHandler { _, exception ->
-    if (exception.isExpectedNetworkNoise()) {
-      logLocal("CoroutinesImpl", "coroutine ended (${exception.message})", exception)
-    } else {
-      log("CoroutinesImpl", "uncaught coroutine exception (${exception.message})", exception)
-    }
-  }
+  // it must NOT rethrow; see nonFatalCoroutineExceptionHandler for the full contract.
+  private val handler = nonFatalCoroutineExceptionHandler("CoroutinesImpl")
 
   private val scope by lazy { CoroutineScope(SupervisorJob() + mainDispatcher + handler) }
 

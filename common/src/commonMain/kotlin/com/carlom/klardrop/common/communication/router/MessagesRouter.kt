@@ -27,7 +27,6 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.invoke
@@ -140,9 +139,12 @@ internal class MessagesRouterImpl(
    * that consumes incoming bytes, so while it's parked in `IncomingAuthorizer.authorize`
    * waiting for the user to tap, the peer's heartbeat PONGs sit unread in the buffer and
    * our heartbeat sender hits its 5s timeout and tears the link down before the user can
-   * decide. SupervisorJob so a single failure doesn't cancel siblings.
+   * decide. SupervisorJob so a single failure doesn't cancel siblings, and built through
+   * [Coroutines.newScope] so it carries the platform's last-resort CoroutineExceptionHandler —
+   * a throw out of `handleFileHeader` would otherwise reach kotlinx.coroutines' final resort and
+   * abort the process on Kotlin/Native.
    */
-  private val authorizationScope = CoroutineScope(SupervisorJob() + coroutines.ioDispatcher)
+  private val authorizationScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
 
   /**
    * Bounded FIFO set of inbound TEXT wire-frame ids that have already been processed

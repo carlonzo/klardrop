@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.di.CommonComponent
 
 import com.klardrop.common.BugsnagWrapper
 import com.carlom.klardrop.common.utils.UtilsModule
+import com.carlom.klardrop.common.utils.installUnhandledExceptionGuard
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.launch
 
@@ -27,6 +28,10 @@ class Klardrop(
 
   fun init() {
     if (::commonComponent.isInitialized) throw IllegalStateException("Klardrop already initialized")
+
+    // Before anything spawns a coroutine: make an uncaught failure in a scope we don't own
+    // (Ktor's selector, most notably) a reported error instead of a process abort.
+    installUnhandledExceptionGuard()
 
     log("Starting Klardrop with ApplicationInfo: $applicationInfo")
 
