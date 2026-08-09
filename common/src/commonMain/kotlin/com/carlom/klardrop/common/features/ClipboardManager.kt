@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -16,14 +17,27 @@ expect class ClipboardReaderWriter {
   fun write(text: String)
 }
 
+/**
+ * Read/write access to the local clipboard plus a stream of its changes.
+ *
+ * Narrow interface over [ClipboardManager] so consumers that only need clipboard access —
+ * notably [com.carlom.klardrop.common.trust.ClipboardSyncManager], whose trust gating is
+ * worth unit-testing — don't have to construct the platform `ClipboardReaderWriter`.
+ */
+interface ClipboardAccess {
+  val flow: Flow<String>
+  fun read(): String
+  fun write(text: String)
+}
+
 class ClipboardManager(
   private val coroutines: Coroutines,
   private val readerWriter: ClipboardReaderWriter
-) {
+) : ClipboardAccess {
 
   private val clipboardScope = coroutines.newScope(coroutines.ioDispatcher)
 
-  val flow = callbackFlow {
+  override val flow = callbackFlow {
 
     val collectionJob = coroutines.appScope.launch {
 
@@ -42,11 +56,11 @@ class ClipboardManager(
   }.distinctUntilChanged()
     .shareIn(clipboardScope, started = SharingStarted.WhileSubscribed())
 
-  fun write(text: String) {
+  override fun write(text: String) {
     readerWriter.write(text)
   }
 
-  fun read(): String {
+  override fun read(): String {
     return runCatching { readerWriter.read() }
       .getOrDefault("")
   }
