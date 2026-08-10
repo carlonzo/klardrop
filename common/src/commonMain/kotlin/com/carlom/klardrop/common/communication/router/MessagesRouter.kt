@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.communication.message.AckType
+import com.carlom.klardrop.common.communication.message.ClipboardSyncMessage
 import com.carlom.klardrop.common.communication.message.FileChunkMessage
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.FileMessageHandler
@@ -290,6 +291,28 @@ internal class MessagesRouterImpl(
           log("MessagesRouter", "SECURITY: unsigned message from trusted device $fromDeviceId - rejecting")
           return@ioDispatcher
         }
+        // Clipboard sync lands in the user's clipboard silently — there is no accept/reject
+        // prompt in front of it, so pairing is the only consent that exists and it has to hold
+        // at this layer too. A CLIPBOARD_SYNC arriving *unwrapped* means it was neither signed
+        // (Messenger wraps clipboard frames in a TrustedMessage for every paired peer) nor sent
+        // over a channel we bound to a known identity, so the sender is not a paired device
+        // whatever id it claims. Drop it rather than pasting for whoever is on the LAN.
+        if (rawMessage is ClipboardSyncMessage && !(isTrustedDevice && cipher.authenticated)) {
+          log(
+            "MessagesRouter",
+            "SECURITY: dropping clipboard sync from $fromDeviceId " +
+              "(trusted=$isTrustedDevice, authenticated=${cipher.authenticated})"
+          )
+          // Terminal ACK so the sender fails fast instead of retrying the push every few seconds.
+          runCatching {
+            writeLock.withLock {
+              sendMessageToDevice(fromDeviceId, MessageAcknowledgment(AckType.REJECTED, ackId), writeChannel, cipher)
+            }
+          }.onFailure { e ->
+            log("MessagesRouter", "Failed to send ACK_REJECTED for clipboard sync from $fromDeviceId", e)
+          }
+          return@ioDispatcher
+        }
         rawMessage
       }
     }
@@ -340,8 +363,9 @@ internal class MessagesRouterImpl(
     // Authorization gate for TEXT messages from untrusted senders. Files are gated
     // separately in handleFileHeader (because rejection there must skip beginReceive
     // entirely, before the receive pipeline opens a sink). Trust-based control messages
-    // (TRUST_PAIRING_*, CLIPBOARD_SYNC, CONNECTION_INFO) are not gated — pairing must
-    // succeed before trust exists, and the others are already trust-restricted upstream.
+    // (TRUST_PAIRING_*, CLIPBOARD_SYNC, CONNECTION_INFO) are not gated by a prompt —
+    // pairing must succeed before trust exists, and CLIPBOARD_SYNC is instead dropped
+    // outright above unless it came from a paired peer over an identity-bound channel.
     //
     // Same reasoning as the FILE header dispatch above: authorize() may suspend on a
     // human decision, and parking the read loop on it deadlocks the heartbeat. Spawn the

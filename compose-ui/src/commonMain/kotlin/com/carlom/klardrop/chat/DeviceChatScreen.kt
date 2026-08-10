@@ -80,6 +80,7 @@ import com.carlom.klardrop.common.persistence.MessageType
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.FileTypeUtils
+import com.carlom.klardrop.media.VideoPreview
 import com.carlom.klardrop.theme.KdTheme
 import coil3.compose.AsyncImage
 import androidx.compose.foundation.layout.heightIn
@@ -719,7 +720,7 @@ private fun FileMessageBubble(
         !isSender && currentStatus == FileTransferStatus.COMPLETED.name
     }
 
-    // Show an inline thumbnail for images once the file is on disk. Senders
+    // Show an inline thumbnail for images and videos once the file is on disk. Senders
     // see it immediately (file already exists locally); receivers see it once
     // the transfer is Completed. The preview is capped to 200 dp tall and to
     // the bubble's natural max-width (78% of the chat pane).
@@ -727,30 +728,32 @@ private fun FileMessageBubble(
     // Prefer the stored mime_type over guessing from the extension: received media is
     // persisted as a MediaStore content URI (e.g. content://media/...), which has no file
     // extension, so extension-based detection would never recognise it as an image.
-    val isImage = run {
+    val previewMimeType = run {
         val mime = fileTransferState?.mime_type
         if (!mime.isNullOrBlank() && mime != "application/octet-stream") {
-            FileTypeUtils.isImageMimeType(mime)
+            mime
         } else {
-            FileTypeUtils.isImageMimeType(
-                FileTypeUtils.getMimeTypeFromExtension(filePath?.substringAfterLast('.', "")?.lowercase())
-            )
+            FileTypeUtils.getMimeTypeFromExtension(filePath?.substringAfterLast('.', "")?.lowercase())
         }
     }
-    val previewModel: String? = filePath?.takeIf {
-        val ready = if (isSender) true else currentStatus == FileTransferStatus.COMPLETED.name
-        ready && isImage
-    }?.let(::toImageModel)
+    val isImage = FileTypeUtils.isImageMimeType(previewMimeType)
+    val isVideo = FileTypeUtils.isVideoMimeType(previewMimeType)
+    val previewReady = if (isSender) true else currentStatus == FileTransferStatus.COMPLETED.name
+    val previewModel: String? = filePath?.takeIf { previewReady && isImage }?.let(::toImageModel)
+    // Videos don't go through Coil: it has no video decoder, so a video model silently
+    // failed to decode and the bubble showed nothing at all. VideoPreview pulls the first
+    // frame through the platform's own media API instead.
+    val videoPreviewPath: String? = filePath?.takeIf { previewReady && isVideo }
 
     Column {
         Bubble(
             direction = direction,
             timestamp = timestamp,
             content = {
+                val openClick = if (openablePath != null) {
+                    Modifier.combinedClickable(onClick = { onOpenFileRequest(openablePath) })
+                } else Modifier
                 if (previewModel != null) {
-                    val openClick = if (openablePath != null) {
-                        Modifier.combinedClickable(onClick = { onOpenFileRequest(openablePath) })
-                    } else Modifier
                     AsyncImage(
                         model = previewModel,
                         contentDescription = fileName,
@@ -760,6 +763,14 @@ private fun FileMessageBubble(
                             .heightIn(max = KdBubbleMaxContentHeight)
                             .clip(RoundedCornerShape(10.dp))
                             .then(openClick),
+                    )
+                    Spacer(Modifier.height(KdTheme.spacing.s1))
+                } else if (videoPreviewPath != null) {
+                    VideoPreview(
+                        path = videoPreviewPath,
+                        contentDescription = fileName,
+                        maxHeight = KdBubbleMaxContentHeight,
+                        modifier = openClick,
                     )
                     Spacer(Modifier.height(KdTheme.spacing.s1))
                 }

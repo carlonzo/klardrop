@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.media.rememberVideoThumbnail
 import com.carlom.klardrop.theme.KdTheme
 import coil3.compose.AsyncImage
 import io.github.vinceglb.filekit.PlatformFile
@@ -90,12 +92,28 @@ actual fun RecentMediaRail(
                     .background(colors.bg2)
                     .clickable { onPick(PlatformFile(entry.uri)) },
             ) {
-                AsyncImage(
-                    model = entry.model,
-                    contentDescription = if (entry.isVideo) "Recent video" else "Recent photo",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(ThumbSize),
-                )
+                if (entry.isVideo) {
+                    // Coil has no video decoder, so a video URI decodes to nothing — pull the
+                    // first frame through MediaMetadataRetriever instead (same path the chat
+                    // bubble's video preview uses). Null while decoding: the tile's background
+                    // plus the play badge below still read as "video".
+                    val frame = rememberVideoThumbnail(entry.model)
+                    if (frame != null) {
+                        Image(
+                            bitmap = frame,
+                            contentDescription = "Recent video",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(ThumbSize),
+                        )
+                    }
+                } else {
+                    AsyncImage(
+                        model = entry.model,
+                        contentDescription = "Recent photo",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(ThumbSize),
+                    )
+                }
                 if (entry.isVideo) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
