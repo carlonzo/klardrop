@@ -74,6 +74,13 @@ class TrustManager(
   private val _pairingEvents = MutableSharedFlow<PairingEvent>(extraBufferCapacity = 10)
   val pairingEvents: SharedFlow<PairingEvent> = _pairingEvents.asSharedFlow()
 
+  // Fires after the set of trusted devices changes (pairing stored, trust removed).
+  // [TrustStorage] is a plain key-value store with no change notification of its own, so
+  // this is the only signal consumers (the trusted-device list) have to re-read it. Emitted
+  // after the write lands, so a collector that reads back sees the new state.
+  private val _trustChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 10)
+  val trustChanges: SharedFlow<Unit> = _trustChanges.asSharedFlow()
+
   /**
    * Initialize the trust manager and load or generate device signing keys.
    *
@@ -277,6 +284,7 @@ class TrustManager(
       storage.storeTrustedDevice(request.deviceId, request.ecdhPublicKey)  // ECDH key
       storage.storeECDSAKey(request.deviceId, request.ecdsaPublicKey)  // ECDSA key for verification
       storage.storeSharedSecret(request.deviceId, sharedSecret)
+      _trustChanges.tryEmit(Unit)
 
       // Create response
       val response = TrustPairingResponse(
@@ -356,6 +364,7 @@ class TrustManager(
       storage.storeTrustedDevice(response.deviceId, response.ecdhPublicKey)  // ECDH key
       storage.storeECDSAKey(response.deviceId, response.ecdsaPublicKey)  // ECDSA key for verification
       storage.storeSharedSecret(response.deviceId, sharedSecret)
+      _trustChanges.tryEmit(Unit)
 
       // DIAGNOSTIC: Log what public key we're storing for the peer
       log("🔐 TrustManager", " Device ${response.deviceId} is now trusted")
@@ -401,6 +410,7 @@ class TrustManager(
    */
   suspend fun removeTrust(deviceId: String) {
     storage.removeTrustedDevice(deviceId)
+    _trustChanges.tryEmit(Unit)
   }
 
   /**
@@ -484,6 +494,7 @@ class TrustManager(
    */
   suspend fun applyVerifiedRevocation(message: TrustRevocationMessage) {
     storage.removeTrustedDevice(message.senderId)
+    _trustChanges.tryEmit(Unit)
     log("🔐 TrustManager", "Trust revoked by ${message.senderId}; local pairing removed")
     _pairingEvents.tryEmit(PairingEvent.PeerRevokedTrust(message.senderId, message.reason))
   }

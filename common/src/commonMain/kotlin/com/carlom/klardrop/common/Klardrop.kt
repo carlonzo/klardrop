@@ -103,6 +103,12 @@ class Klardrop(
     // that the cached mDNS address is dead.
     commonComponent.eagerReachabilityConnector()?.start()
 
+    // Track the paired devices and snapshot their identity while they're discoverable, so a
+    // trusted peer still shows up (offline) once it stops announcing. Touched here rather
+    // than left to the first UI read so a pairing accepted with no UI attached — Android's
+    // background service — still records the peer's name.
+    commonComponent.trustedDevicesDirectory()
+
     // Check for a newer release (desktop only; a no-op where unsupported).
     commonComponent.updateChecker().checkNow()
 

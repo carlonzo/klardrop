@@ -16,6 +16,7 @@ import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryModule
 import com.carlom.klardrop.common.discovery.TrustAwareDiscoveryUtils
+import com.carlom.klardrop.common.discovery.TrustedDevicesDirectory
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
@@ -103,6 +104,16 @@ class CommonComponent(
     TrustAwareDiscoveryUtils(communicationModule.trustManager())
   }
 
+  private val trustedDevicesDirectory: TrustedDevicesDirectory by lazy {
+    TrustedDevicesDirectory(
+      visibleDevices = discoveryModule.visibleDevices(),
+      knownDevicesRepository = knownDevicesRepository,
+      trustStorage = communicationModule.trustStorage(),
+      trustChanges = communicationModule.trustManager().trustChanges,
+      coroutines = coroutines,
+    )
+  }
+
   private val updateChecker: UpdateChecker by lazy {
     val channel = KlardropVersion.UPDATE_CHANNEL
     UpdateChecker(
@@ -146,6 +157,8 @@ class CommonComponent(
   fun trustStorage() = communicationModule.trustStorage()
 
   fun trustAwareDiscoveryUtils() = trustAwareDiscoveryUtils
+
+  fun trustedDevicesDirectory() = trustedDevicesDirectory
 
   fun clipboardSyncManager() = communicationModule.clipboardSyncManager()
 

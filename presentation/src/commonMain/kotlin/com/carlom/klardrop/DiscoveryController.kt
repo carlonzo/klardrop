@@ -16,6 +16,7 @@ import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
+import com.carlom.klardrop.common.discovery.TrustedDevicesDirectory
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.features.ConnectionInfoJoiner
@@ -50,7 +51,7 @@ class DiscoveryController(
   private val platformFileSystem: PlatformFileSystem,
   private val clipboardManager: ClipboardManager,
   private val messageRepository: MessageRepository,
-  private val trustStorage: com.carlom.klardrop.common.trust.TrustStorage,
+  private val trustedDevicesDirectory: TrustedDevicesDirectory,
   private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
   private val pairingProtocolCoordinator: PairingProtocolCoordinator,
   private val currentDeviceProvider: com.carlom.klardrop.common.discovery.CurrentDeviceProvider,
@@ -69,7 +70,7 @@ class DiscoveryController(
     commonComponent.platformFileSystem(),
     commonComponent.clipboardManager(),
     commonComponent.messageRepository(),
-    commonComponent.trustStorage(),
+    commonComponent.trustedDevicesDirectory(),
     commonComponent.trustManager(),
     commonComponent.pairingProtocolCoordinator(),
     commonComponent.currentDeviceProvider(),
@@ -82,7 +83,13 @@ class DiscoveryController(
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage, reachability)
+  private val showDevicesHelper = ShowDevicesControllerHelper(
+    controllerScope,
+    visibleDevices.visibleDevices,
+    messageRepository,
+    trustedDevicesDirectory.trustedDevices,
+    reachability,
+  )
 
   val permissionsState: StateFlow<PermissionsState> = permissionsMonitor.observe()
     .stateIn(controllerScope, SharingStarted.Eagerly, PermissionsState.EMPTY)
