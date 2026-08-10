@@ -3,7 +3,7 @@ agp = "9.3.1"
 # Pinned to 2.3.21 (not main's 2.4.0): SKIE 0.10.12 — the latest — does not yet
 # support Kotlin 2.4.0 and rejects it at Gradle configuration time. Bump back once
 # SKIE ships 2.4.0 support, or once SKIE is removed in favor of native swift-export.
-kotlin = "2.3.21"
+kotlin = "2.4.10"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 jetbrains-compose = "1.11.1"
