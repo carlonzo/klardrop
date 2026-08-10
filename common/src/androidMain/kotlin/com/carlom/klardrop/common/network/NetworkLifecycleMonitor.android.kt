@@ -45,14 +45,12 @@ actual class NetworkLifecycleMonitor(private val context: Context) {
     // network so we can distinguish a real IP rotation from benign link-property churn.
     val linkAddresses = mutableMapOf<Network, List<String>>()
 
-    // Optimization: Replaced multiple chained map/filter calls with a single mapNotNull
-    // to avoid creating intermediate lists. This improves performance by ~40% and reduces garbage collection.
     fun ipv4AddressesOf(linkProperties: LinkProperties): List<String> =
       linkProperties.linkAddresses
-        .mapNotNull { linkAddress ->
-          val address = linkAddress.address
-          if (address is Inet4Address && !address.isLoopbackAddress) address.hostAddress else null
-        }
+        .map { it.address }
+        .filterIsInstance<Inet4Address>()
+        .filterNot { it.isLoopbackAddress }
+        .mapNotNull { it.hostAddress }
         .sorted()
 
     val callback = object : ConnectivityManager.NetworkCallback() {

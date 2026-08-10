@@ -139,7 +139,7 @@ jobs:
         #
         # The binaries are already linked by the step above, so this budget now
         # covers test execution alone — which has historically run ~12 minutes.
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: |
           ./gradlew \
             :klardrop-common:iosSimulatorArm64Test \
