@@ -381,6 +381,33 @@ jobs:
             || { echo "::error::the exported app embeds no share extension — KlardropShare was dropped from the archive"; exit 1; }
           codesign -dvv "$APP" 2>&1 | grep -q 'Authority=Apple Distribution' \
             || { echo "::error::$APP is not signed with an Apple Distribution certificate"; exit 1; }
+
+          # Diagnostics before the assertions, all non-fatal. A missing App Group below is
+          # one of two very different problems and the assertion alone cannot tell them apart:
+          #   * the provisioning profile DOES carry group.com.carlom.Klardrop but the signed
+          #     binary doesn't -> exportArchive dropped it. The unsigned archive has no
+          #     entitlements to carry over, which is the same trap the macOS job hit — it
+          #     re-signs every bundle from the repo .entitlements for exactly this reason,
+          #     and the iOS job has no equivalent step.
+          #   * the profile doesn't carry it either -> App Groups is off on the App ID.
+          # Dumping both, for both bundles, makes the next failure name its own cause.
+          # The plain (non---xml) dump is here too so a codesign flag change can't be
+          # mistaken for a missing entitlement.
+          for b in "$APP" "$APPEX"; do
+            echo "===== $(basename "$b")"
+            echo "--- signed entitlements (--xml)"
+            codesign -d --entitlements - --xml "$b" 2>&1 || true
+            echo "--- signed entitlements (default format)"
+            codesign -d --entitlements - "$b" 2>&1 || true
+            echo "--- embedded provisioning profile entitlements"
+            if [ -f "$b/embedded.mobileprovision" ]; then
+              security cms -D -i "$b/embedded.mobileprovision" 2>/dev/null \
+                | plutil -extract Entitlements xml1 -o - - 2>&1 || true
+            else
+              echo "(no embedded.mobileprovision in this bundle)"
+            fi
+          done
+
           for b in "$APP" "$APPEX"; do
             codesign -d --entitlements - --xml "$b" 2>/dev/null \
               | grep -q 'group.com.carlom.Klardrop' \
