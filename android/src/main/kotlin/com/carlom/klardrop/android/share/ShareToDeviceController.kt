@@ -8,7 +8,8 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
 import com.carlom.klardrop.common.di.CommonComponent
-import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.discovery.DeviceInfo
+import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -19,24 +20,30 @@ import kotlinx.coroutines.launch
 
 class ShareToDeviceController(
   private val coroutines: Coroutines,
-  private val visibleDevices: VisibleDevices,
+  private val visibleDevices: StateFlow<Map<String, DiscoveryDevice>>,
   private val messenger: Messenger,
   private val messageRepository: MessageRepository,
-  private val trustStorage: com.carlom.klardrop.common.trust.TrustStorage,
+  private val trustedDevices: StateFlow<Map<String, DeviceInfo>>,
   private val reachabilitySource: StateFlow<Map<String, Reachability>>,
 ) {
 
   constructor(commonComponent: CommonComponent) : this(
     coroutines = commonComponent.coroutines(),
-    visibleDevices = commonComponent.visibleDevices(),
+    visibleDevices = commonComponent.visibleDevices().visibleDevices,
     messenger = commonComponent.messenger(),
     messageRepository = commonComponent.messageRepository(),
-    trustStorage = commonComponent.trustStorage(),
+    trustedDevices = commonComponent.trustedDevicesDirectory().trustedDevices,
     reachabilitySource = commonComponent.reachability(),
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher)
-  private val showDevicesHelper = ShowDevicesControllerHelper(controllerScope, visibleDevices, messageRepository, trustStorage, reachabilitySource)
+  private val showDevicesHelper = ShowDevicesControllerHelper(
+    controllerScope,
+    visibleDevices,
+    messageRepository,
+    trustedDevices,
+    reachabilitySource,
+  )
 
   val devicesFlow: Flow<Collection<DeviceUi>> = showDevicesHelper.devicesFlow
 

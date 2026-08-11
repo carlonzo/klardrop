@@ -2,9 +2,9 @@ package com.carlom.klardrop
 
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.Reachability
-import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.discovery.DeviceInfo
+import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.carlom.klardrop.common.persistence.MessageRepository
-import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -20,9 +20,9 @@ import kotlin.time.Duration.Companion.seconds
 
 class ShowDevicesControllerHelper(
   private val coroutineScope: CoroutineScope,
-  private val visibleDevices: VisibleDevices,
+  private val visibleDevices: StateFlow<Map<String, DiscoveryDevice>>,
   private val messageRepository: MessageRepository,
-  private val trustStorage: TrustStorage,
+  private val trustedDevices: StateFlow<Map<String, DeviceInfo>>,
   private val reachabilitySource: StateFlow<Map<String, Reachability>>,
 ) {
 
@@ -32,19 +32,17 @@ class ShowDevicesControllerHelper(
   init {
     coroutineScope.launch {
       combine(
-        visibleDevices.visibleDevices.onEach { log("VisibleDevices", "emitting: $it") },
+        visibleDevices.onEach { log("VisibleDevices", "emitting: $it") },
         messageRepository.getAllDevicesWithUnreadCounts(),
         reachabilitySource,
-      ) { devices, unreadCounts, reachabilityMap ->
-        // Fetch all trusted devices once to avoid N+1 disk reads inside the map loop
-        val allTrustedDevices = trustStorage.getAllTrustedDevices()
+        trustedDevices,
+      ) { devices, unreadCounts, reachabilityMap, trusted ->
 
-        devices.values.map { device ->
+        val visibleRows = devices.values.map { device ->
           val deviceInfo = device.deviceInfo
           val unreadCount = unreadCounts[deviceInfo.deviceId] ?: 0L
 
-          // Check trust status
-          val isTrusted = allTrustedDevices.containsKey(deviceInfo.deviceId)
+          val isTrusted = trusted.containsKey(deviceInfo.deviceId)
           val trustStatus = if (isTrusted) TrustStatus.Trusted else TrustStatus.Untrusted
 
           DeviceUi(
@@ -57,6 +55,29 @@ class ShowDevicesControllerHelper(
             reachability = reachabilityMap[deviceInfo.deviceId] ?: Reachability.Unknown,
           )
         }
+
+        // A pairing outlives discovery: a trusted device that isn't announcing right now
+        // still belongs in "Your devices" — flagged offline — so the user can reach its
+        // message history instead of watching the row vanish.
+        val offlineRows = trusted
+          .filterKeys { deviceId -> !devices.containsKey(deviceId) }
+          .map { (deviceId, deviceInfo) ->
+            DeviceUi(
+              deviceId = deviceId,
+              deviceName = deviceInfo.name,
+              deviceType = deviceInfo.deviceType,
+              connectionTypes = emptyList(),
+              hasUnreadMessages = (unreadCounts[deviceId] ?: 0L) > 0,
+              trustStatus = TrustStatus.Trusted,
+              // Not visible doesn't strictly mean unreachable — a live connection can
+              // outlive the mDNS announcement — so keep a Reachable verdict when we have
+              // one, and otherwise say Offline rather than Unknown, which renders no badge.
+              reachability = reachabilityMap[deviceId]?.takeIf { it == Reachability.Reachable }
+                ?: Reachability.Unreachable,
+            )
+          }
+
+        visibleRows + offlineRows
       }.collect { deviceList ->
         _devicesFlow.emit(deviceList.associateBy { device -> device.deviceId }.toMutableMap())
       }
