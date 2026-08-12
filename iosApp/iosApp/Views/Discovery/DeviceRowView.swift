@@ -2,7 +2,8 @@ import SwiftUI
 
 // ---------------------------------------------------------------------------
 // C02 · DeviceRowView
-// 56pt device list row: avatar + name/subText + trailing slot.
+// Device list row: avatar + name/subText + trailing slot. 56pt flush row
+// (.list) or 68pt free-standing filled card (.card).
 // Mirrors: compose-ui/.../components/DeviceRow.kt
 // ---------------------------------------------------------------------------
 
@@ -17,6 +18,14 @@ enum KdRowState {
     case pairPrompt
 }
 
+/// Row shape language — flush inside an elevated surface, or its own card.
+enum KdRowVariant {
+    /// Flush 56pt list row on a transparent ground — sidebar, sheets, pickers.
+    case list
+    /// Free-standing 68pt card on bg/0 — the discovery dashboard.
+    case card
+}
+
 struct DeviceRowView<Trailing: View>: View {
     let name: String
     var subText: String? = nil
@@ -24,6 +33,7 @@ struct DeviceRowView<Trailing: View>: View {
     var avatarStyle: KdAvatarStyle = .neutral
     var rowState: KdRowState = .idle
     var status: KdStatus? = nil
+    var variant: KdRowVariant = .list
     var onTap: () -> Void = {}
     @ViewBuilder let trailing: () -> Trailing
 
@@ -31,12 +41,16 @@ struct DeviceRowView<Trailing: View>: View {
 
     // MARK: - Derived tokens
 
+    private var isCard: Bool { variant == .card }
+
     private var rowBg: Color {
         switch rowState {
         case .active:  return kd.trustBg
         case .hover:   return kd.bg3
         case .pairing: return kd.bg3
-        default:       return .clear
+        // A card is a surface in its own right, so it stays filled at rest; a
+        // list row is flush and only paints when something is happening.
+        default:       return isCard ? kd.bg1 : .clear
         }
     }
 
@@ -70,12 +84,12 @@ struct DeviceRowView<Trailing: View>: View {
                     kind: kind,
                     style: avatarStyle,
                     status: status,
-                    size: 36
+                    size: isCard ? 40 : 36
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
-                        .font(.system(size: 15, weight: nameFontWeight))
+                        .font(.system(size: isCard ? 17 : 15, weight: nameFontWeight))
                         .foregroundColor(nameColor)
                         .lineLimit(1)
 
@@ -89,8 +103,8 @@ struct DeviceRowView<Trailing: View>: View {
 
                 trailing()
             }
-            .padding(.horizontal, KdSpacing.s3)
-            .frame(height: 56)
+            .padding(.horizontal, isCard ? KdSpacing.s4 : KdSpacing.s3)
+            .frame(height: isCard ? 68 : 56)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(rowBg)
             .clipShape(KdShape.lg)
@@ -109,6 +123,7 @@ extension DeviceRowView where Trailing == EmptyView {
         avatarStyle: KdAvatarStyle = .neutral,
         rowState: KdRowState = .idle,
         status: KdStatus? = nil,
+        variant: KdRowVariant = .list,
         onTap: @escaping () -> Void = {}
     ) {
         self.name = name
@@ -117,6 +132,7 @@ extension DeviceRowView where Trailing == EmptyView {
         self.avatarStyle = avatarStyle
         self.rowState = rowState
         self.status = status
+        self.variant = variant
         self.onTap = onTap
         self.trailing = { EmptyView() }
     }
