@@ -20,7 +20,7 @@ filekit = "0.15.0"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
 coil3 = "3.5.0"
-nav3 = "1.1.5"
+nav3 = "1.1.6"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
