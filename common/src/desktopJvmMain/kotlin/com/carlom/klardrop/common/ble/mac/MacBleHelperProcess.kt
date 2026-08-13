@@ -42,7 +42,7 @@ import kotlin.time.TimeSource
  * Lifecycle:
  *  - The helper is spawned lazily on first call to [ensureStarted].
  *  - On unexpected exit the process is restarted with exponential backoff (1s → 30s).
- *    Each crash is reported through `log(tag, msg, throwable)` so Bugsnag captures it.
+ *    Each crash is reported through `log(tag, msg, throwable)` so the crash reporter captures it.
  *  - If the helper crashes more than [maxCrashesPerWindow] times within
  *    [crashWindow], the helper is parked and BLE reports unsupported for the rest of
  *    the session. Logs continue to flow on every crash.

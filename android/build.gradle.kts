@@ -3,7 +3,6 @@ plugins {
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
   alias(deps.plugins.ksp)
-  id("com.bugsnag.android.gradle") version "8.+"
 }
 
 group = "com.carlom.klardrop"
@@ -44,7 +43,6 @@ dependencies {
   implementation(deps.dagger)
   ksp(deps.dagger.compiler)
 
-  implementation(deps.bugsnag.android)
 
   debugImplementation(compose.uiTooling)
   implementation(compose.preview)

@@ -13,7 +13,7 @@ actual class CoroutinesImpl actual constructor() : Coroutines {
   // SupervisorJob scopes. It runs on the failing coroutine's own thread. Rethrowing here
   // pushes the exception to the thread's uncaught handler for no benefit (and aborts the
   // process outright on the Apple targets that share this logic) — so we don't. Expected
-  // network churn is logged locally, everything else is reported to Bugsnag, and the
+  // network churn is logged locally, everything else is reported to Sentry, and the
   // process keeps running, matching Server.kt and Throwable.isExpectedNetworkNoise().
   private val handler = nonFatalCoroutineExceptionHandler("CoroutinesImpl")
 

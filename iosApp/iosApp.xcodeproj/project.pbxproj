@@ -1168,7 +1168,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/../common/build/cocoapods/synthetic/macos/build/Debug/Bugsnag",
+					"$(SRCROOT)/../common/build/cocoapods/synthetic/macos/build/Debug/Sentry",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iosApp/MacInfo.plist;
@@ -1241,7 +1241,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/../common/build/cocoapods/synthetic/macos/build/Release/Bugsnag",
+					"$(SRCROOT)/../common/build/cocoapods/synthetic/macos/build/Release/Sentry",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iosApp/MacInfo.plist;

@@ -69,7 +69,7 @@ class BleChannelBridge(
       throw e
     } catch (e: Throwable) {
       // Pump failures here mean the BLE session ended — peer closed, link lost, or
-      // the caller cancelled. All routine; don't pollute Bugsnag.
+      // the caller cancelled. All routine; don't pollute Sentry.
       logLocal(TAG, "write pump for ${session.deviceId} failed: ${e.message}", e)
     } finally {
       // If the caller stopped writing, close the session and the inbound side too so that

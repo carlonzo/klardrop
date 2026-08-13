@@ -467,7 +467,7 @@ class ConnectionMessenger internal constructor(
       }
     } catch (exception: Throwable) {
       // Peer hangups and TransferRejected are part of the protocol's normal life
-      // cycle; only surprise exceptions belong on the Bugsnag dashboard.
+      // cycle; only surprise exceptions belong on the Sentry dashboard.
       val expected = exception is TransferRejectedException || exception.isExpectedNetworkNoise()
       if (expected) {
         logLocal("ConnectionMessenger", "Send of message ${message.id} to ${connection.deviceId} ended: ${exception.message}", exception)

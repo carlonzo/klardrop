@@ -34,7 +34,6 @@ kotlin {
 
     val jvmMain by getting {
       dependencies {
-        implementation(deps.bugsnag.jvm)
       }
     }
 

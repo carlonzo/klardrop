@@ -3,6 +3,7 @@ plugins {
   alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
   alias(deps.plugins.sqldelight)
+  alias(deps.plugins.sentry.kmp)
   kotlin("native.cocoapods")
 }
 
@@ -22,11 +23,14 @@ kotlin {
 
   applyDefaultHierarchyTemplate()
 
+  // The sentry-kmp plugin adds the `Sentry` pod to this block for as long as we are
+  // still on the CocoaPods integration. Once :presentation moves to swift-export the
+  // whole block goes away and the plugin links sentry-cocoa from SwiftPM instead —
+  // no Kotlin source change either way, since nothing imports `cocoapods.*` anymore.
   cocoapods {
     version = rootProject.version.toString()
     ios.deploymentTarget = "17.0"
     osx.deploymentTarget = "14.0"
-    pod("Bugsnag", "~> 6.0")
   }
 
   sourceSets {
@@ -71,7 +75,6 @@ kotlin {
       dependencies {
         implementation(deps.kotlinx.coroutines.android)
         implementation(deps.simplestorage)
-        implementation(deps.bugsnag.kmp)
         implementation(deps.sqldelight.android.driver)
       }
     }
@@ -88,12 +91,6 @@ kotlin {
       }
     }
 
-    val iosMain by getting {
-      dependencies {
-        implementation(deps.bugsnag.kmp)
-      }
-    }
-
     matching { it.name.startsWith("ios") || it.name.startsWith("macos") }.configureEach {
       languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
     }
@@ -103,7 +100,6 @@ kotlin {
         implementation(deps.jmdns)
         implementation(deps.jna)
         implementation(deps.jna.platform)
-        implementation(deps.bugsnag.jvm)
         implementation(deps.sqldelight.sqlite.driver)
         implementation(deps.kotlinx.serialization.json)
       }

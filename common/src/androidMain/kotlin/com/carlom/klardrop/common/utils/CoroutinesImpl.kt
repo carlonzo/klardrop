@@ -11,7 +11,7 @@ actual class CoroutinesImpl actual constructor() : Coroutines {
 
   // CEH is the terminal sink for uncaught coroutine failures. Do NOT rethrow —
   // rethrowing can take down the process / main scope. log() already reports
-  // to Bugsnag; isExpectedNetworkNoise filters lifecycle noise.
+  // to Sentry; isExpectedNetworkNoise filters lifecycle noise.
   private val handler = nonFatalCoroutineExceptionHandler("CoroutinesImpl")
 
   private val scope by lazy { CoroutineScope(SupervisorJob() + mainDispatcher + handler) }

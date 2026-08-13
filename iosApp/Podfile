@@ -2,7 +2,7 @@ target 'iosApp' do
   use_frameworks!
   platform :ios, '17.0'
   pod 'presentation', :path => '../presentation'
-  pod 'Bugsnag', '~> 6.0'
+  pod 'Sentry'
 
 end
 
@@ -10,5 +10,5 @@ target 'KlardropMac' do
   use_frameworks!
   platform :osx, '14.0'
   pod 'presentation', :path => '../presentation'
-  pod 'Bugsnag', '~> 6.0'
+  pod 'Sentry'
 end

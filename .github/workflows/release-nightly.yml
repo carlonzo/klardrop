@@ -238,7 +238,7 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
           restore-keys: konan-${{ runner.os }}-
 
-      # iOS pulls Bugsnag through CocoaPods directly (unlike macOS, which needs the
+      # iOS pulls sentry-cocoa through CocoaPods directly (unlike macOS, which needs the
       # synthetic Release framework prebuilt), so only the dummy framework + pod
       # install are needed before xcodebuild — mirrors build_pr.yml's iOS build.
       - name: Prebuild Kotlin framework + pod install
@@ -302,17 +302,19 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
 
-      # Upload the archive's dSYMs to Bugsnag straight after archiving. Bugsnag matches a
+      # Upload the archive's dSYMs to Sentry straight after archiving. Sentry matches a
       # dSYM to a crash by Mach-O UUID, and neither the export nor the re-sign below changes
       # LC_UUID (codesign only rewrites the signature blob), so this covers the shipped app.
-      # Without it an Apple crash report reaches Bugsnag as bare load addresses with no Kotlin
+      # Without it an Apple crash report reaches Sentry as bare load addresses with no Kotlin
       # frames — the release binary is stripped and the DWARF only exists here on the runner.
       # continue-on-error: symbolication must never be the reason a release fails to ship.
-      - name: Upload dSYMs to Bugsnag
+      - name: Upload dSYMs to Sentry
         if: steps.signing.outputs.enabled == 'true'
         continue-on-error: true
         env:
-          BUGSNAG_API_KEY: ${{ secrets.BUGSNAG_API_KEY }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: ./scripts/upload_dsyms.sh "$RUNNER_TEMP/Klardrop.xcarchive"
 
       # Also keep them downloadable: the runner (and the archive) is gone within minutes, so
@@ -503,8 +505,8 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
           restore-keys: konan-${{ runner.os }}-
 
-      - name: Build Kotlin macOS frameworks (Bugsnag synthetic + dummy)
-        run: ./gradlew :klardrop-common:podBuildBugsnagMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
+      - name: Build Kotlin macOS frameworks (Sentry synthetic + dummy)
+        run: ./gradlew :klardrop-common:podBuildSentryMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
 
       - name: pod install
         run: pod install --project-directory=iosApp
@@ -560,16 +562,18 @@ jobs:
             ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
 
-      # Upload the archive's dSYMs to Bugsnag straight after archiving. Bugsnag matches a
+      # Upload the archive's dSYMs to Sentry straight after archiving. Sentry matches a
       # dSYM to a crash by Mach-O UUID, and neither the export nor the re-sign below changes
       # LC_UUID (codesign only rewrites the signature blob), so this covers the shipped app.
-      # Without it an Apple crash report reaches Bugsnag as bare load addresses with no Kotlin
+      # Without it an Apple crash report reaches Sentry as bare load addresses with no Kotlin
       # frames — the release binary is stripped and the DWARF only exists here on the runner.
       # continue-on-error: symbolication must never be the reason a release fails to ship.
-      - name: Upload dSYMs to Bugsnag
+      - name: Upload dSYMs to Sentry
         continue-on-error: true
         env:
-          BUGSNAG_API_KEY: ${{ secrets.BUGSNAG_API_KEY }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: ./scripts/upload_dsyms.sh "$RUNNER_TEMP/KlardropMac.xcarchive"
 
       # Also keep them downloadable: the runner (and the archive) is gone within minutes, so
