@@ -5,6 +5,12 @@ plugins {
   alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
   kotlin("native.cocoapods")
+  // Also applied here, not just to :klardrop-common. :presentation's Apple binaries —
+  // including the Gradle-run test executables — inherit `-framework Sentry` from the
+  // klardrop-common cinterop klib, so they need the plugin's sentry-cocoa link
+  // configuration too. Without it the link fails with "framework 'Sentry' not found"
+  // even though podBuildSentryIosSimulator has run.
+  alias(deps.plugins.sentry.kmp)
   id("co.touchlab.skie") version "0.10.14"
 }
 
