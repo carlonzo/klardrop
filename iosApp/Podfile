@@ -1,8 +1,15 @@
+# sentry-cocoa must match the version sentry-kotlin-multiplatform's cinterop was built
+# against — currently 8.58.2, pinned by the sentry-kmp Gradle plugin (io.sentry.BuildConfig).
+# An unpinned `pod 'Sentry'` resolves to 9.x, whose renamed internals leave the Kotlin
+# framework with undefined symbols at app link (SentryDependencyContainer, SentryId,
+# SentryStructuredLogAttribute). Bump this in lockstep with the sentry-kmp version.
+SENTRY_COCOA_VERSION = '8.58.2'
+
 target 'iosApp' do
   use_frameworks!
   platform :ios, '17.0'
   pod 'presentation', :path => '../presentation'
-  pod 'Sentry'
+  pod 'Sentry', SENTRY_COCOA_VERSION
 
 end
 
@@ -10,5 +17,5 @@ target 'KlardropMac' do
   use_frameworks!
   platform :osx, '14.0'
   pod 'presentation', :path => '../presentation'
-  pod 'Sentry'
+  pod 'Sentry', SENTRY_COCOA_VERSION
 end
