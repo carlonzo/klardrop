@@ -34,6 +34,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
@@ -68,6 +70,7 @@ import com.carlom.klardrop.components.KdAvatarStyle
 import com.carlom.klardrop.components.KdBannerTone
 import com.carlom.klardrop.components.KdDeviceKind
 import com.carlom.klardrop.components.KdRowState
+import com.carlom.klardrop.components.KdRowVariant
 import com.carlom.klardrop.components.KdShareDevice
 import com.carlom.klardrop.components.KdStatus
 import com.carlom.klardrop.components.SectionHead
@@ -351,6 +354,12 @@ private fun DiscoveryDashboard(
     }
 }
 
+/**
+ * Screen header: a bare settings affordance, the wordmark as a display-size
+ * title, and one small pill naming *this* device. Everything below the header
+ * is other people's devices — the pill is the only place the screen talks
+ * about itself, so it stays deliberately quiet.
+ */
 @Composable
 private fun DiscoveryHeader(
     currentDeviceName: String,
@@ -361,61 +370,86 @@ private fun DiscoveryHeader(
     val typography = KdTheme.typography
     val spacing = KdTheme.spacing
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = spacing.s4, vertical = spacing.s3),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = spacing.s5)
+            .padding(top = spacing.s2, bottom = spacing.s2),
     ) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(spacing.s3))
-                .clickable(onClick = onEditIdentity)
-                .padding(vertical = spacing.s1, horizontal = spacing.s2),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
         ) {
-            Text(
-                text = "Klardrop",
-                style = typography.title.copy(color = colors.text),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(spacing.s2),
+            Box(
+                modifier = Modifier
+                    .size(spacing.s8)
+                    .clip(CircleShape)
+                    .clickable(onClick = onSettingsClick),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(spacing.s2)
-                        .clip(CircleShape)
-                        .background(colors.trust),
-                )
-                Text(
-                    text = currentDeviceName.ifEmpty { "This device" },
-                    style = typography.caption.copy(color = colors.text2),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Settings",
+                    tint = colors.text2,
+                    modifier = Modifier.size(spacing.s5),
                 )
             }
         }
 
-        Spacer(Modifier.width(spacing.s2))
+        Text(
+            text = "Klardrop",
+            style = typography.display.copy(color = colors.text),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
 
+        Spacer(Modifier.height(spacing.s3))
+
+        ThisDevicePill(
+            deviceName = currentDeviceName,
+            onClick = onEditIdentity,
+        )
+    }
+}
+
+/** Identity chip — status dot, this device's name, and a hint that it renames. */
+@Composable
+private fun ThisDevicePill(
+    deviceName: String,
+    onClick: () -> Unit,
+) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+    val radii = KdTheme.radii
+
+    Row(
+        modifier = Modifier
+            .clip(radii.shapePill)
+            .background(colors.bg1)
+            .clickable(onClick = onClick)
+            .padding(horizontal = spacing.s3, vertical = spacing.s2),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.s2),
+    ) {
         Box(
             modifier = Modifier
-                .size(spacing.s8)
+                .size(spacing.s2)
                 .clip(CircleShape)
-                .background(colors.bg2)
-                .clickable(onClick = onSettingsClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Settings,
-                contentDescription = "Settings",
-                tint = colors.text2,
-                modifier = Modifier.size(spacing.s5),
-            )
-        }
+                .background(colors.trust),
+        )
+        Text(
+            text = deviceName.ifEmpty { "This device" },
+            style = typography.body.copy(color = colors.text),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Icon(
+            imageVector = Icons.Filled.Edit,
+            contentDescription = "Rename this device",
+            tint = colors.text3,
+            modifier = Modifier.size(spacing.s4),
+        )
     }
 }
 
@@ -488,52 +522,73 @@ private fun YourDevicesSection(
     onForgetClick: (DeviceUi) -> Unit,
 ) {
     val spacing = KdTheme.spacing
-    val colors = KdTheme.colors
-    val typography = KdTheme.typography
 
     SectionHead(
         label = "Your devices",
-        trailing = if (trusted.isEmpty()) {
-            {
-                Text(
-                    text = "Pair a device",
-                    style = typography.caption.copy(color = colors.accent),
-                    modifier = Modifier
-                        .clickable(onClick = onAddDeviceClick)
-                        .padding(horizontal = spacing.s1),
-                )
-            }
-        } else {
-            null
-        },
+        trailing = { AddDeviceButton(onClick = onAddDeviceClick) },
     )
 
     if (trusted.isEmpty()) {
         AddDevicePlaceholderSurface(
             isLargeScreen = isLargeScreen,
             onClick = onAddDeviceClick,
-            modifier = Modifier.padding(start = spacing.s3, end = spacing.s3, bottom = spacing.s2),
+            modifier = Modifier.padding(horizontal = spacing.s5),
         )
     } else {
-        trusted.forEach { device ->
-            DeviceRow(
-                name = device.deviceName,
-                subText = deviceSubText(device),
-                kind = device.deviceType.toKdDeviceKind(),
-                avatarStyle = KdAvatarStyle.Tinted,
-                rowState = deviceRowState(device),
-                status = device.reachabilityStatus(),
-                trailing = {
-                    if (device.hasUnreadMessages) {
-                        UnreadBadge()
-                        Spacer(Modifier.width(spacing.s2))
-                    }
-                    TrustedDeviceMenu(onForget = { onForgetClick(device) })
-                },
-                onClick = { onDeviceActionListener.onDeviceClick(device) },
-                modifier = Modifier.padding(horizontal = spacing.s3),
-            )
+        Column(
+            modifier = Modifier.padding(horizontal = spacing.s5),
+            verticalArrangement = Arrangement.spacedBy(spacing.s2),
+        ) {
+            trusted.forEach { device ->
+                DeviceRow(
+                    name = device.deviceName,
+                    subText = deviceSubText(device),
+                    kind = device.deviceType.toKdDeviceKind(),
+                    avatarStyle = KdAvatarStyle.Tinted,
+                    rowState = deviceRowState(device),
+                    status = device.reachabilityStatus(),
+                    variant = KdRowVariant.Card,
+                    trailing = {
+                        if (device.hasUnreadMessages) {
+                            UnreadBadge()
+                            Spacer(Modifier.width(spacing.s2))
+                        }
+                        TrustedDeviceMenu(onForget = { onForgetClick(device) })
+                    },
+                    onClick = { onDeviceActionListener.onDeviceClick(device) },
+                )
+            }
         }
+    }
+}
+
+/** "+ Add device" chip in the Your-devices section head. */
+@Composable
+private fun AddDeviceButton(onClick: () -> Unit) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+    val radii = KdTheme.radii
+
+    Row(
+        modifier = Modifier
+            .clip(radii.shapePill)
+            .background(colors.bg1)
+            .clickable(onClick = onClick)
+            .padding(horizontal = spacing.s3, vertical = spacing.s1),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(spacing.s1),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Add,
+            contentDescription = null,
+            tint = colors.text2,
+            modifier = Modifier.size(spacing.s4),
+        )
+        Text(
+            text = "Add device",
+            style = typography.caption.copy(color = colors.text2),
+        )
     }
 }
 
@@ -584,8 +639,6 @@ private fun NearbySection(
     onDeviceActionListener: OnDeviceActionListener,
 ) {
     val spacing = KdTheme.spacing
-    val colors = KdTheme.colors
-    val typography = KdTheme.typography
 
     SectionHead(
         label = "Nearby",
@@ -595,24 +648,29 @@ private fun NearbySection(
     )
 
     if (devices.isEmpty()) {
-        NearbyEmptyHint(modifier = Modifier.padding(start = spacing.s3, end = spacing.s3, bottom = spacing.s2))
+        NearbyEmptyHint(modifier = Modifier.padding(horizontal = spacing.s5))
     } else {
-        devices.forEach { device ->
-            DeviceRow(
-                name = device.deviceName,
-                subText = deviceSubText(device),
-                kind = device.deviceType.toKdDeviceKind(),
-                avatarStyle = KdAvatarStyle.Neutral,
-                rowState = deviceRowState(device),
-                status = device.reachabilityStatus(),
-                trailing = {
-                    if (device.trustStatus == TrustStatus.Untrusted || device.trustStatus == TrustStatus.Unknown) {
-                        PairButton(onClick = { onDeviceActionListener.onAddToTrusted(device) })
-                    }
-                },
-                onClick = { onDeviceActionListener.onDeviceClick(device) },
-                modifier = Modifier.padding(horizontal = spacing.s3),
-            )
+        Column(
+            modifier = Modifier.padding(horizontal = spacing.s5),
+            verticalArrangement = Arrangement.spacedBy(spacing.s2),
+        ) {
+            devices.forEach { device ->
+                DeviceRow(
+                    name = device.deviceName,
+                    subText = deviceSubText(device),
+                    kind = device.deviceType.toKdDeviceKind(),
+                    avatarStyle = KdAvatarStyle.Neutral,
+                    rowState = deviceRowState(device),
+                    status = device.reachabilityStatus(),
+                    variant = KdRowVariant.Card,
+                    trailing = {
+                        if (device.trustStatus == TrustStatus.Untrusted || device.trustStatus == TrustStatus.Unknown) {
+                            PairButton(onClick = { onDeviceActionListener.onAddToTrusted(device) })
+                        }
+                    },
+                    onClick = { onDeviceActionListener.onDeviceClick(device) },
+                )
+            }
         }
     }
 }
@@ -647,11 +705,13 @@ private fun NearbyEmptyHint(modifier: Modifier = Modifier) {
     val radii = KdTheme.radii
     val spacing = KdTheme.spacing
 
+    // Same filled-card language as a device row, so the empty slot reads as
+    // "this is where devices land" rather than as an error box.
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(radii.shapeLg)
-            .border(width = 1.dp, color = colors.border, shape = radii.shapeLg)
+            .background(colors.bg1)
             .padding(spacing.s4),
         contentAlignment = Alignment.Center,
     ) {
@@ -670,16 +730,16 @@ private fun PairButton(onClick: () -> Unit) {
     val spacing = KdTheme.spacing
 
     Box(
-        modifier = androidx.compose.ui.Modifier
-            .clip(radii.shapeMd)
-            .background(colors.bg2)
+        modifier = Modifier
+            .clip(radii.shapePill)
+            .background(colors.bg3)
             .clickable(onClick = onClick)
-            .padding(horizontal = spacing.s2, vertical = spacing.s1),
+            .padding(horizontal = spacing.s3, vertical = spacing.s1),
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "+",
-            style = typography.body.copy(color = colors.text2),
+            text = "Pair",
+            style = typography.caption.copy(color = colors.text),
         )
     }
 }

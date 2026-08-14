@@ -36,8 +36,23 @@ enum class KdRowState {
     PairPrompt,
 }
 
+enum class KdRowVariant {
+    /**
+     * Flush 56 dp list row on a transparent ground — sidebar, sheets, pickers,
+     * where rows sit inside an already-elevated surface.
+     */
+    List,
+
+    /**
+     * Free-standing 68 dp card on bg/0 — the discovery dashboard. Each row is
+     * its own filled, rounded surface with air between it and its neighbours.
+     */
+    Card,
+}
+
 /**
- * 56 dp height device list row.
+ * Device list row — 56 dp flush ([KdRowVariant.List]) or 68 dp filled card
+ * ([KdRowVariant.Card]).
  *
  * @param name          primary device name — single line, ellipsis
  * @param subText       optional caption below the name
@@ -45,6 +60,7 @@ enum class KdRowState {
  * @param avatarStyle   Tinted or Neutral
  * @param rowState      drives background and text color
  * @param status        reachability dot shown on avatar; null = no dot
+ * @param variant       flush list row or free-standing card
  * @param trailing      optional composable slot at the trailing edge
  * @param onClick       row tap callback
  * @param modifier      applied to root Row
@@ -57,6 +73,7 @@ fun DeviceRow(
     avatarStyle: KdAvatarStyle = KdAvatarStyle.Neutral,
     rowState: KdRowState = KdRowState.Idle,
     status: KdStatus? = null,
+    variant: KdRowVariant = KdRowVariant.List,
     trailing: (@Composable RowScope.() -> Unit)? = null,
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -66,40 +83,41 @@ fun DeviceRow(
     val radii = KdTheme.radii
     val spacing = KdTheme.spacing
 
+    val isCard = variant == KdRowVariant.Card
+
     val rowBg: Color = when (rowState) {
         KdRowState.Active    -> colors.trustBg
         KdRowState.Hover     -> colors.bg3
         KdRowState.Pairing   -> colors.bg3
-        else                 -> Color.Transparent
+        // A card is a surface in its own right, so it stays filled at rest; a
+        // list row is flush and only paints when something is happening.
+        else                 -> if (isCard) colors.bg1 else Color.Transparent
     }
 
+    // Offline reads as dimmed, not as an error. The red status dot on the
+    // avatar already carries that bit — painting the whole row red says it a
+    // second time, and "this device is asleep" is not a failure worth shouting.
     val nameColor: Color = when (rowState) {
         KdRowState.Active      -> colors.trust
-        KdRowState.Unreachable -> colors.err
+        KdRowState.Unreachable -> colors.text2
         else                   -> colors.text
     }
 
     val subColor: Color = when (rowState) {
         KdRowState.Active      -> colors.trust
         KdRowState.Pairing     -> colors.warn
-        KdRowState.Unreachable -> colors.err
+        KdRowState.Unreachable -> colors.text3
         else                   -> colors.text2
-    }
-
-    val shape = if (rowState == KdRowState.Active || rowState == KdRowState.Hover) {
-        radii.shapeLg
-    } else {
-        radii.shapeLg
     }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .clip(shape)
+            .height(if (isCard) 68.dp else 56.dp)
+            .clip(radii.shapeLg)
             .background(rowBg)
             .clickable(onClick = onClick)
-            .padding(horizontal = spacing.s3),
+            .padding(horizontal = if (isCard) spacing.s4 else spacing.s3),
         contentAlignment = Alignment.CenterStart,
     ) {
         Row(
@@ -110,7 +128,7 @@ fun DeviceRow(
                 kind = kind,
                 style = avatarStyle,
                 status = status,
-                size = 36.dp,
+                size = if (isCard) 40.dp else 36.dp,
             )
 
             androidx.compose.foundation.layout.Column(
@@ -119,7 +137,7 @@ fun DeviceRow(
             ) {
                 Text(
                     text = name,
-                    style = typography.body.copy(
+                    style = (if (isCard) typography.headline else typography.body).copy(
                         color = nameColor,
                         fontWeight = if (rowState == KdRowState.Active) FontWeight(600)
                         else FontWeight(500),
