@@ -70,7 +70,6 @@ kotlin {
     val androidMain by getting {
       dependencies {
         implementation(deps.kotlinx.coroutines.android)
-        implementation(deps.simplestorage)
         implementation(deps.bugsnag.kmp)
         implementation(deps.sqldelight.android.driver)
       }
