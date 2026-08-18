@@ -167,6 +167,9 @@ extension DeviceUi: @retroactive Identifiable {
 
 // MARK: - DiscoveryHeaderView
 
+/// Wordmark as a display-size title plus one small pill naming *this* device.
+/// Everything below the header is other people's devices — the pill is the only
+/// place the screen talks about itself, so it stays deliberately quiet.
 struct DiscoveryHeaderView: View {
     let currentDeviceName: String
     let onEditIdentity: () -> Void
@@ -174,30 +177,50 @@ struct DiscoveryHeaderView: View {
     @Environment(\.kdColors) private var kd
 
     var body: some View {
-        HStack(spacing: KdSpacing.s2) {
-            // Tappable title + device name (rename), pinned to the left.
-            Button(action: onEditIdentity) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Klardrop")
-                        .kdStyle(.title, color: kd.text)
-                        .lineLimit(1)
-                    HStack(spacing: KdSpacing.s2) {
-                        Circle()
-                            .fill(kd.trust)
-                            .frame(width: KdSpacing.s2, height: KdSpacing.s2)
-                        Text(currentDeviceName.isEmpty ? "This device" : currentDeviceName)
-                            .kdStyle(.caption, color: kd.text2)
-                            .lineLimit(1)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: KdSpacing.s3) {
+            Text("Klardrop")
+                .kdStyle(.display, color: kd.text)
+                .lineLimit(1)
 
-            Spacer(minLength: 0)
+            ThisDevicePillView(
+                deviceName: currentDeviceName,
+                onTap: onEditIdentity
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, KdSpacing.s4)
-        .padding(.vertical, KdSpacing.s3)
+        .padding(.horizontal, KdSpacing.s5)
+        .padding(.top, KdSpacing.s4)
+        .padding(.bottom, KdSpacing.s2)
+    }
+}
+
+/// Identity chip — status dot, this device's name, and a hint that it renames.
+private struct ThisDevicePillView: View {
+    let deviceName: String
+    let onTap: () -> Void
+
+    @Environment(\.kdColors) private var kd
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: KdSpacing.s2) {
+                Circle()
+                    .fill(kd.trust)
+                    .frame(width: KdSpacing.s2, height: KdSpacing.s2)
+                Text(deviceName.isEmpty ? "This device" : deviceName)
+                    .kdStyle(.body, color: kd.text)
+                    .lineLimit(1)
+                Image(systemName: "pencil")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(kd.text3)
+            }
+            .padding(.horizontal, KdSpacing.s3)
+            .padding(.vertical, KdSpacing.s2)
+            .background(kd.bg1)
+            .clipShape(KdShape.pill)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Rename this device")
     }
 }
 
@@ -211,48 +234,41 @@ private struct YourDevicesSectionView: View {
     let onForgetClick: (DeviceUi) -> Void
     let onPendingLink: (DeviceUi) -> Void
 
-    @Environment(\.kdColors) private var kd
-
     var body: some View {
         VStack(spacing: 0) {
             SectionHeadView(label: "Your devices") {
-                if trusted.isEmpty {
-                    Button(action: onAddDeviceClick) {
-                        Text("Pair a device")
-                            .kdStyle(.caption, color: kd.accent)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, KdSpacing.s1)
-                }
+                AddDeviceButtonView(onClick: onAddDeviceClick)
             }
 
             if trusted.isEmpty {
                 AddDevicePlaceholderSurface(onClick: onAddDeviceClick)
-                    .padding(.horizontal, KdSpacing.s3)
-                    .padding(.bottom, KdSpacing.s2)
+                    .padding(.horizontal, KdSpacing.s5)
             } else {
-                ForEach(trusted, id: \.deviceId) { device in
-                    DeviceRowView(
-                        name: device.deviceName,
-                        subText: device.subText,
-                        kind: device.deviceKind,
-                        avatarStyle: .tinted,
-                        rowState: device.rowState,
-                        status: device.reachabilityStatus,
-                        onTap: {
-                            model.onDeviceTap(device)
-                            onNavigateToChat(device.deviceId, device.deviceName)
-                        }
-                    ) {
-                        HStack(spacing: KdSpacing.s2) {
-                            if device.hasUnreadMessages {
-                                UnreadBadgeView()
+                VStack(spacing: KdSpacing.s2) {
+                    ForEach(trusted, id: \.deviceId) { device in
+                        DeviceRowView(
+                            name: device.deviceName,
+                            subText: device.subText,
+                            kind: device.deviceKind,
+                            avatarStyle: .tinted,
+                            rowState: device.rowState,
+                            status: device.reachabilityStatus,
+                            variant: .card,
+                            onTap: {
+                                model.onDeviceTap(device)
+                                onNavigateToChat(device.deviceId, device.deviceName)
                             }
-                            TrustedDeviceMenuView(onForget: { onForgetClick(device) })
+                        ) {
+                            HStack(spacing: KdSpacing.s2) {
+                                if device.hasUnreadMessages {
+                                    UnreadBadgeView()
+                                }
+                                TrustedDeviceMenuView(onForget: { onForgetClick(device) })
+                            }
                         }
                     }
-                    .padding(.horizontal, KdSpacing.s3)
                 }
+                .padding(.horizontal, KdSpacing.s5)
             }
         }
     }
@@ -276,37 +292,39 @@ private struct NearbySectionView: View {
 
             if devices.isEmpty {
                 NearbyEmptyHintView()
-                    .padding(.horizontal, KdSpacing.s3)
-                    .padding(.bottom, KdSpacing.s2)
+                    .padding(.horizontal, KdSpacing.s5)
             } else {
-                ForEach(devices, id: \.deviceId) { device in
-                    DeviceRowView(
-                        name: device.deviceName,
-                        subText: device.subText,
-                        kind: device.deviceKind,
-                        avatarStyle: .neutral,
-                        rowState: device.rowState,
-                        status: device.reachabilityStatus,
-                        onTap: {
-                            model.onDeviceTap(device)
-                            onNavigateToChat(device.deviceId, device.deviceName)
-                        }
-                    ) {
-                        // Show Pair button for untrusted / unknown
-                        let showPair: Bool = {
-                            switch onEnum(of: device.trustStatus) {
-                            case .untrusted, .unknown:
-                                return true
-                            default:
-                                return false
+                VStack(spacing: KdSpacing.s2) {
+                    ForEach(devices, id: \.deviceId) { device in
+                        DeviceRowView(
+                            name: device.deviceName,
+                            subText: device.subText,
+                            kind: device.deviceKind,
+                            avatarStyle: .neutral,
+                            rowState: device.rowState,
+                            status: device.reachabilityStatus,
+                            variant: .card,
+                            onTap: {
+                                model.onDeviceTap(device)
+                                onNavigateToChat(device.deviceId, device.deviceName)
                             }
-                        }()
-                        if showPair {
-                            PairButtonView(onClick: { onPendingLink(device) })
+                        ) {
+                            // Show Pair button for untrusted / unknown
+                            let showPair: Bool = {
+                                switch onEnum(of: device.trustStatus) {
+                                case .untrusted, .unknown:
+                                    return true
+                                default:
+                                    return false
+                                }
+                            }()
+                            if showPair {
+                                PairButtonView(onClick: { onPendingLink(device) })
+                            }
                         }
                     }
-                    .padding(.horizontal, KdSpacing.s3)
                 }
+                .padding(.horizontal, KdSpacing.s5)
             }
         }
     }
@@ -330,7 +348,9 @@ private struct ScanningTickerView: View {
     }
 }
 
-/// Empty state hint inside the Nearby section.
+/// Empty state hint inside the Nearby section. Same filled-card language as a
+/// device row, so the empty slot reads as "this is where devices land" rather
+/// than as an error box.
 private struct NearbyEmptyHintView: View {
     @Environment(\.kdColors) private var kd
 
@@ -340,27 +360,47 @@ private struct NearbyEmptyHintView: View {
             .multilineTextAlignment(.center)
             .padding(KdSpacing.s4)
             .frame(maxWidth: .infinity)
-            .overlay(
-                KdShape.lg
-                    .strokeBorder(kd.border, lineWidth: 1)
-            )
+            .background(kd.bg1)
             .clipShape(KdShape.lg)
     }
 }
 
-/// Compact "+ Pair" chip button used in the Nearby device row trailing.
+/// "+ Add device" chip in the Your-devices section head.
+private struct AddDeviceButtonView: View {
+    let onClick: () -> Void
+    @Environment(\.kdColors) private var kd
+
+    var body: some View {
+        Button(action: onClick) {
+            HStack(spacing: KdSpacing.s1) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Add device")
+                    .kdStyle(.caption)
+            }
+            .foregroundColor(kd.text2)
+            .padding(.horizontal, KdSpacing.s3)
+            .padding(.vertical, KdSpacing.s1)
+            .background(kd.bg1)
+            .clipShape(KdShape.pill)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Compact "Pair" chip button used in the Nearby device row trailing.
 private struct PairButtonView: View {
     let onClick: () -> Void
     @Environment(\.kdColors) private var kd
 
     var body: some View {
         Button(action: onClick) {
-            Text("+")
-                .kdStyle(.body, color: kd.text2)
-                .padding(.horizontal, KdSpacing.s2)
+            Text("Pair")
+                .kdStyle(.caption, color: kd.text)
+                .padding(.horizontal, KdSpacing.s3)
                 .padding(.vertical, KdSpacing.s1)
-                .background(kd.bg2)
-                .clipShape(KdShape.md)
+                .background(kd.bg3)
+                .clipShape(KdShape.pill)
         }
         .buttonStyle(.plain)
     }

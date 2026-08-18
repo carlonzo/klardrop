@@ -21,7 +21,7 @@ filekit = "0.15.0"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
 coil3 = "3.5.0"
-nav3 = "1.1.5"
+nav3 = "1.1.6"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -33,7 +33,7 @@ kotlinx-serialization-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-seria
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 androidx-core = { module = "androidx.core:core-ktx", version = "1.19.0" }
-androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.7.1" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version = "1.8.0" }
 androidx-activity = { module = "androidx.activity:activity-ktx", version.ref = "androidx-activity" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 
@@ -49,8 +49,6 @@ kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.re
 
 dagger = { module = "com.google.dagger:dagger", version.ref = "dagger" }
 dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = "dagger" }
-
-simplestorage = { module = "com.anggrayudi:storage", version = "2.3.0" }
 
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.3" }
 jna = { module = "net.java.dev.jna:jna", version = "5.19.1" }
