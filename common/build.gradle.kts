@@ -70,7 +70,10 @@ kotlin {
     val androidMain by getting {
       dependencies {
         implementation(deps.kotlinx.coroutines.android)
-        implementation(deps.simplestorage)
+        // Used directly by androidMain (ContextCompat, NotificationCompat, FileProvider,
+        // SharedPreferences.edit). It used to arrive transitively via com.anggrayudi:storage,
+        // so removing that unused dependency requires declaring this one explicitly.
+        implementation(deps.androidx.core)
         implementation(deps.bugsnag.kmp)
         implementation(deps.sqldelight.android.driver)
       }

@@ -49,8 +49,6 @@ kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.re
 dagger = { module = "com.google.dagger:dagger", version.ref = "dagger" }
 dagger-compiler = { module = "com.google.dagger:dagger-compiler", version.ref = "dagger" }
 
-simplestorage = { module = "com.anggrayudi:storage", version = "2.3.0" }
-
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.3" }
 jna = { module = "net.java.dev.jna:jna", version = "5.19.1" }
 jna-platform = { module = "net.java.dev.jna:jna-platform", version = "5.19.1" }
