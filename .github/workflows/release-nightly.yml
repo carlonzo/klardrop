@@ -275,8 +275,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/keys"
           echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8"
 
-      # Archive WITHOUT code signing — signing happens once, at export (the same split the
-      # macOS job below uses).
+      # Archive AD-HOC signed — the real signing happens once, at export (the same split
+      # the macOS job below uses), but the archive still has to carry entitlements.
       #
       # `xcodebuild archive` under automatic signing always resolves a *development*
       # identity (the iosApp target even pins CODE_SIGN_IDENTITY = "Apple Development"),
@@ -288,8 +288,20 @@ jobs:
       #          number of certificates.
       #   error: No profiles for 'com.carlom.Klardrop' were found: Xcode couldn't find any
       #          iOS App Development provisioning profiles matching 'com.carlom.Klardrop'.
-      # With signing off, no development cert or profile is needed (or created) at all.
-      - name: Archive iosApp (unsigned)
+      # Manual style + the ad-hoc identity ("-") never touches the portal, so no
+      # development certificate or profile is needed (or created) here either.
+      #
+      # CODE_SIGNING_ALLOWED=NO (what this used to do) skips ProcessProductPackaging
+      # entirely, so the archived binaries carry NO entitlements — and -exportArchive
+      # re-signs from the entitlements it finds in the bundle, not from the .entitlements
+      # files in this repo. That shipped an app whose App Group was silently dropped and
+      # tripped the verification below on every run:
+      #   Payload/Klardrop.app is missing the group.com.carlom.Klardrop App Group entitlement
+      # (the macOS job hit the same thing and works around it by re-signing after export).
+      # Ad-hoc signing runs ProcessProductPackaging, so each bundle's CODE_SIGN_ENTITLEMENTS
+      # (iosApp.entitlements / KlardropShare.entitlements) is baked into the archive and the
+      # export's re-sign carries it over, swapping in the profile's identifiers.
+      - name: Archive iosApp (ad-hoc signed)
         if: steps.signing.outputs.enabled == 'true'
         env:
           VERSION: ${{ needs.gate.outputs.base }}
@@ -299,8 +311,41 @@ jobs:
           xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme iosApp \
             -configuration Release -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Klardrop.xcarchive" archive \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            PROVISIONING_PROFILE_SPECIFIER="" PROVISIONING_PROFILE="" \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
+
+      # The archive is what -exportArchive re-signs from, so check its entitlements here
+      # rather than 6 minutes later on the .ipa. If ad-hoc signing didn't apply a bundle's
+      # CODE_SIGN_ENTITLEMENTS, sign it again explicitly with the Apple Distribution cert
+      # already in the keychain — codesign needs no provisioning profile, and the export
+      # replaces this signature anyway; only the entitlements it carries have to be right.
+      - name: Ensure the archive carries its entitlements
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/Klardrop.xcarchive/Products/Applications/Klardrop.app"
+          APPEX="$(ls -d "$APP/PlugIns"/*.appex 2>/dev/null | head -1 || true)"
+          test -n "$APPEX" \
+            || { echo "::error::the archived app embeds no share extension — KlardropShare was dropped from the archive"; exit 1; }
+
+          has_group() { codesign -d --entitlements - --xml "$1" 2>/dev/null | grep -q 'group.com.carlom.Klardrop'; }
+
+          # extension first, so the app's outer signature seals the re-signed extension
+          if ! has_group "$APPEX" || ! has_group "$APP"; then
+            echo "::warning::the ad-hoc archive did not carry the App Group entitlement — re-signing the app and its extension from the repo .entitlements"
+            codesign --force --sign "Apple Distribution" \
+              --entitlements "iosApp/Klardrop Share/KlardropShare.entitlements" "$APPEX"
+            codesign --force --sign "Apple Distribution" \
+              --entitlements "iosApp/iosApp/iosApp.entitlements" "$APP"
+          fi
+
+          for b in "$APPEX" "$APP"; do
+            echo "--- entitlements: $b"
+            codesign -d --entitlements - --xml "$b" 2>/dev/null || true
+            has_group "$b" \
+              || { echo "::error::$b left the archive without the group.com.carlom.Klardrop App Group entitlement — -exportArchive would sign the shipped app without it"; exit 1; }
+          done
 
       # Upload the archive's dSYMs to Bugsnag straight after archiving. Bugsnag matches a
       # dSYM to a crash by Mach-O UUID, and neither the export nor the re-sign below changes
@@ -362,11 +407,11 @@ jobs:
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER"
 
-      # The archive is unsigned, so the exported bundles get their entitlements from the
-      # App Store provisioning profile rather than from the built binaries. That's the
-      # intended behaviour, but it means a capability missing from the App ID would
-      # silently produce an app whose share extension can't reach the shared container.
-      # Fail here instead of shipping that to testers.
+      # The export re-signs every bundle, so check the .ipa that comes out of it rather than
+      # trusting the archive: a capability missing from the App ID (and so from the profile
+      # Xcode minted) would otherwise silently produce an app whose share extension can't
+      # reach the shared container. Both the embedded profile and the resulting entitlements
+      # are dumped first, so a failure here says which of the two lost the App Group.
       - name: Verify the exported app is distribution-signed and kept its App Group
         if: steps.signing.outputs.enabled == 'true'
         run: |
@@ -381,10 +426,27 @@ jobs:
             || { echo "::error::the exported app embeds no share extension — KlardropShare was dropped from the archive"; exit 1; }
           codesign -dvv "$APP" 2>&1 | grep -q 'Authority=Apple Distribution' \
             || { echo "::error::$APP is not signed with an Apple Distribution certificate"; exit 1; }
+          has_group() { codesign -d --entitlements - --xml "$1" 2>/dev/null | grep -q 'group.com.carlom.Klardrop'; }
+
           for b in "$APP" "$APPEX"; do
-            codesign -d --entitlements - --xml "$b" 2>/dev/null \
-              | grep -q 'group.com.carlom.Klardrop' \
-              || { echo "::error::$b is missing the group.com.carlom.Klardrop App Group entitlement — the share extension would not reach the app's shared container. Check that App Groups is enabled on the App ID."; exit 1; }
+            echo "--- entitlements: $b"
+            codesign -d --entitlements - --xml "$b" 2>/dev/null || true
+            echo "--- provisioning profile entitlements: $b"
+            PROFILE_ENT=""
+            if [ -f "$b/embedded.mobileprovision" ]; then
+              security cms -D -i "$b/embedded.mobileprovision" > "$RUNNER_TEMP/profile.plist" || true
+              PROFILE_ENT="$(plutil -extract Entitlements xml1 -o - "$RUNNER_TEMP/profile.plist" || true)"
+              echo "$PROFILE_ENT"
+            else
+              echo "(no embedded.mobileprovision)"
+            fi
+            if has_group "$b"; then continue; fi
+            case "$PROFILE_ENT" in
+              *group.com.carlom.Klardrop*)
+                echo "::error::$b lost the group.com.carlom.Klardrop App Group entitlement at signing even though its provisioning profile grants it — the archive went into -exportArchive without entitlements."; exit 1 ;;
+              *)
+                echo "::error::$b is missing the group.com.carlom.Klardrop App Group entitlement and its provisioning profile does not grant it either — enable App Groups (group.com.carlom.Klardrop) on the App ID for this bundle in the Apple Developer portal."; exit 1 ;;
+            esac
           done
 
       # xcodebuild can only upload from an archive, not from an .ipa, so the upload is a
