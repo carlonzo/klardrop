@@ -1,9 +1,84 @@
 # sentry-cocoa must match the version sentry-kotlin-multiplatform's cinterop was built
-# against — currently 8.58.2, pinned by the sentry-kmp Gradle plugin (io.sentry.BuildConfig).
-# An unpinned `pod 'Sentry'` resolves to 9.x, whose renamed internals leave the Kotlin
-# framework with undefined symbols at app link (SentryDependencyContainer, SentryId,
-# SentryStructuredLogAttribute). Bump this in lockstep with the sentry-kmp version.
+# against. An unpinned `pod 'Sentry'` resolves to 9.x, whose renamed internals leave the
+# Kotlin framework with undefined symbols at app link (SentryDependencyContainer, SentryId,
+# SentryStructuredLogAttribute) — a failure that reads like a broken Xcode setup rather
+# than a version skew, which is why the pin below is guarded instead of just commented.
 SENTRY_COCOA_VERSION = '8.58.2'
+
+# The pairing is invisible to CocoaPods: the sentry-kmp Gradle plugin hard-codes the
+# sentry-cocoa version its Obj-C bindings were generated from, so bumping `sentry-kmp` in
+# gradle/dependencies.toml silently invalidates the pin above and the damage only shows up
+# at link time. This table is the checked-in record of that pairing, and the check below
+# refuses to `pod install` when the Gradle side has moved on and the table has not — so the
+# skew surfaces here, by name, instead of as an undefined symbol three build steps later.
+#
+# When bumping sentry-kmp, add the new row by reading the constant out of the very plugin
+# jar Gradle resolved, rather than trusting release notes:
+#
+#   javap -p -constants -cp \
+#     "$(find ~/.gradle/caches -name 'sentry-kotlin-multiplatform-gradle-plugin-*.jar' | head -1)" \
+#     io.sentry.BuildConfig
+#   => public static final java.lang.String SentryCocoaVersion = "8.58.2";
+#
+# Then set SENTRY_COCOA_VERSION to the same value. Both edits are deliberate on purpose:
+# an automatic lookup would happily follow the plugin into a version nobody has link-tested.
+SENTRY_KMP_TO_COCOA = {
+  '0.27.0' => '8.58.2',
+}.freeze
+
+# Resolved at `pod install` time — the Podfile is plain Ruby and the Gradle version
+# catalogue is a sibling file in this same repo, so the two can be compared directly.
+# Read-only; stdlib only, no gems.
+deps_toml = File.expand_path('../gradle/dependencies.toml', File.dirname(__FILE__))
+
+unless File.file?(deps_toml)
+  raise <<~MSG
+    Podfile: cannot find gradle/dependencies.toml at #{deps_toml}.
+    The sentry-cocoa/sentry-kmp lockstep check reads the sentry-kmp version from there.
+    If the repo layout moved, fix the path above rather than deleting the check —
+    without it a version skew reappears as an undefined-symbol link error.
+  MSG
+end
+
+# `[versions]` holds `sentry-kmp = "0.27.0"`; the `[plugins]` entry of the same name is an
+# inline table (`sentry-kmp = { id = ... }`) and so cannot match this pattern.
+sentry_kmp_version = File.read(deps_toml)[/^sentry-kmp\s*=\s*"([^"]+)"/, 1]
+
+if sentry_kmp_version.nil?
+  raise <<~MSG
+    Podfile: no `sentry-kmp = "<version>"` entry under [versions] in gradle/dependencies.toml.
+    The sentry-cocoa lockstep check needs it to know which sentry-cocoa version this build
+    expects. If the catalogue key was renamed, update the pattern in this Podfile to match.
+  MSG
+end
+
+expected_cocoa_version = SENTRY_KMP_TO_COCOA[sentry_kmp_version]
+
+if expected_cocoa_version.nil?
+  raise <<~MSG
+    Podfile: sentry-kmp #{sentry_kmp_version} is not in this Podfile's SENTRY_KMP_TO_COCOA table.
+    Someone bumped sentry-kmp in gradle/dependencies.toml without re-pinning sentry-cocoa.
+    Find the sentry-cocoa version that release's cinterop was built against:
+
+      javap -p -constants -cp \\
+        "$(find ~/.gradle/caches -name 'sentry-kotlin-multiplatform-gradle-plugin-*.jar' | head -1)" \\
+        io.sentry.BuildConfig
+
+    then add `'#{sentry_kmp_version}' => '<that version>'` to the table and set
+    SENTRY_COCOA_VERSION to the same value.
+  MSG
+end
+
+if expected_cocoa_version != SENTRY_COCOA_VERSION
+  raise <<~MSG
+    Podfile: sentry-cocoa pin is out of lockstep with sentry-kmp.
+      sentry-kmp #{sentry_kmp_version} was built against sentry-cocoa #{expected_cocoa_version}
+      but SENTRY_COCOA_VERSION in this Podfile is #{SENTRY_COCOA_VERSION}.
+    Set SENTRY_COCOA_VERSION to #{expected_cocoa_version}. Shipping the mismatch links the app
+    against renamed internals and fails with undefined symbols (SentryDependencyContainer,
+    SentryId, SentryStructuredLogAttribute).
+  MSG
+end
 
 target 'iosApp' do
   use_frameworks!

@@ -27,10 +27,17 @@ class KlarDropApplication : Application(), ApplicationComponentProvider {
     // that masked real production issues. Expected protocol noise (peer reset, connect
     // refused, BLE handshake disconnect) is dropped by CrashReporter.notify itself, so
     // there is no per-platform onError hook to keep in sync any more.
+    // `ApplicationInfo.isDebug` is a desktop/CLI concept — it comes from the `--debug`
+    // command-line flag and is always false here, so it cannot be used to tell a debug
+    // build apart. Read the debuggable flag off the installed package instead, which is
+    // exactly what bugsnag-android derived its "development" release stage from.
+    val isDebuggable =
+      (getApplicationInfo().flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
     initCrashReporter(
       context = this,
       appVersion = applicationInfo.appVersion,
-      isProduction = !applicationInfo.isDebug,
+      isProduction = !isDebuggable,
     )
 
     component = DaggerApplicationComponent.factory().create(this, applicationInfo)

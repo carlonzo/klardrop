@@ -3,6 +3,7 @@ plugins {
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
   alias(deps.plugins.ksp)
+  alias(deps.plugins.sentry.android)
 }
 
 group = "com.carlom.klardrop"
@@ -42,7 +43,6 @@ dependencies {
   implementation(deps.androidx.core)
   implementation(deps.dagger)
   ksp(deps.dagger.compiler)
-
 
   debugImplementation(compose.uiTooling)
   implementation(compose.preview)
@@ -106,6 +106,60 @@ android {
     }
   }
   namespace = "com.carlom.klardrop.android"
+}
+
+// R8 renames every class and method in the release APK, so a production crash arrives
+// at Sentry as `a.b.c(SourceFile:1)` unless Sentry holds the matching mapping. The
+// plugin stamps a UUID into the APK's assets and uploads mapping.txt under that same
+// UUID, so the two halves have to be produced together — hence in the build, not as a
+// separate CI step. This replaces what com.bugsnag.android.gradle used to do.
+sentry {
+  // MANDATORY. The Sentry SDK already reaches this APK transitively: sentry-kotlin-
+  // multiplatform 0.27.0 (via :klardrop-common) pulls io.sentry:sentry-android 8.41.0,
+  // the version it was built against. Auto-installation would add a second, direct
+  // io.sentry:sentry-android at the version *this plugin* ships (8.53.0 for 6.19.0),
+  // and Gradle's conflict resolution would quietly hand the KMP SDK the newer one.
+  // We want the mapping upload out of this plugin and nothing else — and that means
+  // this flag has to be re-checked on every plugin bump, not set and forgotten.
+  autoInstallation.enabled.set(false)
+
+  // This PR is a like-for-like crash-reporter swap, so anything that changes what the
+  // app *does* at runtime stays off. Tracing instrumentation rewrites bytecode to wrap
+  // SQLite, file I/O, OkHttp and Compose in performance spans; runtimeOptimizations
+  // rewrites the SDK's own class-availability checks. Neither was asked for, and both
+  // would land in a release APK nobody profiled.
+  tracingInstrumentation.enabled.set(false)
+  runtimeOptimizations.enabled.set(false)
+
+  // Source context would bundle our sources and ship them to Sentry, and the
+  // dependency report would add a sentry-external-modules.txt asset listing the whole
+  // dependency graph to every event. The mapping alone deobfuscates stack traces.
+  includeSourceContext.set(false)
+  includeDependenciesReport.set(false)
+
+  // On by default, this reports build metrics to Sentry's own project on every
+  // invocation, local dev builds included. Not something a crash-reporter swap adds.
+  telemetry.set(false)
+
+  // Debug builds are not minified and never leave a developer's machine, so there is
+  // no mapping worth uploading and no reason to run sentry-cli on every debug build.
+  ignoredBuildTypes.set(setOf("debug"))
+
+  // org / projectName / authToken are deliberately left unset. sentry-cli reads
+  // SENTRY_ORG, SENTRY_PROJECT and SENTRY_AUTH_TOKEN from the environment it inherits,
+  // which is how the release workflow already feeds the dSYM upload. Hardcoding the
+  // slugs would publish them in a public repo and stop a fork from pointing the build
+  // at its own org.
+
+  // With no token there is nothing to upload to, and neither a fork PR build nor a
+  // local `assembleRelease` may fail over that. Unset, the mapping task still runs but
+  // as a sentry-cli dry run (`--no-upload`), so UUID stamping stays exercised and the
+  // APK is identical. Read through `providers` rather than System.getenv(): the
+  // configuration cache is on (gradle.properties) and only the provider is tracked as
+  // a build input.
+  autoUploadProguardMapping.set(
+    providers.environmentVariable("SENTRY_AUTH_TOKEN").map { it.isNotBlank() }.orElse(false)
+  )
 }
 
 // Pull the compose multiplatform Android assets from :compose-ui into this

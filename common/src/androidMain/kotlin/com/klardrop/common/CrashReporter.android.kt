@@ -10,7 +10,7 @@ internal actual val crashReporterPlatform: String = "android"
  * [Context], so it cannot share the common entry point.
  */
 fun initCrashReporter(context: Context, appVersion: String, isProduction: Boolean) {
-  if (!isProduction) return
+  if (!isProduction || CrashReporterConfig.DSN.isEmpty()) return
   Sentry.init(context) { options ->
     options.dsn = CrashReporterConfig.DSN
     options.release = appVersion

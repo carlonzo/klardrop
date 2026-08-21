@@ -1,5 +1,6 @@
 package com.klardrop.common
 
+import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import io.sentry.kotlin.multiplatform.Sentry
 import io.sentry.kotlin.multiplatform.SentryLevel
@@ -84,10 +85,16 @@ enum class BreadcrumbType(
 
 object CrashReporterConfig {
   /**
-   * Sentry DSN. Unlike the Bugsnag API key this replaces, a DSN is not a secret — it is
-   * a write-only ingest endpoint and is expected to ship in the client.
+   * Sentry DSN, baked in at compile time from the `klardropSentryDsn` Gradle property
+   * (see `common/build.gradle.kts`). Deliberately not checked in: this repository is
+   * public and a DSN is a write-only ingest endpoint, so a committed one is free quota
+   * for anyone who scrapes GitHub. It is still recoverable from a shipped binary, so
+   * Sentry-side rate limits and inbound filters remain the real backstop.
+   *
+   * Empty in local and pull-request builds, which [initCrashReporter] treats as
+   * "crash reporting disabled".
    */
-  const val DSN = "https://examplePublicKey@o0.ingest.sentry.io/0"
+  val DSN: String = KlardropVersion.SENTRY_DSN
 
   /**
    * Only production builds report. Development churn (debug builds, hot reload, manual
@@ -105,9 +112,14 @@ internal expect val crashReporterPlatform: String
  * Starts the SDK for every target except Android, which needs an application `Context`
  * and so has its own overload in `androidMain`. Safe to call from Apple and desktop JVM
  * entry points.
+ *
+ * A no-op unless this is a production build *and* a DSN was injected at compile time.
+ * The DSN check is the load-bearing one: only the release workflows pass
+ * `klardropSentryDsn`, so a locally built or pull-request binary physically cannot
+ * report, regardless of what [isProduction] says.
  */
 fun initCrashReporter(appVersion: String, isProduction: Boolean) {
-  if (!isProduction) return
+  if (!isProduction || CrashReporterConfig.DSN.isEmpty()) return
   Sentry.init { options ->
     options.dsn = CrashReporterConfig.DSN
     options.release = appVersion

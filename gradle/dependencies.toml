@@ -17,6 +17,9 @@ dagger = "2.60.1"
 androidx-activity = "1.13.0"
 kotlinx-io = "0.9.1"
 sentry-kmp = "0.27.0"
+# Tracks the Sentry *Android Gradle* plugin, which is versioned independently of the
+# KMP SDK above and must not be pinned to it.
+sentry-android = "6.19.0"
 filekit = "0.15.0"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
@@ -90,6 +93,12 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 # into the Apple targets. Replaces Bugsnag, whose KMP SDK has no macOS artifact and
 # so forced macosMain to import the CocoaPods-generated `cocoapods.Bugsnag` cinterop.
 sentry-kmp = { id = "io.sentry.kotlin.multiplatform.gradle", version.ref = "sentry-kmp" }
+
+# Uploads the R8 mapping to Sentry so release Android stack traces deobfuscate. The
+# KMP plugin above only installs the SDK; nothing in it knows about the Android build,
+# and this is the piece that replaces com.bugsnag.android.gradle. Deliberately on 6.x:
+# AGP 9 support for the mapping upload landed in 5.12.2, and we are on AGP 9.3.1.
+sentry-android = { id = "io.sentry.android.gradle", version.ref = "sentry-android" }
 
 squareup-wire = { id = "com.squareup.wire", version = "6.4.5" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
