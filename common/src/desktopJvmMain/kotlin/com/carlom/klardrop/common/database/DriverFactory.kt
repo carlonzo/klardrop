@@ -33,6 +33,10 @@ actual class DriverFactory(private val databaseFolderPath: Path, private val dis
         migrateIfNeeded(driver, AppDatabase.Schema)
       }
 
+      // Runs for freshly-created and pre-existing files alike: `user_version` alone cannot tell a
+      // migrated-from-send_status "v2" apart from a created-after-the-rewrite "v2".
+      healSchemaDrift(driver)
+
       driver
     }
   }
