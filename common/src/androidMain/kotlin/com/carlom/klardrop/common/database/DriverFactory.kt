@@ -12,7 +12,7 @@ actual class DriverFactory(private val context: Context, private val disablePers
       openOrRecreate(
         open = { AndroidSqliteDriver(AppDatabase.Schema, context, "AppDatabase.db") },
         deleteDatabase = { context.deleteDatabase("AppDatabase.db") },
-      )
+      ).also(::healSchemaDrift)
     }
   }
 }

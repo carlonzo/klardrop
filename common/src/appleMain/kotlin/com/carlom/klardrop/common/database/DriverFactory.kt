@@ -26,7 +26,7 @@ actual class DriverFactory(private val disablePersistence: Boolean = false) {
       openOrRecreate(
         open = { NativeSqliteDriver(AppDatabase.Schema, DB_NAME) },
         deleteDatabase = { DatabaseFileContext.deleteDatabase(DB_NAME) },
-      )
+      ).also(::healSchemaDrift)
     }
   }
 }

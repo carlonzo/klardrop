@@ -98,4 +98,166 @@ class DriverMigrationTest {
 
     driver.close()
   }
+
+  /**
+   * Repro/regression for the second, nastier shape of the same bug: `1.sqm` was later deleted and
+   * re-added with a *different* body, so `user_version = 2` no longer identifies one schema.
+   *
+   * An install that ran the original `1.sqm` (`ADD COLUMN send_status`) sits at `user_version = 2`
+   * with `send_status` but no `message_id`. [migrateIfNeeded] correctly sees 2 == 2 and does
+   * nothing, so every inbound TEXT kept failing with "table messages has no column named
+   * message_id" — the accepted transfer was ACK_REJECTED back to the sender and never stored.
+   *
+   * This hand-builds that exact on-disk shape and asserts [healSchemaDrift] repairs it.
+   */
+  @Test
+  fun healSchemaDrift_repairsSendStatusEraDatabaseStuckAtVersion2() = runBlocking {
+    val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+
+    // Verbatim `sqlite_master` shape of a real install migrated by the original send_status
+    // `1.sqm`: send_status appended by ALTER, no message_id, user_version already at 2.
+    driver.execute(
+      null,
+      """
+      CREATE TABLE messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          remote_device_id TEXT NOT NULL,
+          content TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          is_sender INTEGER NOT NULL,
+          message_type TEXT NOT NULL,
+          file_transfer_id INTEGER,
+          is_read INTEGER NOT NULL DEFAULT 0,
+          mime_type TEXT NOT NULL DEFAULT 'text/plain', send_status TEXT DEFAULT NULL
+      )
+      """.trimIndent(),
+      0,
+    )
+    driver.execute(null, "PRAGMA user_version = 2", 0)
+
+    // The version check alone is a no-op here — that is precisely why the bug survived it.
+    migrateIfNeeded(driver, AppDatabase.Schema)
+    healSchemaDrift(driver)
+
+    val db = AppDatabase(driver)
+    // The write TextMessageHandler.handleIncoming performs for an accepted inbound TEXT.
+    db.messageQueries.insert(
+      remote_device_id = "device-1",
+      content = "hi",
+      timestamp = 1L,
+      is_sender = 0L,
+      message_type = "TEXT",
+      file_transfer_id = null,
+      is_read = 0L,
+      mime_type = "text/plain",
+      send_status = null,
+      message_id = null,
+    ).await()
+
+    val rows = db.messageQueries.getMessagesForDevice("device-1", 10).executeAsList()
+    assertEquals(1, rows.size, "inbound TEXT must persist after the drift repair")
+    assertEquals("hi", rows.first().content)
+
+    driver.close()
+  }
+
+  /** The repair must be a no-op on a database that already has every column. */
+  @Test
+  fun healSchemaDrift_isIdempotentOnACurrentSchema() = runBlocking {
+    val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+    AppDatabase.Schema.create(driver).await()
+
+    healSchemaDrift(driver)
+    healSchemaDrift(driver)
+
+    val db = AppDatabase(driver)
+    db.messageQueries.insert(
+      remote_device_id = "device-1",
+      content = "hi",
+      timestamp = 1L,
+      is_sender = 0L,
+      message_type = "TEXT",
+      file_transfer_id = null,
+      is_read = 0L,
+      mime_type = "text/plain",
+      send_status = null,
+      message_id = 7L,
+    ).await()
+
+    assertEquals(7L, db.messageQueries.getMessagesForDevice("device-1", 10).executeAsList().first().message_id)
+
+    driver.close()
+  }
+
+  /**
+   * Pins every `messages` shape that exists on a real install, and asserts the open path converges
+   * all of them onto the current schema.
+   *
+   * The four shapes exist because `1.sqm` was written, deleted, then re-added with a different
+   * body, so `PRAGMA user_version` does not identify a schema (see `ADDITIVE_COLUMNS`). Note rows
+   * 2 and 4 are BOTH stamped version 2 while disagreeing about `message_id` — that is why no
+   * sequential `.sqm` chain can repair this: a `2.sqm` adding `message_id` fixes row 2 and fails
+   * row 4 with "duplicate column name: message_id".
+   */
+  @Test
+  fun everyKnownOnDiskShapeConvergesToTheCurrentSchema() = runBlocking {
+    data class Shape(val label: String, val version: Int, val extraColumns: String)
+
+    val shapes = listOf(
+      // Created before the send_status release, never upgraded.
+      Shape("v1, neither column", 1, ""),
+      // Upgraded by the send_status release's 1.sqm. This is the shape that was failing.
+      Shape("v2, send_status only", 2, ", send_status TEXT DEFAULT NULL"),
+      // Created fresh while 1.sqm was deleted: send_status inline in CREATE TABLE, version back to 1.
+      Shape("v1, send_status only", 1, ", send_status TEXT DEFAULT NULL"),
+      // Created fresh after 1.sqm was re-added with the message_id body.
+      Shape("v2, both columns", 2, ", send_status TEXT DEFAULT NULL, message_id INTEGER"),
+    )
+
+    for (shape in shapes) {
+      val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+      driver.execute(
+        null,
+        """
+        CREATE TABLE messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            remote_device_id TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            is_sender INTEGER NOT NULL,
+            message_type TEXT NOT NULL,
+            file_transfer_id INTEGER,
+            is_read INTEGER NOT NULL DEFAULT 0,
+            mime_type TEXT NOT NULL DEFAULT 'text/plain'${shape.extraColumns}
+        )
+        """.trimIndent(),
+        0,
+      )
+      driver.execute(null, "PRAGMA user_version = ${shape.version}", 0)
+
+      // Exactly what DriverFactory (desktopJvm) does for a database file that already existed.
+      migrateIfNeeded(driver, AppDatabase.Schema)
+      healSchemaDrift(driver)
+
+      val db = AppDatabase(driver)
+      db.messageQueries.insert(
+        remote_device_id = "device-1",
+        content = "hi",
+        timestamp = 1L,
+        is_sender = 0L,
+        message_type = "TEXT",
+        file_transfer_id = null,
+        is_read = 0L,
+        mime_type = "text/plain",
+        send_status = "SENDING",
+        message_id = 5L,
+      ).await()
+
+      val row = db.messageQueries.getMessagesForDevice("device-1", 10).executeAsList().single()
+      assertEquals(5L, row.message_id, "message_id must round-trip after repairing '${shape.label}'")
+      assertEquals("SENDING", row.send_status, "send_status must round-trip after repairing '${shape.label}'")
+
+      driver.close()
+    }
+  }
 }
