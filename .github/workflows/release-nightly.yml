@@ -153,7 +153,7 @@ jobs:
           # whose sibling jobs hold the Apple signing identity and the Play credentials.
           # INSTALL_DIR keeps it out of /usr/local/bin (no sudo, and no "already installed"
           # abort if a future runner image ships one).
-          curl -sL https://sentry.io/get-cli/ \
+          curl -fsSL https://sentry.io/get-cli/ \
             | INSTALL_DIR="$RUNNER_TEMP/sentry-cli" SENTRY_CLI_VERSION=3.6.2 bash
           export PATH="$RUNNER_TEMP/sentry-cli:$PATH"
 
@@ -989,7 +989,7 @@ jobs:
           fi
 
           # Pinned for the same supply-chain reason as in `sentry-release` above.
-          curl -sL https://sentry.io/get-cli/ \
+          curl -fsSL https://sentry.io/get-cli/ \
             | INSTALL_DIR="$RUNNER_TEMP/sentry-cli" SENTRY_CLI_VERSION=3.6.2 bash
           export PATH="$RUNNER_TEMP/sentry-cli:$PATH"
 
