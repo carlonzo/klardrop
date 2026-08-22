@@ -12,7 +12,7 @@ class TransferStatsTest {
   }
 
   @Test
-  fun `rate and eta are measured from the window start, not from zero`() {
+  fun `rate and eta are measured from the window start rather than from zero`() {
     // 4 MB moved in the 4s since the window anchored at 1 MB → 1 MB/s, 6 MB left → 6s.
     val stats = transferStatsOrNull(
       bytes = 5L * 1024 * 1024,

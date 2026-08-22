@@ -79,7 +79,7 @@ class BulkCipherTest {
   }
 
   @Test
-  fun `a stranger's key cannot open our frames`() = runTest {
+  fun `a key from another session cannot open our frames`() = runTest {
     val (sender, _) = pair(119)
     val stranger = BulkCipher.fromSessionKeys(Random(9).nextBytes(32), Random(10).nextBytes(32))
 
