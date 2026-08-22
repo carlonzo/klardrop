@@ -10,7 +10,6 @@ Pod::Spec.new do |spec|
     spec.libraries                = 'c++'
     spec.ios.deployment_target    = '17.0'
     spec.osx.deployment_target    = '14.0'
-    spec.dependency 'Bugsnag', '~> 6.0'
     if !Dir.exist?('build/cocoapods/framework/klardrop_common.framework') || Dir.empty?('build/cocoapods/framework/klardrop_common.framework')
         raise "
         Kotlin framework 'klardrop_common' doesn't exist yet, so a proper Xcode project can't be generated.

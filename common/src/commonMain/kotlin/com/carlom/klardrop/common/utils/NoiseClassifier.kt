@@ -2,12 +2,12 @@ package com.carlom.klardrop.common.utils
 
 /**
  * Classifies exceptions that are part of the protocol's normal life cycle and should
- * not be reported to Bugsnag. Two contributors converge here so both stay in lockstep:
+ * not be reported to Sentry. Two contributors converge here so both stay in lockstep:
  *
  *  1. Call sites that *expect* a network-shaped failure (peer dial failed, peer closed
  *     mid-read, BLE disconnect during handshake) call [logLocal] directly — no
  *     classifier check needed.
- *  2. The catch-all `CoroutineExceptionHandler` and the platform Bugsnag onError /
+ *  2. The catch-all `CoroutineExceptionHandler` and the platform crash-reporter hooks /
  *     callback hook use this predicate as a last-line filter for anything that slipped
  *     through and was about to be uploaded.
  *
@@ -18,7 +18,7 @@ package com.carlom.klardrop.common.utils
  */
 fun Throwable.isExpectedNetworkNoise(): Boolean {
   // Walk the cause chain — Ktor wraps lower-level IOException in ClosedByteChannelException
-  // and Bugsnag's grouping latches onto whichever frame is closest to user code.
+  // and event grouping latches onto whichever frame is closest to user code.
   var current: Throwable? = this
   var depth = 0
   while (current != null && depth < 8) {
@@ -34,7 +34,7 @@ private fun Throwable.matchesKnownNoise(): Boolean {
   val msg = message.orEmpty()
   return when (name) {
     // Coroutine cancelled because the parent scope/connection closed — expected lifecycle,
-    // not a product bug. Bugsnag was flooded with "StandaloneCoroutine was cancelled"
+    // not a product bug. The dashboard was flooded with "StandaloneCoroutine was cancelled"
     // (ConnectionMessenger read loop after heartbeat close / explicit close).
     "CancellationException",
     "JobCancellationException" -> true

@@ -112,7 +112,7 @@ object FileTypeUtils {
     return mimeTypes[extension] ?: run {
       // Falling back to octet-stream is harmless — receivers detect by magic
       // bytes when this matters. Worth a local log so we can grow the map over
-      // time, but not worth a Bugsnag event.
+      // time, but not worth a Sentry event.
       nativeLogger("FileTypeUtils", "Unknown mime type for extension $extension; using $DEFAULT_MIME_TYPE")
       DEFAULT_MIME_TYPE
     }

@@ -13,7 +13,7 @@
 -keepattributes RuntimeVisibleAnnotations,AnnotationDefault,InnerClasses,Signature,*Annotation*
 
 # Synthetic enum members — Class.getEnumConstants() returns null without these,
-# which breaks kotlinx.serialization enum descriptors and Bugsnag's serializer init.
+# which breaks kotlinx.serialization enum descriptors and Sentry's serializer init.
 -keepclassmembers,allowoptimization enum * {
     public static **[] values();
     public static ** valueOf(java.lang.String);
@@ -71,18 +71,16 @@
 -dontwarn org.bouncycastle.**
 
 # -------------------------------------------------------------------------
-# Bugsnag crash reporter + its bundled Jackson serializer (enum constants read
-# via getEnumConstants() at init).
+# Sentry crash reporter (replaced Bugsnag + its bundled Jackson serializer).
+# The sentry-android AAR ships consumer rules that AGP applies automatically, so the
+# keeps live there rather than here. These only silence unresolved references to
+# sentry-java's optional integrations, which we do not bundle.
 # -------------------------------------------------------------------------
--keep class com.bugsnag.** { *; }
--keep class com.fasterxml.jackson.** { *; }
--keepclassmembers enum com.fasterxml.jackson.** { *; }
--dontwarn com.bugsnag.**
--dontwarn com.fasterxml.jackson.**
+-dontwarn io.sentry.**
 -dontwarn org.slf4j.**
 
 # Strip debug/verbose/info logging in release (R8 optimize removes these calls).
-# Log.e / Log.w are kept so error reporting and Bugsnag stay intact.
+# Log.e / Log.w are kept so error reporting and Sentry stay intact.
 -assumenosideeffects class android.util.Log {
     public static int d(...);
     public static int v(...);

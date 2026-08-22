@@ -11,7 +11,8 @@
 # Keep annotations + generic signatures used reflectively at runtime.
 -keepattributes RuntimeVisibleAnnotations,AnnotationDefault,InnerClasses,Signature,*Annotation*
 
-# Disable ProGuard's OPTIMIZATION pass (shrinking + obfuscation still run).
+# Disable ProGuard's OPTIMIZATION pass (shrinking still runs; obfuscation is
+# turned off separately just below).
 # Its optimizer emits invalid bytecode for this codebase in at least two
 # unrelated places — kotlinx.coroutines JobSupport ("VerifyError: Bad
 # invokespecial ... indirect superinterface") and Compose's Skia text
@@ -21,9 +22,33 @@
 # for a release that actually runs.
 -dontoptimize
 
+# Disable OBFUSCATION too, so desktop crash reports are readable in Sentry. Shrinking
+# still runs — this only stops name mangling, and it also stops ProGuard stripping the
+# SourceFile/LineNumberTable attributes (attribute removal is part of the obfuscation
+# step, and the -keepattributes above does not ask for them). So release frames arrive
+# as real class/method names WITH file and line, instead of a.b.c.d(Unknown Source).
+#
+# Sentry can deobfuscate a plain JVM app — this is not the Android-only path it looks
+# like. io.sentry.SentryOptions.setProguardUuid lives in the core `sentry` artifact
+# (also settable as `sentry.proguard-uuid` or SENTRY_PROGUARD_UUID, or via an
+# io.sentry.ProguardUuids entry in a sentry-debug-meta.properties resource), core's
+# MainEventProcessor emits the matching debug_meta image of type "proguard" on every
+# event, and the server keys symbolication off platform "java" — which is exactly what
+# sentry-java stamps here. The reason we don't use it is cost, not capability: it would
+# mean teaching the release pipeline to run `sentry-cli proguard uuid` +
+# `upload-proguard` for the mapping of each distribution and bake that UUID into the
+# packaged app — and the desktop distributions are host-locked, so that is three
+# artifacts on three runners to keep in sync for every release.
+#
+# Not obfuscating buys the same result for free. The trade is cheap here for the same
+# reasons as -dontoptimize above: this repo is public, so obfuscation hides nothing
+# that isn't already on GitHub, and the distribution bundles its own JRE, so real names
+# are a rounding error next to the runtime we already ship.
+-dontobfuscate
+
 # Keep the synthetic enum members. Without this ProGuard strips values()/$VALUES,
 # so Class.getEnumConstants() returns null at runtime — which crashes anything
-# that reflects over enums (e.g. Bugsnag's serializer init, kotlinx.serialization
+# that reflects over enums (e.g. Sentry's serializer init, kotlinx.serialization
 # enum descriptors). Canonical ProGuard enum rule.
 -keepclassmembers,allowoptimization enum * {
     public static **[] values();
@@ -115,16 +140,21 @@
 -dontwarn org.bouncycastle.**
 
 # -------------------------------------------------------------------------
-# Bugsnag crash reporter + its bundled Jackson serializer + SLF4J.
-# Jackson's config enums are read via getEnumConstants() at <clinit>; if shrinking
-# drops their constants that returns null and Bugsnag init throws on app startup.
-# Keep Jackson (and its enums) wholesale — it's only the crash reporter's dep.
+# Sentry crash reporter (replaced Bugsnag + its bundled Jackson serializer).
+#
+# sentry-java resolves its integrations, transport and JSON (de)serializers by name at
+# init, so shrinking them produces a ClassNotFoundException on the first Sentry.init.
+# Unlike Android — where AGP applies the Sentry AAR's own consumer rules automatically —
+# the Compose Desktop proguard task reads only this file, so the keeps are manual.
+#
+# The -dontwarn list covers sentry-java's optional integrations (Spring, logback, JUL,
+# OpenTelemetry, GraphQL). They are compile-time references to artifacts we do not
+# bundle, and without this the whole minified build aborts on unresolved references —
+# the same failure mode as the BouncyCastle block above.
 # -------------------------------------------------------------------------
--keep class com.bugsnag.** { *; }
--keep class com.fasterxml.jackson.** { *; }
--keepclassmembers enum com.fasterxml.jackson.** { *; }
--dontwarn com.bugsnag.**
--dontwarn com.fasterxml.jackson.**
+-keep class io.sentry.** { *; }
+-keepclassmembers enum io.sentry.** { *; }
+-dontwarn io.sentry.**
 -dontwarn org.slf4j.**
 
 # -------------------------------------------------------------------------

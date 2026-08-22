@@ -48,3 +48,63 @@ internal fun migrateIfNeeded(driver: SqlDriver, schema: SqlSchema<QueryResult.Va
         driver.execute(null, "PRAGMA user_version = ${schema.version}", 0)
     }
 }
+
+/**
+ * A column that some release added to an already-existing table via `ALTER TABLE ... ADD COLUMN`.
+ *
+ * [type] is the column's full definition suffix (type plus any default), i.e. everything after the
+ * name in the `ADD COLUMN` clause. Only ever additive and nullable/defaulted — SQLite can add such
+ * a column to a populated table in place.
+ */
+private data class AdditiveColumn(val table: String, val name: String, val type: String)
+
+/**
+ * Every column added to an existing table over this database's lifetime, in the order it was added.
+ *
+ * These are re-asserted on open (see [healSchemaDrift]) instead of being trusted to `user_version`
+ * alone, because `user_version` has already proven ambiguous here: `1.sqm` originally read
+ * `ALTER TABLE messages ADD COLUMN send_status ...`, was later deleted, then re-added with a
+ * completely different body (`ADD COLUMN message_id INTEGER`). Both bodies stamp the database
+ * `user_version = 2`, so two mutually incompatible "v2" schemas exist on real installs:
+ *
+ *  - installs that ran the send_status migration have `send_status` but no `message_id`
+ *  - installs created after the rewrite have `message_id` (from `Message.sq`'s CREATE TABLE)
+ *
+ * A version-only check sees "2 == 2, nothing to do" for both and leaves the first kind missing
+ * `message_id` forever — every inbound and outbound TEXT then fails with
+ * "table messages has no column named message_id". Keep appending to this list whenever a `.sqm`
+ * adds a column; never rewrite an existing entry.
+ */
+private val ADDITIVE_COLUMNS = listOf(
+    AdditiveColumn("messages", "send_status", "TEXT DEFAULT NULL"),
+    AdditiveColumn("messages", "message_id", "INTEGER"),
+)
+
+/** Column names of [table], or an empty set if the table does not exist yet. */
+private fun columnsOf(driver: SqlDriver, table: String): Set<String> =
+    driver.executeQuery(null, "PRAGMA table_info($table)", { cursor ->
+        val names = mutableSetOf<String>()
+        while (cursor.next().value) {
+            cursor.getString(1)?.let(names::add)
+        }
+        QueryResult.Value(names)
+    }, 0).value
+
+/**
+ * Re-asserts every [ADDITIVE_COLUMNS] entry against the open database, adding any the on-disk
+ * schema is missing.
+ *
+ * Idempotent and cheap (one `PRAGMA table_info` per table), so it runs on every open of a
+ * persistent database on every platform — the `user_version` ambiguity described on
+ * [ADDITIVE_COLUMNS] affects Android and iOS installs exactly as it does desktop ones, even though
+ * their drivers run `.sqm` migrations automatically.
+ */
+internal fun healSchemaDrift(driver: SqlDriver) {
+    for (table in ADDITIVE_COLUMNS.map { it.table }.distinct()) {
+        val existing = columnsOf(driver, table)
+        if (existing.isEmpty()) continue // table not created yet; CREATE TABLE already has the column
+        ADDITIVE_COLUMNS
+            .filter { it.table == table && it.name !in existing }
+            .forEach { driver.execute(null, "ALTER TABLE ${it.table} ADD COLUMN ${it.name} ${it.type}", 0) }
+    }
+}

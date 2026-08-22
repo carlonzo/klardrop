@@ -6,6 +6,7 @@ import kotlinx.io.files.FileSystem
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.files.SystemTemporaryDirectory
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -17,11 +18,24 @@ class FileManagerTest {
 
   private val testFileSystem = SystemFileSystem
 
+  /**
+   * A directory unique to this test invocation, under the system temp dir.
+   *
+   * These used to be fixed names ("test-file-manager", "test-security-dot", ...). `commonTest`
+   * is compiled into several targets, and Gradle runs `:klardrop-common:testAndroid` and
+   * `:klardrop-common:desktopJvmTest` concurrently on one machine — so a fixed name is shared
+   * state between two live JVMs. One target's setup or `finally` cleanup would delete the
+   * directory the other was still writing into, surfacing as a FileNotFoundException on
+   * /tmp/test-security-dot with no relation to the assertion under test.
+   */
+  private fun uniqueRoot(label: String): Path =
+    Path(SystemTemporaryDirectory, "klardrop-$label-${Random.nextLong().toString(16)}")
+
 
   @Test
   fun returnsRequestedNameWhenNoCollision() {
     val fileName = "image.jpg"
-    val root = Path(SystemTemporaryDirectory, "test-file-manager")
+    val root = uniqueRoot("test-file-manager")
 
     testFileSystem.deleteRecursively(path = root, mustExist = false)
 
@@ -40,7 +54,7 @@ class FileManagerTest {
   @Test
   fun appendsCounterBeforeExtensionOnCollision() {
     val fileName = "dog.jpeg"
-    val root = Path(SystemTemporaryDirectory, "test-file-manager")
+    val root = uniqueRoot("test-file-manager")
 
     // ensure folder does not exist
     testFileSystem.deleteRecursively(path = root, mustExist = false)
@@ -66,7 +80,7 @@ class FileManagerTest {
   @Test
   fun appendsCounterForFileWithoutExtension() {
     val fileName = "README"
-    val root = Path(SystemTemporaryDirectory, "test-file-manager")
+    val root = uniqueRoot("test-file-manager")
 
     testFileSystem.deleteRecursively(path = root, mustExist = false)
 
@@ -153,7 +167,7 @@ class FileManagerTest {
 
   @Test
   fun getAvailableFilePath_traversalFileNameStaysInsideParent() {
-    val root = Path(SystemTemporaryDirectory, "test-security-traversal")
+    val root = uniqueRoot("test-security-traversal")
     testFileSystem.deleteRecursively(path = root, mustExist = false)
     try {
       testFileSystem.createDirectories(root, mustCreate = true)
@@ -177,7 +191,7 @@ class FileManagerTest {
 
   @Test
   fun getAvailableFilePath_embeddedSeparatorsStayInsideParent() {
-    val root = Path(SystemTemporaryDirectory, "test-security-embedded")
+    val root = uniqueRoot("test-security-embedded")
     testFileSystem.deleteRecursively(path = root, mustExist = false)
     try {
       testFileSystem.createDirectories(root, mustCreate = true)
@@ -197,7 +211,7 @@ class FileManagerTest {
 
   @Test
   fun getAvailableFilePath_dotNameFallsBackToSafeName() {
-    val root = Path(SystemTemporaryDirectory, "test-security-dot")
+    val root = uniqueRoot("test-security-dot")
     testFileSystem.deleteRecursively(path = root, mustExist = false)
     try {
       testFileSystem.createDirectories(root, mustCreate = true)
@@ -217,7 +231,7 @@ class FileManagerTest {
 
   @Test
   fun getAvailableFilePath_emptyNameFallsBackToSafeName() {
-    val root = Path(SystemTemporaryDirectory, "test-security-empty")
+    val root = uniqueRoot("test-security-empty")
     testFileSystem.deleteRecursively(path = root, mustExist = false)
     try {
       testFileSystem.createDirectories(root, mustCreate = true)
@@ -237,7 +251,7 @@ class FileManagerTest {
 
   @Test
   fun getAvailableFilePath_windowsBackslashTraversalStaysInsideParent() {
-    val root = Path(SystemTemporaryDirectory, "test-security-backslash")
+    val root = uniqueRoot("test-security-backslash")
     testFileSystem.deleteRecursively(path = root, mustExist = false)
     try {
       testFileSystem.createDirectories(root, mustCreate = true)
@@ -258,7 +272,7 @@ class FileManagerTest {
   @Test
   fun getAvailableFilePath_sanitisedNamePreservesDeduplication() {
     // Even after sanitisation, the collision-counter logic must still work
-    val root = Path(SystemTemporaryDirectory, "test-security-dedup")
+    val root = uniqueRoot("test-security-dedup")
     testFileSystem.deleteRecursively(path = root, mustExist = false)
     try {
       testFileSystem.createDirectories(root, mustCreate = true)

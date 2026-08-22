@@ -1,8 +1,11 @@
 [versions]
 agp = "9.3.1"
-# Pinned to 2.3.21 (not main's 2.4.0): SKIE 0.10.12 — the latest — does not yet
-# support Kotlin 2.4.0 and rejects it at Gradle configuration time. Bump back once
-# SKIE ships 2.4.0 support, or once SKIE is removed in favor of native swift-export.
+# Capped at 2.4.10 by SKIE: 0.10.14 — the latest — supports Kotlin 2.0.0 through
+# 2.4.10 and rejects anything newer at Gradle configuration time. Swift export gained
+# sealed-class support in 2.4.20-RC, which covers the last SKIE feature we depend on,
+# so the cap lifts once :presentation moves from the Obj-C export to swift-export.
+# That migration needs direct integration (swift-export does not support CocoaPods),
+# which is what the Sentry swap below unblocks.
 kotlin = "2.4.10"
 coroutines = "1.11.0"
 serialization = "1.11.0"
@@ -13,9 +16,10 @@ datastore = "1.2.1"
 dagger = "2.60.1"
 androidx-activity = "1.13.0"
 kotlinx-io = "0.9.1"
-bugsnag-kmp = "1.0.0"
-bugsnag-android = "6.26.1"
-bugsnag-jvm = "4.0.1"
+sentry-kmp = "0.27.0"
+# Tracks the Sentry *Android Gradle* plugin, which is versioned independently of the
+# KMP SDK above and must not be pinned to it.
+sentry-android = "6.19.0"
 filekit = "0.15.0"
 composenativetray = "2.1.0"
 sqldelight = "2.3.2"
@@ -55,9 +59,6 @@ jna = { module = "net.java.dev.jna:jna", version = "5.19.1" }
 jna-platform = { module = "net.java.dev.jna:jna-platform", version = "5.19.1" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.1" }
-bugsnag-kmp = { module = "com.bugsnag:bugsnag-kmp", version.ref = "bugsnag-kmp" }
-bugsnag-android = { module = "com.bugsnag:bugsnag-android", version.ref = "bugsnag-android" }
-bugsnag-jvm = { module = "com.bugsnag:bugsnag", version.ref = "bugsnag-jvm" }
 filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekit" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
 nucleus-composenativetray = { module = "dev.nucleusframework:composenativetray", version.ref = "composenativetray" }
@@ -90,6 +91,17 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "jetbrains-compose" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
-squareup-wire = { id = "com.squareup.wire", version = "6.4.5" }
+# Installs the Sentry KMP SDK into commonMain and wires the sentry-cocoa framework
+# into the Apple targets. Replaces Bugsnag, whose KMP SDK has no macOS artifact and
+# so forced macosMain to import the CocoaPods-generated `cocoapods.Bugsnag` cinterop.
+sentry-kmp = { id = "io.sentry.kotlin.multiplatform.gradle", version.ref = "sentry-kmp" }
+
+# Uploads the R8 mapping to Sentry so release Android stack traces deobfuscate. The
+# KMP plugin above only installs the SDK; nothing in it knows about the Android build,
+# and this is the piece that replaces com.bugsnag.android.gradle. Deliberately on 6.x:
+# AGP 9 support for the mapping upload landed in 5.12.2, and we are on AGP 9.3.1.
+sentry-android = { id = "io.sentry.android.gradle", version.ref = "sentry-android" }
+
+squareup-wire = { id = "com.squareup.wire", version = "6.4.6" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
 ksp = { id = "com.google.devtools.ksp", version = "2.3.11" }
