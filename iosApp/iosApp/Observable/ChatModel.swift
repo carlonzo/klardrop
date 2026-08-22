@@ -22,13 +22,28 @@ import presentation
 // Swift (SKIE renames to avoid Swift keyword conflict).
 // ---------------------------------------------------------------------------
 
+/// Kotlin default arguments do not survive the Obj-C export, so Swift has to name every field of
+/// `ChatUiState` — which means each new field breaks every construction site here. One factory
+/// keeps that to a single line. File-scope rather than a static member so it resolves the same
+/// inside the `@Observable` macro expansion as it does in the stored-property initialiser.
+private func emptyChatUiState() -> ChatUiState {
+    ChatUiState(
+        error: nil,
+        notice: nil,
+        fileTransferProgress: nil,
+        fileTransferActive: false,
+        fileTransferStatusText: nil,
+        transferStats: nil
+    )
+}
+
 @Observable @MainActor
 final class ChatModel {
 
     // MARK: - Observable state
 
     private(set) var messages: [ChatMessage] = []
-    private(set) var uiState: ChatUiState = ChatUiState(error: nil, notice: nil, fileTransferProgress: nil, fileTransferActive: false, fileTransferStatusText: nil)
+    private(set) var uiState: ChatUiState = emptyChatUiState()
     private(set) var pendingAuth: ReceiveMessageUpdate? = nil
     private(set) var reachability: Reachability = ReachabilityUnknown()
 
@@ -72,7 +87,7 @@ final class ChatModel {
         vmStorage = vm
 
         // Seed from current StateFlow values now that the VM exists (one-time).
-        uiState = vm.uiState.value as? ChatUiState ?? ChatUiState(error: nil, notice: nil, fileTransferProgress: nil, fileTransferActive: false, fileTransferStatusText: nil)
+        uiState = vm.uiState.value as? ChatUiState ?? emptyChatUiState()
         reachability = vm.reachability.value as? Reachability ?? ReachabilityUnknown()
         pendingAuth = vm.pendingAuth.value as? ReceiveMessageUpdate
         // Cast to [ChatMessage] — the repo returns ChatMessage, not the raw Messages row.
