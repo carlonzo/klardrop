@@ -47,7 +47,10 @@ compose.desktop {
     mainClass = "MainKt"
     nativeDistributions {
       targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-      packageName = "klardrop"
+      // Local builds install under their own name so a dev build and an installed release can
+      // coexist, the same way the Android debug variant does via its applicationId suffix.
+      // CI always passes klardrop.version, so only developer machines get the suffix.
+      packageName = if (providers.gradleProperty("klardrop.version").isPresent) "klardrop" else "klardrop-debug"
       // jpackage requires a strictly numeric x.y.z. Stable passes the tag directly via
       // klardrop.version. Nightly's version is a pre-release semver (1.0.1-nightly.N) that
       // jpackage rejects, so nightly passes the numeric base separately as

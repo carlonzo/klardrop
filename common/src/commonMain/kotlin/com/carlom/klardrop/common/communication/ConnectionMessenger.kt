@@ -100,6 +100,16 @@ class ConnectionMessenger internal constructor(
   //   - outgoing send (file/text payload, via MessagesRouter.onSendingMessage)
   //   - incoming-message reply (PONG, ACK_READY, ACK_RECEIVED, via MessagesRouter.onMessageIncoming)
   // All three honor this single mutex; the router takes it as a parameter.
+  /**
+   * Whether this link's UKEY2 handshake bound the peer to their stored identity. Fixed at connect
+   * time — pairing afterwards does NOT upgrade it, which is why [Messenger] recycles a connection
+   * that has gone stale against the trust store.
+   */
+  val isLinkAuthenticated: Boolean get() = cipher.authenticated
+
+  /** Whether this link is encrypted at all (false for cleartext/BLE), i.e. whether it *could* authenticate. */
+  val isLinkEncrypted: Boolean get() = cipher !is FrameCipher.Plain
+
   private val writeLock = Mutex()
 
   init {

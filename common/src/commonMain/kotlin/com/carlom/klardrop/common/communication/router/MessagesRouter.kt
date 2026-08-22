@@ -21,6 +21,7 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.communication.readMessage
+import com.carlom.klardrop.common.communication.sendBulkChunk
 import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.trust.TrustManager
@@ -581,7 +582,7 @@ internal class MessagesRouterImpl(
         fromDeviceId,
         receiveFlow,
         verifyChunkMac,
-        linkAuthenticated = cipher.authenticated,
+        linkEncrypted = cipher.bulk != null,
         transferAnchor = transferAnchor,
         transferAnchorId = anchorId,
       )
@@ -733,6 +734,28 @@ internal class MessagesRouterImpl(
             )
           }
         }
+        // On an encrypted link the chunk bodies skip the D2D envelope entirely — that envelope
+        // allocated 13.8x the payload per chunk and was the whole reason transfers were pinned to
+        // one GC-bound core. See [BulkCipher].
+// Offered for ANY encrypted session, not just an authenticated one. The binding
+        // constraint is not identity — it is whether the receiver will demand a per-chunk HMAC,
+        // and it only does that when a persisted pair secret exists. Unpaired peers have no such
+        // secret on either side, so nothing is lost by skipping a MAC they were never going to
+        // check; the AEAD tag still gives integrity against everyone outside the session, which
+        // is the same guarantee the D2D envelope gave them. [handleOutgoingChunked] makes the
+        // final call via `canMacChunks` — it is the side that knows. Cleartext/BLE links have no
+        // bulk cipher at all and keep the old envelope plus its content hash.
+        val bulk = cipher.bulk
+        // Once per transfer, not per chunk: without it a fast transfer is indistinguishable from
+        // one that was fast for some other reason, and this gate is easy to fall off.
+        log("MessagesRouter", "File send to $toDeviceId: bulk cipher ${if (bulk != null) "available" else "unavailable"} (authenticated=${cipher.authenticated})")
+        val sendChunkRaw: (suspend (Int, ByteArray, Int, Boolean) -> Unit)? = bulk?.let {
+          { seq, body, bodyLength, isLast ->
+            writeLock.withLock {
+              writeChannel.sendBulkChunk(it, message.id, seq, isLast, body, bodyLength)
+            }
+          }
+        }
         fileMessageHandler.handleOutgoingChunked(
           toDeviceId = toDeviceId,
           request = fileRequest,
@@ -741,6 +764,7 @@ internal class MessagesRouterImpl(
           awaitReady = awaitReadyAck,
           chunkMacFn = chunkMacFn,
           linkAuthenticated = cipher.authenticated,
+          sendChunkRaw = sendChunkRaw,
         )
         return@ioDispatcher
       }

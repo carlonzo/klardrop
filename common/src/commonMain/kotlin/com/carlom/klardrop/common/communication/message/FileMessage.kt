@@ -187,12 +187,13 @@ class FileReceivePipeline internal constructor(
    */
   private val verifyChunkMac: (suspend (chunk: FileChunkMessage) -> Boolean)? = null,
   /**
-   * True when this connection is an authenticated-encrypted (UKEY2/AEAD) link. The sender
-   * legitimately omits both the per-chunk MAC and the header's content hash in that case
-   * (the transport already authenticates every frame), so "no MAC and no contentHash" is
-   * expected rather than a downgrade worth warning about.
+   * True when this connection is encrypted (UKEY2/AEAD), whether or not it is also bound to the
+   * peer's identity. The sender legitimately omits both the per-chunk MAC and the header's content
+   * hash on such a link — every frame is already AEAD-tagged, by the D2D envelope or by the bulk
+   * frame — so "no MAC and no contentHash" is expected there rather than a downgrade worth warning
+   * about. Identity binding is a separate question and is not what this guards.
    */
-  private val linkAuthenticated: Boolean = false,
+  private val linkEncrypted: Boolean = false,
   /**
    * Keeps the process alive and the device awake until this receive reaches a terminal state.
    * The router [TransferAnchor.begin]s it when the header arrives (so the window where the user
@@ -243,8 +244,11 @@ class FileReceivePipeline internal constructor(
         )
         return
       }
-    } else {
-      // No-MAC mode: fall back to accumulating SHA-256 for the content-hash check at end.
+    } else if (header.contentHash != null) {
+      // No-MAC mode WITH a digest to check: accumulate so complete() can verify it. Guarded on
+      // contentHash because the sender omits it whenever the transport already authenticates the
+      // body (AEAD envelope or bulk frame) — hashing then would be a full extra SHA-256 pass over
+      // the file whose result nothing ever reads, which on the receive side is pure throughput lost.
       hashAccumulator.update(chunk.data, 0, chunk.data.size)
     }
     sink.write(chunk.data, 0, chunk.data.size)
@@ -259,7 +263,13 @@ class FileReceivePipeline internal constructor(
       lastEmitTime = now
       lastEmitPercent = progressValue
       receiveFlow.update {
-        it.copy(status = ReceiveMessageStatus.Progress(listOf(header to progressValue)))
+        it.copy(
+          status = ReceiveMessageStatus.Progress(
+            messages = listOf(header to progressValue),
+            bytesTransferred = totalReceived,
+            totalBytes = header.fileSize,
+          ),
+        )
       }
       // Same throttle as the UI flow: on Android this drives a notification rebuild, which is far
       // too expensive to do per 256 KB chunk.
@@ -335,10 +345,14 @@ class FileReceivePipeline internal constructor(
           }
           return false
         }
-      } else if (!linkAuthenticated) {
+      } else if (!linkEncrypted) {
+        // Only a genuinely cleartext link (BLE, legacy peer) is unprotected here. On an encrypted
+        // link every frame carried an AEAD tag — the D2D envelope's or the bulk frame's — so
+        // "no integrity check" would be a false alarm, and a security warning that cries wolf on
+        // the common path is worse than no warning.
         log(
           "FileReceivePipeline",
-          "WARN: no MAC and no contentHash for ${header.fileName} from $fromDeviceId — accepting without integrity check (legacy or untrusted)",
+          "WARN: no MAC and no contentHash for ${header.fileName} from $fromDeviceId — accepting without integrity check (cleartext link)",
         )
       }
     }
@@ -417,8 +431,8 @@ class FileMessageHandler(
     fromDeviceId: String,
     receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
     verifyChunkMac: (suspend (chunk: FileChunkMessage) -> Boolean)? = null,
-    /** See [FileReceivePipeline.linkAuthenticated]. */
-    linkAuthenticated: Boolean = false,
+    /** See [FileReceivePipeline.linkEncrypted]. */
+    linkEncrypted: Boolean = false,
     /**
      * Anchor the router already opened for this receive, handed to the returned pipeline so it
      * can release it on completion or failure. Defaults to a no-op for direct unit-test calls.
@@ -455,7 +469,13 @@ class FileMessageHandler(
     )
 
     receiveFlow.update {
-      it.copy(status = ReceiveMessageStatus.Progress(listOf(header to 0)))
+      it.copy(
+        status = ReceiveMessageStatus.Progress(
+          messages = listOf(header to 0),
+          bytesTransferred = 0,
+          totalBytes = header.fileSize,
+        ),
+      )
     }
 
     return FileReceivePipeline(
@@ -468,7 +488,7 @@ class FileMessageHandler(
       clock = clock,
       crypto = crypto,
       verifyChunkMac = verifyChunkMac,
-      linkAuthenticated = linkAuthenticated,
+      linkEncrypted = linkEncrypted,
       transferAnchor = transferAnchor,
       transferAnchorId = transferAnchorId,
     )
@@ -537,6 +557,13 @@ class FileMessageHandler(
      * with no bytes on the wire — and the UI with a motionless bar — for minutes.
      */
     linkAuthenticated: Boolean = false,
+    /**
+     * Bulk fast path for chunk bodies, supplied by the router when the link has a
+     * [com.carlom.klardrop.common.communication.BulkCipher]. When present, bodies go straight
+     * from the read buffer to an AES-GCM frame — no [FileChunkMessage], no protobuf, no copy of
+     * the buffer. Null falls back to [sendFramed] and the ordinary message envelope.
+     */
+    sendChunkRaw: (suspend (seq: Int, body: ByteArray, bodyLength: Int, isLast: Boolean) -> Unit)? = null,
   ) {
     val fileTransferId = messageRepository.insertFileTransfer(
       fileName = request.message.fileName,
@@ -556,7 +583,7 @@ class FileMessageHandler(
     )
 
     coroutines.ioDispatcher.invoke {
-      progressFlow.emit(MessengerSendProgress.InProgress(0))
+      progressFlow.emit(MessengerSendProgress.InProgress(0, 0, request.message.fileSize))
 
       val buffer = ByteArray(FILE_CHUNK_SIZE)
       var totalSent = 0L
@@ -574,12 +601,21 @@ class FileMessageHandler(
         FileChunkMessage(fileMessageId = request.message.id, seq = -1, data = ByteArray(0), isLast = false),
       ) != null
 
+      // The bulk path carries no HMAC field, so it is only usable when we were not going to
+      // send per-chunk MACs anyway. `canMacChunks` is exactly that test, and it is symmetric:
+      // it is false precisely when no pair secret exists, which is also when the RECEIVER will
+      // not demand one. Paired-but-unauthenticated links keep the old envelope and its MACs.
+      val useBulk = sendChunkRaw != null && !canMacChunks
+      log("FileMessageHandler", "bulk chunk path ${if (useBulk) "ENGAGED" else "OFF"} (canMacChunks=$canMacChunks, linkAuthenticated=$linkAuthenticated)")
+
       val outgoingHeader = when {
         // Per-chunk MAC covers every byte as it arrives — no whole-file digest needed.
         canMacChunks -> request.message
-        // AEAD transport authenticates every frame — likewise redundant, and skipping it
-        // avoids a full extra read pass before the first byte reaches the wire.
-        linkAuthenticated -> request.message
+        // AEAD authenticates every frame end-to-end, so a whole-file digest is redundant —
+        // whether that AEAD is the D2D envelope (linkAuthenticated) or the bulk frame's own tag
+        // (useBulk). Skipping it matters for more than CPU: computing it costs a FULL extra read
+        // pass over the source before the header can even be written.
+        linkAuthenticated || useBulk -> request.message
         else -> request.message.copy(contentHash = computeContentHash(request))
       }
 
@@ -600,7 +636,11 @@ class FileMessageHandler(
           "Sending file ${request.message.fileName} (${request.message.fileSize} bytes), per-chunk MAC: $canMacChunks",
         )
 
-        suspend fun frameChunk(chunkSeq: Int, data: ByteArray, isLast: Boolean) {
+        suspend fun frameChunk(chunkSeq: Int, data: ByteArray, isLast: Boolean, dataLength: Int = data.size) {
+          if (useBulk) {
+            sendChunkRaw!!(chunkSeq, data, dataLength, isLast)
+            return
+          }
           val chunk = FileChunkMessage(
             fileMessageId = request.message.id,
             seq = chunkSeq,
@@ -629,11 +669,16 @@ class FileMessageHandler(
               if (bytesRead <= 0) break
 
               val isLast = totalSent + bytesRead >= request.message.fileSize
-              // Copy the slice we actually filled — the receiver gets the chunk via the
-              // serialized message, which already encodes a length-prefixed bytes field, but
-              // we must not over-send the buffer's tail garbage on the final partial chunk.
-              val chunkData = if (bytesRead == buffer.size) buffer.copyOf() else buffer.copyOf(bytesRead)
-              frameChunk(seq++, chunkData, isLast = isLast)
+              // The bulk path takes (buffer, length) and never retains it, so it can encrypt the
+              // reused buffer in place. The message path has to hand a right-sized array to the
+              // serializer instead, or the final partial chunk would carry the buffer's tail
+              // garbage — hence the copy, which only that path pays for.
+              if (useBulk) {
+                frameChunk(seq++, buffer, isLast = isLast, dataLength = bytesRead)
+              } else {
+                val chunkData = if (bytesRead == buffer.size) buffer.copyOf() else buffer.copyOf(bytesRead)
+                frameChunk(seq++, chunkData, isLast = isLast)
+              }
               totalSent += bytesRead
 
               val progressValue = (totalSent * 100 / request.message.fileSize).toInt().coerceIn(0, 100)
@@ -642,13 +687,17 @@ class FileMessageHandler(
                   now - lastEmitTime >= PROGRESS_EMIT_INTERVAL_MS) {
                 lastEmitTime = now
                 lastEmitPercent = progressValue
-                progressFlow.emit(MessengerSendProgress.InProgress(progressValue))
+                progressFlow.emit(
+                  MessengerSendProgress.InProgress(progressValue, totalSent, request.message.fileSize),
+                )
               }
             }
           }
         }
 
-        progressFlow.emit(MessengerSendProgress.InProgress(100))
+        progressFlow.emit(
+          MessengerSendProgress.InProgress(100, request.message.fileSize, request.message.fileSize),
+        )
         val durationMs = clock.currentTimeMillis() - start
         val kbPerSec = if (durationMs > 0) (totalSent * 1000 / durationMs / 1024) else 0
         log("FileMessageHandler", "Sent ${request.message.fileName} ($totalSent bytes) in ${durationMs}ms ($kbPerSec KB/s)")

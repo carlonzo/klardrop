@@ -178,7 +178,10 @@ val generateKlardropVersion by tasks.registering {
   val versionValue = klardropVersion
   val channelValue = klardropUpdateChannel
   val sentryDsnValue = klardropSentryDsn
+  val isLocalValue = klardropVersion == "0.0.0-dev"
+  val appNameValue = if (isLocalValue) "Klardrop debug" else "Klardrop"
   inputs.property("version", versionValue)
+  inputs.property("appName", appNameValue)
   inputs.property("channel", channelValue)
   inputs.property("sentryDsn", sentryDsnValue)
   doLast {
@@ -192,6 +195,16 @@ val generateKlardropVersion by tasks.registering {
       object KlardropVersion {
         const val VERSION: String = "$versionValue"
         const val UPDATE_CHANNEL: String = "$channelValue"
+
+        /**
+         * True when nothing passed `klardrop.version`, i.e. this is a developer build rather
+         * than one CI produced. Drives [APP_NAME] so a local build is distinguishable from an
+         * installed release — in the launcher, in the tray, and in the peer list on the LAN.
+         */
+        const val IS_LOCAL_BUILD: Boolean = $isLocalValue
+
+        /** User-visible app name. Suffixed on local builds so two installs can't be confused. */
+        const val APP_NAME: String = "$appNameValue"
 
         /** Sentry DSN, injected by CI. Empty in local and pull-request builds. */
         const val SENTRY_DSN: String = "$sentryDsnValue"

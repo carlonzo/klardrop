@@ -1,3 +1,4 @@
+import com.carlom.klardrop.common.KlardropVersion
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.ApplicationScope
@@ -84,7 +85,7 @@ private fun LinuxNativeTray(
     tooltip = trayTooltip(peers),
     primaryAction = onShowWindow,
   ) {
-    Item(label = if (isWindowVisible) "Hide Klardrop" else "Show Klardrop") {
+    Item(label = if (isWindowVisible) "Hide ${KlardropVersion.APP_NAME}" else "Show ${KlardropVersion.APP_NAME}") {
       onToggleWindow()
     }
     Divider()
@@ -98,7 +99,7 @@ private fun LinuxNativeTray(
       }
     }
     Divider()
-    Item(label = "Quit Klardrop") {
+    Item(label = "Quit ${KlardropVersion.APP_NAME}") {
       dispose()
       onQuit()
     }
@@ -108,10 +109,10 @@ private fun LinuxNativeTray(
 private fun trayTooltip(peers: List<TrayPeer>): String {
   val online = peers.count { it.online }
   return when {
-    peers.isEmpty() -> "Klardrop"
-    online == 0 -> "Klardrop · ${peers.size} offline"
-    online == peers.size -> "Klardrop · $online nearby"
-    else -> "Klardrop · $online nearby, ${peers.size - online} offline"
+    peers.isEmpty() -> KlardropVersion.APP_NAME
+    online == 0 -> "${KlardropVersion.APP_NAME} · ${peers.size} offline"
+    online == peers.size -> "${KlardropVersion.APP_NAME} · $online nearby"
+    else -> "${KlardropVersion.APP_NAME} · $online nearby, ${peers.size - online} offline"
   }
 }
 
@@ -131,7 +132,7 @@ private fun ApplicationScope.AwtPlatformTray(
     onAction = onShowWindow,
     menu = {
       Item(
-        text = if (isWindowVisible) "Hide Klardrop" else "Show Klardrop",
+        text = if (isWindowVisible) "Hide ${KlardropVersion.APP_NAME}" else "Show ${KlardropVersion.APP_NAME}",
         onClick = onToggleWindow,
       )
       Separator()
@@ -146,7 +147,7 @@ private fun ApplicationScope.AwtPlatformTray(
         }
       }
       Separator()
-      Item(text = "Quit Klardrop", onClick = onQuit)
+      Item(text = "Quit ${KlardropVersion.APP_NAME}", onClick = onQuit)
     },
   )
 }

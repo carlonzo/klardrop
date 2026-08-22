@@ -123,7 +123,16 @@ sealed interface ReceiveMessageStatus {
 
   data class PendingAuthorization(val acceptTransfer: (Boolean) -> Unit) : ReceiveMessageStatus
 
-  data class Progress(val messages: List<Pair<Message, Int>>) : ReceiveMessageStatus
+  /**
+   * [bytesTransferred]/[totalBytes] mirror MessengerSendProgress.InProgress's counters: the raw
+   * byte totals behind the per-message percentage, so the UI can derive throughput and ETA
+   * without re-deriving them from a 5%-quantised percentage.
+   */
+  data class Progress(
+    val messages: List<Pair<Message, Int>>,
+    val bytesTransferred: Long = 0,
+    val totalBytes: Long = 0,
+  ) : ReceiveMessageStatus
 
   data class Failed(val reason: String) : ReceiveMessageStatus
 

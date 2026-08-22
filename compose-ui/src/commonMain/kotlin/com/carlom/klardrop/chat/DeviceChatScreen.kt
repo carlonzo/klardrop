@@ -279,6 +279,7 @@ fun DeviceChatScreen(
                     isLargeScreen = mode == DeviceChatMode.Pane,
                     liveFileTransferProgress = uiState.fileTransferProgress,
                     liveFileTransferActive = uiState.fileTransferActive,
+                    liveTransferStats = uiState.transferStats,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -449,6 +450,7 @@ private fun MessagesList(
     isLargeScreen: Boolean,
     liveFileTransferProgress: Float?,
     liveFileTransferActive: Boolean,
+    liveTransferStats: TransferStats?,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -496,6 +498,7 @@ private fun MessagesList(
                 isLargeScreen = isLargeScreen,
                 liveFileTransferProgress = liveFileTransferProgress,
                 liveFileTransferActive = liveFileTransferActive,
+                liveTransferStats = liveTransferStats,
             )
 
             if (showDayDivider) {
@@ -521,6 +524,7 @@ private fun MessageRow(
     isLargeScreen: Boolean,
     liveFileTransferProgress: Float?,
     liveFileTransferActive: Boolean,
+    liveTransferStats: TransferStats?,
 ) {
     val isSender = message.isSender
     val direction = if (isSender) KdBubbleDirection.Out else KdBubbleDirection.In
@@ -539,6 +543,7 @@ private fun MessageRow(
                     onRetryFile = onRetryFile,
                     liveProgress = liveFileTransferProgress,
                     liveTransferActive = liveFileTransferActive,
+                    liveTransferStats = liveTransferStats,
                 )
             }
             message.messageType == MessageType.TEXT.name -> {
@@ -682,6 +687,12 @@ private fun FileMessageBubble(
      * indeterminate bar so those windows read as "working", not "stuck at 0%".
      */
     liveTransferActive: Boolean,
+    /**
+     * Throughput/ETA for the in-flight transfer, non-null only once it has been streaming for a
+     * couple of seconds. Replaces the static size caption while present — same line, more info,
+     * no extra row on the card.
+     */
+    liveTransferStats: TransferStats?,
 ) {
     val fileTransferState by messageRepository.getFileTransferById(
         message.fileTransferId ?: return
@@ -775,7 +786,13 @@ private fun FileMessageBubble(
                 }
                 FileCard(
                     fileName = fileName,
-                    fileSize = if (totalSize > 0) formatBytes(totalSize) else null,
+                    fileSize = when {
+                        fileState is KdFileState.Sending || fileState is KdFileState.Receiving ->
+                            liveTransferStats?.let(::formatTransferStats)
+                                ?: totalSize.takeIf { it > 0 }?.let(::formatBytes)
+                        totalSize > 0 -> formatBytes(totalSize)
+                        else -> null
+                    },
                     state = fileState,
                     onRetry = {
                         if (isSender) {
@@ -833,6 +850,27 @@ private fun toImageModel(path: String): String = when {
     path.startsWith("content://") -> path
     path.startsWith("content:/") -> "content://" + path.removePrefix("content:/")
     else -> "file://$path"
+}
+
+/** "1.2 GB / 4.0 GB · 42.0 MB/s · 1m 12s left" — one caption line, no extra card row. */
+private fun formatTransferStats(stats: TransferStats): String = buildString {
+    append(formatBytes(stats.bytesTransferred))
+    append(" / ")
+    append(formatBytes(stats.totalBytes))
+    append(" · ")
+    append(formatBytes(stats.bytesPerSecond))
+    append("/s")
+    stats.etaSeconds?.let {
+        append(" · ")
+        append(formatDuration(it))
+        append(" left")
+    }
+}
+
+private fun formatDuration(seconds: Long): String = when {
+    seconds < 60 -> "${seconds}s"
+    seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
+    else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
 }
 
 private fun formatBytes(bytes: Long): String {
