@@ -263,8 +263,17 @@ jobs:
     if: needs.gate.outputs.proceed == 'true'
     runs-on: macos-26
     env:
+      # `version` is the nightly semver (1.0.1-nightly.N) so KlardropVersion.VERSION -- and
+      # therefore the Sentry release these crashes report against -- matches the android and
+      # linux jobs. It used to be the bare `base`, which meant Apple nightly crashes landed on
+      # the *future stable* 1.0.1 release, mixing tester crashes into a version that had not
+      # shipped. `packageVersion` keeps the bare form for anything that needs a strictly
+      # numeric x.y.z. Note the user-visible CFBundleShortVersionString is unaffected: the
+      # nightly Apple artifacts come from xcodebuild + hdiutil, not jpackage, and take their
+      # marketing version from MARKETING_VERSION on the xcodebuild line.
       GRADLE_VERSION_ARGS: >-
-        -Pklardrop.version=${{ needs.gate.outputs.base }}
+        -Pklardrop.version=${{ needs.gate.outputs.semver }}
+        -Pklardrop.packageVersion=${{ needs.gate.outputs.base }}
         -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
 
       # Same version, exported the ORG_GRADLE_PROJECT_ way, for the same reason as the DSN
@@ -274,7 +283,7 @@ jobs:
       # crash reports a release no pipeline ever creates. Only set on the jobs that drive an
       # Xcode build; elsewhere the `-P` flag above reaches the compiler directly, and the
       # dotted property takes precedence over this alias regardless.
-      ORG_GRADLE_PROJECT_klardropVersion: ${{ needs.gate.outputs.base }}
+      ORG_GRADLE_PROJECT_klardropVersion: ${{ needs.gate.outputs.semver }}
 
       # Sentry DSN, baked in at compile time. Kept out of the tree because this repo is
       # public and a DSN is a write-only ingest endpoint — a committed one is free quota
@@ -578,8 +587,17 @@ jobs:
     if: needs.gate.outputs.proceed == 'true'
     runs-on: macos-latest
     env:
+      # `version` is the nightly semver (1.0.1-nightly.N) so KlardropVersion.VERSION -- and
+      # therefore the Sentry release these crashes report against -- matches the android and
+      # linux jobs. It used to be the bare `base`, which meant Apple nightly crashes landed on
+      # the *future stable* 1.0.1 release, mixing tester crashes into a version that had not
+      # shipped. `packageVersion` keeps the bare form for anything that needs a strictly
+      # numeric x.y.z. Note the user-visible CFBundleShortVersionString is unaffected: the
+      # nightly Apple artifacts come from xcodebuild + hdiutil, not jpackage, and take their
+      # marketing version from MARKETING_VERSION on the xcodebuild line.
       GRADLE_VERSION_ARGS: >-
-        -Pklardrop.version=${{ needs.gate.outputs.base }}
+        -Pklardrop.version=${{ needs.gate.outputs.semver }}
+        -Pklardrop.packageVersion=${{ needs.gate.outputs.base }}
         -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
 
       # Same version, exported the ORG_GRADLE_PROJECT_ way, for the same reason as the DSN
@@ -589,7 +607,7 @@ jobs:
       # crash reports a release no pipeline ever creates. Only set on the jobs that drive an
       # Xcode build; elsewhere the `-P` flag above reaches the compiler directly, and the
       # dotted property takes precedence over this alias regardless.
-      ORG_GRADLE_PROJECT_klardropVersion: ${{ needs.gate.outputs.base }}
+      ORG_GRADLE_PROJECT_klardropVersion: ${{ needs.gate.outputs.semver }}
 
       # Sentry DSN, baked in at compile time. Kept out of the tree because this repo is
       # public and a DSN is a write-only ingest endpoint — a committed one is free quota
