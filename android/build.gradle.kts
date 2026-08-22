@@ -53,7 +53,7 @@ android {
     // applicationId at runtime, so it follows this automatically.)
     applicationId = "com.carlom.klardrop"
     minSdk = 24
-    targetSdk = 35
+    targetSdk = 36
     versionCode = klardropVersionCode
     versionName = klardropVersionName
     proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
