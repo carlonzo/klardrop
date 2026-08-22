@@ -12,14 +12,20 @@ import com.carlom.klardrop.common.communication.message.TrustPairingResponse
 import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.discovery.VisibleDevices
-import com.carlom.klardrop.common.mdns.NearbyClient
+import com.carlom.klardrop.common.mdns.NearbyClientConnectionHandler
+import com.carlom.klardrop.common.FileManager
+import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
 import com.carlom.klardrop.common.persistence.SendStatus
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
-import com.carlom.klardrop.common.trust.TrustChecker
 import com.carlom.klardrop.common.utils.Coroutines
+import io.ktor.network.selector.SelectorManager
+import io.ktor.network.sockets.InetSocketAddress
+import io.ktor.network.sockets.aSocket
+import io.ktor.network.sockets.openReadChannel
+import io.ktor.network.sockets.openWriteChannel
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
@@ -47,9 +53,9 @@ class MessengerImpl(
   private val connectionsPool: ConnectionsPool,
   private val client: Client,
   private val coroutines: Coroutines,
-  private val nearbyClient: Lazy<NearbyClient>,
+  private val currentDeviceProvider: CurrentDeviceProvider,
+  private val fileManager: FileManager,
   private val messageReceiver: MessageReceiver,
-  private val trustChecker: Lazy<TrustChecker>,
   private val trustManager: com.carlom.klardrop.common.trust.TrustManager,
   private val messageSerializer: MessageSerializer,
   private val messageRepository: MessageRepository,
@@ -194,7 +200,7 @@ class MessengerImpl(
         val isRevocation = message is TrustRevocationMessage
         val isFileMessage = message is FileMessage
 
-        if (!isPairingMessage && !isRevocation && !isFileMessage && trustChecker.value.isTrusted(deviceId)) {
+        if (!isPairingMessage && !isRevocation && !isFileMessage && trustManager.isTrusted(deviceId)) {
           log("Messenger", "Device $deviceId is trusted, creating TrustedMessage")
 
           // Serialize the original message
@@ -301,7 +307,7 @@ class MessengerImpl(
     val success = nearbyConnections.any { connection ->
       log("Messenger", "Client sending message to $deviceId: ${connection.address} ${connection.port}")
       runCatching {
-        nearbyClient.value.send(connection.address, connection.port, listOf(messageRequest), sendFlow)
+        sendNearby(connection.address, connection.port, listOf(messageRequest), sendFlow)
       }.onFailure { exception ->
         lastError = exception
         log("Messenger", "Error sending message to $deviceId via ${connection.address}:${connection.port}", exception)
@@ -314,6 +320,22 @@ class MessengerImpl(
       sendFlow.emit(Error(reason))
     }
     return success
+  }
+
+  private suspend fun sendNearby(
+    host: String,
+    port: Int,
+    sendRequests: List<SendMessageRequest>,
+    sendFlow: MutableSharedFlow<MessengerSendProgress>,
+  ) {
+    val selectorManager = SelectorManager(coroutines.ioDispatcher)
+    val socket = aSocket(selectorManager).tcp().connect(InetSocketAddress(host, port))
+    try {
+      NearbyClientConnectionHandler(currentDeviceProvider, fileManager, sendRequests)
+        .onConnection(socket, sendFlow)
+    } finally {
+      socket.dispose()
+    }
   }
 
   private suspend fun handleKlardropTransfer(

@@ -28,7 +28,6 @@ kotlin {
       dependencies {
         api(compose.runtime)
         api(compose.foundation)
-        api(compose.material)
         api(compose.material3)
         api(compose.materialIconsExtended)
         api(compose.components.resources)
@@ -38,7 +37,6 @@ kotlin {
 
         api(deps.filekit.dialogs.compose)
         api(deps.coil3.compose)
-        api(deps.coil3.network.ktor)
 
         api(project(":presentation"))
         implementation(project(":klardrop-common"))
@@ -55,10 +53,7 @@ kotlin {
       dependencies {
         implementation(compose.preview)
         implementation(compose.uiTooling)
-        implementation(deps.androidx.activity)
         implementation(deps.androidx.activity.compose)
-        implementation(deps.androidx.navigation3.runtime)
-        implementation(deps.androidx.navigation3.ui)
       }
     }
 

@@ -5,14 +5,12 @@ import com.carlom.klardrop.common.communication.platformTransferAnchor
 import com.carlom.klardrop.common.di.CommonComponent
 
 import com.klardrop.common.CrashReporter
-import com.carlom.klardrop.common.utils.UtilsModule
 import com.carlom.klardrop.common.utils.installUnhandledExceptionGuard
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.launch
 
 class Klardrop(
   private val applicationInfo: ApplicationInfo = ApplicationInfo(),
-  private val utilsModule: UtilsModule = UtilsModule(),
   private val internalPlatformDependency: InternalPlatformDependencies,
   /**
    * Platform hook that keeps this process alive and awake while a file transfer is in flight, in
@@ -36,7 +34,7 @@ class Klardrop(
     log("Starting Klardrop with ApplicationInfo: $applicationInfo")
 
     commonComponent =
-      CommonComponent(applicationInfo, utilsModule, internalPlatformDependency, transferAnchor)
+      CommonComponent(applicationInfo, internalPlatformDependency, transferAnchor)
 
     // Recover from a prior crash/kill: nothing is actually transferring at boot, so any
     // file_transfers row left as IN_PROGRESS is stale. Without this, those rows render
@@ -79,7 +77,6 @@ class Klardrop(
     // start discovery jobs
     discoveryNetwork.discoveryKlardropDevices()
     discoveryNetwork.discoveryNearbyShareDevices()
-//    discoveryNetwork.discoverAirdrop()
 
     // BLE is a fallback transport for when peers aren't on the same Wi-Fi.
     // Platform implementations return isSupported()=false when unavailable, so these

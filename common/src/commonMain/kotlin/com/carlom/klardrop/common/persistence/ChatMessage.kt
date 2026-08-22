@@ -28,13 +28,10 @@ enum class DeliveryStatus {
  * Merged chat message model — the UI-facing type returned by
  * [MessageRepository.getMessagesForDevice].
  *
- * Combines the persisted disk rows (SENDING/SENT/FAILED) with any legacy in-memory outbox
- * entries. The repository merges and deduplicates them: a disk row always wins over an
- * outbox entry with the same [id].
+ * Persisted chat row (SENDING/SENT/FAILED).
  */
 data class ChatMessage(
-  /** Stable unique id — matches the DB row id for persisted messages, or the
-   *  [OutboxEntry.messageId] for in-flight sends. */
+  /** Stable unique id — the DB row id. */
   val id: Long,
   val remoteDeviceId: String,
   val content: String,

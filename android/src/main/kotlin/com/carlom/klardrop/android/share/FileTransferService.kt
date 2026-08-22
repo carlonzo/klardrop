@@ -16,7 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.carlom.klardrop.android.MainActivity
-import com.carlom.klardrop.android.applicationComponent
+import com.carlom.klardrop.android.appKlardrop
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Completed
@@ -104,7 +104,7 @@ class FileTransferService : Service() {
   @Volatile
   private var idleJob: Job? = null
 
-  private fun commonComponent() = applicationComponent().klardrop().commonComponent
+  private fun commonComponent() = appKlardrop().commonComponent
 
   override fun onBind(intent: Intent?): IBinder? = null
 

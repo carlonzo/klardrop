@@ -10,7 +10,6 @@ import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.KnownDevicesRepositoryImpl
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepositoryImpl
-import com.carlom.klardrop.common.persistence.MessageOutbox
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageRepositoryImpl
 import com.carlom.klardrop.common.utils.Clock
@@ -34,10 +33,6 @@ class StorageModule(
   private val appDatabase: AppDatabase by lazy {
     AppDatabase(driverFactory.createDriver())
   }
-
-  // Shared outbox instance used by both MessageRepositoryImpl (for merge) and
-  // DeviceChatViewModel (for add/remove on send lifecycle).
-  val messageOutbox: MessageOutbox by lazy { MessageOutbox() }
 
   private companion object {
     const val propertiesFileName = "properties.preferences_pb"
@@ -80,7 +75,6 @@ class StorageModule(
       appDatabase,
       clock,
       coroutines.ioDispatcher,
-      messageOutbox,
     )
   }
 

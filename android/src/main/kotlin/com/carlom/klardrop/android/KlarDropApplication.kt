@@ -2,20 +2,20 @@ package com.carlom.klardrop.android
 
 import android.app.Application
 import android.content.Context
-import com.carlom.klardrop.android.di.ApplicationComponent
-import com.carlom.klardrop.android.di.DaggerApplicationComponent
 import com.carlom.klardrop.android.service.DiscoveryForegroundService
+import com.carlom.klardrop.android.share.AndroidTransferAnchor
 import com.carlom.klardrop.common.ApplicationInfo
+import com.carlom.klardrop.common.InternalPlatformDependencies
+import com.carlom.klardrop.common.Klardrop
 import com.klardrop.common.initCrashReporter
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-class KlarDropApplication : Application(), ApplicationComponentProvider {
+class KlarDropApplication : Application() {
 
-  private lateinit var component: ApplicationComponent
-  override val applicationComponent: ApplicationComponent
-    get() = component
+  lateinit var klardrop: Klardrop
+    private set
 
   override fun onCreate() {
     super.onCreate()
@@ -40,14 +40,13 @@ class KlarDropApplication : Application(), ApplicationComponentProvider {
       isProduction = !isDebuggable,
     )
 
-    component = DaggerApplicationComponent.factory().create(this, applicationInfo)
-    val klardrop = component.klardrop()
+    klardrop = Klardrop(
+      applicationInfo = applicationInfo,
+      internalPlatformDependency = InternalPlatformDependencies(this, applicationInfo),
+      transferAnchor = AndroidTransferAnchor(this),
+    )
     klardrop.init()
 
-    // Drive the opt-in "stay discoverable" foreground service off the persisted preference: start
-    // it when the user enables background discovery, stop it when they disable it. startForeground
-    // can be blocked if we're in the background (Android 12+), so guard it — MainActivity re-ensures
-    // the service on next foreground launch.
     val commonComponent = klardrop.commonComponent
     commonComponent.coroutines().appScope.launch {
       commonComponent.localPropertiesRepository().properties
@@ -62,13 +61,7 @@ class KlarDropApplication : Application(), ApplicationComponentProvider {
         }
     }
   }
-
 }
 
-interface ApplicationComponentProvider {
-  val applicationComponent: ApplicationComponent
-}
-
-fun Context.applicationComponent(): ApplicationComponent {
-  return (applicationContext as ApplicationComponentProvider).applicationComponent
-}
+fun Context.appKlardrop(): Klardrop =
+  (applicationContext as KlarDropApplication).klardrop

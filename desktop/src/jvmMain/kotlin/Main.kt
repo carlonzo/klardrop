@@ -73,7 +73,6 @@ fun main(args: Array<String>) {
   val disableNearby = args.contains("--no-nearby")
 
   val applicationInfo = ApplicationInfo(
-
     isDebug = debug,
     disablePersistence = inMemory,
     enableKlardropServer = !disableKlardrop,

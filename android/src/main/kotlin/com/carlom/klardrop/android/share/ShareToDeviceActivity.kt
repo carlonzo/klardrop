@@ -7,9 +7,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Parcelable
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,7 +36,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.TrustStatus
-import com.carlom.klardrop.android.applicationComponent
+import com.carlom.klardrop.android.appKlardrop
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.Reachability
@@ -52,12 +52,11 @@ import com.carlom.klardrop.theme.KdTheme
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
-class ShareToDeviceActivity : AppCompatActivity() {
+class ShareToDeviceActivity : ComponentActivity() {
 
-  @Inject
-  lateinit var klardrop: Klardrop
+  private val klardrop: Klardrop
+    get() = appKlardrop()
 
   private lateinit var shareToDeviceController: ShareToDeviceController
 
@@ -71,8 +70,6 @@ class ShareToDeviceActivity : AppCompatActivity() {
   @OptIn(ExperimentalMaterial3Api::class)
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    applicationComponent().inject(this)
-
     shareToDeviceController = ShareToDeviceController(klardrop.commonComponent)
 
     parseIntent()

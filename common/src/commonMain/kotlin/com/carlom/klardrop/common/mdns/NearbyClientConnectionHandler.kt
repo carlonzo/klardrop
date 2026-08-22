@@ -12,7 +12,7 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.utils.FileTypeUtils
 import com.carlom.klardrop.common.utils.log
-import com.carlom.klardrop.common.utils.toByteArray
+
 import com.carlonzo.ukey2.Ukey2Handshake
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
 import com.google.location.nearby.connections.proto.ConnectionRequestFrame

@@ -2,7 +2,6 @@ plugins {
   alias(deps.plugins.android.application)
   alias(deps.plugins.jetbrains.compose)
   alias(deps.plugins.compose.compiler)
-  alias(deps.plugins.ksp)
   alias(deps.plugins.sentry.android)
 }
 
@@ -39,10 +38,7 @@ dependencies {
   implementation(project(":presentation"))
   implementation(project(":compose-ui"))
   implementation(deps.androidx.activity.compose)
-  implementation(deps.androidx.appcompat)
   implementation(deps.androidx.core)
-  implementation(deps.dagger)
-  ksp(deps.dagger.compiler)
 
   debugImplementation(compose.uiTooling)
   implementation(compose.preview)

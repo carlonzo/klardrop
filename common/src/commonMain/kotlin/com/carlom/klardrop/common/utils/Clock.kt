@@ -1,7 +1,6 @@
 package com.carlom.klardrop.common.utils
 
-expect class Clock() {
-
-  fun currentTimeMillis(): Long
-
+class Clock {
+  fun currentTimeMillis(): Long =
+    kotlin.time.Clock.System.now().toEpochMilliseconds()
 }

@@ -6,7 +6,7 @@ import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
-import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
+import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandler
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.utils.Coroutines
@@ -81,7 +81,7 @@ class Server(
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,
   private val currentDeviceProvider: CurrentDeviceProvider,
-  private val nearbyReceiverConnectionHandlerFactory: NearbyReceiverConnectionHandlerFactory,
+  private val createNearbyReceiver: () -> NearbyReceiverConnectionHandler,
   private val visibleDevices: VisibleDevices,
   private val messageReceiver: MessageReceiver,
   private val protoBuf: ProtoBuf,
@@ -215,12 +215,6 @@ class Server(
 
     log("Server", "Klardrop connection request from: $remoteAddress - ${request.deviceId}")
 
-    if (!isAcceptedSender(request.deviceId, remoteAddress)) {
-      log("Server", "Klardrop connection rejected from: $remoteAddress")
-      socket.close()
-      return
-    }
-
     // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
     // than silently falling back to cleartext.
     if (!request.supportsEncryption) {
@@ -315,23 +309,12 @@ class Server(
     serverScope.launch(exceptionHandler) {
       val connectionRequest = OfflineFrame.ADAPTER.decode(firstMessage)
 
-      val handler = nearbyReceiverConnectionHandlerFactory.get()
+      val handler = createNearbyReceiver()
       // We'll need to modify the handler to accept a pre-parsed connection request
       handler.onConnection(socket, receiveFlow, connectionRequest, readChannel)
     }
   }
 
-  /**
-   * Connection-level admission control. The TCP handshake itself is open to anyone on
-   * the local network — per-message authorization (trusted vs. prompt-the-user) lives
-   * in the router and IncomingAuthorizer, not here, so we always let the connection
-   * establish. This stays as a hook in case we ever want to block specific peers
-   * (e.g. user-blocklist) before the handshake even completes.
-   */
-  @Suppress("UNUSED_PARAMETER")
-  private fun isAcceptedSender(deviceId: String, receiverAddress: String): Boolean {
-    return true
-  }
 }
 
 /**
