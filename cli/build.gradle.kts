@@ -32,12 +32,6 @@ kotlin {
       }
     }
 
-    val jvmMain by getting {
-      dependencies {
-        implementation(deps.bugsnag.jvm)
-      }
-    }
-
     all {
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")
     }

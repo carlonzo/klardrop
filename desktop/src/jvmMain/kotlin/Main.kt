@@ -18,7 +18,7 @@ import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
-import com.klardrop.common.BugsnagWrapper
+import com.klardrop.common.initCrashReporter
 import io.github.vinceglb.filekit.FileKit
 import java.awt.SystemTray
 import java.awt.Taskbar
@@ -82,8 +82,9 @@ fun main(args: Array<String>) {
     enableNearbyServer = !disableNearby,
   )
 
-  BugsnagWrapper.init(
-    applicationInfo.appVersion
+  initCrashReporter(
+    appVersion = applicationInfo.appVersion,
+    isProduction = !applicationInfo.isDebug,
   )
 
   // macOS: use the system's full-window-content / transparent-title-bar mode.

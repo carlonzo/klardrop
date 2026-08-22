@@ -289,7 +289,7 @@ class ClientImpl(
         establishConnection(connection.address, connection.port, deviceId, connectionJob, winnerGate)
           // TCP dial failures (peer not listening, connection refused, peer closed
           // mid-handshake) are routine on a flaky LAN. Keep the on-device log,
-          // skip Bugsnag.
+          // skip Sentry.
           .onFailure { cause ->
             logLocal("Client", "Failed TCP connect to $deviceId @ ${connection.address}", cause)
             // If the dial was actively refused (peer's port is dead — e.g. peer restarted

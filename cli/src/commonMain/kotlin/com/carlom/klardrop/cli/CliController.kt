@@ -5,7 +5,7 @@ import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.discovery.DiscoveryDevice
-import com.klardrop.common.BugsnagWrapper
+import com.klardrop.common.initCrashReporter
 import io.github.vinceglb.filekit.FileKit
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
@@ -60,7 +60,10 @@ object CliController {
       // Initialize dependencies like desktop app.
       // When a custom data dir is requested, point FileKit at that directory so that
       // filesDir / databasesDir / cacheDir all resolve under the isolated path.
-      BugsnagWrapper.init(applicationInfo.appVersion)
+      initCrashReporter(
+        appVersion = applicationInfo.appVersion,
+        isProduction = !applicationInfo.isDebug,
+      )
       if (effectiveDataDir != null) {
         val filesDir = File(effectiveDataDir)
         val cacheDir = File(effectiveDataDir, "cache")

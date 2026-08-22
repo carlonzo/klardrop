@@ -300,7 +300,7 @@ class Server(
     val exceptionHandler = CoroutineExceptionHandler { _, exception ->
       // Nearby Share peers routinely close mid-frame (network drops, app
       // backgrounding, user cancel). Anything in the noise classifier is logged
-      // locally; surprises still go to Bugsnag.
+      // locally; surprises still go to Sentry.
       if (exception.isExpectedNetworkNoise()) {
         logLocal("Server", "Nearby Share connection from $remoteAddress ended", exception)
       } else {

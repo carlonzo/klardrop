@@ -4,7 +4,7 @@ import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.communication.platformTransferAnchor
 import com.carlom.klardrop.common.di.CommonComponent
 
-import com.klardrop.common.BugsnagWrapper
+import com.klardrop.common.CrashReporter
 import com.carlom.klardrop.common.utils.UtilsModule
 import com.carlom.klardrop.common.utils.installUnhandledExceptionGuard
 import com.carlom.klardrop.common.utils.log
@@ -112,13 +112,13 @@ class Klardrop(
     // Check for a newer release (desktop only; a no-op where unsupported).
     commonComponent.updateChecker().checkNow()
 
-    // Tag Bugsnag events/crashes with platform + device identity once the device
+    // Tag crash-reporter events with platform + device identity once the device
     // id is resolved (it's persisted lazily on first read).
     appScope.launch(commonComponent.coroutines().ioDispatcher) {
       runCatching {
         val device = commonComponent.currentDeviceProvider().get()
-        BugsnagWrapper.setUser(device.shortDeviceId, device.deviceName, device.osType.name)
-      }.onFailure { log("Klardrop", "Failed to set Bugsnag user", it) }
+        CrashReporter.setUser(device.shortDeviceId, device.deviceName, device.osType.name)
+      }.onFailure { log("Klardrop", "Failed to set crash-reporter user", it) }
     }
   }
 

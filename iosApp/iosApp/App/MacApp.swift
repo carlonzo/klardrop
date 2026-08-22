@@ -2,7 +2,6 @@
 import SwiftUI
 import AppKit
 import presentation
-import Bugsnag
 
 // ---------------------------------------------------------------------------
 // KlardropMacApp — macOS app entry point (Phase 2B).
@@ -11,9 +10,8 @@ import Bugsnag
 // (iOSApp.swift). Each target compiles exactly one @main because this file
 // is added only to KlardropMac and iOSApp.swift only to iosApp.
 //
-// Bugsnag is started here, mirroring iOSApp.swift: the Cocoa SDK reads its API
-// key from MacInfo.plist and the Kotlin BugsnagWrapper (macosMain) forwards
-// manual notifies/breadcrumbs/user to this same native singleton via cinterop.
+// Crash reporting is started by KlardropBootstrap on the Kotlin side (Sentry KMP
+// has a real macOS artifact), so there is no SDK import here any more.
 //
 // Menu bar: a MenuBarExtra mirrors the JVM desktop tray (Main.kt) — a white
 // template drop glyph that opens the app, opens a specific device, or quits.
@@ -34,11 +32,7 @@ struct KlardropMacApp: App {
     @State private var model: DiscoveryAppModel
 
     init() {
-        // Mirror iOSApp.swift: only forward events from production builds.
-        let config = BugsnagConfiguration.loadConfig()
-        config.enabledReleaseStages = ["production"]
-        Bugsnag.start(with: config)
-
+        // Constructing the bootstrap also starts Sentry (see KlardropBootstrap).
         let bootstrap = KlardropBootstrap()
         self.bootstrap = bootstrap
         _model = State(initialValue: DiscoveryAppModel(bootstrap: bootstrap))

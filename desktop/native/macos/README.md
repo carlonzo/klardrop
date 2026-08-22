@@ -133,6 +133,6 @@ same JVM-side `MacBleHelperProcess` code.
 - JVM restarts the helper with exponential backoff (1s → 30s) on unexpected
   exit; after 5 crashes in 60 seconds the helper is parked and BLE reports
   unsupported for the remainder of the session.
-- Each crash is reported through the project's logger, which feeds Bugsnag.
+- Each crash is reported through the project's logger, which feeds Sentry.
 - `shutdown` command, JVM-side close, or stdin EOF (parent process death)
   terminates the helper cleanly.

@@ -1,14 +1,29 @@
+# sentry-cocoa must match the version sentry-kmp's cinterop was built against, or the app
+# fails to link with undefined symbols (SentryDependencyContainer, SentryId, ...) — a failure
+# that reads like a broken Xcode setup rather than a version skew. The pairing is invisible to
+# CocoaPods, so it lives here. To add a row, read the value out of the plugin jar Gradle
+# actually resolved rather than trusting release notes:
+#
+#   javap -p -constants -cp \
+#     "$(find ~/.gradle/caches -name 'sentry-kotlin-multiplatform-gradle-plugin-*.jar' | head -1)" \
+#     io.sentry.BuildConfig
+SENTRY_COCOA_FOR_KMP = { '0.27.0' => '8.58.2' }.freeze
+
+kmp = File.read(File.expand_path('../gradle/dependencies.toml', __dir__))[/^sentry-kmp\s*=\s*"([^"]+)"/, 1]
+SENTRY_COCOA_VERSION = SENTRY_COCOA_FOR_KMP.fetch(kmp) do
+  raise "Podfile: no sentry-cocoa pin for sentry-kmp #{kmp.inspect}. Add it to SENTRY_COCOA_FOR_KMP above."
+end
+
 target 'iosApp' do
   use_frameworks!
   platform :ios, '17.0'
   pod 'presentation', :path => '../presentation'
-  pod 'Bugsnag', '~> 6.0'
-
+  pod 'Sentry', SENTRY_COCOA_VERSION
 end
 
 target 'KlardropMac' do
   use_frameworks!
   platform :osx, '14.0'
   pod 'presentation', :path => '../presentation'
-  pod 'Bugsnag', '~> 6.0'
+  pod 'Sentry', SENTRY_COCOA_VERSION
 end

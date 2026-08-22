@@ -6,7 +6,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
  * Terminal reporting for a coroutine failure that nothing else caught.
  *
  * Expected network churn (peer vanished, socket reset, scope cancelled — see
- * [Throwable.isExpectedNetworkNoise]) is logged locally; everything else is reported to Bugsnag.
+ * [Throwable.isExpectedNetworkNoise]) is logged locally; everything else is reported to Sentry.
  * Never throws: this runs on paths where an escaping exception would kill the process, so the
  * whole body is wrapped defensively.
  */

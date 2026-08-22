@@ -28,6 +28,39 @@ jobs:
         with:
           fetch-depth: 0   # full history — versionCode is derived from the commit count
 
+
+      # Fail here, not after shipping. An unset secret interpolates to "" and every downstream
+      # consumer treats empty as "disabled": initCrashReporter no-ops on an empty DSN, and the
+      # Sentry jobs skip on an empty token. That is exactly right for pull requests and forks,
+      # and exactly wrong here -- a tagged release would build, sign, publish and go green while
+      # every shipped binary had crash reporting compiled out. One assert up front beats
+      # discovering it from an empty Sentry dashboard weeks later.
+      # SENTRY_ORG / SENTRY_PROJECT are repository *variables*, not secrets, on purpose. They are
+      # not sensitive -- both appear in every Sentry URL -- and storing them as secrets makes
+      # Actions redact those literal strings from every log line in the repo, so `:klardrop-common:`
+      # renders as `:***-common:` and Gradle paths become unreadable. Only the DSN and the auth
+      # token are secrets.
+      - name: Require Sentry configuration
+        shell: bash
+        env:
+          SENTRY_DSN:        ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG:        ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT:    ${{ vars.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for v in SENTRY_DSN SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT; do
+            [ -n "${!v:-}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing Sentry configuration:$missing — a tagged release built without them"\
+                 " ships with crash reporting disabled and unsymbolicated. Set them in"\
+                 " Settings > Secrets and variables > Actions (DSN + auth token as secrets,"\
+                 " org + project as variables), then re-run."
+            exit 1
+          fi
+
       - id: v
         shell: bash
         run: |
@@ -61,6 +94,56 @@ jobs:
           echo "stable=$STABLE"          >> "$GITHUB_OUTPUT"
           echo "Resolved version=$VERSION packageVersion=$PKGVER tag=$TAG versionCode=$CODE commits=$COMMITS stable=$STABLE"
 
+  # Create the Sentry release BEFORE the builds run, so an event from an early artifact
+  # already has a release object to attach to (otherwise Sentry auto-creates a bare one with
+  # no commits, and set-commits afterwards is a no-op for anything already ingested).
+  #
+  # The release NAME must be byte-identical to what the client sends as `options.release`,
+  # which is KlardropVersion.VERSION = the `klardrop.version` value = version.outputs.version.
+  # NOT `tag` (that is `v`-prefixed) and NOT `packageVersion` (that has the pre-release suffix
+  # stripped for jpackage) — either would silently orphan every event of an rc build.
+  sentry-release:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG:        ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT:    ${{ vars.SENTRY_PROJECT }}
+      VERSION:           ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # `set-commits --auto` diffs against the previous release's commit
+
+      - name: Create Sentry release + associate commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SENTRY_AUTH_TOKEN}" ]; then
+            echo "SENTRY_AUTH_TOKEN not set — skipping Sentry release creation (fork or unconfigured repo)."
+            exit 0
+          fi
+
+          # Pinned, and installed into a job-local dir. sentry-cli is not on the runner image,
+          # but piping an unversioned installer into a shell is not acceptable here: this
+          # pipeline's jobs hold the Apple signing identity and the Play/App Store credentials,
+          # so a silent upstream change is a real supply-chain exposure. INSTALL_DIR also keeps
+          # it out of /usr/local/bin (no sudo, and no "already installed" abort if a future
+          # runner image ships one).
+          curl -fsSL https://sentry.io/get-cli/ \
+            | INSTALL_DIR="$RUNNER_TEMP/sentry-cli" SENTRY_CLI_VERSION=3.6.2 bash
+          export PATH="$RUNNER_TEMP/sentry-cli:$PATH"
+
+          sentry-cli releases new "$VERSION"
+
+          # --auto derives the commit range from the repo (hence fetch-depth: 0).
+          # --ignore-missing covers the first-ever release, where there is no previous release
+          # to diff from; the `||` covers the org simply having no repository integration
+          # configured yet. Commit association is a nice-to-have (suspect commits, release
+          # diffs) — it must never be the reason a tagged release fails to ship.
+          sentry-cli releases set-commits "$VERSION" --auto --ignore-missing \
+            || echo "::warning::Could not associate commits with Sentry release $VERSION — continuing."
+
   build:
     needs: version
     strategy:
@@ -83,6 +166,23 @@ jobs:
         -Pklardrop.packageVersion=${{ needs.version.outputs.packageVersion }}
         -Pklardrop.versionCode=${{ needs.version.outputs.versionCode }}
 
+      # Credentials for the Sentry Android Gradle plugin, which uploads the R8 mapping file
+      # as part of :android:bundleRelease/:assembleRelease. Without them every Android stack
+      # trace in Sentry stays obfuscated (a.b.c.d), which is the same class of unreadable as
+      # an unsymbolicated Apple crash. Same three variables scripts/upload_dsyms.sh consumes;
+      # empty on a fork, and android/build.gradle.kts is responsible for making the mapping
+      # upload optional in that case rather than failing the build.
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG:        ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT:    ${{ vars.SENTRY_PROJECT }}
+
+      # Sentry DSN, baked in at compile time. Kept out of the tree because this repo is
+      # public and a DSN is a write-only ingest endpoint — a committed one is free quota
+      # for anyone scraping GitHub. Passed as ORG_GRADLE_PROJECT_* rather than a `-P` flag
+      # because the Apple frameworks are built by xcodebuild running `syncFramework` from
+      # the podspec script phase, which inherits the environment but not this job's Gradle
+      # arguments. Absent from build_pr.yml on purpose: PR builds must not report.
+      ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
     steps:
       - uses: actions/checkout@v7
 
@@ -95,6 +195,13 @@ jobs:
 
       - name: Build Windows MSI
         if: matrix.target == 'windows'
+        # shell: bash is load-bearing, not style. windows-latest defaults to pwsh, where
+        # $GRADLE_VERSION_ARGS is an undefined PowerShell variable that expands to nothing --
+        # so every -P flag was silently dropped and the MSI built with packageVersion 1.0.0 and
+        # KlardropVersion.VERSION "0.0.0-dev". Harmless while Windows had no crash reporting;
+        # now that the DSN reaches it (as a real env var, which pwsh does pass to Gradle) it
+        # would report against a release name no pipeline ever creates.
+        shell: bash
         run: ./gradlew :desktop:packageReleaseMsi $GRADLE_VERSION_ARGS
 
       # Decode the release keystore so the APK/AAB are signed with the real upload
@@ -235,6 +342,23 @@ jobs:
       GRADLE_VERSION_ARGS: >-
         -Pklardrop.version=${{ needs.version.outputs.version }}
         -Pklardrop.versionCode=${{ needs.version.outputs.versionCode }}
+
+      # Same version, exported the ORG_GRADLE_PROJECT_ way, for the same reason as the DSN
+      # below: the Kotlin framework this job ships is built by xcodebuild running
+      # `syncFramework` from the podspec script phase, which never sees $GRADLE_VERSION_ARGS.
+      # Without it the framework embeds KlardropVersion.VERSION = "0.0.0-dev" and macOS
+      # crashes report a release that does not match the one created by `sentry-release`.
+      # Only set on the jobs that drive an Xcode build — everywhere else the `-P` flag above
+      # already reaches the compiler, and the dotted property takes precedence regardless.
+      ORG_GRADLE_PROJECT_klardropVersion: ${{ needs.version.outputs.version }}
+
+      # Sentry DSN, baked in at compile time. Kept out of the tree because this repo is
+      # public and a DSN is a write-only ingest endpoint — a committed one is free quota
+      # for anyone scraping GitHub. Passed as ORG_GRADLE_PROJECT_* rather than a `-P` flag
+      # because the Apple frameworks are built by xcodebuild running `syncFramework` from
+      # the podspec script phase, which inherits the environment but not this job's Gradle
+      # arguments. Absent from build_pr.yml on purpose: PR builds must not report.
+      ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
     steps:
       - uses: actions/checkout@v7
 
@@ -256,13 +380,13 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
           restore-keys: konan-${{ runner.os }}-
 
-      # Build the Bugsnag synthetic CocoaPod framework for macOS (both Debug and
+      # Build the Sentry synthetic CocoaPod framework for macOS (both Debug and
       # Release variants). This must run BEFORE xcodebuild because FRAMEWORK_SEARCH_PATHS
-      # in the pbxproj points at common/build/cocoapods/synthetic/macos/build/{Debug,Release}/Bugsnag.
+      # in the pbxproj points at common/build/cocoapods/synthetic/macos/build/{Debug,Release}/Sentry.
       # Only the Debug variant exists locally after local dev; CI must produce the Release variant
       # explicitly here.
-      - name: Build Kotlin macOS frameworks (Bugsnag synthetic + dummy)
-        run: ./gradlew :klardrop-common:podBuildBugsnagMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
+      - name: Build Kotlin macOS frameworks (Sentry synthetic + dummy)
+        run: ./gradlew :klardrop-common:podBuildSentryMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
 
       - name: pod install
         run: pod install --project-directory=iosApp
@@ -322,16 +446,18 @@ jobs:
             ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
 
-      # Upload the archive's dSYMs to Bugsnag straight after archiving. Bugsnag matches a
+      # Upload the archive's dSYMs to Sentry straight after archiving. Sentry matches a
       # dSYM to a crash by Mach-O UUID, and neither the export nor the re-sign below changes
       # LC_UUID (codesign only rewrites the signature blob), so this covers the shipped app.
-      # Without it an Apple crash report reaches Bugsnag as bare load addresses with no Kotlin
+      # Without it an Apple crash report reaches Sentry as bare load addresses with no Kotlin
       # frames — the release binary is stripped and the DWARF only exists here on the runner.
       # continue-on-error: symbolication must never be the reason a release fails to ship.
-      - name: Upload dSYMs to Bugsnag
+      - name: Upload dSYMs to Sentry
         continue-on-error: true
         env:
-          BUGSNAG_API_KEY: ${{ secrets.BUGSNAG_API_KEY }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: ./scripts/upload_dsyms.sh "$RUNNER_TEMP/KlardropMac.xcarchive"
 
       # Also keep them downloadable: the runner (and the archive) is gone within minutes, so
@@ -616,6 +742,40 @@ jobs:
           draft: false
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  # Finalize only once every build has succeeded and the artifacts are published. `finalize`
+  # stamps dateReleased, which is what turns on regression detection and "resolved in the next
+  # release" from that point — marking a release shipped that then failed to build would poison
+  # both. `needs: publish` transitively covers build + build-macos-native, and `sentry-release`
+  # so we never finalize a release that was never created (or was skipped for a missing token).
+  sentry-finalize:
+    needs: [version, sentry-release, publish]
+    runs-on: ubuntu-latest
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG:        ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT:    ${{ vars.SENTRY_PROJECT }}
+      VERSION:           ${{ needs.version.outputs.version }}
+    steps:
+      # No checkout: finalize and deploys are pure API calls against the release name.
+      - name: Finalize Sentry release + record the production deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${SENTRY_AUTH_TOKEN}" ]; then
+            echo "SENTRY_AUTH_TOKEN not set — skipping Sentry release finalize (fork or unconfigured repo)."
+            exit 0
+          fi
+
+          # Pinned for the same supply-chain reason as in `sentry-release` above.
+          curl -fsSL https://sentry.io/get-cli/ \
+            | INSTALL_DIR="$RUNNER_TEMP/sentry-cli" SENTRY_CLI_VERSION=3.6.2 bash
+          export PATH="$RUNNER_TEMP/sentry-cli:$PATH"
+
+          sentry-cli releases finalize "$VERSION"
+          # The deploy is what dates "shipped to production" separately from "release created",
+          # so Sentry can report time-to-adoption and flag events arriving from an older release.
+          sentry-cli deploys new -r "$VERSION" -e production
 
   # Bump the Homebrew cask in the carlonzo/homebrew-klardrop tap. Gated on the
   # tap token + a stable version.
