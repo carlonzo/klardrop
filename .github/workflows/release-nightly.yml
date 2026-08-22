@@ -401,6 +401,25 @@ jobs:
           mkdir -p "$RUNNER_TEMP/keys"
           echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8"
 
+      # App Store distribution profiles inherit capabilities from the App ID. If
+      # App Groups is not enabled (and group.com.carlom.Klardrop not assigned) on
+      # com.carlom.Klardrop / com.carlom.Klardrop.Share, exportArchive drops the
+      # planted entitlement and the share extension cannot reach the host. No-op
+      # when the capability is already assigned.
+      - name: Ensure App Groups on iOS App IDs
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography
+          "$RUNNER_TEMP/venv/bin/python" scripts/ensure_ios_app_groups.py \
+            --p8 "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8" \
+            --key-id "$API_KEY_ID" \
+            --issuer "$API_ISSUER"
+
       # Archive WITHOUT code signing — signing happens once, at export (the same split the
       # macOS job below uses).
       #
@@ -454,6 +473,36 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      # CODE_SIGNING_ALLOWED=NO skips ProcessProductPackaging, so the archive carries
+      # no entitlements. -exportArchive re-signs from the archive's existing entitlement
+      # set (the App Store profile supplies the identity, not the dict) — the same
+      # empty-set behaviour the macOS job already works around by re-signing from repo
+      # .entitlements. Without planting App Groups here, the IPA is distribution-signed
+      # but the share extension cannot reach the host app's shared container. Ad-hoc
+      # sign (identity `-`) writes the entitlements onto the Mach-O without minting a
+      # certificate; export then re-signs with Apple Distribution. The xcent next to
+      # the binary is what the exporter also reads.
+      - name: Plant App Group entitlements on the unsigned archive
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/Klardrop.xcarchive/Products/Applications/Klardrop.app"
+          APPEX="$APP/PlugIns/KlardropShare.appex"
+          test -d "$APP" || { echo "::error::archived app not at $APP"; exit 1; }
+          test -d "$APPEX" || { echo "::error::archived share extension not at $APPEX"; exit 1; }
+
+          plant() {
+            local bundle="$1" src="$2"
+            cp "$src" "$bundle/archived-expanded-entitlements.xcent"
+            codesign --force --sign - --entitlements "$src" "$bundle"
+            codesign -d --entitlements - --xml "$bundle" 2>/dev/null \
+              | grep -q 'group.com.carlom.Klardrop' \
+              || { echo "::error::failed to plant App Group on $bundle from $src"; exit 1; }
+          }
+          # extension first so the app's outer ad-hoc signature seals it
+          plant "$APPEX" "iosApp/Klardrop Share/KlardropShare.entitlements"
+          plant "$APP" "iosApp/iosApp/iosApp.entitlements"
+
       # Export to disk first (destination=export) rather than straight to upload, so the
       # signed .ipa can be inspected before it ships. -allowProvisioningUpdates + the API
       # key lets Xcode create the App Store *distribution* profiles for the app + share
@@ -490,11 +539,13 @@ jobs:
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER"
 
-      # The archive is unsigned, so the exported bundles get their entitlements from the
-      # App Store provisioning profile rather than from the built binaries. That's the
-      # intended behaviour, but it means a capability missing from the App ID would
-      # silently produce an app whose share extension can't reach the shared container.
-      # Fail here instead of shipping that to testers.
+      # Fail here instead of shipping an IPA whose share extension cannot reach the
+      # host app's shared container. Dump codesign + profile entitlements for both
+      # bundles before asserting so a miss distinguishes "export dropped the planted
+      # entitlements" (signature empty, profile has App Groups) from "App Groups is
+      # not enabled on the App ID" (profile also lacks them — enable it on
+      # com.carlom.Klardrop and com.carlom.Klardrop.Share and assign
+      # group.com.carlom.Klardrop). Check both bundles before exiting.
       - name: Verify the exported app is distribution-signed and kept its App Group
         if: steps.signing.outputs.enabled == 'true'
         run: |
@@ -507,13 +558,31 @@ jobs:
           APPEX="$(ls -d "$APP/PlugIns"/*.appex 2>/dev/null | head -1 || true)"
           test -n "$APPEX" \
             || { echo "::error::the exported app embeds no share extension — KlardropShare was dropped from the archive"; exit 1; }
-          codesign -dvv "$APP" 2>&1 | grep -q 'Authority=Apple Distribution' \
-            || { echo "::error::$APP is not signed with an Apple Distribution certificate"; exit 1; }
+
+          dump() {
+            local b="$1"
+            echo "=== codesign entitlements: $b"
+            codesign -d --entitlements - --xml "$b" 2>/dev/null || echo "(codesign produced no entitlements)"
+            local profile="$b/embedded.mobileprovision"
+            if [ -f "$profile" ]; then
+              echo "=== profile entitlements: $profile"
+              security cms -D -i "$profile" | plutil -extract Entitlements xml1 -o - \
+                || echo "(failed to decode embedded.mobileprovision)"
+            else
+              echo "=== no embedded.mobileprovision in $b"
+            fi
+          }
+
+          failed=0
           for b in "$APP" "$APPEX"; do
+            dump "$b"
+            codesign -dvv "$b" 2>&1 | grep -q 'Authority=Apple Distribution' \
+              || { echo "::error::$b is not signed with an Apple Distribution certificate"; failed=1; }
             codesign -d --entitlements - --xml "$b" 2>/dev/null \
               | grep -q 'group.com.carlom.Klardrop' \
-              || { echo "::error::$b is missing the group.com.carlom.Klardrop App Group entitlement — the share extension would not reach the app's shared container. Check that App Groups is enabled on the App ID."; exit 1; }
+              || { echo "::error::$b is missing the group.com.carlom.Klardrop App Group entitlement — the share extension would not reach the app's shared container. If the profile dump above also lacks application-groups, enable App Groups on the App ID and assign group.com.carlom.Klardrop. If the profile has it but the signature doesn't, exportArchive dropped the planted entitlements."; failed=1; }
           done
+          exit "$failed"
 
       # xcodebuild can only upload from an archive, not from an .ipa, so the upload is a
       # second export of the same archive with destination=upload. It re-signs identically
