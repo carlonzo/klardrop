@@ -35,13 +35,18 @@ jobs:
       # and exactly wrong here -- a tagged release would build, sign, publish and go green while
       # every shipped binary had crash reporting compiled out. One assert up front beats
       # discovering it from an empty Sentry dashboard weeks later.
-      - name: Require Sentry secrets
+      # SENTRY_ORG / SENTRY_PROJECT are repository *variables*, not secrets, on purpose. They are
+      # not sensitive -- both appear in every Sentry URL -- and storing them as secrets makes
+      # Actions redact those literal strings from every log line in the repo, so `:klardrop-common:`
+      # renders as `:***-common:` and Gradle paths become unreadable. Only the DSN and the auth
+      # token are secrets.
+      - name: Require Sentry configuration
         shell: bash
         env:
           SENTRY_DSN:        ${{ secrets.SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT:    ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_ORG:        ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT:    ${{ vars.SENTRY_PROJECT }}
         run: |
           set -euo pipefail
           missing=""
@@ -49,9 +54,10 @@ jobs:
             [ -n "${!v:-}" ] || missing="$missing $v"
           done
           if [ -n "$missing" ]; then
-            echo "::error::Missing repository secret(s):$missing — a tagged release built without them"\
+            echo "::error::Missing Sentry configuration:$missing — a tagged release built without them"\
                  " ships with crash reporting disabled and unsymbolicated. Set them in"\
-                 " Settings > Secrets and variables > Actions, then re-run."
+                 " Settings > Secrets and variables > Actions (DSN + auth token as secrets,"\
+                 " org + project as variables), then re-run."
             exit 1
           fi
 
@@ -101,8 +107,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
-      SENTRY_PROJECT:    ${{ secrets.SENTRY_PROJECT }}
+      SENTRY_ORG:        ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT:    ${{ vars.SENTRY_PROJECT }}
       VERSION:           ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
@@ -167,8 +173,8 @@ jobs:
       # empty on a fork, and android/build.gradle.kts is responsible for making the mapping
       # upload optional in that case rather than failing the build.
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
-      SENTRY_PROJECT:    ${{ secrets.SENTRY_PROJECT }}
+      SENTRY_ORG:        ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT:    ${{ vars.SENTRY_PROJECT }}
 
       # Sentry DSN, baked in at compile time. Kept out of the tree because this repo is
       # public and a DSN is a write-only ingest endpoint — a committed one is free quota
@@ -450,8 +456,8 @@ jobs:
         continue-on-error: true
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: ./scripts/upload_dsyms.sh "$RUNNER_TEMP/KlardropMac.xcarchive"
 
       # Also keep them downloadable: the runner (and the archive) is gone within minutes, so
@@ -747,8 +753,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
-      SENTRY_PROJECT:    ${{ secrets.SENTRY_PROJECT }}
+      SENTRY_ORG:        ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT:    ${{ vars.SENTRY_PROJECT }}
       VERSION:           ${{ needs.version.outputs.version }}
     steps:
       # No checkout: finalize and deploys are pure API calls against the release name.
