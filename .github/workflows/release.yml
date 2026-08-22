@@ -78,7 +78,10 @@ jobs:
           # commit always outranks an earlier one on either channel. Needs full git
           # history (fetch-depth: 0) and assumes main-line history only grows.
           COMMITS="$(git rev-list --count HEAD)"
-          CODE=$(( COMMITS * 2 ))
+          # The +20 offset clears versionCode 1589, which a nightly dispatched from a side
+          # branch published to Play beta on 2026-08-22 — above anything main's own commit
+          # count reaches. Keep it identical in release-nightly.yml.
+          CODE=$(( COMMITS * 2 + 20 ))
           # A "stable" release is bare X.Y.Z (no pre-release suffix). Package-manager
           # bumps only run for stable versions.
           if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then STABLE=true; else STABLE=false; fi
