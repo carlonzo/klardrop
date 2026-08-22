@@ -97,12 +97,22 @@ object CrashReporterConfig {
   val DSN: String = KlardropVersion.SENTRY_DSN
 
   /**
-   * Only production builds report. Development churn (debug builds, hot reload, manual
-   * disconnect tests) was filling the dashboard with peer-hangup noise that masked real
-   * production issues — this is the Sentry equivalent of Bugsnag's
-   * `enabledReleaseStages = setOf("production")`.
+   * The Sentry `environment` for [appVersion].
+   *
+   * This has to be derived from the version rather than hard-coded, because nightlies ship to
+   * real testers (TestFlight, Play `beta`, the rolling prerelease) and their crashes must be
+   * separable from production ones. `sentry-cli deploys new -e nightly` does NOT do that: a
+   * deploy only records "this release reached environment X" — issue filters and
+   * regression detection read the *event's* environment field, which is this one. Tagging
+   * every nightly `production` would have quietly made "is this crash only on the tester
+   * track?" unanswerable.
+   *
+   * Keyed off the pre-release suffix the nightly pipeline already puts in the version
+   * (1.0.1-nightly.N vs 1.0.1) so it needs no extra Gradle property plumbed through four
+   * jobs — and, unlike a property, it cannot drift out of step with the release name.
    */
-  const val PRODUCTION_ENVIRONMENT = "production"
+  fun environmentFor(appVersion: String): String =
+    if (appVersion.contains("-nightly.")) "nightly" else "production"
 }
 
 /** Compile-time target name, reported as the `device.platform` tag. */
@@ -123,6 +133,6 @@ fun initCrashReporter(appVersion: String, isProduction: Boolean) {
   Sentry.init { options ->
     options.dsn = CrashReporterConfig.DSN
     options.release = appVersion
-    options.environment = CrashReporterConfig.PRODUCTION_ENVIRONMENT
+    options.environment = CrashReporterConfig.environmentFor(appVersion)
   }
 }

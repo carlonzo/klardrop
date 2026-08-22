@@ -131,10 +131,9 @@ sentry {
   tracingInstrumentation.enabled.set(false)
   runtimeOptimizations.enabled.set(false)
 
-  // Source context would bundle our sources and ship them to Sentry, and the
-  // dependency report would add a sentry-external-modules.txt asset listing the whole
+  // The dependency report would add a sentry-external-modules.txt asset listing the whole
   // dependency graph to every event. The mapping alone deobfuscates stack traces.
-  includeSourceContext.set(false)
+  // (includeSourceContext is not set: it already defaults to false.)
   includeDependenciesReport.set(false)
 
   // On by default, this reports build metrics to Sentry's own project on every

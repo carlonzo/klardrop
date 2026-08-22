@@ -105,6 +105,32 @@ jobs:
       # is not retried against the same commit on the next schedule (which would rebuild the
       # same commit-derived versionCode and be rejected by Play). The tag is the gate's
       # commit marker; on success `publish` recreates the GitHub release on top of it.
+# Fail here, not after shipping. An unset secret interpolates to "" and every downstream
+      # consumer treats empty as "disabled": initCrashReporter no-ops on an empty DSN, and the
+      # Sentry jobs skip on an empty token. That is exactly right for pull requests and forks,
+      # and exactly wrong here -- a nightly would build, sign, publish and go green while
+      # every shipped binary had crash reporting compiled out. One assert up front beats
+      # discovering it from an empty Sentry dashboard weeks later.
+      - name: Require Sentry secrets
+        shell: bash
+        env:
+          SENTRY_DSN:        ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT:    ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for v in SENTRY_DSN SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT; do
+            [ -n "${!v:-}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing — a nightly built without them"\
+                 " ships with crash reporting disabled and unsymbolicated. Set them in"\
+                 " Settings > Secrets and variables > Actions, then re-run."
+            exit 1
+          fi
+
       - name: Advance the `nightly` tag to this commit
         if: steps.check.outputs.proceed == 'true'
         run: |
@@ -117,14 +143,11 @@ jobs:
   # commit range between two nightlies is a day, so Sentry's suspect-commit resolution
   # actually points at a single change instead of a whole release's worth of them.
   #
-  # The release name is `semver` (1.0.1-nightly.<commits>) — that is what the Android and
-  # Linux builds bake into KlardropVersion.VERSION and therefore send as `options.release`.
-  # KNOWN GAP: the ios/macos jobs pass `-Pklardrop.version=base` (bare 1.0.1), so Apple
-  # nightlies currently report under the *next stable* version's name. Deliberately not
-  # papered over by also creating a `base` release here: that release belongs to the stable
-  # pipeline, and filling it with nightly events before it ships would corrupt it. The fix
-  # is to give those two jobs `-Pklardrop.version=semver -Pklardrop.packageVersion=base`,
-  # exactly like the `android` job above — a version-semantics change, not a CI change.
+  # The release name is `semver` (1.0.1-nightly.<commits>). All four build jobs bake exactly
+  # that into KlardropVersion.VERSION and therefore send it as `options.release`, so events
+  # and release land on the same name. Keep it that way: ios/macos used to pass the bare
+  # `base` here, which filed Apple nightly crashes under the *next stable* version — a release
+  # belonging to the tagged pipeline, corrupted before it had shipped.
   sentry-release:
     needs: gate
     if: needs.gate.outputs.proceed == 'true'

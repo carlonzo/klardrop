@@ -28,6 +28,33 @@ jobs:
         with:
           fetch-depth: 0   # full history — versionCode is derived from the commit count
 
+
+      # Fail here, not after shipping. An unset secret interpolates to "" and every downstream
+      # consumer treats empty as "disabled": initCrashReporter no-ops on an empty DSN, and the
+      # Sentry jobs skip on an empty token. That is exactly right for pull requests and forks,
+      # and exactly wrong here -- a tagged release would build, sign, publish and go green while
+      # every shipped binary had crash reporting compiled out. One assert up front beats
+      # discovering it from an empty Sentry dashboard weeks later.
+      - name: Require Sentry secrets
+        shell: bash
+        env:
+          SENTRY_DSN:        ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT:    ${{ secrets.SENTRY_PROJECT }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for v in SENTRY_DSN SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT; do
+            [ -n "${!v:-}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secret(s):$missing — a tagged release built without them"\
+                 " ships with crash reporting disabled and unsymbolicated. Set them in"\
+                 " Settings > Secrets and variables > Actions, then re-run."
+            exit 1
+          fi
+
       - id: v
         shell: bash
         run: |
@@ -162,6 +189,13 @@ jobs:
 
       - name: Build Windows MSI
         if: matrix.target == 'windows'
+        # shell: bash is load-bearing, not style. windows-latest defaults to pwsh, where
+        # $GRADLE_VERSION_ARGS is an undefined PowerShell variable that expands to nothing --
+        # so every -P flag was silently dropped and the MSI built with packageVersion 1.0.0 and
+        # KlardropVersion.VERSION "0.0.0-dev". Harmless while Windows had no crash reporting;
+        # now that the DSN reaches it (as a real env var, which pwsh does pass to Gradle) it
+        # would report against a release name no pipeline ever creates.
+        shell: bash
         run: ./gradlew :desktop:packageReleaseMsi $GRADLE_VERSION_ARGS
 
       # Decode the release keystore so the APK/AAB are signed with the real upload

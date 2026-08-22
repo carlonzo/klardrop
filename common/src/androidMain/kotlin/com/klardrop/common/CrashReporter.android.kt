@@ -14,6 +14,6 @@ fun initCrashReporter(context: Context, appVersion: String, isProduction: Boolea
   Sentry.init(context) { options ->
     options.dsn = CrashReporterConfig.DSN
     options.release = appVersion
-    options.environment = CrashReporterConfig.PRODUCTION_ENVIRONMENT
+    options.environment = CrashReporterConfig.environmentFor(appVersion)
   }
 }
