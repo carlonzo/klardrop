@@ -124,4 +124,6 @@ class Klardrop(
 
   fun visibleDevices() = commonComponent.visibleDevices()
 
+  fun trustedDevices() = commonComponent.trustedDevicesDirectory().trustedDevices
+
 }

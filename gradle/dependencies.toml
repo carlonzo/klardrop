@@ -21,6 +21,7 @@ sentry-kmp = "0.27.0"
 # KMP SDK above and must not be pinned to it.
 sentry-android = "6.19.0"
 filekit = "0.15.0"
+composenativetray = "2.1.0"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
 coil3 = "3.5.0"
@@ -60,6 +61,7 @@ ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }
 turbine = { module = "app.cash.turbine:turbine", version = "1.2.1" }
 filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekit" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
+nucleus-composenativetray = { module = "dev.nucleusframework:composenativetray", version.ref = "composenativetray" }
 
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
 sqldelight-coroutines-extensions = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
