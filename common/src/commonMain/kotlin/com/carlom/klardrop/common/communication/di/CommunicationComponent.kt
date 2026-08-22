@@ -15,19 +15,20 @@ import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.communication.MessengerImpl
 import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.communication.Server
-import com.carlom.klardrop.common.communication.message.AckMessageHandler
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessageHandler
 import com.carlom.klardrop.common.communication.message.FileMessageHandler
-import com.carlom.klardrop.common.communication.message.MessageHandlersImpl
+import com.carlom.klardrop.common.communication.message.Message
+import com.carlom.klardrop.common.communication.message.MessageHandler
+import com.carlom.klardrop.common.communication.message.MessageHandlers
 import com.carlom.klardrop.common.communication.message.MessageType
+import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.TextMessageHandler
 import com.carlom.klardrop.common.communication.router.IncomingAuthorizer
 import com.carlom.klardrop.common.communication.router.MessagesRouterImpl
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
-import com.carlom.klardrop.common.mdns.NearbyClient
-import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandlerFactory
+import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandler
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.MessageReceiver
@@ -35,10 +36,8 @@ import com.carlom.klardrop.common.receiver.MessageReceiverImpl
 import com.carlom.klardrop.common.trust.ClipboardSyncManager
 import com.carlom.klardrop.common.trust.ClipboardSyncMessageHandler
 import com.carlom.klardrop.common.trust.PairingProtocolCoordinator
-import com.carlom.klardrop.common.trust.TrustChecker
 import com.carlom.klardrop.common.trust.TrustCrypto
 import com.carlom.klardrop.common.trust.TrustManager
-import com.carlom.klardrop.common.trust.TrustMessageWrapper
 import com.carlom.klardrop.common.trust.TrustPairingRequestHandler
 import com.carlom.klardrop.common.trust.TrustPairingResponseHandler
 import com.carlom.klardrop.common.trust.TrustRevocationMessageHandler
@@ -70,7 +69,7 @@ class CommunicationModule(
   /**
    * Platform hook that keeps the host process alive and awake for the length of a file transfer,
    * outbound (via [MessengerImpl]) and inbound (via [MessagesRouterImpl] for Klardrop transfers
-   * and [NearbyReceiverConnectionHandlerFactory] for Nearby ones) alike.
+   * and Nearby inbound for Nearby ones) alike.
    */
   private val transferAnchor: TransferAnchor = TransferAnchor.None,
 ) {
@@ -82,17 +81,9 @@ class CommunicationModule(
 
   private val trustCrypto = TrustCrypto()
 
-  private val trustChecker = object : TrustChecker {
-    override suspend fun isTrusted(deviceId: String): Boolean = trustStorage.isTrusted(deviceId)
-  }
-
-  // TrustManager is now a pure domain component without messenger dependency
   private val trustManager by lazy {
     TrustManager(trustCrypto, trustStorage, clock, currentDeviceProvider)
   }
-
-  // PairingProtocolCoordinator will be initialized manually after DI cycle is complete
-  private var pairingProtocolCoordinator: PairingProtocolCoordinator? = null
 
 
   // Clipboard sync components
@@ -107,17 +98,16 @@ class CommunicationModule(
   private val messageHandlers by lazy {
     val handlers = mapOf(
       MessageType.TEXT to TextMessageHandler(serializer, messageRepository),
-      MessageType.FILE to fileMessageHandler,
-      MessageType.ACK_READY to AckMessageHandler(),
-      MessageType.ACK_RECEIVED to AckMessageHandler(),
       MessageType.TRUST_PAIRING_REQUEST to TrustPairingRequestHandler(serializer, trustManager),
       MessageType.TRUST_PAIRING_RESPONSE to TrustPairingResponseHandler(serializer, trustManager),
       MessageType.TRUST_REVOCATION to TrustRevocationMessageHandler(serializer, trustManager),
       MessageType.CLIPBOARD_SYNC to ClipboardSyncMessageHandler(serializer, clipboardSyncManager),
       MessageType.CONNECTION_INFO to ConnectionInfoMessageHandler(serializer),
     )
-
-    MessageHandlersImpl(handlers)
+    MessageHandlers { type ->
+      @Suppress("UNCHECKED_CAST")
+      handlers[type] as MessageHandler<Message, SendMessageRequest>?
+    }
   }
 
   private val connectionsPool by lazy { ConnectionsPoolImpl(coroutines, networkLifecycleMonitor, currentDeviceProvider) }
@@ -215,7 +205,9 @@ class CommunicationModule(
       messagesRouter,
       serializer,
       currentDeviceProvider,
-      NearbyReceiverConnectionHandlerFactory(fileManager, coroutines, incomingAuthorizer, messageRepository, clock, transferAnchor),
+      createNearbyReceiver = {
+        NearbyReceiverConnectionHandler(fileManager, coroutines, incomingAuthorizer, messageRepository, transferAnchor)
+      },
       visibleDevices,
       messageReceiver,
       protoBuf,
@@ -225,29 +217,25 @@ class CommunicationModule(
     )
   }
 
-  private val nearbyClient = lazy {
-    NearbyClient(
-      coroutines,
-      currentDeviceProvider,
-      fileManager,
-    )
-  }
-
   private val messenger: Messenger by lazy {
     MessengerImpl(
       visibleDevices,
       connectionsPool,
       client(),
       coroutines,
-      nearbyClient,
+      currentDeviceProvider,
+      fileManager,
       messageReceiver,
-      lazy { trustChecker },
       trustManager,
       serializer,
       messageRepository,
       ackTimeoutConfig,
       transferAnchor,
     )
+  }
+
+  private val pairingProtocolCoordinator by lazy {
+    PairingProtocolCoordinator(trustManager, messenger)
   }
 
   fun client() = client
@@ -258,16 +246,9 @@ class CommunicationModule(
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
   fun trustManager() = trustManager
-  fun pairingProtocolCoordinator() = pairingProtocolCoordinator ?: initializePairingProtocolCoordinator()
+  fun pairingProtocolCoordinator() = pairingProtocolCoordinator
   fun trustStorage() = trustStorage
   fun clipboardSyncManager() = clipboardSyncManager
-
-  private fun initializePairingProtocolCoordinator(): PairingProtocolCoordinator {
-    if (pairingProtocolCoordinator == null) {
-      pairingProtocolCoordinator = PairingProtocolCoordinator(trustManager, messenger)
-    }
-    return pairingProtocolCoordinator!!
-  }
 
 
   @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)

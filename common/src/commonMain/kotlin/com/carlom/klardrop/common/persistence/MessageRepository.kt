@@ -11,7 +11,6 @@ import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlin.uuid.ExperimentalUuidApi
@@ -119,7 +118,6 @@ class MessageRepositoryImpl(
   private val database: AppDatabase,
   private val clock: Clock,
   private val ioDispatcher: CoroutineDispatcher,
-  private val outbox: MessageOutbox = MessageOutbox(),
 ) : MessageRepository {
 
   override suspend fun insertMessage(
@@ -218,7 +216,7 @@ class MessageRepositoryImpl(
   }
 
   override fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<ChatMessage>> {
-    val diskFlow: Flow<List<ChatMessage>> = database.messageQueries
+    return database.messageQueries
       .getMessagesForDevice(remoteDeviceId, limit)
       .asFlow()
       .mapToList(ioDispatcher)
@@ -243,34 +241,6 @@ class MessageRepositoryImpl(
           )
         }
       }
-
-    val outboxFlow: Flow<List<ChatMessage>> = outbox.entries.map { entries ->
-      entries
-        .filter { it.remoteDeviceId == remoteDeviceId }
-        .map { entry ->
-          ChatMessage(
-            id = entry.messageId,
-            remoteDeviceId = entry.remoteDeviceId,
-            content = entry.content,
-            timestamp = entry.timestamp,
-            isSender = true,
-            messageType = MessageType.TEXT.name,
-            fileTransferId = null,
-            isRead = 1L,
-            mimeType = "text/plain",
-            deliveryStatus = DeliveryStatus.SENDING,
-          )
-        }
-    }
-
-    // Merge: disk rows take precedence over outbox entries with the same id.
-    return diskFlow.combine(outboxFlow) { diskMessages, outboxMessages ->
-      val diskIds = diskMessages.map { it.id }.toSet()
-      val filteredOutbox = outboxMessages.filter { it.id !in diskIds }
-      (diskMessages + filteredOutbox)
-        .sortedByDescending { it.timestamp }
-        .take(limit.toInt())
-    }
   }
 
   override fun getFileTransferById(id: Long): Flow<File_transfers?> {

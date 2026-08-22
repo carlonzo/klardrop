@@ -771,11 +771,8 @@ internal fun RenameDialog(
     onSave: (String) -> Unit,
 ) {
     val colors = KdTheme.colors
-    val typography = KdTheme.typography
     val spacing = KdTheme.spacing
     val radii = KdTheme.radii
-
-    var newName by remember { mutableStateOf(currentName) }
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Box(
@@ -785,48 +782,7 @@ internal fun RenameDialog(
                 .border(width = 1.dp, color = colors.border, shape = radii.shapeLg)
                 .padding(spacing.s6),
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(spacing.s4),
-            ) {
-                Text(
-                    text = "Rename device",
-                    style = typography.headline.copy(color = colors.text),
-                )
-                Text(
-                    text = "This is how others will see you when sharing.",
-                    style = typography.body.copy(color = colors.text2),
-                )
-
-                OutlinedTextField(
-                    value = newName,
-                    onValueChange = { newName = it },
-                    label = {
-                        Text("Device name", style = typography.caption.copy(color = colors.text2))
-                    },
-                    textStyle = typography.body.copy(color = colors.text),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardActions = KeyboardActions(onDone = { onSave(newName) }),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = colors.accent,
-                        unfocusedBorderColor = colors.border,
-                        cursorColor = colors.accent,
-                    ),
-                )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(spacing.s2, Alignment.End),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Cancel", style = typography.body.copy(color = colors.text2))
-                    }
-                    TextButton(onClick = { onSave(newName) }) {
-                        Text("Save", style = typography.body.copy(color = colors.accent))
-                    }
-                }
-            }
+            RenameForm(currentName = currentName, onDismiss = onDismiss, onSave = onSave)
         }
     }
 }
@@ -838,63 +794,77 @@ internal fun RenameSheet(
     onDismiss: () -> Unit,
     onSave: (String) -> Unit,
 ) {
-    val colors = KdTheme.colors
-    val typography = KdTheme.typography
-    val spacing = KdTheme.spacing
     val radii = KdTheme.radii
-
+    val spacing = KdTheme.spacing
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var newName by remember { mutableStateOf(currentName) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = radii.shapeSheet,
-        containerColor = colors.bg1,
+        containerColor = KdTheme.colors.bg1,
     ) {
-        Column(
+        RenameForm(
+            currentName = currentName,
+            onDismiss = onDismiss,
+            onSave = onSave,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = spacing.s6, end = spacing.s6, bottom = spacing.s6),
-            verticalArrangement = Arrangement.spacedBy(spacing.s4),
+        )
+    }
+}
+
+@Composable
+private fun RenameForm(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+    var newName by remember { mutableStateOf(currentName) }
+
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(spacing.s4),
+    ) {
+        Text(
+            text = "Rename device",
+            style = typography.headline.copy(color = colors.text),
+        )
+        Text(
+            text = "This is how others will see you when sharing.",
+            style = typography.body.copy(color = colors.text2),
+        )
+        OutlinedTextField(
+            value = newName,
+            onValueChange = { newName = it },
+            label = {
+                Text("Device name", style = typography.caption.copy(color = colors.text2))
+            },
+            textStyle = typography.body.copy(color = colors.text),
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            keyboardActions = KeyboardActions(onDone = { onSave(newName) }),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colors.accent,
+                unfocusedBorderColor = colors.border,
+                cursorColor = colors.accent,
+            ),
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(spacing.s2, Alignment.End),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(
-                text = "Rename device",
-                style = typography.headline.copy(color = colors.text),
-            )
-            Text(
-                text = "This is how others will see you when sharing.",
-                style = typography.body.copy(color = colors.text2),
-            )
-
-            OutlinedTextField(
-                value = newName,
-                onValueChange = { newName = it },
-                label = {
-                    Text("Device name", style = typography.caption.copy(color = colors.text2))
-                },
-                textStyle = typography.body.copy(color = colors.text),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardActions = KeyboardActions(onDone = { onSave(newName) }),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colors.accent,
-                    unfocusedBorderColor = colors.border,
-                    cursorColor = colors.accent,
-                ),
-            )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(spacing.s2, Alignment.End),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                TextButton(onClick = onDismiss) {
-                    Text("Cancel", style = typography.body.copy(color = colors.text2))
-                }
-                TextButton(onClick = { onSave(newName) }) {
-                    Text("Save", style = typography.body.copy(color = colors.accent))
-                }
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", style = typography.body.copy(color = colors.text2))
+            }
+            TextButton(onClick = { onSave(newName) }) {
+                Text("Save", style = typography.body.copy(color = colors.accent))
             }
         }
     }

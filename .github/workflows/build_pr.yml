@@ -139,15 +139,21 @@ jobs:
         #
         # The binaries are already linked by the step above, so this budget now
         # covers test execution alone — which has historically run ~12 minutes.
+        # macOS and iOS Simulator tests are run as two sequential Gradle invocations
+        # with --no-parallel: a single invocation schedules both native test workers
+        # at once, and on a 3-core runner that contention has been observed to push
+        # real-socket tests past this 60-minute step timeout even though every test
+        # that finished had passed.
         timeout-minutes: 60
         run: |
-          ./gradlew \
-            :klardrop-common:iosSimulatorArm64Test \
-            :presentation:iosSimulatorArm64Test \
-            :protos:iosSimulatorArm64Test \
+          ./gradlew --no-parallel \
             :klardrop-common:macosArm64Test \
             :presentation:macosArm64Test \
             :protos:macosArm64Test
+          ./gradlew --no-parallel \
+            :klardrop-common:iosSimulatorArm64Test \
+            :presentation:iosSimulatorArm64Test \
+            :protos:iosSimulatorArm64Test
 
       - name: Publish Test Report
         uses: dorny/test-reporter@v3

@@ -15,7 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.carlom.klardrop.android.MainActivity
-import com.carlom.klardrop.android.applicationComponent
+import com.carlom.klardrop.android.appKlardrop
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.launch
 
@@ -48,7 +48,7 @@ class DiscoveryForegroundService : Service() {
       log("DiscoveryForegroundService", "Stop requested; turning background discovery off")
       // Reflect the choice in the persisted pref so the Settings toggle shows OFF and the
       // app-side observer doesn't immediately restart us.
-      val component = applicationComponent().klardrop().commonComponent
+      val component = appKlardrop().commonComponent
       component.coroutines().appScope.launch {
         runCatching { component.localPropertiesRepository().saveBackgroundDiscoveryEnabled(false) }
       }

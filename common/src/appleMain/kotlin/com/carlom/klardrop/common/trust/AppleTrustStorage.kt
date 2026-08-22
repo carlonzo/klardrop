@@ -14,6 +14,8 @@ import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import platform.CoreFoundation.CFDataCreate
 import platform.CoreFoundation.CFDataGetBytePtr
 import platform.CoreFoundation.CFDataGetLength
@@ -373,6 +375,13 @@ class AppleTrustStorage : TrustStorage {
             }
         }
     }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun ByteArray.toBase64String(): String = Base64.encode(this)
+
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun String.fromBase64OrNull(): ByteArray? =
+        runCatching { Base64.decode(this) }.getOrNull()
 
 }
 

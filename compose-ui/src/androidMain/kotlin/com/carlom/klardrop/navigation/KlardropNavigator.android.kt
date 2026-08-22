@@ -13,15 +13,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
-import androidx.navigation3.runtime.NavKey
-import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberNavBackStack
-import androidx.navigation3.ui.NavDisplay
 import com.carlom.klardrop.DiscoveryController
 import com.carlom.klardrop.DiscoveryScreen
 import com.carlom.klardrop.TrustStatus
@@ -29,20 +26,6 @@ import com.carlom.klardrop.UiDependencies
 import com.carlom.klardrop.WideLayout
 import com.carlom.klardrop.chat.DeviceChatScreen
 import com.carlom.klardrop.common.permissions.Capability
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.serialization.Serializable
-
-@Serializable
-sealed interface KlardropNavKey : NavKey
-
-@Serializable
-data object DiscoveryRoute : KlardropNavKey
-
-@Serializable
-data class ChatRoute(
-  val deviceId: String,
-  val deviceName: String,
-) : KlardropNavKey
 
 @Composable
 actual fun KlardropNavigator(
@@ -60,79 +43,61 @@ actual fun KlardropNavigator(
     return
   }
 
-  val backStack = rememberNavBackStack(DiscoveryRoute)
+  var chatTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-  LaunchedEffect(backStack, discoveryController) {
-    snapshotFlow { (backStack.lastOrNull() as? ChatRoute)?.deviceId }
-      .distinctUntilChanged()
-      .collect { discoveryController.setActiveChatDeviceId(it) }
+  LaunchedEffect(chatTarget) {
+    discoveryController.setActiveChatDeviceId(chatTarget?.first)
   }
 
-  NavDisplay(
-    backStack = backStack,
-    modifier = modifier,
-    onBack = { backStack.removeLastOrNull() },
-    entryProvider = entryProvider {
-      entry<DiscoveryRoute> {
-        val context = LocalContext.current
-        // RequestMultiplePermissions covers the bundled runtime perms behind a
-        // single capability (e.g. the three BLUETOOTH_* perms). After the
-        // dialog returns we check whether anything was permanently denied
-        // ("Don't ask again") and fall through to system Settings as the
-        // user's only remaining recourse.
-        val requestedPerms = remember { mutableListOf<String>() }
-        val permsLauncher = rememberLauncherForActivityResult(
-          ActivityResultContracts.RequestMultiplePermissions()
-        ) { results ->
-          // The runtime prompt only pauses the Activity, so the permissions
-          // monitor sees no foreground transition — poke it explicitly so a
-          // freshly-granted permission dismisses its banner right away.
-          discoveryController.refreshPermissions()
-          val activity = context.findActivity()
-          val anyPermanentlyDenied = activity != null && results.any { (perm, granted) ->
-            !granted && !ActivityCompat.shouldShowRequestPermissionRationale(activity, perm)
-          }
-          if (anyPermanentlyDenied) openAppSettings(context)
-          requestedPerms.clear()
-        }
-
-        DiscoveryScreen(
-          modifier = Modifier,
-          isLargeScreen = false,
-          discoveryController = discoveryController,
-          uiDependencies = uiDependencies,
-          onNavigateToChat = { id, name -> backStack.add(ChatRoute(id, name)) },
-          onRequestCapability = { capability ->
-            val perms = capability.androidPermissions()
-            if (perms.isEmpty()) {
-              openAppSettings(context)
-            } else {
-              requestedPerms.clear()
-              requestedPerms.addAll(perms)
-              permsLauncher.launch(perms.toTypedArray())
-            }
-          },
-        )
+  val currentTarget = chatTarget
+  if (currentTarget == null) {
+    val context = LocalContext.current
+    val requestedPerms = remember { mutableListOf<String>() }
+    val permsLauncher = rememberLauncherForActivityResult(
+      ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+      discoveryController.refreshPermissions()
+      val activity = context.findActivity()
+      val anyPermanentlyDenied = activity != null && results.any { (perm, granted) ->
+        !granted && !ActivityCompat.shouldShowRequestPermissionRationale(activity, perm)
       }
-      entry<ChatRoute> { key ->
-        val vm = remember(key.deviceId) {
-          uiDependencies.deviceChatViewModelFactory(key.deviceId)
-        }
-        val state by discoveryController.screenStateFlow.collectAsState()
-        val isOwned = state.devices
-          .firstOrNull { it.deviceId == key.deviceId }
-          ?.trustStatus == TrustStatus.Trusted
-        DeviceChatScreen(
-          deviceName = key.deviceName,
-          isOwned = isOwned,
-          viewModel = vm,
-          onBackClicked = { backStack.removeLastOrNull() },
-          onOpenFileRequest = { path -> vm.openFileClicked(path) },
-          onOpenUrlRequest = { url -> vm.openUrlClicked(url) },
-        )
-      }
+      if (anyPermanentlyDenied) openAppSettings(context)
+      requestedPerms.clear()
     }
-  )
+
+    DiscoveryScreen(
+      modifier = modifier,
+      isLargeScreen = false,
+      discoveryController = discoveryController,
+      uiDependencies = uiDependencies,
+      onNavigateToChat = { id, name -> chatTarget = id to name },
+      onRequestCapability = { capability ->
+        val perms = capability.androidPermissions()
+        if (perms.isEmpty()) {
+          openAppSettings(context)
+        } else {
+          requestedPerms.clear()
+          requestedPerms.addAll(perms)
+          permsLauncher.launch(perms.toTypedArray())
+        }
+      },
+    )
+  } else {
+    val (deviceId, deviceName) = currentTarget
+    val vm = remember(deviceId) { uiDependencies.deviceChatViewModelFactory(deviceId) }
+    val state by discoveryController.screenStateFlow.collectAsState()
+    val isOwned = state.devices
+      .firstOrNull { it.deviceId == deviceId }
+      ?.trustStatus == TrustStatus.Trusted
+    DeviceChatScreen(
+      deviceName = deviceName,
+      isOwned = isOwned,
+      viewModel = vm,
+      onBackClicked = { chatTarget = null },
+      onOpenFileRequest = { path -> vm.openFileClicked(path) },
+      onOpenUrlRequest = { url -> vm.openUrlClicked(url) },
+    )
+  }
 }
 
 private fun Capability.androidPermissions(): List<String> = when (this) {

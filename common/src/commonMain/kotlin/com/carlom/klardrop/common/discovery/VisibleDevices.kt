@@ -67,7 +67,7 @@ interface VisibleDevices {
 
 }
 
-internal class VisibleDevicesImpl(
+class VisibleDevicesImpl(
   private val coroutines: Coroutines,
   private val clock: Clock,
   /**

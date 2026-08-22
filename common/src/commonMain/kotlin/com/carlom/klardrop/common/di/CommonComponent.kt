@@ -14,25 +14,26 @@ import com.carlom.klardrop.common.communication.ConnectionsPool
 import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
-import com.carlom.klardrop.common.discovery.DiscoveryModule
-import com.carlom.klardrop.common.discovery.TrustAwareDiscoveryUtils
+import com.carlom.klardrop.common.discovery.DiscoveryNetwork
+import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils
+import com.carlom.klardrop.common.discovery.NearbyShareDiscoveryUtils
 import com.carlom.klardrop.common.discovery.TrustedDevicesDirectory
+import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.discovery.VisibleDevicesImpl
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
-import com.carlom.klardrop.common.persistence.MessageOutbox
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
+import com.carlom.klardrop.common.utils.CoroutinesImpl
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.PlatformFileSystemImpl
-import com.carlom.klardrop.common.utils.UtilsModule
 import kotlinx.serialization.protobuf.ProtoBuf
 
 class CommonComponent(
   private val applicationInfo: ApplicationInfo,
-  private val utilsModule: UtilsModule,
   private val internalPlatformDependency: InternalPlatformDependencies,
   /**
    * Keeps the host process alive and awake while a file transfer is in flight, in either
@@ -64,16 +65,17 @@ class CommonComponent(
     storageModule.messageRepository()
   }
 
-  private val coroutines: Coroutines by lazy { utilsModule.coroutines() }
-  private val clock: Clock by lazy { utilsModule.clock() }
+  private val coroutines: Coroutines by lazy { CoroutinesImpl() }
+  private val clock: Clock by lazy { Clock() }
   private val protoBuf = ProtoBuf
   private val currentDeviceProvider by lazy { CurrentDeviceProvider(localProperties) }
   private val platformFileSystem: PlatformFileSystem by lazy { PlatformFileSystemImpl(internalPlatformDependency, coroutines) }
+  private val visibleDevices: VisibleDevices by lazy { VisibleDevicesImpl(coroutines, clock) }
 
   private val communicationModule by lazy {
     CommunicationModule(
       coroutines = coroutines,
-      visibleDevices = discoveryModule.visibleDevices(),
+      visibleDevices = visibleDevices,
       protoBuf = protoBuf,
       clock = clock,
       fileManager = fileManager,
@@ -87,9 +89,16 @@ class CommonComponent(
     )
   }
 
-  private val discoveryModule by lazy {
-    DiscoveryModule(
-      coroutines, currentDeviceProvider, internalPlatformDependency, utilsModule
+  private val discoveryNetwork by lazy {
+    DiscoveryNetwork(
+      coroutines,
+      visibleDevices,
+      internalPlatformDependency.serviceDiscoveryMdns(),
+      NearbyShareDiscoveryUtils(),
+      KlardropDiscoveryUtils(),
+      currentDeviceProvider,
+      internalPlatformDependency.bleTransport(),
+      internalPlatformDependency.networkLifecycleMonitor(),
     )
   }
 
@@ -100,13 +109,9 @@ class CommonComponent(
   private val fileManager: FileManager
     get() = FileManagerImpl(platformFileSystem)
 
-  private val trustAwareDiscoveryUtils: TrustAwareDiscoveryUtils by lazy {
-    TrustAwareDiscoveryUtils(communicationModule.trustManager())
-  }
-
   private val trustedDevicesDirectory: TrustedDevicesDirectory by lazy {
     TrustedDevicesDirectory(
-      visibleDevices = discoveryModule.visibleDevices(),
+      visibleDevices = visibleDevices,
       knownDevicesRepository = knownDevicesRepository,
       trustStorage = communicationModule.trustStorage(),
       trustChanges = communicationModule.trustManager().trustChanges,
@@ -127,13 +132,13 @@ class CommonComponent(
     )
   }
 
-  fun discoveryNetwork() = discoveryModule.discoveryNetwork()
+  fun discoveryNetwork() = discoveryNetwork
   fun server() = communicationModule.server()
   fun bleServerListener() = communicationModule.bleServerListener()
   fun bleEagerConnector() = communicationModule.bleEagerConnector()
   fun eagerReachabilityConnector() = communicationModule.eagerReachabilityConnector()
   fun coroutines() = coroutines
-  fun visibleDevices() = discoveryModule.visibleDevices()
+  fun visibleDevices() = visibleDevices
   fun messenger() = communicationModule.messenger()
   fun messageReceiver() = communicationModule.messageReceiver()
   fun reachability() = communicationModule.reachability()
@@ -146,8 +151,6 @@ class CommonComponent(
 
   fun messageRepository() = messageRepository
 
-  fun messageOutbox(): MessageOutbox = storageModule.messageOutbox
-
   fun fileManager() = fileManager
 
   fun trustManager() = communicationModule.trustManager()
@@ -155,8 +158,6 @@ class CommonComponent(
   fun pairingProtocolCoordinator() = communicationModule.pairingProtocolCoordinator()
 
   fun trustStorage() = communicationModule.trustStorage()
-
-  fun trustAwareDiscoveryUtils() = trustAwareDiscoveryUtils
 
   fun trustedDevicesDirectory() = trustedDevicesDirectory
 

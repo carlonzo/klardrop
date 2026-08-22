@@ -458,7 +458,7 @@ internal class MessagesRouterImpl(
       val messageHandler = handlers[message.type]
       if (messageHandler != null) {
         messageHandler.handleIncoming(message, readChannel, receiveFlow)
-      } else {
+      } else if (!isAckMessage) {
         error("No handler found in MessagesRouter for message type ${message.type} with id ${message.id}")
       }
     }

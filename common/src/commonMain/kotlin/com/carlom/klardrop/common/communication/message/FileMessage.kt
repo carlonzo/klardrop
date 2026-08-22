@@ -2,7 +2,6 @@ package com.carlom.klardrop.common.communication.message
 
 import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.FileTransfer
-import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.persistence.FileTransferStatus
@@ -15,8 +14,6 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.path
-import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -396,14 +393,9 @@ class FileReceivePipeline internal constructor(
 }
 
 /**
- * File transfer handler. Note that, unlike other [MessageHandler]s, the standard
- * [handleIncoming] / [handleOutgoing] / [handleOutgoingWithReadyAck] paths are NOT used for
- * FILE messages — the router invokes [beginReceive] (incoming header) and [handleOutgoingChunked]
- * (outgoing) directly because the chunked wire format requires per-chunk framing rather than
- * one continuous payload write under a single mutex hold.
- *
- * Those overridden methods only exist to satisfy the [MessageHandler] interface; the router
- * never reaches them for FILE messages.
+ * File transfer handler. The router invokes [beginReceive] (incoming header) and
+ * [handleOutgoingChunked] (outgoing) directly because the chunked wire format requires
+ * per-chunk framing rather than one continuous payload write under a single mutex hold.
  */
 class FileMessageHandler(
   private val fileManager: FileManager,
@@ -411,39 +403,7 @@ class FileMessageHandler(
   private val coroutines: Coroutines,
   private val messageRepository: MessageRepository,
   private val crypto: com.carlom.klardrop.common.trust.TrustCrypto = com.carlom.klardrop.common.trust.TrustCrypto(),
-) : MessageHandler<FileMessage, FileMessage.FileSendRequest> {
-
-  override suspend fun handleIncoming(
-    message: FileMessage,
-    readChannel: ByteReadChannel,
-    receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
-  ) {
-    error("FileMessageHandler.handleIncoming is bypassed by the router for FILE messages; " +
-        "use beginReceive() instead.")
-  }
-
-  override suspend fun handleOutgoing(
-    toDeviceId: String,
-    request: FileMessage.FileSendRequest,
-    writeChannel: ByteWriteChannel,
-    progressFlow: MutableSharedFlow<MessengerSendProgress>,
-    cipher: FrameCipher,
-  ) {
-    error("FileMessageHandler.handleOutgoing is bypassed by the router for FILE messages; " +
-        "use handleOutgoingChunked() instead.")
-  }
-
-  override suspend fun handleOutgoingWithReadyAck(
-    toDeviceId: String,
-    request: FileMessage.FileSendRequest,
-    writeChannel: ByteWriteChannel,
-    progressFlow: MutableSharedFlow<MessengerSendProgress>,
-    awaitReady: suspend () -> Unit,
-    cipher: FrameCipher,
-  ) {
-    error("FileMessageHandler.handleOutgoingWithReadyAck is bypassed by the router for FILE " +
-        "messages; use handleOutgoingChunked() instead.")
-  }
+) {
 
   /**
    * Called by the router when a [FileMessage] header arrives. Inserts persistence rows, opens

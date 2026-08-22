@@ -177,7 +177,6 @@ fun DeviceChatScreen(
             when (data) {
                 is OnDataToSend.FilesList -> if (data.files.isNotEmpty()) viewModel.sendFiles(data.files)
                 is OnDataToSend.Text -> if (data.text.isNotBlank()) viewModel.sendTextMessage(data.text)
-                is OnDataToSend.WifiCredentials -> Unit
             }
         },
         onDragStateChange = { dropHovered = it },

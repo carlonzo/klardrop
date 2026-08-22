@@ -266,23 +266,8 @@ class DiscoveryController(
     when (onDataToSend) {
       is OnDataToSend.FilesList -> sendFiles(deviceUi.deviceId, onDataToSend.files)
       is OnDataToSend.Text -> sendText(deviceUi.deviceId, onDataToSend.text)
-      is OnDataToSend.WifiCredentials -> sendWifiCredentials(deviceUi.deviceId, onDataToSend)
     }
 
-  }
-
-  private fun sendWifiCredentials(deviceId: String, data: OnDataToSend.WifiCredentials) {
-    coroutines.appScope.launch {
-      messenger.send(
-        deviceId,
-        ConnectionInfoMessage(
-          kind = data.kind,
-          ssid = data.ssid,
-          password = data.password,
-          hidden = data.hidden,
-        ).toSimpleSendRequest()
-      ).untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
-    }
   }
 
   private fun listenNewMessagesReceived(remoteDeviceId: String, flow: Flow<ReceiveMessageUpdate>) { // Changed

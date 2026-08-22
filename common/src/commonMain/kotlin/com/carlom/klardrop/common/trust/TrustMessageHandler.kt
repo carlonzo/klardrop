@@ -3,15 +3,11 @@ package com.carlom.klardrop.common.trust
 import com.carlom.klardrop.common.communication.FrameCipher
 import com.carlom.klardrop.common.communication.MessageSerializer
 import com.carlom.klardrop.common.communication.MessengerSendProgress
-import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.MessageHandler
-import com.carlom.klardrop.common.communication.message.MessageType
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
 import com.carlom.klardrop.common.communication.message.TrustPairingResponse
 import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
-import com.carlom.klardrop.common.communication.message.TrustedMessage
-import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
@@ -163,139 +159,3 @@ class TrustRevocationMessageHandler(
     }
 }
 
-/**
- * Message handler for TrustedMessage - verifies signatures and processes trusted content.
- */
-class TrustedMessageHandler(
-    private val serializer: MessageSerializer,
-    private val trustManager: TrustManager,
-    private val messageHandlers: com.carlom.klardrop.common.communication.message.MessageHandlers
-) : MessageHandler<TrustedMessage, SimpleSendMessageRequest> {
-    
-    private val trustMessageWrapper = TrustMessageWrapper(trustManager, serializer)
-
-    override suspend fun handleIncoming(
-        message: TrustedMessage,
-        readChannel: ByteReadChannel,
-        receiveFlow: MutableStateFlow<ReceiveMessageUpdate>
-    ) {
-        log("TrustedMessageHandler", "Received trusted message from ${message.senderId}")
-        
-        // Use TrustMessageWrapper to verify and unwrap the message
-        val unwrappedMessage = trustMessageWrapper.unwrapMessage(message)
-        
-        if (unwrappedMessage == null) {
-            log("TrustedMessageHandler", "Message verification failed for ${message.senderId}")
-            receiveFlow.update {
-                it.copy(
-                    status = ReceiveMessageStatus.Failed("Message signature verification failed")
-                )
-            }
-            return
-        }
-        
-        log("TrustedMessageHandler", "Message verification succeeded, unwrapped ${unwrappedMessage.type}")
-        
-        // CRITICAL SAFEGUARD: Prevent infinite dispatch loops 
-        if (unwrappedMessage.type == MessageType.TRUSTED_MESSAGE) {
-            log("TrustedMessageHandler", "ERROR: Nested TRUSTED_MESSAGE detected. Dropping to prevent infinite loop.")
-            receiveFlow.update {
-                it.copy(
-                    status = ReceiveMessageStatus.Failed("Invalid nested trusted message")
-                )
-            }
-            return
-        }
-        
-        // Delegate to the appropriate handler for the unwrapped message
-        val targetHandler = messageHandlers[unwrappedMessage.type]
-        if (targetHandler != null) {
-            log("TrustedMessageHandler", "Delegating to ${unwrappedMessage.type} handler")
-            @Suppress("UNCHECKED_CAST")
-            val handler = targetHandler
-            handler.handleIncoming(unwrappedMessage, readChannel, receiveFlow)
-        } else {
-            log("TrustedMessageHandler", "No handler found for unwrapped message type ${unwrappedMessage.type}")
-            receiveFlow.update {
-                it.copy(
-                    status = ReceiveMessageStatus.Failed("No handler for message type ${unwrappedMessage.type}")
-                )
-            }
-        }
-    }
-
-    override suspend fun handleOutgoing(
-        toDeviceId: String,
-        request: SimpleSendMessageRequest,
-        writeChannel: ByteWriteChannel,
-        progressFlow: MutableSharedFlow<MessengerSendProgress>,
-        cipher: FrameCipher,
-    ) {
-        val message = request.message as TrustedMessage
-        log("TrustedMessageHandler", "Sending trusted message to $toDeviceId")
-        
-        // Send the signed message
-        writeChannel.sendMessage(message, serializer, cipher)
-    }
-}
-
-/**
- * Utility class for wrapping regular messages in trusted envelopes.
- */
-class TrustMessageWrapper(
-    private val trustManager: TrustManager,
-    private val serializer: MessageSerializer
-) {
-    
-    /**
-     * Wrap a regular message in a trusted envelope if the target device is trusted.
-     * @param originalMessage The message to wrap
-     * @param targetDeviceId The device ID to send to
-     * @return TrustedMessage if device is trusted, null otherwise
-     */
-    suspend fun wrapMessage(
-        originalMessage: Message,
-        targetDeviceId: String
-    ): TrustedMessage? {
-        // Only wrap if target is trusted
-        if (!trustManager.isTrusted(targetDeviceId)) {
-            return null
-        }
-        
-        // Serialize original message to bytes
-        val payload = serializer.serialize(originalMessage)
-        
-        // Sign and wrap the message
-        return trustManager.signMessage(payload)
-    }
-    
-    /**
-     * Unwrap a trusted message and deserialize the original payload.
-     * @param trustedMessage The trusted message to unwrap
-     * @return The original message if verification succeeds, null otherwise
-     */
-    suspend fun unwrapMessage(
-        trustedMessage: TrustedMessage
-    ): Message? {
-        // Verify the message signature
-        val isValid = trustManager.verifyMessage(trustedMessage)
-        if (!isValid) {
-            return null
-        }
-        
-        // Deserialize the original message from payload
-        return try {
-            serializer.deserialize(trustedMessage.payload)
-        } catch (e: Exception) {
-            log("TrustMessageWrapper", "Failed to deserialize trusted message payload: ${e.message}")
-            null
-        }
-    }
-}
-
-/**
- * Extension functions to create send requests for trust messages.
- */
-fun TrustPairingRequest.toSendRequest(): SimpleSendMessageRequest = this.toSimpleSendRequest() as SimpleSendMessageRequest
-fun TrustPairingResponse.toSendRequest(): SimpleSendMessageRequest = this.toSimpleSendRequest() as SimpleSendMessageRequest
-fun TrustedMessage.toSendRequest(): SimpleSendMessageRequest = this.toSimpleSendRequest() as SimpleSendMessageRequest

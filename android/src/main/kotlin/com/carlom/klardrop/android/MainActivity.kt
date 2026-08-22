@@ -4,9 +4,9 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.carlom.klardrop.KlardropApp
@@ -18,20 +18,17 @@ import io.github.vinceglb.filekit.dialogs.init
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
 
-
-  @Inject
-  lateinit var klardrop: Klardrop
+  private val klardrop: Klardrop
+    get() = appKlardrop()
 
   private val requestNotificationPermission =
     registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* best-effort */ }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    applicationComponent().inject(this)
     FileKit.init(this)
 
     // Keep the "stay discoverable" service in sync with the pref while we're foregrounded: starting

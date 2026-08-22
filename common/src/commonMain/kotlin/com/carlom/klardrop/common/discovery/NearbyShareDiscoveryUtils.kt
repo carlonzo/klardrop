@@ -14,7 +14,7 @@ import com.google.security.cryptauth.lib.securegcm.DeviceType.UNKNOWN
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
-internal class NearbyShareDiscoveryUtils {
+class NearbyShareDiscoveryUtils {
 
   fun getRegisterServiceInfo(port: Int, currentDevice: CurrentDevice): RegisterServiceInfo {
 

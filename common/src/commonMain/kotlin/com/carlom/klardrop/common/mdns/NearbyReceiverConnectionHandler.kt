@@ -56,7 +56,7 @@ class NearbyReceiverConnectionHandler(
   private val transferAnchor: TransferAnchor = TransferAnchor.None,
 ) {
 
-  /** Unique per handler instance — [NearbyReceiverConnectionHandlerFactory] makes one per session. */
+  /** Unique per handler instance — [Server] makes one per session. */
   private val transferAnchorId = "nearby:in:${Random.nextInt()}"
 
   private val messagesToReceive = mutableMapOf<Long, Message>()

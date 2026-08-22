@@ -41,7 +41,6 @@ kotlin {
         implementation(deps.kotlinx.coroutines.core)
 
         implementation(deps.ktor.network)
-        implementation(deps.ktor.serialization.protobuf)
 
         implementation(deps.kotlinx.io.core)
         implementation(deps.kotlinx.io.okio)

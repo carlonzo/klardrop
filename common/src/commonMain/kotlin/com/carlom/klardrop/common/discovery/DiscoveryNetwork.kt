@@ -33,7 +33,7 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Service that keeps emitting pings to announce availability and discover new devices or update info of the known ones
  */
-class DiscoveryNetwork internal constructor(
+class DiscoveryNetwork(
   coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
   private val serviceDiscoveryMdns: ServiceDiscoveryMdns,
@@ -445,20 +445,6 @@ class DiscoveryNetwork internal constructor(
         }
         .launchIn(discoveryScope)
     }
-  }
-
-  fun discoverAirdrop() {
-
-    discoveryScope.launch {
-
-      serviceDiscoveryMdns.discoverServices("_airdrop._tcp.local.")
-        .collect {
-          println("Discovered airdrop: $it")
-        }
-
-    }
-
-
   }
 
   private suspend fun onDiscoveredService(serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {

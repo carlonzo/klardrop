@@ -32,7 +32,7 @@ class NonceManager(
    * @return `true` if the nonce is new and valid, `false` if it's a replay or invalid.
    */
   suspend fun isNonceValid(senderId: String, nonceBytes: ByteArray): Boolean {
-    val nonce = nonceBytes.joinToString("") { it.toUByte().toString(16).padStart(2, '0') } // Convert to hex string
+    val nonce = nonceBytes.toHexString()
     val now = Clock.System.now()
 
     return mutex.withLock {
