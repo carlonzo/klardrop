@@ -28,6 +28,10 @@ kotlin {
         implementation(compose.desktop.currentOs)
         implementation(deps.kotlinx.coroutines.core)
         implementation(deps.bugsnag.jvm)
+        // Linux StatusNotifierItem tray so Omarchy (and other SNI hosts) can
+        // show the live device list from this process. macOS/Windows keep the
+        // Compose Desktop AWT tray.
+        implementation(deps.nucleus.composenativetray)
       }
     }
     val jvmTest by getting

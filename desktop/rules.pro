@@ -126,3 +126,13 @@
 -dontwarn com.bugsnag.**
 -dontwarn com.fasterxml.jackson.**
 -dontwarn org.slf4j.**
+
+# -------------------------------------------------------------------------
+# Compose Native Tray — Linux StatusNotifierItem via JNI. The library loads a
+# bundled .so reflectively; shrinking it (or JNA, if a transitive still pulls
+# it) produces a missing/untinted tray icon and dead clicks in release builds.
+# -------------------------------------------------------------------------
+-keep class dev.nucleusframework.composenativetray.** { *; }
+-keep class com.sun.jna.** { *; }
+-dontwarn com.sun.jna.**
+-dontwarn dev.nucleusframework.composenativetray.**

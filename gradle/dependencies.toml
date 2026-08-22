@@ -17,6 +17,7 @@ bugsnag-kmp = "1.0.0"
 bugsnag-android = "6.26.1"
 bugsnag-jvm = "4.0.1"
 filekit = "0.15.0"
+composenativetray = "2.1.0"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
 coil3 = "3.5.0"
@@ -59,6 +60,7 @@ bugsnag-android = { module = "com.bugsnag:bugsnag-android", version.ref = "bugsn
 bugsnag-jvm = { module = "com.bugsnag:bugsnag", version.ref = "bugsnag-jvm" }
 filekit-core = { module = "io.github.vinceglb:filekit-core", version.ref = "filekit" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
+nucleus-composenativetray = { module = "dev.nucleusframework:composenativetray", version.ref = "composenativetray" }
 
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
 sqldelight-coroutines-extensions = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }

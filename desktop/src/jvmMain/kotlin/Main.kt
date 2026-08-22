@@ -9,7 +9,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -20,7 +19,6 @@ import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.theme.AppTheme
 import com.klardrop.common.BugsnagWrapper
 import io.github.vinceglb.filekit.FileKit
-import java.awt.SystemTray
 import java.awt.Taskbar
 import java.awt.Window as AwtWindow
 import javax.imageio.ImageIO
@@ -123,41 +121,21 @@ fun main(args: Array<String>) {
     val windowState = rememberWindowState()
     var isWindowVisible by remember { mutableStateOf(true) }
 
-    val traySupported = remember { SystemTray.isSupported() }
-    val devices by k.visibleDevices().visibleDevices.collectAsState()
+    val trayAvailable = remember { klardropTrayAvailable() }
+    val visibleDevices by k.visibleDevices().visibleDevices.collectAsState()
+    val trustedDevices by k.trustedDevices().collectAsState()
+    val peers = remember(visibleDevices, trustedDevices) {
+      trayPeers(visibleDevices, trustedDevices)
+    }
 
     val isMacOs = remember { System.getProperty("os.name").lowercase().contains("mac") }
 
-    if (traySupported) {
-      // macOS menu bar uses the white outline template glyph; on Windows /
-      // Linux the system tray sits on a colored background, so the full
-      // tile icon reads better there.
-      val trayIcon = if (isMacOs) "icons/menubar.svg" else "icons/app-icon.svg"
-      Tray(
-        icon = painterResource(trayIcon),
-        tooltip = "Klardrop",
-        onAction = { isWindowVisible = true },
-        menu = {
-          Item(
-            text = if (isWindowVisible) "Hide Klardrop" else "Show Klardrop",
-            onClick = { isWindowVisible = !isWindowVisible }
-          )
-          Separator()
-          if (devices.isEmpty()) {
-            Item(text = "No devices found", enabled = false, onClick = {})
-          } else {
-            devices.values
-              .sortedBy { it.deviceInfo.name.lowercase() }
-              .forEach { device ->
-                Item(
-                  text = device.deviceInfo.name,
-                  onClick = { isWindowVisible = true }
-                )
-              }
-          }
-          Separator()
-          Item(text = "Quit Klardrop", onClick = ::exitApplication)
-        }
+    if (trayAvailable) {
+      KlardropTray(
+        peers = peers,
+        isWindowVisible = isWindowVisible,
+        onToggleWindow = { isWindowVisible = !isWindowVisible },
+        onShowWindow = { isWindowVisible = true },
       )
     }
 
@@ -165,7 +143,7 @@ fun main(args: Array<String>) {
       title = "",
       icon = painterResource("icons/app-icon.svg"),
       onCloseRequest = {
-        if (traySupported) {
+        if (trayAvailable) {
           isWindowVisible = false
         } else {
           exitApplication()
