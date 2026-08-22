@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Klardrop Dev</string>
+    <!--
+      Debug builds already install alongside release under a `.debug` applicationId suffix; this
+      is what makes the two distinguishable in the launcher and the share sheet once they are.
+      A resource override rather than a `resValue` in Gradle: the release name stays the single
+      value in main/res, and neither build type needs build logic to pick one.
+    -->
+    <string name="app_name">Klardrop debug</string>
 </resources>

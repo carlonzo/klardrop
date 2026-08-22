@@ -34,12 +34,19 @@ sealed interface FrameCipher {
    */
   val authenticated: Boolean
 
+  /**
+   * Leaner AEAD for file-chunk bodies on this same session, or null on links that have no secure
+   * channel to derive it from. See [BulkCipher] for why bulk data does NOT go through [encode].
+   */
+  val bulk: BulkCipher?
+
   fun encode(payload: ByteArray): ByteArray
   fun decode(wire: ByteArray): ByteArray
 
   /** Identity transform: cleartext in, cleartext out. */
   object Plain : FrameCipher {
     override val authenticated: Boolean = false
+    override val bulk: BulkCipher? = null
     override fun encode(payload: ByteArray): ByteArray = payload
     override fun decode(wire: ByteArray): ByteArray = wire
   }
@@ -60,6 +67,7 @@ sealed interface FrameCipher {
     private val context: D2DConnectionContext,
     override val authenticated: Boolean,
     val verificationSas: String,
+    override val bulk: BulkCipher? = null,
   ) : FrameCipher {
     override fun encode(payload: ByteArray): ByteArray = context.encodeMessageToPeer(payload)
     override fun decode(wire: ByteArray): ByteArray = context.decodeMessageFromPeer(wire)
@@ -155,7 +163,14 @@ object KlardropEncryptedTransport {
       writeChannel = writeChannel,
     )
     log(TAG, "Initiator UKEY2 handshake complete with $peerDeviceId (authenticated=$authenticated, sas=$sas)")
-    return FrameCipher.Encrypted(context, authenticated, sas)
+    return FrameCipher.Encrypted(
+      context = context,
+      authenticated = authenticated,
+      verificationSas = sas,
+      // Derived from this same session's keys — see [BulkCipher] for why file bodies skip the
+      // D2D envelope.
+      bulk = BulkCipher.fromSessionKeys(context.encodeKey, context.decodeKey),
+    )
   }
 
   /** Responder (TCP/BLE server) side of the handshake. Reads the first UKEY2 message. */
@@ -193,7 +208,14 @@ object KlardropEncryptedTransport {
       writeChannel = writeChannel,
     )
     log(TAG, "Responder UKEY2 handshake complete with $peerDeviceId (authenticated=$authenticated, sas=$sas)")
-    return FrameCipher.Encrypted(context, authenticated, sas)
+    return FrameCipher.Encrypted(
+      context = context,
+      authenticated = authenticated,
+      verificationSas = sas,
+      // Derived from this same session's keys — see [BulkCipher] for why file bodies skip the
+      // D2D envelope.
+      bulk = BulkCipher.fromSessionKeys(context.encodeKey, context.decodeKey),
+    )
   }
 
   /**

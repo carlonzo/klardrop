@@ -340,13 +340,68 @@ internal suspend fun ByteReadChannel.readByteArrayMessage(cipher: FrameCipher = 
   return cipher.decode(wireBytes)
 }
 
+/**
+ * Marks a frame as a [BulkCipher] chunk rather than a normal `[type][protobuf]` message, set in
+ * the top bit of the length prefix. Lengths are bounded far below 2^31, so the bit is free — and
+ * putting the discriminator OUTSIDE the ciphertext is what lets the read loop pick an envelope
+ * before it decrypts, without spending a whole extra byte on every frame.
+ */
+internal const val BULK_FRAME_FLAG: Int = 1 shl 31
+
 internal suspend fun ByteReadChannel.readMessage(serializer: MessageSerializer, cipher: FrameCipher = FrameCipher.Plain): Message {
-  val messageBytes = readByteArrayMessage(cipher)
+  val lengthBytes = ByteArray(4)
+  readFully(lengthBytes)
+  val prefix = (lengthBytes[0].toInt() and 0xFF shl 24) or
+      (lengthBytes[1].toInt() and 0xFF shl 16) or
+      (lengthBytes[2].toInt() and 0xFF shl 8) or
+      (lengthBytes[3].toInt() and 0xFF)
+
+  val wireBytes = ByteArray(prefix and BULK_FRAME_FLAG.inv())
+  readFully(wireBytes)
+
+  if (prefix and BULK_FRAME_FLAG != 0) {
+    // No logging on this path: it runs once per 256 KB chunk, and the two lines the normal path
+    // emits per frame were themselves a measurable slice of a transfer's budget.
+    val bulk = checkNotNull(cipher.bulk) { "Bulk frame received on a link with no bulk cipher" }
+    return bulk.open(wireBytes)
+  }
+
+  val messageBytes = cipher.decode(wireBytes)
   com.carlom.klardrop.common.utils.log("ByteReadChannel", "[DEBUG] Read message: ${messageBytes.size} bytes")
 
   val message = serializer.deserialize(messageBytes)
   com.carlom.klardrop.common.utils.log("ByteReadChannel", "[DEBUG] Deserialized message: type=${message.type}, id=${message.id}, class=${message::class.simpleName}")
   return message
+}
+
+/**
+ * Writes one [BulkCipher] chunk frame: `[4-byte length | BULK_FRAME_FLAG][17-byte header][ciphertext]`.
+ *
+ * The header and ciphertext go out as two writes rather than being spliced into one array — the
+ * whole point of this path is to touch the payload as few times as possible.
+ *
+ * THREADING: [BulkCipher.seal] advances the frame counter, so this must be called under the
+ * connection's write mutex, same as [sendMessage].
+ */
+internal suspend fun ByteWriteChannel.sendBulkChunk(
+  bulk: BulkCipher,
+  fileMessageId: Int,
+  seq: Int,
+  isLast: Boolean,
+  body: ByteArray,
+  bodyLength: Int,
+) {
+  val sealed = bulk.seal(fileMessageId, seq, isLast, body, bodyLength)
+  val prefix = sealed.wireSize or BULK_FRAME_FLAG
+  val lengthBytes = ByteArray(4)
+  lengthBytes[0] = (prefix ushr 24).toByte()
+  lengthBytes[1] = (prefix ushr 16).toByte()
+  lengthBytes[2] = (prefix ushr 8).toByte()
+  lengthBytes[3] = prefix.toByte()
+
+  writeByteArray(lengthBytes)
+  writeByteArray(sealed.header)
+  writeByteArray(sealed.ciphertext)
 }
 
 /**

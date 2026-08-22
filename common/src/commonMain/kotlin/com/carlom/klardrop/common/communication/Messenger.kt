@@ -65,6 +65,9 @@ class MessengerImpl(
 
   private val messengerScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
 
+  /** Devices we have already re-dialled once to pick up a post-pairing identity binding. */
+  private val authUpgradeAttempted = mutableSetOf<String>()
+
   override fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress> {
     log(
       "Messenger",
@@ -491,8 +494,33 @@ class MessengerImpl(
         // For light/text messages we tolerate the cached BLE connection (matches the
         // policy: TCP > BLE > Nearby for small messages).
         val device = visibleDevices.getDevice(deviceId)
+        // Pairing does not upgrade a live link. `authenticated` is decided once, during the
+        // UKEY2 identity-binding exchange at connect time, so a connection dialed BEFORE the peer
+        // was trusted keeps authenticated=false for its whole life. Everything fast is gated on
+        // that flag — the bulk chunk path, skipping per-message signatures, skipping the
+        // whole-file content hash — so "pair, then immediately send" silently ran ~14x slower
+        // than the same transfer after any incidental reconnect. Recycle the link once so the
+        // next dial re-runs the binding with the trust store now populated.
+        // Short-circuit deliberately: the trust-store lookup suspends and hits storage, so it
+        // only runs when the free checks already say an upgrade is plausible.
+        val staleAuth = linkMayNeedAuthUpgrade(
+          isLinkEncrypted = existingConnection.isLinkEncrypted,
+          isLinkAuthenticated = existingConnection.isLinkAuthenticated,
+          alreadyAttempted = deviceId in authUpgradeAttempted,
+        ) && trustManager.isTrusted(deviceId)
         val tcpAvailable = device?.hasKlardropConnection() == true
-        if (!preferBle && existingConnection.isBleTransport && tcpAvailable) {
+        if (staleAuth) {
+          // Once per device per process: if the re-dial still comes back unauthenticated (peer's
+          // stored key no longer matches, say) we must not spin re-dialling forever.
+          // ponytail: plain set, benign race — worst case two devices each re-dial once.
+          authUpgradeAttempted += deviceId
+          log(
+            "Messenger",
+            "Connection for $deviceId predates pairing (authenticated=false but device is trusted); " +
+              "recycling so the handshake re-binds identity"
+          )
+          connectionsPool.closeConnection(deviceId)
+        } else if (!preferBle && existingConnection.isBleTransport && tcpAvailable) {
           log(
             "Messenger",
             "[DEBUG] Existing connection for $deviceId is BLE but a TCP path is now available; " +
@@ -584,9 +612,34 @@ fun Flow<MessengerSendProgress>.untilCompleted(): Flow<MessengerSendProgress> {
     }
 }
 
+/**
+ * Cheap half of the "this link predates pairing" test — see the call site in
+ * [MessengerImpl.getOrEstablishConnection].
+ *
+ * Both negative guards matter. A cleartext/BLE link is NEVER authenticated, so without
+ * [isLinkEncrypted] a trusted peer on BLE would be re-dialled forever. And [alreadyAttempted]
+ * bounds it to one retry per device, so a peer whose stored key no longer matches — where the
+ * fresh handshake also returns unauthenticated — cannot spin.
+ */
+internal fun linkMayNeedAuthUpgrade(
+  isLinkEncrypted: Boolean,
+  isLinkAuthenticated: Boolean,
+  alreadyAttempted: Boolean,
+): Boolean = isLinkEncrypted && !isLinkAuthenticated && !alreadyAttempted
+
 sealed interface MessengerSendProgress {
   data object Pending : MessengerSendProgress
-  data class InProgress(val percentage: Int) : MessengerSendProgress
+  /**
+   * [bytesTransferred]/[totalBytes] are the raw byte counters behind [percentage]. The UI needs
+   * them (not the rounded percent) to derive throughput and ETA — a 5%-quantised percentage over
+   * a multi-GB file is far too coarse to differentiate for a rate. Both default to 0 for
+   * non-file sends, which have no meaningful byte count.
+   */
+  data class InProgress(
+    val percentage: Int,
+    val bytesTransferred: Long = 0,
+    val totalBytes: Long = 0,
+  ) : MessengerSendProgress
 
   /**
    * The file header is on the wire and we're blocked on the recipient's ACK_READY — which for

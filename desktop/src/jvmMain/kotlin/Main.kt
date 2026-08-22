@@ -13,6 +13,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.carlom.klardrop.KlardropApp
+import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
@@ -90,7 +91,7 @@ fun main(args: Array<String>) {
   // floating over the dark content.
   if (System.getProperty("os.name").lowercase().contains("mac")) {
     System.setProperty("apple.awt.application.appearance", "system")
-    System.setProperty("apple.awt.application.name", "Klardrop")
+    System.setProperty("apple.awt.application.name", KlardropVersion.APP_NAME)
   }
 
   // Set the dock / taskbar / Alt-Tab icon at runtime. The bundler-supplied

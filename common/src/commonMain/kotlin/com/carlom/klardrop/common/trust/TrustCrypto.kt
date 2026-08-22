@@ -341,28 +341,18 @@ class TrustCrypto {
   }
 
   private inner class Sha256AccumulatorImpl : Sha256Accumulator {
-    // The cryptography-kotlin Hasher API is one-shot per `hash()` call. We hold the buffered
-    // bytes ourselves and finalize on digest(). For the file-transfer use case this means
-    // O(file size) memory in the receive pipeline — acceptable for the file sizes Klardrop
-    // targets (LAN sharing of media files, typically <100MB). If we ever need to support
-    // streaming GB-scale transfers we can swap to an incremental hasher; for now keep it simple.
-    private val buffer = ArrayList<ByteArray>()
+    // Incremental: cryptography-kotlin's HashFunction keeps only SHA-256 state (a few dozen
+    // bytes), never the input. The previous version buffered every chunk in an ArrayList and
+    // hashed the concatenation at digest() time, which made hashing O(file size) in MEMORY —
+    // a multi-GB send OOM'd the sender at ART's 256 MB heap limit before a byte left the device,
+    // and the receive pipeline had the same ceiling on the way in.
+    private val function = sha256.hasher().createHashFunction()
 
     override fun update(data: ByteArray, offset: Int, length: Int) {
-      buffer.add(if (offset == 0 && length == data.size) data.copyOf() else data.copyOfRange(offset, offset + length))
+      function.update(data, offset, offset + length)
     }
 
-    override suspend fun digest(): ByteArray {
-      val total = buffer.sumOf { it.size }
-      val combined = ByteArray(total)
-      var pos = 0
-      for (chunk in buffer) {
-        chunk.copyInto(combined, pos)
-        pos += chunk.size
-      }
-      val hasher = sha256.hasher()
-      return hasher.hash(combined)
-    }
+    override suspend fun digest(): ByteArray = function.use { it.hashToByteArray() }
   }
 
 

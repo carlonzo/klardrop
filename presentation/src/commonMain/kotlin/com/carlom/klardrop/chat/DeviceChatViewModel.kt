@@ -18,6 +18,7 @@ import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
@@ -48,12 +49,17 @@ class DeviceChatViewModel(
   private val platformFileSystem: PlatformFileSystem,
   private val clipboardManager: ClipboardManager,
   reachabilitySource: StateFlow<Map<String, Reachability>>,
+  private val clock: Clock = Clock(),
 ) {
 
   // TODO we need to dispose this viewmodel
   // newScope (rather than a raw CoroutineScope) so the scope carries the platform's last-resort
   // CoroutineExceptionHandler: an uncaught throw in a UI job aborts the process on Kotlin/Native.
   private val viewModelScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
+
+  // Rate window for [onTransferProgress]; reset by [transferIdle] so each transfer measures itself.
+  private var windowStartMs = 0L
+  private var windowStartBytes = 0L
 
   private val _uiState = MutableStateFlow(ChatUiState())
   val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -123,11 +129,11 @@ class DeviceChatViewModel(
           is ReceiveMessageStatus.Progress -> {
             val percentage = status.messages.lastOrNull()?.second
             if (percentage != null) {
-              _uiState.update { it.transferring(fraction = percentage / 100f) }
+              onTransferProgress(percentage / 100f, status.bytesTransferred, status.totalBytes)
             }
           }
           is ReceiveMessageStatus.Completed, is ReceiveMessageStatus.Failed -> {
-            _uiState.update { it.transferIdle() }
+            transferIdle()
           }
           else -> Unit
         }
@@ -264,9 +270,42 @@ class DeviceChatViewModel(
         // state set above outlives every path that never reaches it — an unresolvable file,
         // an empty resolve, or a throw before the first send. Without this the banner would
         // stay up forever.
-        _uiState.update { it.transferIdle() }
+        transferIdle()
       }
     }
+  }
+
+  /**
+   * Fold one byte-counter sample into ui state and, once the transfer has been running long
+   * enough to have a trustworthy rate, into [TransferStats].
+   *
+   * The rate window starts at the first sample that actually carries bytes, not at the first
+   * sample overall: a send emits InProgress(0) before it blocks on the recipient's accept, and
+   * anchoring the window there would divide the bytes by however many seconds a human took to
+   * tap Accept. `bytes <= windowStartBytes` keeps re-anchoring until bytes start moving.
+   *
+   * ponytail: plain average over the window, no EWMA — LAN throughput is steady enough that a
+   * smoothed rate would look identical. Revisit if the ETA visibly jitters on flaky links.
+   */
+  private fun onTransferProgress(fraction: Float, bytes: Long, total: Long) {
+    val now = clock.currentTimeMillis()
+    if (windowStartMs == 0L || bytes <= windowStartBytes) {
+      windowStartMs = now
+      windowStartBytes = bytes
+    }
+    val stats = transferStatsOrNull(
+      bytes = bytes,
+      total = total,
+      windowStartBytes = windowStartBytes,
+      elapsedMs = now - windowStartMs,
+    )
+    _uiState.update { it.transferring(fraction = fraction, stats = stats) }
+  }
+
+  private fun transferIdle() {
+    windowStartMs = 0L
+    windowStartBytes = 0L
+    _uiState.update { it.transferIdle() }
   }
 
   fun clearError() {
@@ -318,13 +357,13 @@ class DeviceChatViewModel(
         finalStatus = progress
         when (progress) {
           is MessengerSendProgress.InProgress ->
-            _uiState.update { it.transferring(fraction = progress.percentage / 100f) }
+            onTransferProgress(progress.percentage / 100f, progress.bytesTransferred, progress.totalBytes)
           is MessengerSendProgress.AwaitingRecipient ->
             _uiState.update { it.transferring(fraction = null, statusText = "Waiting for the recipient to accept…") }
           MessengerSendProgress.Pending ->
             _uiState.update { it.transferring(fraction = null, statusText = "Connecting…") }
           is MessengerSendProgress.Completed, is MessengerSendProgress.Error ->
-            _uiState.update { it.transferIdle() }
+            transferIdle()
         }
       }
 
@@ -363,13 +402,60 @@ data class ChatUiState(
    * created once the transfer's DB rows are inserted, which is after the connection is up.
    */
   val fileTransferStatusText: String? = null,
+  /**
+   * Throughput/ETA for the in-flight transfer, or null while there isn't one — or while it has
+   * been running for less than [TRANSFER_STATS_MIN_ELAPSED_MS]. Small files finish inside that
+   * window and never show stats, which is the point: a rate and an ETA on a transfer that is
+   * already over is noise.
+   */
+  val transferStats: TransferStats? = null,
 )
 
+/** Live throughput figures for a file transfer. All byte counts are raw bytes. */
+data class TransferStats(
+  val bytesTransferred: Long,
+  val totalBytes: Long,
+  val bytesPerSecond: Long,
+  /** Null when the rate is 0 (nothing has moved in the window) so no ETA can be projected. */
+  val etaSeconds: Long?,
+)
+
+/**
+ * Pure half of [DeviceChatViewModel.onTransferProgress]: given the current byte count and the
+ * rate window, either the figures to show or null (window too young, or no known total).
+ */
+internal fun transferStatsOrNull(
+  bytes: Long,
+  total: Long,
+  windowStartBytes: Long,
+  elapsedMs: Long,
+): TransferStats? {
+  if (elapsedMs < TRANSFER_STATS_MIN_ELAPSED_MS || total <= 0) return null
+  val bytesPerSecond = (bytes - windowStartBytes) * 1000 / elapsedMs
+  return TransferStats(
+    bytesTransferred = bytes,
+    totalBytes = total,
+    bytesPerSecond = bytesPerSecond,
+    etaSeconds = if (bytesPerSecond > 0) (total - bytes) / bytesPerSecond else null,
+  )
+}
+
+/**
+ * How long a transfer must have been streaming before its stats line appears. Keeps the card
+ * uncluttered for the small files that make up most sends.
+ */
+internal const val TRANSFER_STATS_MIN_ELAPSED_MS = 2_000L
+
 /** Mark a transfer as in flight. [fraction] null = active but no percentage to show yet. */
-private fun ChatUiState.transferring(fraction: Float?, statusText: String? = null) = copy(
+private fun ChatUiState.transferring(
+  fraction: Float?,
+  statusText: String? = null,
+  stats: TransferStats? = null,
+) = copy(
   fileTransferProgress = fraction,
   fileTransferActive = true,
   fileTransferStatusText = statusText,
+  transferStats = stats,
 )
 
 /** Clear every trace of an in-flight transfer. */
@@ -377,4 +463,5 @@ private fun ChatUiState.transferIdle() = copy(
   fileTransferProgress = null,
   fileTransferActive = false,
   fileTransferStatusText = null,
+  transferStats = null,
 )
