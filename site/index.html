@@ -688,6 +688,8 @@
     const NIGHTLY_JSON  = `https://github.com/${REPO}/releases/download/nightly/latest.json`;
     const NIGHTLY_PAGE  = `https://github.com/${REPO}/releases/tag/nightly`;
     const CURL_CMD      = `curl -fsSL ${INSTALL_SH} | bash`;
+    const CURL_NIGHTLY  = `curl -fsSL ${INSTALL_SH} | bash -s -- --nightly`;
+    const NIGHTLY_TARBALL = `https://github.com/${REPO}/releases/download/nightly/klardrop-linux-x64.tar.gz`;
     // Mobile stores — replace the placeholder IDs to light these buttons up (greyed out until then).
     const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.carlom.klardrop";
     const APP_STORE_URL  = "https://apps.apple.com/app/id<APPSTORE_ID>";
@@ -749,6 +751,15 @@
       const panes = items.map((t,i) => `<div class="mpane${i===0?' on':''}" data-pane="${t.id}">${t.panel}</div>`).join("");
       return `<div class="mtabs">${heads}</div>${panes}`;
     }
+    // a Linux download channel: install command + tarball link
+    function linuxChannel(cmd, tarballUrl, size, note){
+      return `<div><div class="opt-label">Install with one command</div>${codeBlock(cmd)}`
+        + `<p class="dl-note" style="text-align:left">${note}</p></div>`
+        + `<div class="modal-or">or download the tarball</div>`
+        + `<div class="sub-links">`
+        + `<a href="${esc(tarballUrl)}" rel="noopener"><small>Any distro · x64</small>.tar.gz${size}</a>`
+        + `</div>`;
+    }
     // a macOS download channel: .dmg button + Homebrew command
     function macChannel(dmgLabel, dmgUrl, note, brew){
       return primaryDownload(dmgLabel, dmgUrl, note)
@@ -770,12 +781,14 @@
         case "windows":
           return primaryDownload("Download .msi" + sizeFor("windows"), urlFor("windows"), "Windows 10 and 11 (x64)");
         case "linux":
-          return `<div><div class="opt-label">Install with one command</div>${codeBlock(CURL_CMD)}`
-            + `<p class="dl-note" style="text-align:left">Downloads the latest tarball, installs to <code>~/.local</code>, and links the <code>klardrop</code> binary. Uninstall later with the same command plus <code>-s -- --uninstall</code>.</p></div>`
-            + `<div class="modal-or">or download the tarball</div>`
-            + `<div class="sub-links">`
-            + `<a href="${esc(urlFor("linux-tarball", LINUX_TARBALL))}" rel="noopener"><small>Any distro · x64</small>.tar.gz${sizeFor("linux-tarball")}</a>`
-            + `</div>`;
+          return tabs([
+            { id:"stable", label:"Stable", panel: linuxChannel(CURL_CMD,
+                urlFor("linux-tarball", LINUX_TARBALL), sizeFor("linux-tarball"),
+                "Downloads the latest tarball, installs to <code>~/.local</code>, and links the <code>klardrop</code> binary. Uninstall later with the same command plus <code>-s -- --uninstall</code>.") },
+            { id:"nightly", label:"Nightly", panel: linuxChannel(CURL_NIGHTLY,
+                nurlFor("linux-tarball", NIGHTLY_TARBALL), nsizeFor("linux-tarball"),
+                "Latest tester build — newest features, less tested. Installs to <code>~/.local</code> and self-updates on the nightly channel.") },
+          ]);
         case "android": {
           const playReady = PLAY_STORE_URL && !PLAY_STORE_URL.includes('<');
           const playRow = playReady
@@ -842,7 +855,7 @@
     back.addEventListener('click', e => { if(e.target === back) closeModal(); });
     addEventListener('keydown', e => { if(e.key === 'Escape' && back.classList.contains('open')) closeModal(); });
 
-    // tab switching (delegated — Stable/Nightly inside the macOS modal)
+    // tab switching (delegated — Stable/Nightly inside the macOS/Linux/iOS modals)
     body.addEventListener('click', e => {
       const t = e.target.closest('.mtab');
       if(!t) return;

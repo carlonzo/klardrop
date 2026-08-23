@@ -89,7 +89,11 @@ trap 'rm -rf "$tmp"' EXIT
 
 # --- download + verify -------------------------------------------------------
 say "Downloading Klardrop ($CHANNEL)…"
-dl "$BASE/$TARBALL" "$tmp/$TARBALL"
+dl "$BASE/$TARBALL" "$tmp/$TARBALL" || {
+  [ "$CHANNEL" = "stable" ] && die "no stable release published yet — install the nightly instead:
+    curl -fsSL https://raw.githubusercontent.com/${REPO}/main/packaging/install.sh | bash -s -- --nightly"
+  die "download failed: $BASE/$TARBALL"
+}
 
 if dl "$BASE/$TARBALL.sha256" "$tmp/$TARBALL.sha256" 2>/dev/null && command -v sha256sum >/dev/null 2>&1; then
   expected="$(tr -d '[:space:]' < "$tmp/$TARBALL.sha256" | cut -d= -f2 | tail -c 65)"
