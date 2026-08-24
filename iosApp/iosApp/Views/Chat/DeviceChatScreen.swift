@@ -20,8 +20,8 @@ import presentation
 // File picking: native SwiftUI .fileImporter + PhotosPicker.
 // Bridge to Kotlin: platformFileFromPath() free function from :presentation.
 //
-// On iPhone: pushed in NavigationStack with toolbar header.
-// On iPad: rendered in split detail; ChatHeaderView placed above by KlardropNav.
+// On iPhone: pushed in NavigationStack with the toolbar header (.principal).
+// On iPad: rendered in split detail, same .principal toolbar header.
 // ---------------------------------------------------------------------------
 
 struct DeviceChatScreen: View {
@@ -180,12 +180,18 @@ struct DeviceChatScreen: View {
                 #endif
             }
         }
-        // Navigation bar (iPhone): compact device header pinned to the left, next to the
-        // system back button (the .principal slot centers its content).
+        // Navigation bar (iOS/iPadOS): compact device header in the .principal slot.
+        // It must NOT go in .topBarLeading — there UIKit sizes it against the space
+        // left over by the back button / sidebar toggle and collapses the name to
+        // nothing. navigationTitle stays set so the bar has a stable title (and the
+        // back button gets a label) even while the principal view is laid out.
+        // The subline is always present, only faded out, so the item's view identity
+        // never changes as reachability flips — that churn made the bar redraw empty.
         #if os(iOS)
+        .navigationTitle(deviceName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItem(placement: .principal) {
                 HStack(spacing: KdSpacing.s2) {
                     DeviceAvatarView(
                         kind: deviceKind,
@@ -198,12 +204,11 @@ struct DeviceChatScreen: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(kd.text)
                             .lineLimit(1)
-                        if !headerSubText.isEmpty {
-                            Text(headerSubText)
-                                .font(.system(size: 12))
-                                .foregroundColor(isOffline ? kd.err : kd.trust)
-                                .lineLimit(1)
-                        }
+                        Text(headerSubText.isEmpty ? " " : headerSubText)
+                            .font(.system(size: 12))
+                            .foregroundColor(isOffline ? kd.err : kd.trust)
+                            .lineLimit(1)
+                            .opacity(headerSubText.isEmpty ? 0 : 1)
                     }
                 }
             }
