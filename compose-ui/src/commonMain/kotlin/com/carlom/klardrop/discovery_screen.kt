@@ -503,12 +503,10 @@ private fun SettingsSheet(
                         onCheckedChange = onBackgroundDiscoveryChange,
                     )
                 }
-            } else {
-                Text(
-                    text = "No settings available on this platform yet.",
-                    style = typography.caption.copy(color = colors.text2),
-                )
+                Spacer(Modifier.height(spacing.s4))
             }
+
+            ReportProblemSection()
         }
     }
 }

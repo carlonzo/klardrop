@@ -13,6 +13,7 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.logLocal
+import com.carlom.klardrop.common.utils.transferLog
 import com.google.location.nearby.connections.proto.OfflineFrame
 import com.google.location.nearby.connections.proto.V1Frame
 import io.ktor.network.selector.*
@@ -360,17 +361,24 @@ internal suspend fun ByteReadChannel.readMessage(serializer: MessageSerializer, 
   readFully(wireBytes)
 
   if (prefix and BULK_FRAME_FLAG != 0) {
-    // No logging on this path: it runs once per 256 KB chunk, and the two lines the normal path
-    // emits per frame were themselves a measurable slice of a transfer's budget.
+    // Runs once per 256 KB chunk, so it only ever counts into [transferLog] — the two lines the
+    // normal path used to emit per frame were themselves a measurable slice of a transfer's budget.
     val bulk = checkNotNull(cipher.bulk) { "Bulk frame received on a link with no bulk cipher" }
+    transferLog.received(wireBytes.size)
     return bulk.open(wireBytes)
   }
 
   val messageBytes = cipher.decode(wireBytes)
-  com.carlom.klardrop.common.utils.log("ByteReadChannel", "[DEBUG] Read message: ${messageBytes.size} bytes")
-
   val message = serializer.deserialize(messageBytes)
-  com.carlom.klardrop.common.utils.log("ByteReadChannel", "[DEBUG] Deserialized message: type=${message.type}, id=${message.id}, class=${message::class.simpleName}")
+  // Chunks are counted, not logged; everything else is rare enough to name individually.
+  if (message.type == MessageType.FILE_CHUNK) {
+    transferLog.received(messageBytes.size)
+  } else {
+    com.carlom.klardrop.common.utils.log(
+      "ByteReadChannel",
+      "[DEBUG] Read ${message.type} id=${message.id} class=${message::class.simpleName} (${messageBytes.size} bytes)",
+    )
+  }
   return message
 }
 
@@ -402,6 +410,7 @@ internal suspend fun ByteWriteChannel.sendBulkChunk(
   writeByteArray(lengthBytes)
   writeByteArray(sealed.header)
   writeByteArray(sealed.ciphertext)
+  transferLog.sent(sealed.wireSize)
 }
 
 /**
@@ -413,7 +422,13 @@ internal suspend fun ByteWriteChannel.sendBulkChunk(
  * callers already hold [ConnectionMessenger.writeLock] on every write path.
  */
 internal suspend fun ByteWriteChannel.sendMessage(message: Message, serializer: MessageSerializer, cipher: FrameCipher = FrameCipher.Plain) {
-  com.carlom.klardrop.common.utils.log("ByteWriteChannel", "[DEBUG] Sending message: type=${message.type}, id=${message.id}, class=${message::class.simpleName}")
+  // Logged BEFORE the write, so a wire that wedges mid-send still names the message that did it.
+  if (message.type != MessageType.FILE_CHUNK) {
+    com.carlom.klardrop.common.utils.log(
+      "ByteWriteChannel",
+      "[DEBUG] Sending ${message.type} id=${message.id} class=${message::class.simpleName}",
+    )
+  }
   val wireBytes = cipher.encode(serializer.serialize(message))
   val introLengthBytes = ByteArray(4)
   introLengthBytes[0] = (wireBytes.size shr 24).toByte()
@@ -423,5 +438,5 @@ internal suspend fun ByteWriteChannel.sendMessage(message: Message, serializer: 
 
   writeByteArray(introLengthBytes)
   writeByteArray(wireBytes)
-  com.carlom.klardrop.common.utils.log("ByteWriteChannel", "[DEBUG] Message sent successfully: ${wireBytes.size} bytes")
+  if (message.type == MessageType.FILE_CHUNK) transferLog.sent(wireBytes.size)
 }

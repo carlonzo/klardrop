@@ -76,6 +76,7 @@ fun WideLayout(
     var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
     var showAddDevicePicker by remember { mutableStateOf(false) }
     var showRenameSheet by remember { mutableStateOf(false) }
+    var showReportProblem by remember { mutableStateOf(false) }
     var pendingForget by remember { mutableStateOf<DeviceUi?>(null) }
 
     val hasTrustedDevice = state.devices.any { it.trustStatus == TrustStatus.Trusted }
@@ -135,6 +136,7 @@ fun WideLayout(
             },
             onAddDeviceClick = { showAddDevicePicker = true },
             onRenameLocalDevice = { showRenameSheet = true },
+            onReportProblem = { showReportProblem = true },
             onSendData = { device, data -> discoveryController.onSendData(device, data) },
             onNotificationDismissed = discoveryController::onNotificationDismissed,
             onNotificationPair = discoveryController::onNotificationPair,
@@ -154,6 +156,10 @@ fun WideLayout(
             },
             onDismiss = { pendingForget = null },
         )
+    }
+
+    if (showReportProblem) {
+        ReportProblemDialog(onDismiss = { showReportProblem = false })
     }
 
     if (showRenameSheet) {
@@ -216,6 +222,7 @@ private fun WideContent(
     onDeviceSelected: (DeviceUi) -> Unit,
     onAddDeviceClick: () -> Unit,
     onRenameLocalDevice: () -> Unit,
+    onReportProblem: () -> Unit,
     onSendData: (DeviceUi, OnDataToSend) -> Unit,
     onNotificationDismissed: (Int) -> Unit,
     onNotificationPair: (Int) -> Unit,
@@ -301,6 +308,7 @@ private fun WideContent(
                 localDeviceName = localDeviceName,
                 localDeviceSub = null,
                 onLocalDeviceClick = onRenameLocalDevice,
+                footerMenu = { AppMenu(onReportProblem = onReportProblem) },
             )
         }
 
@@ -421,6 +429,49 @@ private fun SidebarRowMenu(onForget: () -> Unit) {
                 onClick = {
                     expanded = false
                     onForget()
+                },
+            )
+        }
+    }
+}
+
+/**
+ * App-level overflow menu in the sidebar footer. The wide layout has no settings screen — the one
+ * setting we have is Android-only — so this is where the "Report a problem" entry lives on desktop,
+ * mirroring the phone layout's Settings sheet.
+ */
+@Composable
+private fun AppMenu(onReportProblem: () -> Unit) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(28.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "More options",
+                tint = colors.text3,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = "Report a problem",
+                        style = typography.body.copy(color = colors.text),
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onReportProblem()
                 },
             )
         }

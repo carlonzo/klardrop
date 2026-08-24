@@ -55,6 +55,7 @@ private val SidebarRadius = 12.dp
  * @param localDeviceName       the user's own device name shown in the footer card
  * @param localDeviceSub        optional secondary line under the name (e.g. "This device")
  * @param onLocalDeviceClick    fired when the footer card is tapped — open the rename UI
+ * @param footerMenu            optional trailing slot in the footer, for an app-level overflow menu
  * @param modifier              applied to the Surface
  */
 @Composable
@@ -66,6 +67,7 @@ fun Sidebar(
     localDeviceName: String,
     localDeviceSub: String? = null,
     onLocalDeviceClick: () -> Unit = {},
+    footerMenu: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = KdTheme.colors
@@ -99,6 +101,7 @@ fun Sidebar(
                 name = localDeviceName,
                 sub = localDeviceSub,
                 onClick = onLocalDeviceClick,
+                menu = footerMenu,
             )
         }
     }
@@ -109,6 +112,7 @@ private fun LocalDeviceFooter(
     name: String,
     sub: String?,
     onClick: () -> Unit,
+    menu: (@Composable () -> Unit)? = null,
 ) {
     val colors = KdTheme.colors
     val typography = KdTheme.typography
@@ -158,5 +162,6 @@ private fun LocalDeviceFooter(
                 modifier = Modifier.size(16.dp),
             )
         }
+        menu?.invoke()
     }
 }

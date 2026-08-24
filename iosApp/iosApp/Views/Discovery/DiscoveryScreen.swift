@@ -14,6 +14,8 @@ import presentation
 struct DiscoveryScreen: View {
     let model: DiscoveryAppModel
     let onNavigateToChat: (_ deviceId: String, _ deviceName: String) -> Void
+    /// Opens the report sheet, which KlardropNav owns so it survives navigation.
+    let onReportProblem: () -> Void
 
     // MARK: - Local sheet state
 
@@ -59,7 +61,8 @@ struct DiscoveryScreen: View {
                     // Device-identity header — left-aligned, inline at the top of content.
                     DiscoveryHeaderView(
                         currentDeviceName: currentDeviceName,
-                        onEditIdentity: { showRenameSheet = true }
+                        onEditIdentity: { showRenameSheet = true },
+                        onReportProblem: onReportProblem
                     )
                     // Update banner (renders nothing on iOS unless Available)
                     UpdateBannerView(
@@ -173,14 +176,21 @@ extension DeviceUi: @retroactive Identifiable {
 struct DiscoveryHeaderView: View {
     let currentDeviceName: String
     let onEditIdentity: () -> Void
+    let onReportProblem: () -> Void
 
     @Environment(\.kdColors) private var kd
 
     var body: some View {
         VStack(alignment: .leading, spacing: KdSpacing.s3) {
-            Text("Klardrop")
-                .kdStyle(.display, color: kd.text)
-                .lineLimit(1)
+            // Wordmark + the app-level overflow menu, mirroring the settings affordance that sits
+            // in the same corner of the Compose header (discovery_screen.kt DiscoveryHeader).
+            HStack(alignment: .center, spacing: KdSpacing.s2) {
+                Text("Klardrop")
+                    .kdStyle(.display, color: kd.text)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                AppMenuButton(onReportProblem: onReportProblem)
+            }
 
             ThisDevicePillView(
                 deviceName: currentDeviceName,
