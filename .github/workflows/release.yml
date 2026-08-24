@@ -189,7 +189,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           java-version: '21'
           distribution: 'zulu'
@@ -367,7 +367,7 @@ jobs:
 
       # JDK 21 is REQUIRED — the Kotlin pod syncFramework script phase (invoked by
       # xcodebuild during the pod build phase) is pinned to JDK 21.
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           java-version: '21'
           distribution: 'zulu'
