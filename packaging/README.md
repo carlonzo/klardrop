@@ -39,9 +39,15 @@ curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/in
 
 Install locations (kept in sync with the app's self-updater — see below):
 
+The per-user app-image is in `~/.local/lib`, not `~/.local/share/klardrop`: that
+directory is the app's own data root (FileKit `filesDir` — `databases/`,
+`properties.preferences_pb`), and the installer replaces its app-image root
+wholesale. Installs made before the split are relocated automatically; their
+data is left in place.
+
 | Scope | App-image | Launcher | Desktop entry | Icons |
 |-------|-----------|----------|---------------|-------|
-| user (default) | `~/.local/share/klardrop` | `~/.local/bin/klardrop` | `~/.local/share/applications` | `~/.local/share/icons/hicolor` |
+| user (default) | `~/.local/lib/klardrop` | `~/.local/bin/klardrop` | `~/.local/share/applications` | `~/.local/share/icons/hicolor` |
 | root (`sudo`)  | `/opt/klardrop` | `/usr/local/bin/klardrop` | `/usr/share/applications` | `/usr/share/icons/hicolor` |
 
 ### macOS — Homebrew cask

@@ -51,7 +51,12 @@ if [ "$(id -u)" -eq 0 ]; then
   METAINFO_DIR="/usr/share/metainfo"
   SCOPE="system-wide"
 else
-  APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/klardrop"
+  # The app-image lives in .local/lib, NOT .local/share/klardrop — that is where
+  # FileKit puts the app's own data (databases/, properties.preferences_pb), and
+  # an installer that rm -rf'd its install root would wipe the device identity
+  # and message history on every upgrade.
+  APP_DIR="$HOME/.local/lib/klardrop"
+  LEGACY_APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/klardrop"
   BIN_DIR="$HOME/.local/bin"
   DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
   ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
@@ -62,6 +67,9 @@ fi
 uninstall() {
   say "Removing Klardrop ($SCOPE)…"
   rm -rf "$APP_DIR"
+  # Pre-relocation installs put the app-image inside the data dir; drop only the
+  # app-image parts so databases/ and preferences survive an uninstall.
+  if [ -n "${LEGACY_APP_DIR:-}" ]; then rm -rf "$LEGACY_APP_DIR/bin" "$LEGACY_APP_DIR/lib"; fi
   rm -f "$BIN_DIR/klardrop"
   rm -f "$DESKTOP_DIR/klardrop.desktop"
   rm -f "$METAINFO_DIR/com.carlom.Klardrop.metainfo.xml"
@@ -115,6 +123,8 @@ mkdir -p "$BIN_DIR" "$DESKTOP_DIR" "$METAINFO_DIR" "$(dirname "$APP_DIR")"
 
 rm -rf "$APP_DIR"
 cp -r "$src/klardrop" "$APP_DIR"
+# Sweep the old in-data-dir app-image, leaving the data itself alone.
+if [ -n "${LEGACY_APP_DIR:-}" ]; then rm -rf "$LEGACY_APP_DIR/bin" "$LEGACY_APP_DIR/lib"; fi
 ln -sf "$APP_DIR/bin/klardrop" "$BIN_DIR/klardrop"
 
 # Desktop entry, with Exec pointed at the absolute launcher.

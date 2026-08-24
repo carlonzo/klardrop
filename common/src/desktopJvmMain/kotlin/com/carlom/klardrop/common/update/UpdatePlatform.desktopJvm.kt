@@ -71,14 +71,20 @@ actual fun detectInstallChannel(): InstallChannel {
 /**
  * If [launcher] lives inside an install.sh-managed app-image, the root of that
  * app-image (`…/klardrop`); otherwise null. Matches the two scopes the script
- * installs to: system-wide `/opt/klardrop` and per-user `~/.local/share/klardrop`.
+ * installs to: system-wide `/opt/klardrop` and per-user `~/.local/lib/klardrop`.
+ *
+ * Deliberately does NOT match the pre-relocation `~/.local/share/klardrop` root:
+ * that directory also holds the app's own data (databases, preferences), and the
+ * swap in [DesktopTarballInstaller.applyAndRestart] replaces the whole tree — it
+ * would take the device identity and message history with it. Returning null there
+ * falls the UI back to re-running install.sh, which relocates and keeps the data.
  */
 private fun linuxInstallRoot(launcher: String): Path? {
   val home = System.getProperty("user.home").orEmpty()
   return when {
     launcher.startsWith("/opt/klardrop/") -> Path.of("/opt/klardrop")
-    home.isNotEmpty() && launcher.startsWith("$home/.local/share/klardrop/") ->
-      Path.of(home, ".local", "share", "klardrop")
+    home.isNotEmpty() && launcher.startsWith("$home/.local/lib/klardrop/") ->
+      Path.of(home, ".local", "lib", "klardrop")
     else -> null
   }
 }
@@ -133,7 +139,7 @@ private fun runExitCode(vararg command: String): Int = runCatching {
  * [applyAndRestart] hands off to a detached shell that waits for this process to exit,
  * swaps the directory, and relaunches.
  *
- * @param appDir the live app-image root (e.g. ~/.local/share/klardrop).
+ * @param appDir the live app-image root (e.g. ~/.local/lib/klardrop).
  * @param parent appDir's parent — staging happens here so the final move is a rename.
  * @param relaunch the native launcher to exec after the swap (appDir/bin/klardrop).
  */
