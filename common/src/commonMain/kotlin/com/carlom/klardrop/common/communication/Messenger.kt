@@ -27,6 +27,7 @@ import io.ktor.network.sockets.aSocket
 import io.ktor.network.sockets.openReadChannel
 import io.ktor.network.sockets.openWriteChannel
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.logLocal
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -397,7 +398,12 @@ class MessengerImpl(
           "Messenger",
           "[DEBUG] Error in Klardrop transfer to $deviceId (attempt $attempt): ${exception::class.simpleName}: ${exception.message}"
         )
-        log("Messenger", "[DEBUG] Full exception for attempt $attempt", exception)
+        // logLocal, not log: a per-attempt failure is not yet a product failure — the retry
+        // below usually succeeds. Uploading here produced up to 6 Sentry events (2 per
+        // attempt, with ConnectionMessenger reporting the same throwable) for one transfer
+        // the user never saw fail. The terminal report is the retries-exhausted branch below,
+        // so one uploaded event == one genuinely failed transfer.
+        logLocal("Messenger", "[DEBUG] Full exception for attempt $attempt", exception)
 
         // Treat every exception caught here as transport-level and worth
         // retrying. Force a fresh redial on the next attempt by evicting the
@@ -421,7 +427,7 @@ class MessengerImpl(
 
           return@getOrElse false // Signal to retry
         } else {
-          log("Messenger", "[DEBUG] Retries exhausted for $deviceId")
+          log("Messenger", "Transfer to $deviceId failed after $attempt attempts", exception)
           val errorMessage = exception.message ?: "Unknown connection error"
           flow.emit(Error("Transfer failed: $errorMessage"))
           return false
