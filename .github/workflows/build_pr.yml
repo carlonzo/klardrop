@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: '25'
           distribution: 'zulu'
@@ -68,7 +68,7 @@ jobs:
           xcode-version: latest-stable
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: '25'
           distribution: 'zulu'
@@ -167,7 +167,7 @@ jobs:
       # exercise the Xcode app build, so a SwiftUI / pbxproj / SKIE / framework
       # regression would otherwise slip through. Mirrors release.yml's macOS prep.
       - name: Set up JDK 21 (Apple app build uses the project's pinned JDK)
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: '21'
           distribution: 'zulu'
