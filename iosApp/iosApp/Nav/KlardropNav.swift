@@ -41,6 +41,9 @@ struct KlardropNav: View {
     @State private var pendingLinkDevice: DeviceUi? = nil
     /// Trusted device awaiting forget confirmation (long-press / context menu on a sidebar row).
     @State private var pendingForgetDevice: DeviceUi? = nil
+    /// Problem report. Presented from here (not the screen) so it survives push/pop and the
+    /// compact/regular layout switch, same as the rename sheet below.
+    @State private var showReportProblem = false
 
     private var trustedDevices: [DeviceUi] {
         model.state.devices.filter { isTrusted($0) }
@@ -87,6 +90,10 @@ struct KlardropNav: View {
                     showRenameSheet = false
                 }
             )
+        }
+        // Problem report — sends the recent log breadcrumbs to Sentry as user feedback.
+        .sheet(isPresented: $showReportProblem) {
+            ReportProblemSheet(onDismiss: { showReportProblem = false })
         }
         // Add-device picker: list of nearby untrusted candidates.
         .sheet(isPresented: $showAddDevicePicker) {
@@ -139,7 +146,8 @@ struct KlardropNav: View {
                 onNavigateToChat: { deviceId, deviceName in
                     let route = ChatRoute(deviceId: deviceId, deviceName: deviceName)
                     model.navigateToChat(route)
-                }
+                },
+                onReportProblem: { showReportProblem = true }
             )
             .navigationDestination(for: ChatRoute.self) { route in
                 let isOwned = isDeviceTrusted(deviceId: route.deviceId)
@@ -253,27 +261,33 @@ struct KlardropNav: View {
 
             Divider().background(kd.border)
 
-            // Local device footer (tap to rename)
-            Button {
-                showRenameSheet = true
-            } label: {
-                HStack(spacing: KdSpacing.s3) {
-                    DeviceAvatarView(kind: .mac, style: .tinted, status: .ok, size: 40)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(localName.isEmpty ? "This device" : localName)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(kd.text)
-                            .lineLimit(1)
+            // Local device footer (tap to rename) + the app-level overflow menu. The menu is a
+            // sibling of the Button, not inside it: nested inside, the Button would swallow its tap.
+            HStack(spacing: 0) {
+                Button {
+                    showRenameSheet = true
+                } label: {
+                    HStack(spacing: KdSpacing.s3) {
+                        DeviceAvatarView(kind: .mac, style: .tinted, status: .ok, size: 40)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(localName.isEmpty ? "This device" : localName)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(kd.text)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(kd.text3)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Image(systemName: "pencil")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(kd.text3)
+                    .padding(.leading, KdSpacing.s3)
+                    .padding(.vertical, KdSpacing.s3)
                 }
-                .padding(.horizontal, KdSpacing.s3)
-                .padding(.vertical, KdSpacing.s3)
+                .buttonStyle(.plain)
+
+                AppMenuButton(onReportProblem: { showReportProblem = true })
+                    .padding(.trailing, KdSpacing.s2)
             }
-            .buttonStyle(.plain)
         }
         .scrollContentBackground(.hidden)
     }

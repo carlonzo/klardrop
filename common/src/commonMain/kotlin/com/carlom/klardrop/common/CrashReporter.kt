@@ -5,7 +5,9 @@ import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import io.sentry.kotlin.multiplatform.Sentry
 import io.sentry.kotlin.multiplatform.SentryLevel
 import io.sentry.kotlin.multiplatform.protocol.Breadcrumb
+import io.sentry.kotlin.multiplatform.protocol.SentryId
 import io.sentry.kotlin.multiplatform.protocol.User
+import io.sentry.kotlin.multiplatform.protocol.UserFeedback
 
 /**
  * Crash/error reporting, backed by the Sentry KMP SDK.
@@ -32,6 +34,40 @@ object CrashReporter {
   fun notify(throwable: Throwable) {
     if (throwable.isExpectedNetworkNoise()) return
     Sentry.captureException(throwable)
+  }
+
+  /**
+   * Sends a user-authored problem report, and returns whether it actually went out.
+   *
+   * Sentry models user feedback as an annotation on an *existing event* rather than a standalone
+   * submission, so this captures a message event first and attaches [comments] to it. That
+   * indirection is the whole reason this is worth having: the event carries the current scope,
+   * which means the last 100 breadcrumbs — every [com.carlom.klardrop.common.utils.log] call, see
+   * `logger.kt` — ride along with the report. A user hitting a connection problem then produces
+   * something debuggable, instead of the "it wouldn't connect" that a plain feedback form gives.
+   *
+   * Every report groups under one Sentry issue (same message title) and carries `report:user`, so
+   * they can be found without trawling crashes. [ReportOutcome.Disabled] is returned rather than
+   * silently swallowed: local and pull-request builds have no DSN, and a UI that says "thanks,
+   * sent!" to a report that went nowhere is worse than one that admits it.
+   */
+  fun reportUserFeedback(comments: String, name: String? = null, email: String? = null): ReportOutcome {
+    if (!Sentry.isEnabled()) return ReportOutcome.Disabled
+    val eventId = Sentry.captureMessage(USER_REPORT_TITLE) { scope ->
+      scope.level = SentryLevel.INFO
+      scope.setTag("report", "user")
+    }
+    // A dropped event (sampling, an inbound filter, rate limit) yields the nil id, and feedback
+    // attached to it would be unreachable — say it failed rather than pretend otherwise.
+    if (eventId == SentryId.EMPTY_ID) return ReportOutcome.Failed
+    Sentry.captureUserFeedback(
+      UserFeedback(eventId).apply {
+        this.comments = comments
+        name?.takeIf { it.isNotBlank() }?.let { this.name = it }
+        email?.takeIf { it.isNotBlank() }?.let { this.email = it }
+      }
+    )
+    return ReportOutcome.Sent
   }
 
   fun leaveBreadcrumb(message: String, type: BreadcrumbType = BreadcrumbType.MANUAL) {
@@ -62,6 +98,19 @@ object CrashReporter {
       scope.setTag("device.osType", osType)
     }
   }
+
+  private const val USER_REPORT_TITLE = "User report"
+}
+
+/** Result of [CrashReporter.reportUserFeedback], so the UI can tell the user the truth. */
+enum class ReportOutcome {
+  Sent,
+
+  /** No DSN was compiled in (local or pull-request build), or the SDK never started. */
+  Disabled,
+
+  /** The SDK is running but dropped the event, so there is nothing to attach the report to. */
+  Failed,
 }
 
 /**
