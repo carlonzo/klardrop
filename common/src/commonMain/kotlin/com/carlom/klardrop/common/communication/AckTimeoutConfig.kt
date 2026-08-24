@@ -21,9 +21,14 @@ data class AckTimeoutConfig(
   val readyAckTimeout: Duration = 5.seconds,
 
   /**
-   * Timeout for ACK_RECEIVED when sending payload completion
+   * Timeout for ACK_RECEIVED when sending payload completion.
+   *
+   * Measured from the moment the sender finishes *writing* the last chunk, which — with TCP
+   * send buffers and a 38 MB/s link — can be several megabytes ahead of what the receiver has
+   * drained, hashed and finalized. 10s was tight enough to fire on a slow receiver and trigger
+   * a pointless retry of an already-delivered file.
    */
-  val receivedAckTimeout: Duration = 10.seconds,
+  val receivedAckTimeout: Duration = 30.seconds,
 
   /**
    * Time to wait for ACK_READY / ACK_RECEIVED / ACK_REJECTED after the receiver has

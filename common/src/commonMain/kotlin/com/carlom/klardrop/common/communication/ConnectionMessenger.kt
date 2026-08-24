@@ -362,11 +362,13 @@ class ConnectionMessenger internal constructor(
   ) {
     val initialTimeoutMs = ackTimeoutConfig.timeoutFor(ackType, hasPayload).inWholeMilliseconds
     val userTimeoutMs = ackTimeoutConfig.userResponseTimeout.inWholeMilliseconds
+    var timeoutSoFar = initialTimeoutMs
     log("ConnectionMessenger: [DEBUG] Awaiting ACK $ackType for message $messageId from ${connection.deviceId} (timeout: ${initialTimeoutMs}ms)")
 
     try {
       withContext(coroutines.ioDispatcher) {
         var timeoutMs = initialTimeoutMs
+        timeoutSoFar = timeoutMs
         var awaitingUserActive = awaitingUserChannel
         while (true) {
           val outcome = withTimeout(timeoutMs) {
@@ -386,6 +388,7 @@ class ConnectionMessenger internal constructor(
             AckOutcome.AwaitingUser -> {
               log("ConnectionMessenger: [DEBUG] Peer signalled awaiting-user for message $messageId; extending timeout to ${userTimeoutMs}ms")
               timeoutMs = userTimeoutMs
+              timeoutSoFar = timeoutMs
               // Only honor the AWAITING_USER signal once per wait so a misbehaving peer
               // can't pin the sender open indefinitely by re-sending it.
               awaitingUserActive = null
@@ -416,7 +419,13 @@ class ConnectionMessenger internal constructor(
       channel.close()
       rejectedChannel?.close()
       awaitingUserChannel?.close()
-      throw IllegalStateException("ACK timeout: Expected $ackType for message $messageId from ${connection.deviceId}")
+      // Message carries the timeout that actually elapsed and whether a payload was in
+      // flight: without them a Sentry event says only "it timed out", which is not enough
+      // to tell a dead socket from a receiver that needed longer than the window.
+      throw IllegalStateException(
+        "ACK timeout: Expected $ackType for message $messageId from ${connection.deviceId} " +
+          "after ${timeoutSoFar}ms (hasPayload=$hasPayload, transport=${if (isBleTransport) "BLE" else "TCP"})"
+      )
     }
   }
 
@@ -482,7 +491,10 @@ class ConnectionMessenger internal constructor(
       if (expected) {
         logLocal("ConnectionMessenger", "Send of message ${message.id} to ${connection.deviceId} ended: ${exception.message}", exception)
       } else {
-        log("ConnectionMessenger: Exception while sending message ${message.id} to ${connection.deviceId}", exception)
+        // Local only: Messenger.handleKlardropTransfer retries this send and reports the
+        // throwable to Sentry once, when retries are exhausted. Uploading per attempt here
+        // multiplied every ACK timeout into 6 events for a single transfer.
+        logLocal("ConnectionMessenger", "Exception while sending message ${message.id} to ${connection.deviceId}", exception)
       }
       // Close the socket so the next send forces a fresh connection and so the
       // pool's isClosed() check evicts this entry. Do NOT emit a terminal flow

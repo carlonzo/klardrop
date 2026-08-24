@@ -1,17 +1,14 @@
 package com.carlom.klardrop.common.utils
 
-import com.carlom.klardrop.common.CommonPlatformDependencies
-import com.carlom.klardrop.common.readFromBash
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.path
+import java.nio.file.Files
+import java.nio.file.Paths
 
 internal actual fun PlatformFile.mimeType(): String {
-  // file --mime-type -b <filepath
-
-    val mimeType = when(CommonPlatformDependencies.osType()){
-      OsType.APPLE, OsType.LINUX ->  readFromBash("file", "--mime-type", "-b", path)
-      else -> null
-    }
-
-  return mimeType ?: mimeTypeFromExtension()
+  // Files.probeContentType replaces a `file --mime-type -b` subprocess: same answer on
+  // Linux/macOS (the JDK's provider reads the same magic/xdg databases), and it cannot fail
+  // with "Cannot run program" when the app is launched without a usable PATH.
+  val probed = runCatching { Files.probeContentType(Paths.get(path)) }.getOrNull()
+  return probed?.takeIf { it.isNotBlank() } ?: mimeTypeFromExtension()
 }
