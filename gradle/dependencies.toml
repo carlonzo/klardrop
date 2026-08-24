@@ -92,5 +92,5 @@ sentry-kmp = { id = "io.sentry.kotlin.multiplatform.gradle", version.ref = "sent
 # AGP 9 support for the mapping upload landed in 5.12.2, and we are on AGP 9.3.1.
 sentry-android = { id = "io.sentry.android.gradle", version.ref = "sentry-android" }
 
-squareup-wire = { id = "com.squareup.wire", version = "6.4.6" }
+squareup-wire = { id = "com.squareup.wire", version = "6.4.7" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
