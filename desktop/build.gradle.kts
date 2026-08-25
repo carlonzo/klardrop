@@ -46,7 +46,7 @@ compose.desktop {
   application {
     mainClass = "MainKt"
     nativeDistributions {
-      targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+      targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
       // Local builds install under their own name so a dev build and an installed release can
       // coexist, the same way the Android debug variant does via its applicationId suffix.
       // CI always passes klardrop.version, so only developer machines get the suffix.
@@ -82,10 +82,13 @@ compose.desktop {
       }
       linux {
         iconFile.set(file("icons/Klardrop.png"))
-        // Register an application-menu launcher in the generated .deb.
+        // Register an application-menu launcher in the generated .deb/.rpm.
         shortcut = true
         menuGroup = "Network"
         appCategory = "Network"
+        // jpackage refuses to build an RPM without a license type (--linux-rpm-license-type);
+        // it lands in the package's License: field, so it has to match the actual LICENSE.
+        rpmLicenseType = "ASL 2.0"
       }
     }
     buildTypes.release.proguard {

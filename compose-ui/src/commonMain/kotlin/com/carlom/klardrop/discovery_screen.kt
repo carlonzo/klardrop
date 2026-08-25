@@ -77,6 +77,7 @@ import com.carlom.klardrop.components.SectionHead
 import com.carlom.klardrop.components.ShareSheet
 import com.carlom.klardrop.components.Banner
 import com.carlom.klardrop.components.UpdateBanner
+import com.carlom.klardrop.components.UpdateSettingsSection
 import com.carlom.klardrop.theme.KdEaseOut
 import com.carlom.klardrop.theme.KdTheme
 import io.github.vinceglb.filekit.dialogs.FileKitMode
@@ -161,6 +162,19 @@ fun DiscoveryScreen(
             showBackgroundDiscoveryToggle = discoveryController.supportsBackgroundDiscovery,
             onBackgroundDiscoveryChange = { discoveryController.setBackgroundDiscoveryEnabled(it) },
             onDismiss = { showSettings = false },
+            updates = {
+                UpdateSettingsSection(
+                    visible = updateBannerController.updatesSupported,
+                    currentVersion = updateBannerController.currentVersion,
+                    releaseChannel = updateBannerController.releaseChannel,
+                    status = updateStatus,
+                    installProgress = updateInstallProgress,
+                    onCheck = updateBannerController::recheck,
+                    onAction = updateBannerController::onAction,
+                    onRestart = updateBannerController::onRestart,
+                    onOpenUrl = updateBannerController::openUrl,
+                )
+            },
         )
     }
 
@@ -460,6 +474,7 @@ private fun SettingsSheet(
     showBackgroundDiscoveryToggle: Boolean,
     onBackgroundDiscoveryChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
+    updates: @Composable () -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val colors = KdTheme.colors
@@ -505,6 +520,10 @@ private fun SettingsSheet(
                 }
                 Spacer(Modifier.height(spacing.s4))
             }
+
+            // Renders nothing where the app store owns updates (Android/iOS).
+            updates()
+            Spacer(Modifier.height(spacing.s4))
 
             ReportProblemSection()
         }

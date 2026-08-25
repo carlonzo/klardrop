@@ -106,8 +106,11 @@ class Klardrop(
     // background service — still records the peer's name.
     commonComponent.trustedDevicesDirectory()
 
-    // Check for a newer release (desktop only; a no-op where unsupported).
-    commonComponent.updateChecker().checkNow()
+    // Check for a newer release, then keep re-checking in the background (desktop
+    // only; a no-op where unsupported). A desktop session commonly outlives several
+    // releases, so a single check at launch would only ever catch the one published
+    // before it started.
+    commonComponent.updateChecker().start()
 
     // Tag crash-reporter events with platform + device identity once the device
     // id is resolved (it's persisted lazily on first read).
@@ -122,5 +125,11 @@ class Klardrop(
   fun visibleDevices() = commonComponent.visibleDevices()
 
   fun trustedDevices() = commonComponent.trustedDevicesDirectory().trustedDevices
+
+  /** Update-check result, so the desktop tray can surface it with the window hidden. */
+  fun updateStatus() = commonComponent.updateChecker().status
+
+  /** Self-update progress, so the tray can offer the restart that applies it. */
+  fun updateInstallProgress() = commonComponent.updateChecker().install
 
 }

@@ -231,11 +231,18 @@ jobs:
             echo "KLARDROP_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
           } >> "$GITHUB_ENV"
 
-      - name: Build Linux DEB + app-image + Android APK & AAB
+      # jpackage shells out to rpmbuild for TargetFormat.Rpm and fails the task if it
+      # is missing; the GitHub ubuntu image ships dpkg-deb but not rpm.
+      - name: Install RPM tooling
+        if: matrix.target == 'linux-android'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Build Linux DEB + RPM + app-image + Android APK & AAB
         if: matrix.target == 'linux-android'
         run: >-
           ./gradlew
           :desktop:packageReleaseDeb
+          :desktop:packageReleaseRpm
           :desktop:createReleaseDistributable
           :android:assembleRelease
           :android:bundleRelease
@@ -309,7 +316,7 @@ jobs:
           # (or main/<format>/ for non-release). Match both so the workflow keeps working if
           # the desktop module ever stops calling proguard.
           find desktop/build/compose/binaries -type f \
-            \( -name '*.dmg' -o -name '*.msi' -o -name '*.deb' \) \
+            \( -name '*.dmg' -o -name '*.msi' -o -name '*.deb' -o -name '*.rpm' \) \
             -exec cp -v {} dist/ \;
           if [ -d android/build/outputs/apk/release ]; then
             find android/build/outputs/apk/release -name '*.apk' -exec cp -v {} dist/ \;
@@ -703,13 +710,14 @@ jobs:
           DMG=$(pick "*.dmg")
           MSI=$(pick "*.msi")
           DEB=$(pick "*.deb")
+          RPM=$(pick "*.rpm")
           APK=$(pick "*.apk")
           TGZ=$(pick "*.tar.gz")
 
           export BASE="https://github.com/${REPO}/releases/download/${TAG}"
-          python3 - "$DMG" "$MSI" "$DEB" "$APK" "$TGZ" <<'PY' > latest.json
+          python3 - "$DMG" "$MSI" "$DEB" "$RPM" "$APK" "$TGZ" <<'PY' > latest.json
           import json, os, sys, datetime, pathlib
-          dmg, msi, deb, apk, tgz = sys.argv[1:6]
+          dmg, msi, deb, rpm, apk, tgz = sys.argv[1:7]
           base = os.environ["BASE"]
           def entry(name):
               if not name: return None
@@ -724,6 +732,7 @@ jobs:
           if dmg and os.path.exists("macos-verified.txt"): platforms["macos"] = entry(dmg)
           if msi: platforms["windows"]       = entry(msi)
           if deb: platforms["linux-deb"]     = entry(deb)
+          if rpm: platforms["linux-rpm"]     = entry(rpm)
           if tgz: platforms["linux-tarball"] = entry(tgz)
           if apk: platforms["android"]       = entry(apk)
           out = {
@@ -847,6 +856,111 @@ jobs:
           git config user.email "carlo.marinangeli@gmail.com"
           git add Casks/klardrop.rb
           git commit -m "klardrop ${VERSION}" || { echo "no cask change"; exit 0; }
+          git push
+
+  # Bump the `klardrop-bin` AUR package. Gated on the AUR deploy key + a stable
+  # version, the same way the Homebrew job is gated on its tap token: an
+  # unconfigured AUR account skips, it never fails the release.
+  aur:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Guard (AUR key present + stable version)
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          OK=true
+          if [ -z "${{ secrets.AUR_SSH_PRIVATE_KEY }}" ]; then
+            echo "AUR_SSH_PRIVATE_KEY not set — skipping AUR publish."; OK=false
+          fi
+          if [ "${{ needs.version.outputs.stable }}" != "true" ]; then
+            echo "Version is a pre-release — skipping AUR publish."; OK=false
+          fi
+          echo "ok=$OK" >> "$GITHUB_OUTPUT"
+
+      - name: Render PKGBUILD + .SRCINFO
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG:      ${{ needs.version.outputs.tag }}
+          VERSION:  ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Hash the exact published tarball so makepkg's checksum matches what users download.
+          gh release download "$TAG" --repo "${{ github.repository }}" \
+            --pattern 'klardrop-linux-x64.tar.gz' --dir tgz
+          SHA="$(sha256sum tgz/klardrop-linux-x64.tar.gz | awk '{print $1}')"
+          mkdir -p aur
+          sed -e "s/@VERSION@/${VERSION}/g" -e "s/@SHA256@/${SHA}/g" \
+            packaging/aur/PKGBUILD > aur/PKGBUILD
+
+          # .SRCINFO is what the AUR actually indexes, and it must agree with the
+          # PKGBUILD. Rather than maintain a second copy by hand, source the rendered
+          # PKGBUILD (it is a bash script) and print the fields back out — the same
+          # thing `makepkg --printsrcinfo` does, without needing an Arch container.
+          (
+            set -euo pipefail
+            # shellcheck disable=SC1091
+            source aur/PKGBUILD
+            {
+              echo "pkgbase = ${pkgname}"
+              echo -e "\tpkgdesc = ${pkgdesc}"
+              echo -e "\tpkgver = ${pkgver}"
+              echo -e "\tpkgrel = ${pkgrel}"
+              echo -e "\turl = ${url}"
+              for a in "${arch[@]}";      do echo -e "\tarch = $a";      done
+              for l in "${license[@]}";   do echo -e "\tlicense = $l";   done
+              for d in "${depends[@]}";   do echo -e "\tdepends = $d";   done
+              for pr in "${provides[@]}"; do echo -e "\tprovides = $pr"; done
+              for c in "${conflicts[@]}"; do echo -e "\tconflicts = $c"; done
+              for o in "${options[@]}";   do echo -e "\toptions = $o";   done
+              for sr in "${source[@]}";   do echo -e "\tsource = $sr";   done
+              for sm in "${sha256sums[@]}"; do echo -e "\tsha256sums = $sm"; done
+              echo
+              echo "pkgname = ${pkgname}"
+            } > aur/.SRCINFO
+          )
+          echo "--- PKGBUILD ---"; cat aur/PKGBUILD
+          echo "--- .SRCINFO ---"; cat aur/.SRCINFO
+
+      - name: Push to the AUR
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_KNOWN_HOSTS:     ${{ secrets.AUR_KNOWN_HOSTS }}
+          VERSION:             ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$HOME/.ssh/aur"
+          chmod 600 "$HOME/.ssh/aur"
+
+          # This step holds a key that can publish a package other people install from,
+          # so how we learn the host key matters. Set the optional AUR_KNOWN_HOSTS secret
+          # (output of `ssh-keyscan aur.archlinux.org`, checked against the fingerprint
+          # published by the AUR) to pin it. Without it we fall back to ssh-keyscan, which
+          # is trust-on-first-use: it accepts whatever the host presents on this run.
+          if [ -n "${AUR_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$AUR_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          else
+            echo "::warning::AUR_KNOWN_HOSTS not set — trusting the host key ssh-keyscan returns."
+            ssh-keyscan -t ed25519 aur.archlinux.org > "$HOME/.ssh/known_hosts" 2>/dev/null
+          fi
+          chmod 600 "$HOME/.ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+
+          git clone ssh://aur@aur.archlinux.org/klardrop-bin.git aur-repo
+          cp aur/PKGBUILD aur/.SRCINFO aur-repo/
+          cd aur-repo
+          git config user.name "klardrop-ci"
+          git config user.email "carlo.marinangeli@gmail.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "klardrop ${VERSION}" || { echo "no AUR change"; exit 0; }
           git push
 
   # After a stable release, refresh the tester tracks (Play internal + TestFlight +
