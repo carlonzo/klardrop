@@ -183,6 +183,66 @@ class SentStatusReliabilityTest {
     }
   }
 
+  @Test
+  fun notVisibleButPooledInboundConnection_sendSucceeds() = runReliabilityTest {
+    val ctx = it
+    // KLARDROP-JD incident shape: the client's visible-devices map is EMPTY (one-directional
+    // mDNS — the peer's dial reaches us, our browse never sees the peer), but the peer dialed
+    // us first, so a live inbound connection sits in the pool. The send must ride that pooled
+    // connection instead of failing with "$name is not visible".
+    turbineScope(timeout = 30.seconds) {
+      ctx.setupInboundOnlyConnection()
+
+      // Client sends while still not visible — must succeed over the pooled inbound link.
+      val clientMessenger = ctx.clientCommunicationModule.messenger()
+      val sendRequest = SimpleSendMessageRequest(TextMessage(text = "riding the inbound link"))
+
+      val senderChannel = clientMessenger.send(serverDeviceId, sendRequest).testIn(this)
+      val terminal = ctx.awaitTerminal(senderChannel)
+
+      assertTrue(
+        terminal is Completed,
+        "a send to a not-visible device with a live pooled connection must complete, was $terminal",
+      )
+
+      val rows = ctx.clientRows(serverDeviceId)
+      assertEquals(1, rows.size, "exactly one row must be persisted for the whole send")
+      assertEquals(null, rows.first().send_status, "the row must end SENT (send_status NULL)")
+
+      senderChannel.cancelAndIgnoreRemainingEvents()
+    }
+  }
+
+  @Test
+  fun pairingResponse_keepsOnlyInboundConnectionWhenPeerNotVisible() = runReliabilityTest {
+    val ctx = it
+    turbineScope(timeout = 30.seconds) {
+      ctx.setupInboundOnlyConnection()
+
+      // Pairing acceptance stores trust before its response is sent. That makes the existing
+      // encrypted link eligible for an authentication upgrade, but mDNS is still one-directional:
+      // there is no endpoint with which to redial. The response must keep and use the only link.
+      val request = ctx.serverCommunicationModule.trustManager()
+        .createPairingRequest(clientDeviceId)
+        .getOrThrow()
+      val response = ctx.clientCommunicationModule.trustManager()
+        .createPairingAcceptance(request)
+        .getOrThrow()
+
+      val senderChannel = ctx.clientCommunicationModule.messenger()
+        .send(serverDeviceId, SimpleSendMessageRequest(response))
+        .testIn(this)
+      val terminal = ctx.awaitTerminal(senderChannel)
+
+      assertTrue(
+        terminal is Completed,
+        "pairing response must use the only inbound connection when no redial path exists, was $terminal",
+      )
+
+      senderChannel.cancelAndIgnoreRemainingEvents()
+    }
+  }
+
   /** Test-only fixture: a real client+server loopback pair, mirroring MessagesRouterReliabilityTest.Ctx. */
   inner class Ctx {
     private val driver = createTestDriver()
@@ -218,6 +278,7 @@ class SentStatusReliabilityTest {
       }
 
     private val clientVisibleDevices = FakeVisibleDevices()
+    val serverVisibleDevices = FakeVisibleDevices()
 
     val clientCommunicationModule = CommunicationModule(
       coroutines = coroutines,
@@ -234,9 +295,9 @@ class SentStatusReliabilityTest {
       incomingAuthorizerOverride = autoAcceptAuthorizer,
     )
 
-    private val serverCommunicationModule = CommunicationModule(
+    val serverCommunicationModule = CommunicationModule(
       coroutines = coroutines,
-      visibleDevices = FakeVisibleDevices(),
+      visibleDevices = serverVisibleDevices,
       protoBuf = ProtoBuf,
       clock = clock,
       fileManager = InMemoryTestFileManager(),
@@ -271,6 +332,23 @@ class SentStatusReliabilityTest {
 
       coroutines.dispatcher.scheduler.runCurrent()
       coroutines.dispatcher.scheduler.advanceTimeBy(100)
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
+    }
+
+    suspend fun setupInboundOnlyConnection() {
+      // The client remains absent from its own visible map. Only the server side knows an endpoint,
+      // so it dials first and leaves an inbound connection in the client's pool.
+      val clientServerStatus = clientCommunicationModule.server().startServer()
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceTimeBy(200)
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceUntilIdle()
+
+      serverVisibleDevices.addKlardropDevice(clientDeviceId, "localhost", clientServerStatus.port)
+      serverCommunicationModule.client().connectTo(clientDeviceId)
+      coroutines.dispatcher.scheduler.runCurrent()
+      coroutines.dispatcher.scheduler.advanceTimeBy(500)
       coroutines.dispatcher.scheduler.runCurrent()
       coroutines.dispatcher.scheduler.advanceUntilIdle()
     }
