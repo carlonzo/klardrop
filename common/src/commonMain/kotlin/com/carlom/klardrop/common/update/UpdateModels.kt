@@ -7,12 +7,20 @@ import kotlinx.serialization.Serializable
  * instruction we show the user. Detected at runtime on desktop; always
  * [UNKNOWN] on mobile (those platforms update through their app stores).
  */
-enum class InstallChannel {
-  BREW,      // macOS Homebrew cask
-  DMG,       // macOS: downloaded .dmg by hand
-  TARBALL,   // Linux: installed via the install.sh script (self-updatable in place)
-  MANUAL,    // installed some other way
-  UNKNOWN,   // couldn't tell / not a desktop build
+enum class InstallChannel(val displayName: String) {
+  BREW("Homebrew"),          // macOS Homebrew cask
+  DMG("macOS disk image"),   // macOS: downloaded .dmg by hand
+  TARBALL("install.sh"),     // Linux: install.sh script (self-updatable in place)
+  DEB("apt / dpkg"),         // Linux: the .deb, installed by dpkg/apt
+  RPM("rpm"),                // Linux: the .rpm, installed by rpm/dnf/zypper
+  PACMAN("AUR"),             // Arch: pacman-owned, i.e. the klardrop-bin AUR package
+  FLATPAK("Flatpak"),        // Linux: running inside a Flatpak sandbox
+  SNAP("Snap"),              // Linux: running from a snap mount
+  APPIMAGE("AppImage"),      // Linux: launched from an AppImage
+  NIX("Nix"),                // Linux: /nix/store-resident build
+  MSI("Windows installer"),  // Windows: the .msi
+  MANUAL("manual install"),  // installed some other way
+  UNKNOWN("unknown"),        // couldn't tell / not a desktop build
 }
 
 /**
@@ -40,19 +48,33 @@ data class ReleaseAsset(
   val size: Long? = null,
 )
 
-/** Result of an update check. The UI shows a banner only for [Available]. */
+/**
+ * Result of an update check. The banner shows only [Available]; the settings
+ * sheet renders every state so a manual "Check for updates" has visible feedback.
+ *
+ * A re-check never regresses [Available] back to [Checking] or [Failed] — once we
+ * know a newer version exists, a later flaky fetch must not hide the banner.
+ */
 sealed interface UpdateStatus {
-  /** Not checked yet, check in flight, or check failed — render nothing. */
+  /** Never checked (or unsupported platform) — the banner renders nothing. */
   data object Unknown : UpdateStatus
 
-  /** Checked and we're on the latest version — render nothing. */
+  /** A check is in flight. Only reached from [Unknown], [UpToDate] or [Failed]. */
+  data object Checking : UpdateStatus
+
+  /** Checked and we're on the latest version — the banner renders nothing. */
   data object UpToDate : UpdateStatus
+
+  /** The check itself failed (offline, GitHub down, malformed manifest). */
+  data class Failed(val message: String) : UpdateStatus
 
   /** A newer version exists; [action] is the channel-specific way to get it. */
   data class Available(
     val version: String,
     val channel: InstallChannel,
     val action: UpdateAction,
+    /** Release-notes page for [version], for the "What's new" link. */
+    val notesUrl: String? = null,
   ) : UpdateStatus
 }
 

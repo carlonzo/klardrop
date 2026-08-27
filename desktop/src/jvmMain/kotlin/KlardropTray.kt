@@ -5,6 +5,8 @@ import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Tray as AwtTray
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.DiscoveryDevice
+import com.carlom.klardrop.common.update.InstallProgress
+import com.carlom.klardrop.common.update.UpdateStatus
 import dev.nucleusframework.composenativetray.tray.api.Tray as NativeTray
 import java.awt.SystemTray
 
@@ -46,6 +48,7 @@ internal fun trayPeers(
 internal fun ApplicationScope.KlardropTray(
   peers: List<TrayPeer>,
   isWindowVisible: Boolean,
+  updateLabel: String?,
   onToggleWindow: () -> Unit,
   onShowWindow: () -> Unit,
 ) {
@@ -54,6 +57,7 @@ internal fun ApplicationScope.KlardropTray(
     LinuxNativeTray(
       peers = peers,
       isWindowVisible = isWindowVisible,
+      updateLabel = updateLabel,
       onToggleWindow = onToggleWindow,
       onShowWindow = onShowWindow,
       onQuit = ::exitApplication,
@@ -62,6 +66,7 @@ internal fun ApplicationScope.KlardropTray(
     AwtPlatformTray(
       peers = peers,
       isWindowVisible = isWindowVisible,
+      updateLabel = updateLabel,
       onToggleWindow = onToggleWindow,
       onShowWindow = onShowWindow,
       onQuit = ::exitApplication,
@@ -69,10 +74,24 @@ internal fun ApplicationScope.KlardropTray(
   }
 }
 
+/**
+ * Tray entry for a pending update, or null when there is nothing to say. The tray is
+ * the only Klardrop surface a user sees while the window is hidden — which, for a
+ * share target that lives in the background, is most of the time — so an update that
+ * only ever announced itself in the window could go unnoticed for weeks. Clicking it
+ * opens the window, where the banner and the Updates settings do the actual work.
+ */
+internal fun trayUpdateLabel(status: UpdateStatus, install: InstallProgress): String? = when {
+  install is InstallProgress.Ready -> "Restart to update"
+  status is UpdateStatus.Available -> "Update available — ${status.version}"
+  else -> null
+}
+
 @Composable
 private fun LinuxNativeTray(
   peers: List<TrayPeer>,
   isWindowVisible: Boolean,
+  updateLabel: String?,
   onToggleWindow: () -> Unit,
   onShowWindow: () -> Unit,
   onQuit: () -> Unit,
@@ -87,6 +106,11 @@ private fun LinuxNativeTray(
   ) {
     Item(label = if (isWindowVisible) "Hide ${KlardropVersion.APP_NAME}" else "Show ${KlardropVersion.APP_NAME}") {
       onToggleWindow()
+    }
+    if (updateLabel != null) {
+      Item(label = updateLabel) {
+        onShowWindow()
+      }
     }
     Divider()
     if (peers.isEmpty()) {
@@ -120,6 +144,7 @@ private fun trayTooltip(peers: List<TrayPeer>): String {
 private fun ApplicationScope.AwtPlatformTray(
   peers: List<TrayPeer>,
   isWindowVisible: Boolean,
+  updateLabel: String?,
   onToggleWindow: () -> Unit,
   onShowWindow: () -> Unit,
   onQuit: () -> Unit,
@@ -135,6 +160,9 @@ private fun ApplicationScope.AwtPlatformTray(
         text = if (isWindowVisible) "Hide ${KlardropVersion.APP_NAME}" else "Show ${KlardropVersion.APP_NAME}",
         onClick = onToggleWindow,
       )
+      if (updateLabel != null) {
+        Item(text = updateLabel, onClick = onShowWindow)
+      }
       Separator()
       if (peers.isEmpty()) {
         Item(text = "No devices found", enabled = false, onClick = {})

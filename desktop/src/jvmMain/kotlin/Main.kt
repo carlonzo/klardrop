@@ -131,10 +131,17 @@ fun main(args: Array<String>) {
 
     val isMacOs = remember { System.getProperty("os.name").lowercase().contains("mac") }
 
+    val updateStatus by k.updateStatus().collectAsState()
+    val updateInstall by k.updateInstallProgress().collectAsState()
+    val updateLabel = remember(updateStatus, updateInstall) {
+      trayUpdateLabel(updateStatus, updateInstall)
+    }
+
     if (trayAvailable) {
       KlardropTray(
         peers = peers,
         isWindowVisible = isWindowVisible,
+        updateLabel = updateLabel,
         onToggleWindow = { isWindowVisible = !isWindowVisible },
         onShowWindow = { isWindowVisible = true },
       )

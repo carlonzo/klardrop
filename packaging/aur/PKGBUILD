@@ -1,0 +1,56 @@
+# Maintainer: Carlo Marinangeli <carlo.marinangeli@gmail.com>
+#
+# This is a TEMPLATE. The release workflow renders @VERSION@ and @SHA256@ from the
+# git tag and the universal tarball's checksum, then pushes the result (plus a
+# generated .SRCINFO) to the AUR as the `klardrop-bin` package. Users then install
+# with `yay -S klardrop-bin` (or any other AUR helper / a manual makepkg -si).
+#
+# `-bin` because this packages the prebuilt release tarball rather than compiling
+# from source: the payload is a jpackage app-image that bundles its own JRE, so
+# there is nothing for makepkg to build and no java runtime dependency to declare.
+#
+# The layout mirrors what packaging/install.sh produces for a root install
+# (/opt/klardrop + a launcher on PATH), so the app's own install-channel detection
+# sees a pacman-owned file and offers `yay -S klardrop-bin` instead of trying to
+# overwrite pacman's files behind its back.
+
+pkgname=klardrop-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Share files and clipboard with nearby devices over the local network (AirDrop-style)"
+arch=('x86_64')
+url="https://github.com/carlonzo/klardrop"
+license=('Apache-2.0')
+depends=('hicolor-icon-theme')
+provides=('klardrop')
+conflicts=('klardrop')
+# The bundled runtime is already stripped, and running strip over a jlink image
+# corrupts its embedded modules file.
+options=('!strip')
+source=("klardrop-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkgver}/klardrop-linux-x64.tar.gz")
+sha256sums=('@SHA256@')
+
+package() {
+  cd "${srcdir}/klardrop-linux-x64"
+
+  # The app-image (launcher + lib/ + bundled runtime), kept whole.
+  install -d "${pkgdir}/opt/klardrop"
+  cp -a klardrop/. "${pkgdir}/opt/klardrop/"
+
+  install -d "${pkgdir}/usr/bin"
+  ln -s /opt/klardrop/bin/klardrop "${pkgdir}/usr/bin/klardrop"
+
+  install -Dm644 klardrop.desktop \
+    "${pkgdir}/usr/share/applications/klardrop.desktop"
+  install -Dm644 com.carlom.Klardrop.metainfo.xml \
+    "${pkgdir}/usr/share/metainfo/com.carlom.Klardrop.metainfo.xml"
+
+  # Icon theme entries. The .desktop refers to the icon by theme *name*
+  # (Icon=klardrop), so the scalable SVG is preferred and the PNGs are fallbacks.
+  for size in 32 64 128 256 512; do
+    install -Dm644 "icons/${size}x${size}/klardrop.png" \
+      "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/klardrop.png"
+  done
+  install -Dm644 icons/scalable/klardrop.svg \
+    "${pkgdir}/usr/share/icons/hicolor/scalable/apps/klardrop.svg"
+}

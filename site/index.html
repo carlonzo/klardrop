@@ -682,6 +682,7 @@
     // Install script lives in the repo; the raw URL resolves once packaging/install.sh is on main.
     const INSTALL_SH    = `https://raw.githubusercontent.com/${REPO}/main/packaging/install.sh`;
     const BREW_CMD      = "brew install --cask carlonzo/klardrop/klardrop";
+    const AUR_CMD       = "yay -S klardrop-bin";
     const BREW_NIGHTLY  = "brew install --cask carlonzo/klardrop/klardrop-nightly";
     // Nightly channel: rolling `nightly` tag. The DMG filename is version-stamped, so
     // resolve it from the nightly latest.json; fall back to the nightly release page.
@@ -751,14 +752,29 @@
       const panes = items.map((t,i) => `<div class="mpane${i===0?' on':''}" data-pane="${t.id}">${t.panel}</div>`).join("");
       return `<div class="mtabs">${heads}</div>${panes}`;
     }
-    // a Linux download channel: install command + tarball link
-    function linuxChannel(cmd, tarballUrl, size, note){
+    // a Linux download channel: install command + tarball link. `packages` adds the
+    // native-package row (AUR command + .deb/.rpm) — stable only, since the nightly
+    // prerelease publishes just the tarball.
+    function linuxChannel(cmd, tarballUrl, size, note, packages){
+      const debUrl = DATA && DATA.platforms && DATA.platforms["linux-deb"];
+      const rpmUrl = DATA && DATA.platforms && DATA.platforms["linux-rpm"];
+      let extra = "";
+      if (packages) {
+        const pkgLinks = [
+          debUrl ? `<a href="${esc(debUrl.url)}" rel="noopener"><small>Debian · Ubuntu</small>.deb${sizeFor("linux-deb")}</a>` : "",
+          rpmUrl ? `<a href="${esc(rpmUrl.url)}" rel="noopener"><small>Fedora · openSUSE</small>.rpm${sizeFor("linux-rpm")}</a>` : "",
+        ].filter(Boolean).join("");
+        extra = `<div class="modal-or">or use your package manager</div>`
+          + `<div><div class="opt-label">Arch Linux (AUR)</div>${codeBlock(AUR_CMD)}</div>`
+          + (pkgLinks ? `<div class="sub-links">${pkgLinks}</div>` : "");
+      }
       return `<div><div class="opt-label">Install with one command</div>${codeBlock(cmd)}`
         + `<p class="dl-note" style="text-align:left">${note}</p></div>`
         + `<div class="modal-or">or download the tarball</div>`
         + `<div class="sub-links">`
         + `<a href="${esc(tarballUrl)}" rel="noopener"><small>Any distro · x64</small>.tar.gz${size}</a>`
-        + `</div>`;
+        + `</div>`
+        + extra;
     }
     // a macOS download channel: .dmg button + Homebrew command
     function macChannel(dmgLabel, dmgUrl, note, brew){
@@ -784,7 +800,8 @@
           return tabs([
             { id:"stable", label:"Stable", panel: linuxChannel(CURL_CMD,
                 urlFor("linux-tarball", LINUX_TARBALL), sizeFor("linux-tarball"),
-                "Downloads the latest tarball, installs to <code>~/.local</code>, and links the <code>klardrop</code> binary. Uninstall later with the same command plus <code>-s -- --uninstall</code>.") },
+                "Downloads the latest tarball, installs to <code>~/.local</code>, and links the <code>klardrop</code> binary. Uninstall later with the same command plus <code>-s -- --uninstall</code>.",
+                true) },
             { id:"nightly", label:"Nightly", panel: linuxChannel(CURL_NIGHTLY,
                 nurlFor("linux-tarball", NIGHTLY_TARBALL), nsizeFor("linux-tarball"),
                 "Latest tester build — newest features, less tested. Installs to <code>~/.local</code> and self-updates on the nightly channel.") },
