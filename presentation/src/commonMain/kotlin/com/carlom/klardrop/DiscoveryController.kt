@@ -83,6 +83,15 @@ class DiscoveryController(
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
+
+  /**
+   * Pairing-failure messages per device. Lives OUTSIDE the DeviceUi list because
+   * [ShowDevicesControllerHelper] rebuilds that list from discovery on every tick, which
+   * would wipe a field set directly on the rows — the map is merged back in at collect time.
+   * Accessed only from [controllerScope] (single-threaded main dispatcher).
+   */
+  private val pairingErrors = mutableMapOf<String, String>()
+
   private val showDevicesHelper = ShowDevicesControllerHelper(
     controllerScope,
     visibleDevices.visibleDevices,
@@ -147,7 +156,11 @@ class DiscoveryController(
     controllerScope.launch {
       showDevicesHelper.devicesFlow.collect {
         screenStateFlow.update { state ->
-          state.copy(devices = it.toList())
+          state.copy(
+            devices = it.toList().map { device ->
+              device.copy(pairingError = pairingErrors[device.deviceId])
+            }
+          )
         }
       }
     }
@@ -189,10 +202,24 @@ class DiscoveryController(
       if (success) {
         log("DiscoveryController", "Updating UI to show device $deviceName as Trusted")
         updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
+        setPairingError(deviceId, null)
       } else {
         log("DiscoveryController", "Updating UI to show device $deviceName as Untrusted (pairing failed)")
         updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
       }
+    }
+
+    // Surface pairing failures (send failure, ack/session timeout, peer rejection, response
+    // delivery failure) as a per-device error message. The PairingFailed event is the single
+    // source of truth for these — onAddToTrusted's own failure path only resets trust status.
+    pairingProtocolCoordinator.onPairingFailed = { deviceId, reason ->
+      val deviceName = screenStateFlow.value.devices
+        .firstOrNull { it.deviceId == deviceId }
+        ?.deviceName
+        ?: deviceId
+      log("DiscoveryController", "Pairing failed for $deviceName ($deviceId): $reason")
+      updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+      setPairingError(deviceId, pairingFailureText(deviceName, reason))
     }
 
     // Route system-notification action taps back into the same accept/reject
@@ -351,16 +378,19 @@ class DiscoveryController(
   override fun onAddToTrusted(deviceUi: DeviceUi) {
     log("DiscoveryController", "onAddToTrusted() called for device: ${deviceUi.deviceName} (${deviceUi.deviceId})")
     log("DiscoveryController", "Adding device ${deviceUi.deviceName} to trusted")
-    
+
+    // Next interaction clears the previous attempt's error.
+    setPairingError(deviceUi.deviceId, null)
+
     // Update UI to show pairing state
     log("DiscoveryController", "Updating UI to show Pairing state")
     updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Pairing)
-    
+
     coroutines.appScope.launch {
       log("DiscoveryController", "Calling pairingProtocolCoordinator.initiatePairing(${deviceUi.deviceId})")
       val result = pairingProtocolCoordinator.initiatePairing(deviceUi.deviceId)
       log("DiscoveryController", "pairingProtocolCoordinator.initiatePairing() returned: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
-      
+
       result.fold(
         onSuccess = {
           log("DiscoveryController", "SUCCESS: Pairing initiation succeeded for ${deviceUi.deviceName}")
@@ -370,7 +400,8 @@ class DiscoveryController(
         onFailure = { error ->
           log("DiscoveryController", "FAILURE: Pairing initiation failed for ${deviceUi.deviceName}: ${error.message}")
           log("DiscoveryController", "Failed to initiate pairing with ${deviceUi.deviceName}: ${error.message}")
-          // Reset to untrusted state on failure
+          // Reset to untrusted state on failure. The error text itself is surfaced via the
+          // PairingFailed event (see onPairingFailed above) — single source of truth.
           updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Untrusted)
         }
       )
@@ -422,6 +453,33 @@ class DiscoveryController(
       }
       currentState.copy(devices = updatedDevices)
     }
+  }
+
+  private fun setPairingError(deviceId: String, message: String?) {
+    if (message == null) pairingErrors.remove(deviceId) else pairingErrors[deviceId] = message
+    screenStateFlow.update { currentState ->
+      currentState.copy(
+        devices = currentState.devices.map { device ->
+          if (device.deviceId == deviceId) device.copy(pairingError = message) else device
+        }
+      )
+    }
+  }
+
+  /**
+   * Human-readable phrasing for a [PairingEvent.PairingFailed] reason. The raw reason strings
+   * ("connect-failed(IOException)", …) are for logs and tests; this is what the user reads.
+   */
+  private fun pairingFailureText(deviceName: String, reason: String): String = when {
+    reason == "no-endpoints" || reason.startsWith("connect-failed") ->
+      "Could not reach $deviceName — the device may be offline or a firewall blocks direct connections"
+    reason == "ack-timeout" ->
+      "$deviceName did not respond in time — check that both devices are on the same network"
+    reason == "session-timeout" ->
+      "Pairing with $deviceName timed out — try again"
+    reason == "rejected-by-peer" ->
+      "$deviceName declined the pairing request"
+    else -> "Could not pair with $deviceName"
   }
 
   // Implementation of PairingApprovalCallback
@@ -608,6 +666,12 @@ data class DeviceUi(
   val hasUnreadMessages: Boolean = false,
   val trustStatus: TrustStatus = TrustStatus.Unknown,
   val reachability: Reachability = Reachability.Unknown,
+  /**
+   * Transient pairing-failure message for this device, rendered as red helper text under the
+   * row. Single source of truth lives in [DiscoveryController]'s error map (which survives
+   * discovery-tick rebuilds of this model); cleared on the next pairing interaction.
+   */
+  val pairingError: String? = null,
 )
 
 sealed interface TrustStatus {

@@ -656,6 +656,8 @@ private fun NearbySection(
     onDeviceActionListener: OnDeviceActionListener,
 ) {
     val spacing = KdTheme.spacing
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
 
     SectionHead(
         label = "Nearby",
@@ -672,21 +674,32 @@ private fun NearbySection(
             verticalArrangement = Arrangement.spacedBy(spacing.s2),
         ) {
             devices.forEach { device ->
-                DeviceRow(
-                    name = device.deviceName,
-                    subText = deviceSubText(device),
-                    kind = device.deviceType.toKdDeviceKind(),
-                    avatarStyle = KdAvatarStyle.Neutral,
-                    rowState = deviceRowState(device),
-                    status = device.reachabilityStatus(),
-                    variant = KdRowVariant.Card,
-                    trailing = {
-                        if (device.trustStatus == TrustStatus.Untrusted || device.trustStatus == TrustStatus.Unknown) {
-                            PairButton(onClick = { onDeviceActionListener.onAddToTrusted(device) })
-                        }
-                    },
-                    onClick = { onDeviceActionListener.onDeviceClick(device) },
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(spacing.s1)) {
+                    DeviceRow(
+                        name = device.deviceName,
+                        subText = deviceSubText(device),
+                        kind = device.deviceType.toKdDeviceKind(),
+                        avatarStyle = KdAvatarStyle.Neutral,
+                        rowState = deviceRowState(device),
+                        status = device.reachabilityStatus(),
+                        variant = KdRowVariant.Card,
+                        trailing = {
+                            if (device.trustStatus == TrustStatus.Untrusted || device.trustStatus == TrustStatus.Unknown) {
+                                PairButton(onClick = { onDeviceActionListener.onAddToTrusted(device) })
+                            }
+                        },
+                        onClick = { onDeviceActionListener.onDeviceClick(device) },
+                    )
+                    // Pairing failure surfaced next to the pair button: the row itself is a
+                    // fixed-height card, so the red helper text sits directly beneath it.
+                    device.pairingError?.let { error ->
+                        Text(
+                            text = error,
+                            style = typography.caption.copy(color = colors.err),
+                            modifier = Modifier.padding(start = spacing.s4, bottom = spacing.s1),
+                        )
+                    }
+                }
             }
         }
     }

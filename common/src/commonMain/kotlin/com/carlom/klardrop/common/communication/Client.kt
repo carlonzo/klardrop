@@ -239,7 +239,7 @@ class ClientImpl(
     val bleConnections = discoveryDevice.getBleConnection()
 
     require(tcpConnections.isNotEmpty() || bleConnections.isNotEmpty()) {
-      "Cant connect to $deviceId. No Klardrop TCP or BLE connection is available"
+      "Cant connect to $deviceId. No known route: device is visible but advertises no Klardrop TCP or BLE endpoint"
     }
 
     // launch coroutine to connect and await for the connection to stay alive. TCP is

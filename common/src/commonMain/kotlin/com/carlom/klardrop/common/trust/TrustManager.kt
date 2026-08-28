@@ -145,6 +145,10 @@ class TrustManager(
         if (pairingSessions[targetDeviceId] == session) {
           pairingSessions.remove(targetDeviceId)
           log("🔐 TrustManager", " Cleaned up pairing session for $targetDeviceId after timeout")
+          // The response never arrived within the window — tell the UI instead of leaving
+          // the row stuck on "Pairing…" forever. Only fires when the session is still live,
+          // i.e. finalizePairing hasn't already consumed it.
+          _pairingEvents.tryEmit(PairingEvent.PairingFailed(targetDeviceId, "session-timeout"))
         }
       }
 
@@ -164,11 +168,22 @@ class TrustManager(
 
   /**
    * Called when a pairing request failed to send.
-   * Cleans up the pairing session.
+   * Cleans up the pairing session and surfaces the failure to the UI.
    */
-  fun onPairingRequestFailed(targetDeviceId: String) {
-    log("🔐 TrustManager", " Pairing request failed for $targetDeviceId, cleaning up session")
+  fun onPairingRequestFailed(targetDeviceId: String, reason: String) {
+    log("🔐 TrustManager", " Pairing request failed for $targetDeviceId (reason=$reason), cleaning up session")
     pairingSessions.remove(targetDeviceId)
+    _pairingEvents.tryEmit(PairingEvent.PairingFailed(targetDeviceId, reason))
+  }
+
+  /**
+   * Called when the acceptor's pairing response could not be delivered. The acceptor has
+   * already stored trust, but the initiator will never finalize without the response —
+   * surface the delivery failure so the UI can tell the user to retry.
+   */
+  fun onPairingResponseDeliveryFailed(targetDeviceId: String, reason: String) {
+    log("🔐 TrustManager", " Pairing response delivery failed for $targetDeviceId (reason=$reason)")
+    _pairingEvents.tryEmit(PairingEvent.PairingFailed(targetDeviceId, reason))
   }
 
   /**
@@ -345,8 +360,7 @@ class TrustManager(
 
         // Emit failure event for UI updates
         _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, false))
-
-        // TODO: Show rejection message to user
+        _pairingEvents.tryEmit(PairingEvent.PairingFailed(response.deviceId, "rejected-by-peer"))
         return@withContext
       }
 
@@ -371,16 +385,14 @@ class TrustManager(
 
       // Emit completion event for UI updates
       _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, true))
-
-      // TODO: Show success message to user
+      _pairingEvents.tryEmit(PairingEvent.PairingSucceeded(response.deviceId))
 
     } catch (e: Exception) {
       log("🔐 TrustManager", " ❌ Exception during finalizePairing: ${e.message}")
 
       // Emit failure event for UI updates
       _pairingEvents.tryEmit(PairingEvent.PairingCompleted(response.deviceId, response.deviceName, false))
-
-      // TODO: Show error message to user
+      _pairingEvents.tryEmit(PairingEvent.PairingFailed(response.deviceId, "finalize-failed(${e::class.simpleName})"))
     } finally {
       // Clean up session
       pairingSessions.remove(response.deviceId)
@@ -759,6 +771,18 @@ sealed interface PairingEvent {
     PairingEvent
 
   data class PairingCompleted(val deviceId: String, val deviceName: String, val success: Boolean) : PairingEvent
+
+  /**
+   * A pairing attempt failed before trust was established. [reason] is a machine-readable
+   * failure class so the UI can phrase the message: "no-endpoints" (device not visible, no
+   * pooled connection), "connect-failed(<cause class>)" (endpoints existed but every dial
+   * failed), "ack-timeout", "session-timeout", "rejected-by-peer", "response-delivery-failed",
+   * or "finalize-failed(<cause class>)".
+   */
+  data class PairingFailed(val deviceId: String, val reason: String) : PairingEvent
+
+  /** The pairing session finalized successfully — trust is stored on this side. */
+  data class PairingSucceeded(val deviceId: String) : PairingEvent
 
   /**
    * Fired after a verified [TrustRevocationMessage] from [deviceId] has been applied — local

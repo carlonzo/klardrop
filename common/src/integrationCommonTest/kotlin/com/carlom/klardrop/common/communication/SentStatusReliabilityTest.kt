@@ -67,6 +67,7 @@ class SentStatusReliabilityTest {
     userResponseTimeout = 2.seconds,
     maxRetries = 2,
     retryBackoffMultiplier = 1.0,
+    connectionWaitTimeout = 1.seconds,
   )
 
   private fun runReliabilityTest(
@@ -245,6 +246,76 @@ class SentStatusReliabilityTest {
     }
   }
 
+  @Test
+  fun pairingRequest_overPooledInboundConnection_succeeds() = runReliabilityTest {
+    val ctx = it
+    turbineScope(timeout = 30.seconds) {
+      ctx.setupInboundOnlyConnection()
+
+      // Mirror of pairingResponse_keepsOnlyInboundConnectionWhenPeerNotVisible for the REQUEST
+      // leg: the initiator's visible map is empty (one-directional mDNS) but the peer dialed us,
+      // so a live inbound connection sits in the pool. Pairing messages are hasPayload=false
+      // lightweight frames — the pooled fallback must apply to them identically.
+      val request = ctx.clientCommunicationModule.trustManager()
+        .createPairingRequest(serverDeviceId)
+        .getOrThrow()
+
+      val senderChannel = ctx.clientCommunicationModule.messenger()
+        .send(serverDeviceId, SimpleSendMessageRequest(request))
+        .testIn(this)
+      val terminal = ctx.awaitTerminal(senderChannel)
+
+      assertTrue(
+        terminal is Completed,
+        "pairing request must deliver over the only inbound connection when no redial path exists, was $terminal",
+      )
+
+      senderChannel.cancelAndIgnoreRemainingEvents()
+    }
+  }
+
+  @Test
+  fun pairingRequest_connectFails_allRetriesRunBeforeTerminalError() = runReliabilityTest {
+    val ctx = it
+    turbineScope(timeout = 60.seconds) {
+      // The device IS visible (endpoints exist) but its advertised port is dead, so every dial
+      // is refused immediately and each attempt burns exactly one connectionWaitTimeout budget.
+      // One exhausted budget must not abort the send: the loop must consume ALL maxRetries
+      // before emitting the terminal Error (T5: the phone gave up after attempt 1).
+      ctx.addVisibleDeviceWithDeadEndpoint()
+
+      val startReal = TimeSource.Monotonic.markNow()
+      val clientMessenger = ctx.clientCommunicationModule.messenger()
+      val request = ctx.clientCommunicationModule.trustManager()
+        .createPairingRequest(serverDeviceId)
+        .getOrThrow()
+
+      val senderChannel = clientMessenger
+        .send(serverDeviceId, SimpleSendMessageRequest(request))
+        .testIn(this)
+      val terminal = ctx.awaitTerminal(senderChannel)
+
+      assertTrue(terminal is Error, "send to a dead endpoint must end in Error, was $terminal")
+      assertTrue(
+        terminal.reason?.startsWith("connect-failed") == true,
+        "terminal error must carry a connect-failed reason, was: $terminal",
+      )
+
+      // The connect-failed(TimeoutCancellationException) reason is only emitted once the loop has
+      // run out of attempts, i.e. after attempt 3 started — which takes at least the first two
+      // 1s connection-wait budgets plus backoffs. Pre-fix, attempt 1's exhausted budget aborted
+      // the whole send with reason=null.
+      val elapsedRealMs = startReal.elapsedNow().inWholeMilliseconds
+      assertTrue(
+        elapsedRealMs >= 2_000,
+        "at least the first two connection-wait budgets must be consumed before the terminal " +
+          "error (elapsed real ms: $elapsedRealMs)",
+      )
+
+      senderChannel.cancelAndIgnoreRemainingEvents()
+    }
+  }
+
   /** Test-only fixture: a real client+server loopback pair, mirroring MessagesRouterReliabilityTest.Ctx. */
   inner class Ctx {
     private val driver = createTestDriver()
@@ -379,6 +450,13 @@ class SentStatusReliabilityTest {
         "the client's pool must hold the inbound connection from $serverDeviceId " +
           "(last dial outcome: $outcome)",
       )
+    }
+
+    /** Makes [serverDeviceId] visible with an advertised endpoint where nothing listens. */
+    fun addVisibleDeviceWithDeadEndpoint() {
+      // Port 1 on localhost: reserved, nothing binds it as non-root, so the dial is refused
+      // immediately on every platform this suite runs on.
+      clientVisibleDevices.addKlardropDevice(serverDeviceId, "localhost", 1)
     }
 
     fun clientRows(remoteDeviceId: String) =

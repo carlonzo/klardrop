@@ -32,6 +32,13 @@ class NoiseClassifierTest {
 
   @Test
   fun noTransportAvailable_isNoise() {
+    // Current wording (T5: distinguishes "no known route" from "connect failed: <cause>").
+    assertTrue(
+      IllegalArgumentException(
+        "Cant connect to ef020564. No known route: device is visible but advertises no Klardrop TCP or BLE endpoint",
+      ).isExpectedNetworkNoise(),
+    )
+    // Pre-T5 wording, still present in older on-device logs.
     assertTrue(
       IllegalArgumentException(
         "Cant connect to ef020564. No Klardrop TCP or BLE connection is available",
