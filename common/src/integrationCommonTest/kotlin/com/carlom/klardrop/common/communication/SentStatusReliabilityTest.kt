@@ -21,7 +21,9 @@ import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageT
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.trust.InMemoryTrustStorage
 import com.carlom.klardrop.common.utils.Clock
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
@@ -346,11 +348,37 @@ class SentStatusReliabilityTest {
       coroutines.dispatcher.scheduler.advanceUntilIdle()
 
       serverVisibleDevices.addKlardropDevice(clientDeviceId, "localhost", clientServerStatus.port)
-      serverCommunicationModule.client().connectTo(clientDeviceId)
-      coroutines.dispatcher.scheduler.runCurrent()
-      coroutines.dispatcher.scheduler.advanceTimeBy(500)
-      coroutines.dispatcher.scheduler.runCurrent()
-      coroutines.dispatcher.scheduler.advanceUntilIdle()
+
+      // Never await the dial inline: connectTo() is a real network round-trip, and blocking this
+      // virtual-time coroutine on it stalls the pump that the peer's coroutines need to answer the
+      // handshake. Launch it, pump, and RETRY — ClientImpl reads its peer list from a
+      // stateIn(Eagerly) mirror populated by a coroutine on Dispatchers.IO, so a dial issued before
+      // that mirror has copied the entry above returns Failed immediately rather than waiting. One
+      // fixed sleep is not enough of a guarantee under full-suite load; retrying until the deadline
+      // is.
+      val pool = clientCommunicationModule.connectionsPool()
+      val deadline = TimeSource.Monotonic.markNow() + 30.seconds
+      var outcome: ConnectOutcome? = null
+      while (deadline.hasNotPassedNow() && !pool.isAvailable(serverDeviceId)) {
+        val dial = CoroutineScope(coroutines.ioDispatcher).async {
+          serverCommunicationModule.client().connectTo(clientDeviceId)
+        }
+        while (deadline.hasNotPassedNow() && !dial.isCompleted) {
+          pump(virtualStepMs = 200, realSleepMs = 50)
+        }
+        if (!dial.isCompleted) break
+        outcome = dial.await()
+        // Let the client side finish pooling the connection its peer just accepted.
+        pump(virtualStepMs = 200, realSleepMs = 100)
+      }
+
+      // Assert here so a setup that never connects fails on this line instead of surfacing 60
+      // seconds later as an unexplained awaitTerminal timeout.
+      assertTrue(
+        pool.isAvailable(serverDeviceId),
+        "the client's pool must hold the inbound connection from $serverDeviceId " +
+          "(last dial outcome: $outcome)",
+      )
     }
 
     fun clientRows(remoteDeviceId: String) =
@@ -359,6 +387,15 @@ class SentStatusReliabilityTest {
     fun repositoryCallKinds(): List<String> = recordingClientRepository.calls
 
     fun tearDown() {
+      // Release the sockets, not just the DB. Every Client and every started Server owns a ktor
+      // SelectorManager, and on Apple targets each live one blocks in `pselect` holding one of
+      // Dispatchers.IO's 64 parallelism slots. Leaking a few per test across the whole native
+      // suite starves that pool, and the test binary then hangs forever — uncancellably, so even
+      // runTest's own timeout can't fire (that is the macosArm64Test 60-minute CI hang).
+      clientCommunicationModule.server().stopServer()
+      serverCommunicationModule.server().stopServer()
+      clientCommunicationModule.client().close()
+      serverCommunicationModule.client().close()
       driver.close()
     }
 

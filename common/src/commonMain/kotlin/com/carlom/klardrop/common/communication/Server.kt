@@ -115,24 +115,31 @@ class Server(
     log("Server", "Unified server started on $host:$actualPort")
 
     serverScope.launch {
-      while (isActive) {
-        val socket = serverSocket.accept()
-        val remoteAddress = socket.remoteAddress.toString()
-        log("Server", "New connection from: $remoteAddress")
+      try {
+        while (isActive) {
+          val socket = serverSocket.accept()
+          val remoteAddress = socket.remoteAddress.toString()
+          log("Server", "New connection from: $remoteAddress")
 
-        launch {
-          try {
-            handleConnection(socket, remoteAddress)
-          } catch (e: Exception) {
-            log("Server", "Error handling connection from $remoteAddress", e)
-            socket.close()
+          launch {
+            try {
+              handleConnection(socket, remoteAddress)
+            } catch (e: Exception) {
+              log("Server", "Error handling connection from $remoteAddress", e)
+              socket.close()
+            }
           }
         }
+      } finally {
+        // MUST be a finally: stopServer() cancels serverScope, which cancels this very coroutine,
+        // so cleanup placed after the loop never ran and every accept loop leaked its selector.
+        // On Apple targets that matters — ktor's selector loop blocks in `pselect` and holds one
+        // of Dispatchers.IO's 64 parallelism slots until closed, so leaked selectors eventually
+        // starve the pool and every subsequent socket operation hangs forever.
+        log("Server", "Closing the server connection")
+        serverSocket.close()
+        selectorManager.close()
       }
-
-      log("Server", "Closing the server connection")
-      serverSocket.close()
-      selectorManager.close()
     }
 
     return ServerConfig(host, actualPort)

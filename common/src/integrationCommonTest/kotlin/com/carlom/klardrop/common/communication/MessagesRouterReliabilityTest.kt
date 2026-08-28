@@ -92,7 +92,11 @@ class MessagesRouterReliabilityTest {
     clock = Clock()
     runTest(coroutines.dispatcher, timeout = timeout) {
       val ctx = Ctx()
-      body(ctx)
+      try {
+        body(ctx)
+      } finally {
+        ctx.tearDown()
+      }
     }
   }
 
@@ -325,6 +329,20 @@ class MessagesRouterReliabilityTest {
       // message verification use.
       clientTrustStorage.storeTrustedDevice(serverDeviceId, serverPublicKey)
       clientTrustStorage.storeECDSAKey(serverDeviceId, serverPublicKey)
+    }
+
+    /**
+     * Closes this fixture's sockets. The comment above promises no sibling test's sockets linger;
+     * this is what makes that true. Every Client and every started Server owns a ktor
+     * SelectorManager, and on Apple targets each live one blocks in `pselect` holding one of
+     * Dispatchers.IO's 64 parallelism slots until closed — leak enough across the suite and the
+     * native test binary hangs forever, uncancellably.
+     */
+    fun tearDown() {
+      clientCommunicationModule.server().stopServer()
+      serverCommunicationModule.server().stopServer()
+      clientCommunicationModule.client().close()
+      serverCommunicationModule.client().close()
     }
 
     suspend fun setupServerAndClient() {

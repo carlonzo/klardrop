@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -83,6 +84,17 @@ sealed interface ConnectOutcome {
 
 interface Client {
   suspend fun connectTo(deviceId: String): ConnectOutcome
+
+  /**
+   * Releases this client's networking resources — most importantly its [SelectorManager].
+   *
+   * On Kotlin/Native a SelectorManager is NOT free to leave running: ktor's posix selector loop
+   * blocks in `pselect` and only ever yields to re-dispatch onto the same dispatcher, so each live
+   * instance permanently occupies one of Dispatchers.IO's 64 parallelism slots until it is closed.
+   * The app builds one client and keeps it, so this is a no-op there; test fixtures build dozens,
+   * and without this they exhaust the pool and deadlock the whole native test binary.
+   */
+  fun close() = Unit
 }
 
 /**
@@ -133,6 +145,11 @@ class ClientImpl(
     visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
 
   private val selectorManager = SelectorManager(coroutines.ioDispatcher)
+
+  override fun close() {
+    selectorManager.close()
+    clientScope.cancel()
+  }
 
   // Per-device dial coalescing (F8): EagerReachabilityConnector and Messenger.send can both call
   // connectTo() for the same device concurrently. Both would pass the isAvailable() check below

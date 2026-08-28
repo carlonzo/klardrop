@@ -23,12 +23,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.protobuf.ProtoBuf
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Repro/regression for F8: [ClientImpl.connectTo] checks [ConnectionsPool.isAvailable] once and
@@ -146,6 +148,16 @@ class ClientDialCoalescingTest {
 
       assertEquals(ConnectOutcome.Connected, outcomeA, "First concurrent connectTo() must report Connected")
       assertEquals(ConnectOutcome.Connected, outcomeB, "Second concurrent connectTo() must report Connected")
+
+      // ConnectOutcome.Connected is decided on THIS side, the moment the initiator's identity
+      // binding returns — the peer still has to build its ConnectionMessenger and register it.
+      // Sampling the counter right here reads the server's state with no happens-before edge and
+      // loses the race on a loaded runner (observed as "got 0 accepted handshakes" in CI). Wait
+      // for the first registration, then let a would-be SECOND dial land before asserting on one.
+      withTimeout(5.seconds) {
+        while (serverPool.updateConnectionCalls.get() == 0) delay(20)
+      }
+      delay(200)
 
       assertEquals(
         1,

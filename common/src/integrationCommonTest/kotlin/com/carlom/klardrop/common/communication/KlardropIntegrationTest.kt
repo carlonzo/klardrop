@@ -108,12 +108,16 @@ class KlardropIntegrationTest {
     var lastError: Throwable? = null
     repeat(attempts) { attempt ->
       if (attempt > 0) {
+        // Close the previous attempt's sockets before replacing it — a discarded fixture keeps
+        // its selectors (and their Dispatchers.IO slots) alive forever otherwise.
+        testContext.tearDown()
         coroutines = TestCoroutines(dispatcher = UnconfinedTestDispatcher())
         clientVisibleDevices = FakeVisibleDevices()
         testContext = newTestContext()
       }
       try {
         runTest(coroutines.dispatcher, timeout = timeout, testBody = body)
+        testContext.tearDown()
         return
       } catch (t: Throwable) {
         lastError = t
@@ -123,6 +127,7 @@ class KlardropIntegrationTest {
         )
       }
     }
+    testContext.tearDown()
     throw lastError!!
   }
 
@@ -823,6 +828,21 @@ internal class KlardropTestContext(
     coroutines.dispatcher.scheduler.advanceUntilIdle()
 
     return ServerContext(server, serverStatus.port)
+  }
+
+  /**
+   * Releases the sockets this fixture opened. Every Client and every started Server owns a ktor
+   * SelectorManager, and on Apple targets each live one blocks in `pselect` holding one of
+   * Dispatchers.IO's 64 parallelism slots until closed. This class builds two of each and is
+   * rebuilt on every retry, so without this the native suite starves that pool part-way through
+   * and hangs forever — uncancellably, which is why runTest's own timeout never fired and CI hit
+   * the 60-minute job limit instead.
+   */
+  fun tearDown() {
+    clientCommunicationModule.server().stopServer()
+    serverCommunicationModule.server().stopServer()
+    clientCommunicationModule.client().close()
+    serverCommunicationModule.client().close()
   }
 
   fun advanceToCompletion() {

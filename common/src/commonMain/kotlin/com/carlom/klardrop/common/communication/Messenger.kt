@@ -174,14 +174,11 @@ class MessengerImpl(
       // VisibleDevices stayed empty for the whole session but PING/PONG flowed both ways).
       // A live pooled connection is a strictly better send path than failing here, so fall
       // through to the Klardrop transport, which picks it up out of the pool.
-      val pooledFallback = if (device == null) {
-        connectionsPool.getConnection(deviceId)?.takeUnless { it.isClosed() }
-      } else {
-        null
-      }
+      val hasLivePooledConnection =
+        device == null && connectionsPool.getConnection(deviceId)?.isClosed() == false
 
       //    skip if not visible (unless a live pooled connection exists — see above)
-      if (device == null && pooledFallback == null) {
+      if (device == null && !hasLivePooledConnection) {
         log("Messenger", "❌ Device $deviceId is not visible in device list")
         // Include what the app *did* think was visible: the 30s snapshot elsewhere is too
         // coarse to correlate with this exact failure from breadcrumbs alone.
@@ -207,9 +204,9 @@ class MessengerImpl(
           "Messenger",
           "Device $deviceId is not in the visible list but a live pooled connection exists; sending over it"
         )
+      } else {
+        log("Messenger", "✅ Device $deviceId found in visible devices")
       }
-
-      log("Messenger", "✅ Device $deviceId found in visible devices")
 
       // Check if device is trusted and wrap message in TrustedMessage if needed.
       //
@@ -368,6 +365,10 @@ class MessengerImpl(
         .onConnection(socket, sendFlow)
     } finally {
       socket.dispose()
+      // Must be closed with the socket: on Apple targets ktor's selector loop blocks in `pselect`
+      // and holds one of Dispatchers.IO's 64 parallelism slots until closed, so leaking one per
+      // Nearby send wedges all networking after ~64 sends.
+      selectorManager.close()
     }
   }
 
@@ -544,7 +545,12 @@ class MessengerImpl(
           alreadyAttempted = deviceId in authUpgradeAttempted,
         ) && trustManager.isTrusted(deviceId)
         val tcpAvailable = device?.hasKlardropConnection() == true
-        if (staleAuth && tcpAvailable) {
+        // A re-dial re-runs the UKEY2 identity binding over TCP *or* BLE (establishBleConnection
+        // runs the same exchange), so any visible endpoint is a usable redial path. Gating this on
+        // TCP alone left BLE-only trusted peers stuck on their pre-pairing unauthenticated link
+        // forever, which is the slow path this whole branch exists to escape.
+        val redialPathAvailable = device != null
+        if (staleAuth && redialPathAvailable) {
           // Once per device per process: if the re-dial still comes back unauthenticated (peer's
           // stored key no longer matches, say) we must not spin re-dialling forever.
           // ponytail: plain set, benign race — worst case two devices each re-dial once.
@@ -556,12 +562,17 @@ class MessengerImpl(
           )
           connectionsPool.closeConnection(deviceId)
         } else if (staleAuth) {
-          // Do not discard the only working link: without a discovered TCP endpoint the client
-          // cannot re-run the authenticated handshake. Keep using this encrypted link until mDNS
-          // supplies a redial path; pairing responses must be able to travel over it meanwhile.
+          // Do not discard the only working link: with no discovered endpoint at all the client
+          // cannot re-run the authenticated handshake, so recycling would strand the peer instead
+          // of upgrading it. Keep using this encrypted link until mDNS supplies a redial path;
+          // pairing responses must be able to travel over it meanwhile. The link stays
+          // opportunistically encrypted but not identity-bound, so it is not MITM-proof — content
+          // authenticity still holds, since TrustedMessage signs at the application layer, and
+          // deviceId is deliberately NOT added to authUpgradeAttempted so the upgrade is retried
+          // as soon as an endpoint appears.
           log(
             "Messenger",
-            "Connection for $deviceId predates pairing, but no TCP redial path is visible; " +
+            "Connection for $deviceId predates pairing, but no redial path is visible; " +
               "keeping the current link"
           )
           return existingConnection
