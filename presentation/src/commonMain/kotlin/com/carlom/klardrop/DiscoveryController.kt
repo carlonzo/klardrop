@@ -138,6 +138,17 @@ class DiscoveryController(
   )
   private val pendingPairings = mutableMapOf<String, PendingPairing>()
 
+  /**
+   * Pairing requests that arrived while another dialog was active, FIFO. Presented by
+   * [presentNextQueuedPairing] when the active dialog resolves (accept/reject/dismiss).
+   */
+  private data class QueuedPairingRequest(
+    val deviceId: String,
+    val deviceName: String,
+    val deviceType: String,
+  )
+  private val queuedPairingRequests = ArrayDeque<QueuedPairingRequest>()
+
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 
   private var activeChatDeviceId: String? = null
@@ -494,37 +505,64 @@ class DiscoveryController(
     pendingPairings[deviceId] = PendingPairing(deviceName, onAccept, onReject)
 
     controllerScope.launch {
-      screenStateFlow.update { currentState ->
-        // Check if a pairing dialog is already active
-        if (currentState.pairingDialogState != null) {
-          log("DiscoveryController", "Ignoring duplicate/concurrent pairing request for $deviceId. A dialog is already active.")
-          return@update currentState // Don't update the state
+      val active = screenStateFlow.value.pairingDialogState
+      when {
+        // Duplicate/replayed request for a device we are already showing or already
+        // queued: one dialog per device.
+        active?.deviceId == deviceId || queuedPairingRequests.any { it.deviceId == deviceId } ->
+          log("DiscoveryController", "Duplicate pairing request for $deviceId (already showing or queued); ignoring")
+
+        active != null -> {
+          log("DiscoveryController", "A pairing dialog is already active; queueing request for $deviceName ($deviceId)")
+          queuedPairingRequests.addLast(QueuedPairingRequest(deviceId, deviceName, deviceType))
         }
 
-        log("DiscoveryController", "Creating PairingDialogState for $deviceName")
-        currentState.copy(
-          pairingDialogState = PairingDialogState(
-            deviceId = deviceId,
-            deviceName = deviceName,
-            deviceType = deviceType,
-            onAccept = { controllerScope.launch { acceptPairing(deviceId) } },
-            onReject = { controllerScope.launch { rejectPairing(deviceId) } }
-          )
-        )
+        else -> presentPairingDialog(deviceId, deviceName, deviceType)
       }
+    }
+  }
 
-      // System notification only fires when the user can't see the in-app
-      // dialog. Foreground state is observed reactively but the request
-      // arrives once, so we sample the current value here.
-      if (!foregroundState.isForeground.value) {
-        log("DiscoveryController", "App backgrounded; posting pairing notification for $deviceName")
-        notifier.show(
-          AppNotification.IncomingPairing(
-            id = deviceId,
-            deviceId = deviceId,
-            deviceName = deviceName,
-          )
+  private fun presentPairingDialog(deviceId: String, deviceName: String, deviceType: String) {
+    log("DiscoveryController", "Creating PairingDialogState for $deviceName")
+    screenStateFlow.update { currentState ->
+      if (currentState.pairingDialogState != null) return@update currentState
+      currentState.copy(
+        pairingDialogState = PairingDialogState(
+          deviceId = deviceId,
+          deviceName = deviceName,
+          deviceType = deviceType,
+          onAccept = { controllerScope.launch { acceptPairing(deviceId) } },
+          onReject = { controllerScope.launch { rejectPairing(deviceId) } }
         )
+      )
+    }
+
+    // System notification only fires when the user can't see the in-app
+    // dialog. Foreground state is observed reactively but the request
+    // arrives once, so we sample the current value here.
+    if (!foregroundState.isForeground.value) {
+      log("DiscoveryController", "App backgrounded; posting pairing notification for $deviceName")
+      notifier.show(
+        AppNotification.IncomingPairing(
+          id = deviceId,
+          deviceId = deviceId,
+          deviceName = deviceName,
+        )
+      )
+    }
+  }
+
+  /**
+   * Present the next queued pairing request, if the dialog slot is free. Requests resolved
+   * out-of-band while queued (e.g. a notification action) are skipped.
+   */
+  private fun presentNextQueuedPairing() {
+    while (screenStateFlow.value.pairingDialogState == null && queuedPairingRequests.isNotEmpty()) {
+      val next = queuedPairingRequests.removeFirst()
+      if (pendingPairings.containsKey(next.deviceId)) {
+        presentPairingDialog(next.deviceId, next.deviceName, next.deviceType)
+      } else {
+        log("DiscoveryController", "Skipping queued pairing request for ${next.deviceId}: already resolved")
       }
     }
   }
@@ -544,6 +582,7 @@ class DiscoveryController(
         if (state.pairingDialogState?.deviceId == deviceId) state.copy(pairingDialogState = null)
         else state
       }
+      presentNextQueuedPairing()
       updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
       log("DiscoveryController", "Pairing accepted for ${pending.deviceName}")
     } catch (e: Exception) {
@@ -575,6 +614,7 @@ class DiscoveryController(
         if (state.pairingDialogState?.deviceId == deviceId) state.copy(pairingDialogState = null)
         else state
       }
+      presentNextQueuedPairing()
       updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
       log("DiscoveryController", "Pairing rejected for ${pending.deviceName}")
     } catch (e: Exception) {
@@ -595,6 +635,7 @@ class DiscoveryController(
 
   fun dismissPairingDialog() {
     screenStateFlow.update { it.copy(pairingDialogState = null) }
+    presentNextQueuedPairing()
   }
 
   fun loadDeviceNames() {

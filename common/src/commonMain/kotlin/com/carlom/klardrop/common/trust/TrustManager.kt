@@ -37,6 +37,9 @@ class TrustManager(
     private const val PAIRING_TIMEOUT_SECONDS = 30
     private const val MAX_TIME_DIFF_SECONDS = 300 // 5 minutes
 
+    /** Cap on requests retained while no approval callback is registered; drops oldest. */
+    private const val MAX_UNCLAIMED_PAIRING_REQUESTS = 10
+
     /**
      * HKDF info string for deriving the per-pair file-chunk HMAC key. Versioned so we
      * can rotate the derivation later without colliding with existing deployed keys.
@@ -70,8 +73,19 @@ class TrustManager(
   // Callback for UI approval dialogs
   private var pairingApprovalCallback: PairingApprovalCallback? = null
 
-  // Events for pairing operations that external coordinators can listen to
-  private val _pairingEvents = MutableSharedFlow<PairingEvent>(extraBufferCapacity = 10)
+  /**
+   * Requests that arrived while [pairingApprovalCallback] was still null — the server can
+   * accept an inbound pairing before the platform UI has composed and registered. Retained
+   * (oldest first, capped) and re-emitted with a decision once the callback registers.
+   */
+  private val unclaimedPairingRequests = ArrayDeque<UnclaimedPairingRequest>()
+
+  private data class UnclaimedPairingRequest(val request: TrustPairingRequest, val senderAddress: String)
+
+  // Events for pairing operations that external coordinators can listen to.
+  // replay = 5: a request emitted before a coordinator subscribes (early-start race) is
+  // still delivered; stale replays are deduped downstream by deviceId (pendingPairings).
+  private val _pairingEvents = MutableSharedFlow<PairingEvent>(replay = 5, extraBufferCapacity = 10)
   val pairingEvents: SharedFlow<PairingEvent> = _pairingEvents.asSharedFlow()
 
   // Fires after the set of trusted devices changes (pairing stored, trust removed).
@@ -202,29 +216,39 @@ class TrustManager(
     log("🔐 TrustManager", " Time validation: current=$currentTime, request=${request.timestamp}, diff=${timeDiff}ms")
 
     if (timeDiff > MAX_TIME_DIFF_SECONDS * 1000) {
-      log("🔐 TrustManager", " ❌ Rejecting request due to timestamp too old (>${MAX_TIME_DIFF_SECONDS}s)")
-      return@withContext // Ignore old requests
+      val skewSeconds = timeDiff / 1000
+      log("TrustManager", "Pairing request from ${request.deviceId} rejected: timestamp skew ${skewSeconds}s")
+      // Still rejected (>5min is a security invariant), but no longer silently: the
+      // sender-visible failure path from T5 is driven by receiver-side outcomes too.
+      _pairingEvents.tryEmit(PairingEvent.PairingFailed(request.deviceId, "clock-skew"))
+      return@withContext
     }
 
     log("🔐 TrustManager", " Timestamp validation passed")
 
     // Create decision object with callback
-    val callback = pairingApprovalCallback
-    val decision = if (callback != null) {
-      log("🔐 TrustManager", " ✅ Creating pairing decision for device: ${request.deviceName}")
-      PairingDecision(
-        deviceId = request.deviceId,
-        deviceName = request.deviceName,
-        deviceType = request.deviceType,
-        approvalCallback = callback
-      )
-    } else {
-      log("🔐 TrustManager", " ❌ CRITICAL: pairingApprovalCallback is null! No UI dialog will be shown")
-      null
+    val decision = decisionFor(request)
+    if (decision == null) {
+      log("TrustManager", "No approval callback registered yet; retaining request from ${request.deviceName} (${request.deviceId}) for later delivery")
+      unclaimedPairingRequests.addLast(UnclaimedPairingRequest(request, senderAddress))
+      while (unclaimedPairingRequests.size > MAX_UNCLAIMED_PAIRING_REQUESTS) {
+        unclaimedPairingRequests.removeFirst()
+      }
     }
 
     // Emit event for external coordinators to handle
     _pairingEvents.tryEmit(PairingEvent.PairingRequestReceived(request, senderAddress, decision))
+  }
+
+  /** Builds the approval decision for [request], or null while no callback is registered. */
+  private fun decisionFor(request: TrustPairingRequest): PairingDecision? {
+    val callback = pairingApprovalCallback ?: return null
+    return PairingDecision(
+      deviceId = request.deviceId,
+      deviceName = request.deviceName,
+      deviceType = request.deviceType,
+      approvalCallback = callback
+    )
   }
 
   /**
@@ -660,10 +684,18 @@ class TrustManager(
   }
 
   /**
-   * Set callback for pairing approval dialogs.
+   * Set callback for pairing approval dialogs. Any requests retained while no callback was
+   * registered are delivered (oldest first) through the same event path the live flow uses.
    */
   fun setPairingApprovalCallback(callback: PairingApprovalCallback) {
     this.pairingApprovalCallback = callback
+    while (unclaimedPairingRequests.isNotEmpty()) {
+      val unclaimed = unclaimedPairingRequests.removeFirst()
+      log("TrustManager", "Delivering retained pairing request from ${unclaimed.request.deviceName} (${unclaimed.request.deviceId})")
+      _pairingEvents.tryEmit(
+        PairingEvent.PairingRequestReceived(unclaimed.request, unclaimed.senderAddress, decisionFor(unclaimed.request))
+      )
+    }
   }
 
   /**
