@@ -23,6 +23,9 @@ import org.freedesktop.dbus.types.Variant
 /** String-array D-Bus type ("as") for @DBusProperty, which cannot express generics directly. */
 interface StringListType : TypeRef<List<String>>
 
+/** String-keyed variant-map D-Bus type ("a{sv}") for @DBusProperty. */
+interface VariantMapType : TypeRef<Map<String, Variant<*>>>
+
 @DBusInterfaceName("org.bluez.Adapter1")
 @DBusProperty(name = "Address", type = String::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "Name", type = String::class, access = DBusProperty.Access.READ)
@@ -91,6 +94,7 @@ interface GattCharacteristic1 : DBusInterface {
 @DBusInterfaceName("org.bluez.LEAdvertisement1")
 @DBusProperty(name = "Type", type = String::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "ServiceUUIDs", type = StringListType::class, access = DBusProperty.Access.READ)
+@DBusProperty(name = "ServiceData", type = VariantMapType::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "LocalName", type = String::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "Includes", type = StringListType::class, access = DBusProperty.Access.READ)
 interface LEAdvertisement1 : DBusInterface {

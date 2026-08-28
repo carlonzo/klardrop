@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.ble.linux
 
 import com.carlom.klardrop.common.ble.BleConstants
+import com.carlom.klardrop.common.discovery.CurrentDevice
 import com.carlom.klardrop.common.utils.log
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +36,7 @@ class BlueZPeripheralFacade(
   @Volatile private var writeListener: ((String, ByteArray) -> Unit)? = null
   @Volatile private var subscriptionListener: ((String, Boolean) -> Unit)? = null
   @Volatile private var application: GattApplication? = null
+  @Volatile private var advertisement: ExportedAdvertisement? = null
 
   override suspend fun probeCapability(): BlueZCapability = BlueZConnection.probe()
 
@@ -83,11 +85,35 @@ class BlueZPeripheralFacade(
     app.notifySubscribers(value)
   }
 
+  override suspend fun startAdvertising(currentDevice: CurrentDevice) = withContext(Dispatchers.IO) {
+    check(advertisement == null) { "Advertisement already active" }
+    checkAdapterPowered()
+    val adv = ExportedAdvertisement(currentDevice.shortDeviceId)
+    try {
+      connection.exportObject(adv.getObjectPath(), adv)
+      advertisingManager().RegisterAdvertisement(DBusPath(adv.getObjectPath()), emptyMap())
+    } catch (e: Exception) {
+      runCatching { connection.unExportObject(adv.getObjectPath()) }
+      throw e
+    }
+    advertisement = adv
+  }
+
+  override suspend fun stopAdvertising() {
+    withContext(Dispatchers.IO) {
+      val adv = advertisement ?: return@withContext
+      advertisement = null
+      runCatching { advertisingManager().UnregisterAdvertisement(DBusPath(adv.getObjectPath())) }
+        .onFailure { log(TAG, "UnregisterAdvertisement failed", it) }
+      runCatching { connection.unExportObject(adv.getObjectPath()) }
+    }
+  }
+
   /** Fails early with the plan-documented message when the adapter is powered off. */
   private fun checkAdapterPowered() {
     val powered = runCatching {
       val props = connection.getRemoteObject(BlueZConnection.BLUEZ_SERVICE, adapterPath, Properties::class.java)
-      val raw = props.Get<Any>(BlueZConnection.BLUEZ_SERVICE, "Powered")
+      val raw = props.Get<Any>(ADAPTER1, "Powered")
       (raw as? Variant<*>)?.value ?: raw
     }.getOrNull() as? Boolean
     if (powered == false) {
@@ -116,6 +142,9 @@ class BlueZPeripheralFacade(
   private fun gattManager(): GattManager1 =
     connection.getRemoteObject(BlueZConnection.BLUEZ_SERVICE, adapterPath, GattManager1::class.java)
 
+  private fun advertisingManager(): LEAdvertisingManager1 =
+    connection.getRemoteObject(BlueZConnection.BLUEZ_SERVICE, adapterPath, LEAdvertisingManager1::class.java)
+
   private fun unexport(app: GattApplication) {
     listOf(app.appPath, app.servicePath, app.txPath, app.rxPath).forEach { path ->
       runCatching { connection.unExportObject(path) }
@@ -125,6 +154,7 @@ class BlueZPeripheralFacade(
   private companion object {
     const val TAG = "BlueZPeripheralFacade"
     const val DEVICE1 = "org.bluez.Device1"
+    const val ADAPTER1 = "org.bluez.Adapter1"
     const val UNKNOWN_CENTRAL = "unknown"
   }
 }
@@ -262,5 +292,42 @@ internal class ExportedGattCharacteristic(
         emptyList(),
       ),
     )
+  }
+}
+
+/**
+ * The exported LEAdvertisement1. Bean getters match the @DBusProperty declarations
+ * (dbus-java strips the get/is prefix without decapitalizing). Mirrors
+ * `klardropAdvertisePayload`: service UUID in the primary advertisement, shortDeviceId
+ * as service data — only the 8-char id ever goes on the air.
+ */
+internal class ExportedAdvertisement(
+  private val shortDeviceId: String,
+  private val path: String = ADVERTISEMENT_PATH,
+) : LEAdvertisement1 {
+
+  override fun getObjectPath() = path
+
+  fun getType(): String = "peripheral"
+
+  fun getServiceUUIDs(): List<String> = listOf(BleConstants.SERVICE_UUID)
+
+  /** a{sv} keyed by service UUID; byte-array values carry the explicit "ay" signature. */
+  fun getServiceData(): Map<String, Variant<*>> = mapOf(
+    BleConstants.SERVICE_UUID to Variant(shortDeviceId.encodeToByteArray(), "ay"),
+  )
+
+  fun getLocalName(): String = shortDeviceId
+
+  fun getIncludes(): List<String> = listOf("tx-power")
+
+  /** BlueZ releases the advertisement itself on adapter power-off; nothing to reclaim. */
+  override fun Release() {
+    log(TAG, "Advertisement released by BlueZ")
+  }
+
+  private companion object {
+    const val TAG = "ExportedAdvertisement"
+    const val ADVERTISEMENT_PATH = "/com/carlom/klardrop/ble/advertisement0"
   }
 }

@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.ble.linux
 
 import com.carlom.klardrop.common.ble.BleConstants
 import com.carlom.klardrop.common.ble.BlePeerEvent
+import com.carlom.klardrop.common.discovery.CurrentDevice
 
 /**
  * Seam for every BlueZ interaction the Linux BLE transport needs. The real
@@ -45,6 +46,20 @@ interface BlueZFacade {
 
   /** Registers the callback invoked when a remote central subscribes/unsubscribes on RX. */
   fun onCentralSubscription(listener: ((centralId: String, subscribed: Boolean) -> Unit)?) = Unit
+
+  // ── Advertising ───────────────────────────────────────────────────────────
+
+  /**
+   * Exports an `LEAdvertisement1` (service UUID + shortDeviceId service data, per
+   * `BleAdvertisePayload`) and registers it with
+   * `LEAdvertisingManager1.RegisterAdvertisement`. Only the 8-char [CurrentDevice.shortDeviceId]
+   * goes on the air — the friendly name is exchanged after the authenticated handshake.
+   * Throws when BlueZ cannot host the advertisement (e.g. adapter powered off).
+   */
+  suspend fun startAdvertising(currentDevice: CurrentDevice) = Unit
+
+  /** Unregisters the advertisement started by [startAdvertising]. No-op when none. */
+  suspend fun stopAdvertising() = Unit
 
   // ── Central role ──────────────────────────────────────────────────────────
 
