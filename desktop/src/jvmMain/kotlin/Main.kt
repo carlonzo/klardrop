@@ -17,12 +17,15 @@ import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
+import com.carlom.klardrop.desktop.SingleInstance
 import com.carlom.klardrop.theme.AppTheme
 import com.klardrop.common.initCrashReporter
 import io.github.vinceglb.filekit.FileKit
+import java.awt.EventQueue
 import java.awt.Taskbar
 import java.awt.Window as AwtWindow
 import javax.imageio.ImageIO
+import kotlin.system.exitProcess
 
 // Height of the macOS title-bar inset (points). Sized just tall enough to
 // clear the default macOS traffic-light cluster (~28 pt) with a hair of
@@ -108,6 +111,14 @@ fun main(args: Array<String>) {
     }
   }
 
+  // Single-instance guard: before touching any app state, make sure no other instance
+  // owns the data dir. A second launch focuses the first window and exits.
+  val instanceGuard = SingleInstance.acquire()
+  if (instanceGuard == null) {
+    println("Klardrop is already running — focusing existing window")
+    exitProcess(0)
+  }
+
   FileKit.init("klardrop")
 
   val k = Klardrop(
@@ -175,6 +186,18 @@ fun main(args: Array<String>) {
           // Push the traffic lights down into a taller, Xcode-style title
           // bar. JBR-only — silently no-ops on stock OpenJDK.
           applyMacCustomTitleBar(window, MAC_TITLE_BAR_HEIGHT)
+        }
+      }
+
+      // A second launch asked us to come forward: raise and focus the window on the
+      // UI thread (the focus server thread itself must not touch AWT).
+      LaunchedEffect(instanceGuard) {
+        instanceGuard.onFocus = {
+          EventQueue.invokeLater {
+            isWindowVisible = true
+            window.toFront()
+            window.requestFocusInWindow()
+          }
         }
       }
 
