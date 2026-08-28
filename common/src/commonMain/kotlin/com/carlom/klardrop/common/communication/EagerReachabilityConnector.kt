@@ -8,10 +8,12 @@ import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.TimeSource
 
 /**
  * Proactively dials newly-discovered TCP-reachable peers so "visible" implies
@@ -29,6 +31,11 @@ import kotlin.time.TimeSource
  * visibleDevices flow then triggers fresh probes here. Per-peer cooldowns
  * back off failed probes so we don't hammer the radio on a peer that's
  * announcing but unreachable.
+ *
+ * A 30s ticker additionally re-evaluates the CURRENT visible device set on its
+ * own, so a peer whose probe failed (server temporarily down, firewall drop)
+ * is re-dialed periodically instead of staying Offline until some unrelated
+ * discovery churn happens to re-emit the device list.
  */
 class EagerReachabilityConnector(
   private val coroutines: Coroutines,
@@ -41,6 +48,7 @@ class EagerReachabilityConnector(
 
   private val scope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
   private var watchJob: Job? = null
+  private var reprobeJob: Job? = null
   private var lifecycleJob: Job? = null
 
   // Per-peer cooldown after a failed probe. Re-probing on every visibleDevices update for a
@@ -49,7 +57,12 @@ class EagerReachabilityConnector(
   // important because when the peer is behind a default-deny-inbound firewall, OUR outbound dial
   // is the only way a connection can ever form, and a pending send is waiting on exactly that.
   // The cooldown is also cleared the instant a device (re)appears in discovery (see [start]).
-  private val failureCooldownUntil = mutableMapOf<String, TimeSource.Monotonic.ValueTimeMark>()
+  //
+  // Implemented as one delayed-clear job per peer — plain `delay`, the same virtual-time-friendly
+  // timer pattern as ConnectionsPool's debounce and Probing watchdog — rather than a TimeSource
+  // mark: "in cooldown" simply means a clear job is still pending, expiry is exact, and tests can
+  // drive it on the virtual clock.
+  private val failureCooldownJobs = mutableMapOf<String, Job>()
   private val cooldownDuration = 5.seconds
 
   fun start() {
@@ -62,18 +75,23 @@ class EagerReachabilityConnector(
         // A device that just (re)appeared in discovery is a strong "it's back" signal: clear any
         // failure cooldown so we re-dial it immediately instead of waiting the cooldown out.
         val currentlyVisible = devices.keys.toSet()
-        (currentlyVisible - previouslyVisible).forEach { failureCooldownUntil.remove(it) }
+        (currentlyVisible - previouslyVisible).forEach { clearCooldown(it) }
         previouslyVisible = currentlyVisible
 
         for ((deviceId, device) in devices) {
-          if (deviceId == self) continue
-          if (!device.hasKlardropConnection()) continue
-          if (shouldSkip(deviceId)) continue
-          if (connectionsPool.isAvailable(deviceId)) {
-            failureCooldownUntil.remove(deviceId)
-            continue
-          }
-          probe(deviceId, device)
+          probeIfEligible(deviceId, device, self)
+        }
+      }
+    }
+
+    // Periodic re-probe: re-evaluate the CURRENT device set (not waiting for a new emission)
+    // with the exact same per-device decision as the collect path above, cooldown map included.
+    reprobeJob = scope.launch {
+      val self = currentDeviceProvider.get().shortDeviceId
+      while (isActive) {
+        delay(REPROBE_INTERVAL)
+        for ((deviceId, device) in visibleDevices.visibleDevices.value) {
+          probeIfEligible(deviceId, device, self)
         }
       }
     }
@@ -81,7 +99,7 @@ class EagerReachabilityConnector(
     lifecycleJob = scope.launch {
       networkLifecycleMonitor.observe().collect {
         log(TAG, "Network change observed; clearing reachability cooldowns")
-        failureCooldownUntil.clear()
+        failureCooldownJobs.keys.toList().forEach { clearCooldown(it) }
       }
     }
   }
@@ -89,26 +107,59 @@ class EagerReachabilityConnector(
   fun stop() {
     watchJob?.cancel()
     watchJob = null
+    reprobeJob?.cancel()
+    reprobeJob = null
     lifecycleJob?.cancel()
     lifecycleJob = null
   }
 
-  private fun shouldSkip(deviceId: String): Boolean {
-    val cooldown = failureCooldownUntil[deviceId] ?: return false
-    return cooldown.elapsedNow() < cooldownDuration
+  /**
+   * The single per-device probe decision, shared by the visibleDevices collect path and the
+   * periodic re-probe ticker: skip self, non-Klardrop peers, peers in cooldown, and peers with
+   * a live pooled connection. Also skips a peer whose probe is still in flight
+   * ([Reachability.Probing]) so the two paths never double-dial. Every other peer without a
+   * live connection — [Reachability.Unknown], [Reachability.Unreachable], or a stale
+   * [Reachability.Reachable] left behind when the heartbeat closed a dead socket (the pool's
+   * reachability map is only corrected by closeConnection / network flush) — is a probe
+   * candidate.
+   */
+  private suspend fun probeIfEligible(deviceId: String, device: DiscoveryDevice, selfId: String) {
+    if (deviceId == selfId) return
+    if (!device.hasKlardropConnection()) return
+    if (shouldSkip(deviceId)) return
+    if (connectionsPool.isAvailable(deviceId)) {
+      clearCooldown(deviceId)
+      return
+    }
+    if (connectionsPool.reachability.value[deviceId] == Reachability.Probing) return
+    probe(deviceId, device)
+  }
+
+  private fun shouldSkip(deviceId: String): Boolean = failureCooldownJobs.containsKey(deviceId)
+
+  private fun clearCooldown(deviceId: String) {
+    failureCooldownJobs.remove(deviceId)?.cancel()
+  }
+
+  private fun armCooldown(deviceId: String) {
+    clearCooldown(deviceId)
+    failureCooldownJobs[deviceId] = scope.launch {
+      delay(cooldownDuration)
+      failureCooldownJobs.remove(deviceId)
+    }
   }
 
   private fun probe(deviceId: String, device: DiscoveryDevice) {
     log(TAG, "Probing reachability for $deviceId (${device.deviceConnections.size} endpoint(s))")
-    failureCooldownUntil[deviceId] = TimeSource.Monotonic.markNow()
+    armCooldown(deviceId)
     connectionsPool.markProbing(deviceId)
     scope.launch {
       runCatching { client.connectTo(deviceId) }
         .onSuccess { outcome ->
           when (outcome) {
             ConnectOutcome.Connected -> {
-              failureCooldownUntil.remove(deviceId)
-              log(TAG, "Probe succeeded for $deviceId")
+              clearCooldown(deviceId)
+              log(TAG, "Probe $deviceId: Connected (${device.deviceConnections.size} endpoint(s) raced)")
               // updateConnection() inside Client already marked Reachable.
             }
             ConnectOutcome.NotInitiated -> {
@@ -120,19 +171,42 @@ class EagerReachabilityConnector(
               log(TAG, "Probe inconclusive for $deviceId (not initiator); leaving as Probing")
             }
             ConnectOutcome.Failed -> {
-              log(TAG, "Probe completed without establishing connection for $deviceId")
+              // Client collapses the per-endpoint causes (refused / timeout / handshake
+              // mismatch / encryption refusal — each logged there) into this one outcome.
+              log(TAG, "Probe $deviceId: Error (all ${device.deviceConnections.size} endpoint(s) exhausted)")
               connectionsPool.markUnreachable(deviceId)
             }
           }
         }
-        .onFailure {
-          log(TAG, "Probe failed for $deviceId: ${it.message}")
+        .onFailure { cause ->
+          val (outcome, detail) = classifyProbeFailure(cause)
+          log(TAG, "Probe $deviceId: $outcome ($detail)")
           connectionsPool.markUnreachable(deviceId)
         }
     }
   }
 
+  /**
+   * Maps a dial failure that escaped [Client.connectTo] to a breadcrumb outcome label,
+   * reusing Client.kt's failure classification (isConnectionRefused /
+   * TimeoutCancellationException). "Failed-mismatch" / "Failed-encryption" surface the two
+   * establishConnection error() messages (device-id mismatch, encryption refusal) when they
+   * propagate; anything else is "Error".
+   */
+  private fun classifyProbeFailure(cause: Throwable): Pair<String, String> = when {
+    cause.isConnectionRefused() -> "Failed-refused" to (cause.message ?: "connection refused")
+    cause is TimeoutCancellationException -> "Failed-timeout" to (cause.message ?: "connect/handshake timeout")
+    cause.message?.contains("mismatch", ignoreCase = true) == true ->
+      "Failed-mismatch" to cause.message.orEmpty()
+    cause.message?.contains("encrypted transport", ignoreCase = true) == true ->
+      "Failed-encryption" to cause.message.orEmpty()
+    else -> "Error" to (cause.message ?: cause::class.simpleName ?: "unknown error")
+  }
+
   private companion object {
     const val TAG = "EagerReachabilityConnector"
+
+    /** How often the re-probe ticker re-evaluates the current visible device set. */
+    val REPROBE_INTERVAL = 30.seconds
   }
 }
