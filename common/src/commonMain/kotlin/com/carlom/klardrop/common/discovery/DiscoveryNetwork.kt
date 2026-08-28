@@ -50,7 +50,14 @@ class DiscoveryNetwork(
   private var nearbySharePublishJob: Job? = null
   private var klardropPublishJob: Job? = null
   private var nearbySharePort: Int? = null
-  private var klardropPort: Int? = null
+
+  /**
+   * The port currently advertised over mDNS for the klardrop service (the
+   * unified server port). The advertisement must always match the live server
+   * listener — [republishIfPortChanged] repairs drift, [checkAdvertisedPortAlive]
+   * warns when nothing listens on it anymore.
+   */
+  private var publishedKlardropPort: Int? = null
   private var deviceFlowSubscription: Job? = null
 
   private var bleAdvertiseJob: Job? = null
@@ -118,8 +125,12 @@ class DiscoveryNetwork(
     if (nearbyDiscoveryJob != null) discoveryNearbyShareDevices()
 
     // Re-publish active services on the same ports.
-    klardropPort?.let { republishKlardrop(it) }
+    publishedKlardropPort?.let { republishKlardrop(it) }
     nearbySharePort?.let { republishNearbyShare(it) }
+
+    // The rebuild can outlive the server's listener (sleep/wake kills sockets);
+    // verify the advertised port still has a listener behind it.
+    checkAdvertisedPortAlive()
   }
 
 
@@ -142,9 +153,37 @@ class DiscoveryNetwork(
 
   fun startPublishKlardrop(port: Int) {
     log("DiscoveryNetwork", "startPublishKlardrop $port")
-    klardropPort = port
+    publishedKlardropPort = port
     startDeviceFlowSubscriptionIfNeeded()
     republishKlardrop(port)
+  }
+
+  /**
+   * Re-register BOTH mDNS publications when the server's live port differs
+   * from the advertised one ([publishedKlardropPort]). No-op when the port is
+   * unchanged or nothing has been published yet. Called after every server
+   * (re)start, from the network-change handler's watchdog, and from the
+   * periodic 60s port-sync check in Klardrop.init().
+   */
+  fun republishIfPortChanged(currentPort: Int) {
+    val advertised = publishedKlardropPort ?: nearbySharePort ?: return
+    if (advertised == currentPort) return
+    log("DiscoveryNetwork", "Re-publishing discovery: server port changed $advertised -> $currentPort")
+    if (publishedKlardropPort != null) startPublishKlardrop(currentPort)
+    if (nearbySharePort != null) startPublishNearbyShare(currentPort)
+  }
+
+  /**
+   * Probe that something still listens on the advertised port. Warn-only:
+   * never auto-unregisters, so a dead advertisement stays visible in the log
+   * trail instead of silently disappearing.
+   */
+  fun checkAdvertisedPortAlive() {
+    val port = publishedKlardropPort ?: return
+    discoveryScope.launch {
+      val alive = runCatching { verifyAdvertisedPortAlive(port) }.getOrDefault(true)
+      if (!alive) log("DiscoveryNetwork", "WARNING: advertised port $port has no listener")
+    }
   }
   
   private fun republishKlardrop(port: Int, deviceInfo: CurrentDevice? = null) {
@@ -172,7 +211,7 @@ class DiscoveryNetwork(
         log("DiscoveryNetwork", "Device info changed: ${deviceInfo.deviceName}")
         // Republish services if they were previously started
         nearbySharePort?.let { port -> republishNearbyShare(port, deviceInfo) }
-        klardropPort?.let { port -> republishKlardrop(port, deviceInfo) }
+        publishedKlardropPort?.let { port -> republishKlardrop(port, deviceInfo) }
       }
       .launchIn(discoveryScope)
   }
@@ -521,4 +560,11 @@ class DiscoveryNetwork(
     )
   }
 }
+
+/**
+ * Platform probe: does anything on THIS device accept TCP connections on
+ * [port]? Desktop JVM opens a loopback socket; platforms without a portable
+ * probe no-op (return true = assume alive, never warn).
+ */
+expect fun verifyAdvertisedPortAlive(port: Int): Boolean
 

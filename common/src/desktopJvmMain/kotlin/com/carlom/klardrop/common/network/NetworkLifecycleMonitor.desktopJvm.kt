@@ -20,9 +20,16 @@ import kotlin.time.Duration.Companion.seconds
  * they come back up, often with the same address but with the underlying
  * sockets already broken. Either transition surfaces as a [NetworkChangeEvent.Changed].
  */
-actual class NetworkLifecycleMonitor {
+actual class NetworkLifecycleMonitor(
+  /**
+   * Test seam: fixed event flow instead of live NIC polling. Production call
+   * sites use the default (null -> poll [NetworkInterface] every 5 s).
+   */
+  private val events: Flow<NetworkChangeEvent>? = null,
+) {
 
-  actual fun observe(): Flow<NetworkChangeEvent> = flow {
+  actual fun observe(): Flow<NetworkChangeEvent> =
+    events ?: flow {
     var previous = snapshot()
     log("NetworkLifecycleMonitor", "starting NIC polling; initial snapshot=${previous.size}")
     while (true) {
