@@ -27,6 +27,7 @@ import okio.ByteString.Companion.toByteString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
 
 /**
  * Tests for Server protocol detection logic.
@@ -164,6 +165,82 @@ class ServerTest {
         assertEquals(Server.Protocol.KLARDROP, protocol)
       }
     }
+  }
+
+  @Test
+  fun testDetectNearbyShareProtocolWithRealDeviceCollisionFirstByte() {
+    // Collision regression: real Nearby Share peers open the wire with a length-delimited
+    // `version` message block (field 1, wire-type 2 → first byte 0x0A), which equals
+    // MessageType.TRUST_PAIRING_REQUEST's id. Detection must fall through the failed
+    // HandshakeMessage parse and classify the frame as NEARBY_SHARE.
+    val frame = realDeviceNearbyConnectionRequest(
+      // Version{ v1: V1{ min_version=1, max_version=1 } } — the shape real peers send.
+      versionBlock = byteArrayOf(0x0A, 0x06, 0x0A, 0x04, 0x08, 0x01, 0x10, 0x01),
+    )
+
+    // Precondition: the crafted frame IS a valid Nearby CONNECTION_REQUEST OfflineFrame.
+    assertEquals(V1Frame.FrameType.CONNECTION_REQUEST, OfflineFrame.ADAPTER.decode(frame).v1?.type)
+
+    val server = createTestServer()
+    assertEquals(Server.Protocol.NEARBY_SHARE, server.detectProtocol(frame))
+  }
+
+  @Test
+  fun testValidNearbyFrameNeverDetectedAsKlardrop() {
+    // Negative/false-positive guard: even when the bytes after a 0x0A first byte accidentally
+    // parse as a HandshakeMessage, a valid Nearby CONNECTION_REQUEST frame must never be
+    // classified KLARDROP. The version block below is sized so the Handshake parse walks the
+    // whole frame cleanly (deviceId="AAAAAAAAA", deviceName=<v1 frame bytes>) and returns
+    // successfully — without the 0x0A Nearby-first guard this frame IS misdetected as KLARDROP.
+    val frame = realDeviceNearbyConnectionRequest(
+      // 0x0A 0x0A: field-1 tag + length 10; content starts 0x09 so the Handshake parse reads a
+      // 9-byte deviceId and lands exactly on the 0x12 deviceName tag of the v1 frame.
+      versionBlock = byteArrayOf(0x0A, 0x0A, 0x09) + "AAAAAAAAA".encodeToByteArray(),
+    )
+
+    // Precondition: the crafted frame IS a valid Nearby CONNECTION_REQUEST OfflineFrame.
+    assertEquals(V1Frame.FrameType.CONNECTION_REQUEST, OfflineFrame.ADAPTER.decode(frame).v1?.type)
+
+    val server = createTestServer()
+    assertNotEquals(Server.Protocol.KLARDROP, server.detectProtocol(frame))
+    assertEquals(Server.Protocol.NEARBY_SHARE, server.detectProtocol(frame))
+  }
+
+  @Test
+  fun testDetectProtocolWithGarbageInKlardropRangeThrowsNewMessage() {
+    // Garbage whose first byte sits in the Klardrop MessageType range must be rejected by BOTH
+    // parsers and surface the new "Unrecognized protocol" message naming the first byte.
+    val server = createTestServer()
+
+    val collisionByteGarbage = byteArrayOf(0x0A, 0x01, 0x02, 0x03) // 0x0A = TRUST_PAIRING_REQUEST id
+    val exception = assertFailsWith<IllegalArgumentException> {
+      server.detectProtocol(collisionByteGarbage)
+    }
+    assertEquals("Unrecognized protocol: first byte 0x0A", exception.message)
+
+    val otherRangeByteGarbage = byteArrayOf(0x0E, 0x01, 0x02, 0x03) // 0x0E = TRUST_REVOCATION id
+    val otherException = assertFailsWith<IllegalArgumentException> {
+      server.detectProtocol(otherRangeByteGarbage)
+    }
+    assertEquals("Unrecognized protocol: first byte 0x0E", otherException.message)
+  }
+
+  /**
+   * Builds a first message exactly as real Nearby Share peers send it: the OfflineFrame
+   * `version` field travels as a length-delimited message block (field 1, wire-type 2 → first
+   * byte 0x0A), unlike this repo's enum-typed proto whose encoding starts 0x08. Wire's parser
+   * skips the unknown-shaped field 1 and still decodes the v1 frame, so the result is a valid
+   * CONNECTION_REQUEST OfflineFrame for detection purposes.
+   */
+  private fun realDeviceNearbyConnectionRequest(versionBlock: ByteArray): ByteArray {
+    val v1Frame = V1Frame(
+      type = V1Frame.FrameType.CONNECTION_REQUEST,
+      connection_request = ConnectionRequestFrame(
+        endpoint_info = "test-endpoint-info".encodeToByteArray().toByteString(),
+        endpoint_name = "Test Device"
+      )
+    ).encode()
+    return versionBlock + byteArrayOf(0x12, v1Frame.size.toByte()) + v1Frame
   }
 
 }

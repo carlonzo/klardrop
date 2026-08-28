@@ -181,6 +181,14 @@ class Server(
   /**
    * Detects which protocol is being used based on the first message structure.
    *
+   * Detection order:
+   * 1. A first byte of 0x0A that parses as a Nearby CONNECTION_REQUEST OfflineFrame is
+   *    NEARBY_SHARE — the byte collides with [MessageType.TRUST_PAIRING_REQUEST]'s id, and
+   *    Klardrop never opens a connection with it (its first message is always a Handshake).
+   * 2. Any other first byte in the Klardrop MessageType range means Klardrop only if the rest
+   *    parses as a [HandshakeMessage]; a failed parse falls through to Nearby detection.
+   * 3. A Nearby Share OfflineFrame is accepted only when it carries a CONNECTION_REQUEST.
+   *
    * @param payload The complete first message including the 4-byte length prefix
    * @return The detected protocol
    * @throws IllegalArgumentException if the protocol cannot be determined
@@ -190,23 +198,47 @@ class Server(
       throw IllegalArgumentException("Message too short: ${payload.size} bytes")
     }
 
-    // Check if the first payload byte matches Klardrop message types
-    val potentialMessageType = payload[0]
-    if (potentialMessageType in MessageType.entries.map { it.id }) {
-      // Try to parse as Klardrop HandshakeMessage
-      val handshakePayload = payload.sliceArray(1 until payload.size)
-      protoBuf.decodeFromByteArray(HandshakeMessage.serializer(), handshakePayload)
-      return Protocol.KLARDROP
-    }
+    val firstByte = payload[0]
 
-    // Try to parse as Nearby Share OfflineFrame
-
-    val offlineFrame = OfflineFrame.ADAPTER.decode(payload)
-    if (offlineFrame.v1?.type == V1Frame.FrameType.CONNECTION_REQUEST) {
+    // Collision guard: Nearby OfflineFrames from real peers start 0x0A (protobuf field 1,
+    // wire-type 2), which equals TRUST_PAIRING_REQUEST's id, and a crafted Version block can
+    // accidentally parse as a HandshakeMessage. Preferring Nearby for this byte is safe because
+    // Klardrop's first message on a fresh connection is always a Handshake (id 0).
+    if (firstByte == 0x0A.toByte() && isValidNearbyConnectionRequest(payload)) {
       return Protocol.NEARBY_SHARE
     }
 
-    throw IllegalArgumentException("Unable to detect protocol - message doesn't match Klardrop or Nearby Share format")
+    // Klardrop frames start with a MessageType id followed by a protobuf HandshakeMessage.
+    // A first byte in range is only Klardrop if that parse succeeds — on failure fall through
+    // to Nearby Share detection instead of dropping the connection.
+    if (firstByte in MessageType.entries.map { it.id }) {
+      val handshakePayload = payload.sliceArray(1 until payload.size)
+      val handshake = try {
+        protoBuf.decodeFromByteArray(HandshakeMessage.serializer(), handshakePayload)
+      } catch (_: Exception) {
+        null
+      }
+      if (handshake != null) {
+        return Protocol.KLARDROP
+      }
+    }
+
+    // Try to parse as Nearby Share OfflineFrame
+    if (isValidNearbyConnectionRequest(payload)) {
+      return Protocol.NEARBY_SHARE
+    }
+
+    val firstByteHex = (firstByte.toInt() and 0xFF).toString(16).padStart(2, '0').uppercase()
+    throw IllegalArgumentException("Unrecognized protocol: first byte 0x$firstByteHex")
+  }
+
+  private fun isValidNearbyConnectionRequest(payload: ByteArray): Boolean {
+    val offlineFrame = try {
+      OfflineFrame.ADAPTER.decode(payload)
+    } catch (_: Exception) {
+      return false
+    }
+    return offlineFrame.v1?.type == V1Frame.FrameType.CONNECTION_REQUEST
   }
 
   /**
