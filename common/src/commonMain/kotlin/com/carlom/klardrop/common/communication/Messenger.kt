@@ -169,10 +169,24 @@ class MessengerImpl(
 
       val device = visibleDevices.getDevice(deviceId)
 
-      //    skip if not visible
-      if (device == null) {
+      // mDNS can be one-directional (a peer firewall eats our browse while the peer's dial
+      // to us lands a healthy connection in the pool — the KLARDROP-JB/JD incident, where
+      // VisibleDevices stayed empty for the whole session but PING/PONG flowed both ways).
+      // A live pooled connection is a strictly better send path than failing here, so fall
+      // through to the Klardrop transport, which picks it up out of the pool.
+      val hasLivePooledConnection =
+        device == null && connectionsPool.getConnection(deviceId)?.isClosed() == false
+
+      //    skip if not visible (unless a live pooled connection exists — see above)
+      if (device == null && !hasLivePooledConnection) {
         log("Messenger", "❌ Device $deviceId is not visible in device list")
-        log("Messenger", "Wanted to send a message to $deviceId but it is not visible")
+        // Include what the app *did* think was visible: the 30s snapshot elsewhere is too
+        // coarse to correlate with this exact failure from breadcrumbs alone.
+        log(
+          "Messenger",
+          "Wanted to send a message to $deviceId but it is not visible " +
+            "(visible ids: ${visibleDevices.visibleDevices.value.keys})"
+        )
         // The user-facing string never includes the raw deviceId — that's an internal
         // identifier (random hex shortId) and is meaningless to a person. Prefer the
         // cached friendly name; fall back to a generic label so the chat error banner
@@ -185,7 +199,14 @@ class MessengerImpl(
         return
       }
 
-      log("Messenger", "✅ Device $deviceId found in visible devices")
+      if (device == null) {
+        log(
+          "Messenger",
+          "Device $deviceId is not in the visible list but a live pooled connection exists; sending over it"
+        )
+      } else {
+        log("Messenger", "✅ Device $deviceId found in visible devices")
+      }
 
       // Check if device is trusted and wrap message in TrustedMessage if needed.
       //
@@ -249,7 +270,12 @@ class MessengerImpl(
       // Preference is based on the *application* message shape (file vs lightweight), not
       // the trust envelope. TrustedMessage wrapping only applies to the Klardrop wire path.
       val preference = transportPreferenceFor(messageRequest)
-      val chosen = preference.firstOrNull { it.isAvailable(device) }
+      val chosen = when {
+        device != null -> preference.firstOrNull { it.isAvailable(device) }
+        // Not visible but pooled: only the Klardrop path can ride the pooled connection —
+        // Nearby/BLE availability both come from the visible-map entry we don't have.
+        else -> TransportChoice.KLARDROP_TCP
+      }
       val transferCompleted = when (chosen) {
         TransportChoice.KLARDROP_TCP, TransportChoice.KLARDROP_BLE ->
           handleKlardropTransfer(deviceId, finalMessageRequest, flow, preferBle = chosen == TransportChoice.KLARDROP_BLE)
@@ -339,6 +365,10 @@ class MessengerImpl(
         .onConnection(socket, sendFlow)
     } finally {
       socket.dispose()
+      // Must be closed with the socket: on Apple targets ktor's selector loop blocks in `pselect`
+      // and holds one of Dispatchers.IO's 64 parallelism slots until closed, so leaking one per
+      // Nearby send wedges all networking after ~64 sends.
+      selectorManager.close()
     }
   }
 
@@ -515,7 +545,12 @@ class MessengerImpl(
           alreadyAttempted = deviceId in authUpgradeAttempted,
         ) && trustManager.isTrusted(deviceId)
         val tcpAvailable = device?.hasKlardropConnection() == true
-        if (staleAuth) {
+        // A re-dial re-runs the UKEY2 identity binding over TCP *or* BLE (establishBleConnection
+        // runs the same exchange), so any visible endpoint is a usable redial path. Gating this on
+        // TCP alone left BLE-only trusted peers stuck on their pre-pairing unauthenticated link
+        // forever, which is the slow path this whole branch exists to escape.
+        val redialPathAvailable = device != null
+        if (staleAuth && redialPathAvailable) {
           // Once per device per process: if the re-dial still comes back unauthenticated (peer's
           // stored key no longer matches, say) we must not spin re-dialling forever.
           // ponytail: plain set, benign race — worst case two devices each re-dial once.
@@ -526,6 +561,21 @@ class MessengerImpl(
               "recycling so the handshake re-binds identity"
           )
           connectionsPool.closeConnection(deviceId)
+        } else if (staleAuth) {
+          // Do not discard the only working link: with no discovered endpoint at all the client
+          // cannot re-run the authenticated handshake, so recycling would strand the peer instead
+          // of upgrading it. Keep using this encrypted link until mDNS supplies a redial path;
+          // pairing responses must be able to travel over it meanwhile. The link stays
+          // opportunistically encrypted but not identity-bound, so it is not MITM-proof — content
+          // authenticity still holds, since TrustedMessage signs at the application layer, and
+          // deviceId is deliberately NOT added to authUpgradeAttempted so the upgrade is retried
+          // as soon as an endpoint appears.
+          log(
+            "Messenger",
+            "Connection for $deviceId predates pairing, but no redial path is visible; " +
+              "keeping the current link"
+          )
+          return existingConnection
         } else if (!preferBle && existingConnection.isBleTransport && tcpAvailable) {
           log(
             "Messenger",
@@ -660,4 +710,3 @@ sealed interface MessengerSendProgress {
 
   fun isCompleted(): Boolean = this is Completed || this is Error
 }
-
