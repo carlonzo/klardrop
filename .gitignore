@@ -74,3 +74,8 @@ keystore.properties
 # python bytecode
 __pycache__/
 *.pyc
+
+# Claude Code scratch worktrees — live checkouts, never repo content.
+# One was committed by accident as a bare gitlink (no .gitmodules entry), which
+# made every CI job fail `git submodule foreach` with exit code 128.
+.claude/worktrees/
