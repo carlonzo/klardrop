@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.chat.DeviceChatMode
 import com.carlom.klardrop.chat.DeviceChatScreen
 import com.carlom.klardrop.common.communication.Reachability
+import com.carlom.klardrop.common.connectivity.ConnectivityRestriction
+import com.carlom.klardrop.common.connectivity.ConnectivityRestrictions
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.components.ChatHeader
 import com.carlom.klardrop.components.DeviceRow
@@ -70,8 +72,10 @@ fun WideLayout(
     discoveryController: DiscoveryController,
     uiDependencies: UiDependencies,
     sidebarWidth: Dp = DesktopSidebarWidth,
+    onRequestExemption: (ConnectivityRestriction) -> Unit = {},
 ) {
     val state by discoveryController.screenStateFlow.collectAsState()
+    val connectivityRestrictions by discoveryController.connectivityRestrictions.collectAsState()
     var activeDeviceId by remember { mutableStateOf<String?>(null) }
     var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
     var showAddDevicePicker by remember { mutableStateOf(false) }
@@ -126,6 +130,8 @@ fun WideLayout(
 
         WideContent(
             state = state,
+            connectivityRestrictions = connectivityRestrictions,
+            onRequestExemption = onRequestExemption,
             activeDeviceId = activeDeviceId,
             sidebarWidth = resolvedSidebarWidth,
             showSidebar = maxWidth > WideBreakpoint,
@@ -215,6 +221,8 @@ fun WideLayout(
 @Composable
 private fun WideContent(
     state: DiscoveryScreenState,
+    connectivityRestrictions: ConnectivityRestrictions,
+    onRequestExemption: (ConnectivityRestriction) -> Unit,
     activeDeviceId: String?,
     sidebarWidth: Dp,
     showSidebar: Boolean,
@@ -325,6 +333,14 @@ private fun WideContent(
                     status = activeDevice.reachability.toKdStatus(),
                     isReachable = activeDevice.reachability == Reachability.Reachable,
                     toolbarVariant = true,
+                )
+            }
+
+            if (connectivityRestrictions.restricted) {
+                ConnectivityRestrictionBanner(
+                    restrictions = connectivityRestrictions,
+                    onRequestExemption = onRequestExemption,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                 )
             }
 

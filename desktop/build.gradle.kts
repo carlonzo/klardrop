@@ -33,7 +33,12 @@ kotlin {
         implementation(deps.nucleus.composenativetray)
       }
     }
-    val jvmTest by getting
+    val jvmTest by getting {
+      dependencies {
+        implementation(kotlin("test"))
+        implementation(deps.kotlinx.coroutines.test)
+      }
+    }
     
     all {
       languageSettings.optIn("kotlinx.serialization.ExperimentalSerializationApi")

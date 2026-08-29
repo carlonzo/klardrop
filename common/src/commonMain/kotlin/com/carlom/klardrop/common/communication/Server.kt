@@ -20,6 +20,7 @@ import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.protobuf.ProtoBuf
 
@@ -89,6 +90,11 @@ class Server(
   private val trustManager: TrustManager,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
+  /**
+   * Published with the bound port as soon as the listener is up (0 while unknown). The
+   * client's T10 punch-through dial reads it to bind its sockets to our listening port.
+   */
+  private val serverPort: MutableStateFlow<Int>? = null,
 ) {
   data class ServerConfig(val host: String, val port: Int)
 
@@ -106,11 +112,19 @@ class Server(
    */
   suspend fun startServer(): ServerConfig {
     val selectorManager = SelectorManager(coroutines.ioDispatcher)
-    val serverSocket = aSocket(selectorManager).tcp().bind("0.0.0.0", 0)
+    val serverSocket = aSocket(selectorManager).tcp().bind("0.0.0.0", 0) {
+      // T10: the punch-through dial socket co-binds this port (on a specific local address)
+      // while the listener holds it. Linux refuses that co-bind with SO_REUSEADDR alone when
+      // the existing socket is LISTENing — SO_REUSEPORT on BOTH sockets is what permits it
+      // (the dial socket never listens, so SYNs are still dispatched only to the listener).
+      reuseAddress = true
+      reusePort = true
+    }
 
     val localAddress = serverSocket.localAddress as InetSocketAddress
     val actualPort = localAddress.port
     val host = localAddress.hostname
+    serverPort?.value = actualPort
 
     log("Server", "Unified server started on $host:$actualPort")
 
@@ -181,6 +195,14 @@ class Server(
   /**
    * Detects which protocol is being used based on the first message structure.
    *
+   * Detection order:
+   * 1. A first byte of 0x0A that parses as a Nearby CONNECTION_REQUEST OfflineFrame is
+   *    NEARBY_SHARE — the byte collides with [MessageType.TRUST_PAIRING_REQUEST]'s id, and
+   *    Klardrop never opens a connection with it (its first message is always a Handshake).
+   * 2. Any other first byte in the Klardrop MessageType range means Klardrop only if the rest
+   *    parses as a [HandshakeMessage]; a failed parse falls through to Nearby detection.
+   * 3. A Nearby Share OfflineFrame is accepted only when it carries a CONNECTION_REQUEST.
+   *
    * @param payload The complete first message including the 4-byte length prefix
    * @return The detected protocol
    * @throws IllegalArgumentException if the protocol cannot be determined
@@ -190,23 +212,47 @@ class Server(
       throw IllegalArgumentException("Message too short: ${payload.size} bytes")
     }
 
-    // Check if the first payload byte matches Klardrop message types
-    val potentialMessageType = payload[0]
-    if (potentialMessageType in MessageType.entries.map { it.id }) {
-      // Try to parse as Klardrop HandshakeMessage
-      val handshakePayload = payload.sliceArray(1 until payload.size)
-      protoBuf.decodeFromByteArray(HandshakeMessage.serializer(), handshakePayload)
-      return Protocol.KLARDROP
-    }
+    val firstByte = payload[0]
 
-    // Try to parse as Nearby Share OfflineFrame
-
-    val offlineFrame = OfflineFrame.ADAPTER.decode(payload)
-    if (offlineFrame.v1?.type == V1Frame.FrameType.CONNECTION_REQUEST) {
+    // Collision guard: Nearby OfflineFrames from real peers start 0x0A (protobuf field 1,
+    // wire-type 2), which equals TRUST_PAIRING_REQUEST's id, and a crafted Version block can
+    // accidentally parse as a HandshakeMessage. Preferring Nearby for this byte is safe because
+    // Klardrop's first message on a fresh connection is always a Handshake (id 0).
+    if (firstByte == 0x0A.toByte() && isValidNearbyConnectionRequest(payload)) {
       return Protocol.NEARBY_SHARE
     }
 
-    throw IllegalArgumentException("Unable to detect protocol - message doesn't match Klardrop or Nearby Share format")
+    // Klardrop frames start with a MessageType id followed by a protobuf HandshakeMessage.
+    // A first byte in range is only Klardrop if that parse succeeds — on failure fall through
+    // to Nearby Share detection instead of dropping the connection.
+    if (firstByte in MessageType.entries.map { it.id }) {
+      val handshakePayload = payload.sliceArray(1 until payload.size)
+      val handshake = try {
+        protoBuf.decodeFromByteArray(HandshakeMessage.serializer(), handshakePayload)
+      } catch (_: Exception) {
+        null
+      }
+      if (handshake != null) {
+        return Protocol.KLARDROP
+      }
+    }
+
+    // Try to parse as Nearby Share OfflineFrame
+    if (isValidNearbyConnectionRequest(payload)) {
+      return Protocol.NEARBY_SHARE
+    }
+
+    val firstByteHex = (firstByte.toInt() and 0xFF).toString(16).padStart(2, '0').uppercase()
+    throw IllegalArgumentException("Unrecognized protocol: first byte 0x$firstByteHex")
+  }
+
+  private fun isValidNearbyConnectionRequest(payload: ByteArray): Boolean {
+    val offlineFrame = try {
+      OfflineFrame.ADAPTER.decode(payload)
+    } catch (_: Exception) {
+      return false
+    }
+    return offlineFrame.v1?.type == V1Frame.FrameType.CONNECTION_REQUEST
   }
 
   /**
@@ -222,6 +268,13 @@ class Server(
     val request = protoBuf.decodeFromByteArray(HandshakeMessage.serializer(), handshakePayload)
 
     log("Server", "Klardrop connection request from: $remoteAddress - ${request.deviceId}")
+
+    // Log-only diagnostic: a claimed id absent from the visible map usually means mDNS loss
+    // or a regenerated id on the peer. Legitimate cases exist (BLE-only visibility, races
+    // between discovery and connect), so the connection proceeds regardless.
+    if (!visibleDevices.isDeviceVisible(request.deviceId)) {
+      log("Server", "Inbound connection claims deviceId ${request.deviceId} which is not in visible devices (mDNS loss or id change)")
+    }
 
     // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
     // than silently falling back to cleartext.

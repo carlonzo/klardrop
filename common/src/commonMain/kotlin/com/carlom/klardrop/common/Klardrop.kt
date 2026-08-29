@@ -7,7 +7,9 @@ import com.carlom.klardrop.common.di.CommonComponent
 import com.klardrop.common.CrashReporter
 import com.carlom.klardrop.common.utils.installUnhandledExceptionGuard
 import com.carlom.klardrop.common.utils.log
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 
 class Klardrop(
   private val applicationInfo: ApplicationInfo = ApplicationInfo(),
@@ -67,6 +69,18 @@ class Klardrop(
         }
         if (applicationInfo.enableNearbyServer) {
           discoveryNetwork.startPublishNearbyShare(serverPort)
+        }
+
+        // Port-sync watchdog (T4): the mDNS advertisement must always match the
+        // live server port. Re-check every 60s: repair the advertisement if the
+        // server port drifted (covers any future server restart path), and warn
+        // when nothing listens on the advertised port anymore. delay() is
+        // virtual-time friendly; no real sleeps.
+        discoveryNetwork.republishIfPortChanged(serverPort)
+        while (true) {
+          delay(60.seconds)
+          discoveryNetwork.republishIfPortChanged(serverPort)
+          discoveryNetwork.checkAdvertisedPortAlive()
         }
       }
     }

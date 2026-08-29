@@ -171,6 +171,8 @@ class CommonComponent(
 
   fun permissionsMonitor() = internalPlatformDependency.permissionsMonitor()
 
+  fun connectivityRestrictionMonitor() = internalPlatformDependency.connectivityRestrictionMonitor()
+
   fun notifier() = internalPlatformDependency.notifier()
 
   fun foregroundState() = internalPlatformDependency.foregroundState()

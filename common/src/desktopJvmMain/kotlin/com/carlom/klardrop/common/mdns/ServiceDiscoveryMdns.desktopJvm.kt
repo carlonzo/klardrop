@@ -16,17 +16,26 @@ internal interface ServiceDiscoveryMdnsBackend {
   suspend fun restart()
 }
 
-actual class ServiceDiscoveryMdns {
+actual class ServiceDiscoveryMdns internal constructor(
+  /**
+   * Test seam: inject a [ServiceDiscoveryMdnsBackend] instead of the OS-chosen
+   * one. Production call sites use the default (null -> jmDNS on Linux/Windows,
+   * Bonjour on macOS).
+   */
+  private val backendOverride: ServiceDiscoveryMdnsBackend? = null,
+) {
 
   private val backend: ServiceDiscoveryMdnsBackend by lazy {
-    val osName = System.getProperty("os.name")?.lowercase().orEmpty()
-    val isMac = osName.contains("mac") || osName.contains("darwin")
-    if (isMac) {
-      log("ServiceDiscoveryMdns", "using native Bonjour backend (libdns_sd)")
-      BonjourServiceDiscoveryMdns()
-    } else {
-      log("ServiceDiscoveryMdns", "using jmDNS backend (os=$osName)")
-      JmDnsServiceDiscoveryMdns()
+    backendOverride ?: run {
+      val osName = System.getProperty("os.name")?.lowercase().orEmpty()
+      val isMac = osName.contains("mac") || osName.contains("darwin")
+      if (isMac) {
+        log("ServiceDiscoveryMdns", "using native Bonjour backend (libdns_sd)")
+        BonjourServiceDiscoveryMdns()
+      } else {
+        log("ServiceDiscoveryMdns", "using jmDNS backend (os=$osName)")
+        JmDnsServiceDiscoveryMdns()
+      }
     }
   }
 

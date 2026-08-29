@@ -31,6 +31,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -60,6 +63,17 @@ internal const val TCP_CONNECT_TIMEOUT_MS = 3_000L
  * can still take over.
  */
 internal const val UKEY2_HANDSHAKE_TIMEOUT_MS = 10_000L
+
+/**
+ * T10 firewall punch-through burst: after a direct dial exhausts every advertised endpoint,
+ * retry this many times with the dial socket BOUND to our own listening port (1s apart).
+ * Both peers run the same burst via the reachability prober, so dial windows overlap and
+ * stateful firewalls accept the cross SYNs as ESTABLISHED (TCP simultaneous open).
+ */
+internal const val PUNCH_THROUGH_ATTEMPTS = 3
+
+/** Gap between punch-through burst attempts. See [PUNCH_THROUGH_ATTEMPTS]. */
+internal const val PUNCH_THROUGH_ATTEMPT_INTERVAL_MS = 1_000L
 
 /**
  * Result of a [Client.connectTo] call. The connector uses this to distinguish a
@@ -138,6 +152,12 @@ class ClientImpl(
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
   private val bleTransport: BleTransport? = null,
+  /**
+   * Our own server's bound port, published by [Server] on bind (0 while unknown). The T10
+   * punch-through dial binds its socket to this port so the outbound SYN creates conntrack
+   * state for the peer's inbound SYN to our listener. 0 disables punch-through entirely.
+   */
+  private val serverPort: StateFlow<Int> = MutableStateFlow(0),
 ) : Client {
 
   private val clientScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -239,7 +259,7 @@ class ClientImpl(
     val bleConnections = discoveryDevice.getBleConnection()
 
     require(tcpConnections.isNotEmpty() || bleConnections.isNotEmpty()) {
-      "Cant connect to $deviceId. No Klardrop TCP or BLE connection is available"
+      "Cant connect to $deviceId. No known route: device is visible but advertises no Klardrop TCP or BLE endpoint"
     }
 
     // launch coroutine to connect and await for the connection to stay alive. TCP is
@@ -248,6 +268,12 @@ class ClientImpl(
     launch {
       if (tcpConnections.isNotEmpty()) {
         raceTcpConnections(tcpConnections, deviceId, connectionJob)
+      }
+
+      // T10: the direct dials are exhausted without a connection — try the firewall
+      // punch-through burst before falling back to BLE / marking the peer unreachable.
+      if (!connectionJob.isCompleted && tcpConnections.isNotEmpty()) {
+        punchThroughBurst(tcpConnections, deviceId, connectionJob)
       }
 
       if (!connectionJob.isCompleted && bleTransport != null && bleConnections.isNotEmpty()) {
@@ -278,6 +304,39 @@ class ClientImpl(
   }
 
   /**
+   * T10 firewall punch-through: when a direct dial fails with a timeout/unreachable
+   * classification, retry with the dial socket BOUND to our own listening port. The
+   * outbound SYN creates conntrack state whose REVERSE direction is the peer's inbound
+   * SYN to our listening port, which stateful firewalls (ufw/nft/conntrack-based APs)
+   * accept. Both peers run the same burst via the reachability prober, so dial windows
+   * overlap naturally: the OS completes the simultaneous open OR a listener accepts the
+   * second connection — ConnectionsPool.updateConnection's tie-break dedupes the pair.
+   *
+   * Tight burst ([PUNCH_THROUGH_ATTEMPTS] attempts, [PUNCH_THROUGH_ATTEMPT_INTERVAL_MS]
+   * apart) before the caller falls back to its normal cadence. Skipped entirely when our
+   * own server port is unknown (nothing to punch through from).
+   */
+  private suspend fun CoroutineScope.punchThroughBurst(
+    tcpConnections: List<DeviceConnection.KlardropConnection>,
+    deviceId: String,
+    connectionJob: CompletableDeferred<ConnectOutcome>,
+  ) {
+    val ownPort = serverPort.value
+    if (ownPort <= 0) return
+    log("Client", "Direct dial to $deviceId failed; starting punch-through burst from local :$ownPort")
+    repeat(PUNCH_THROUGH_ATTEMPTS) { attempt ->
+      if (connectionJob.isCompleted) return
+      raceTcpConnections(tcpConnections, deviceId, connectionJob, punchThrough = true)
+      if (connectionJob.isCompleted) {
+        log("Client", "Punch-through dial to $deviceId succeeded (attempt ${attempt + 1})")
+        return
+      }
+      if (attempt < PUNCH_THROUGH_ATTEMPTS - 1) delay(PUNCH_THROUGH_ATTEMPT_INTERVAL_MS)
+    }
+    log("Client", "Punch-through burst to $deviceId exhausted ($PUNCH_THROUGH_ATTEMPTS attempts)")
+  }
+
+  /**
    * F7: races every advertised TCP endpoint concurrently instead of dialing them one at a time.
    * Sequentially, N bad addresses cost up to N x TCP_CONNECT_TIMEOUT_MS before a good one is even
    * tried; racing bounds the wait to a single TCP_CONNECT_TIMEOUT_MS regardless of how many stale
@@ -296,6 +355,7 @@ class ClientImpl(
     tcpConnections: List<DeviceConnection.KlardropConnection>,
     deviceId: String,
     connectionJob: CompletableDeferred<ConnectOutcome>,
+    punchThrough: Boolean = false,
   ) = coroutineScope {
     val winnerGate = CompletableDeferred<Job>()
     // Built fully (LAZY, not yet running) before any of them start, so the cancellation watcher
@@ -303,7 +363,7 @@ class ClientImpl(
     val jobs: List<Job> = tcpConnections.map { connection ->
       launch(start = CoroutineStart.LAZY) {
         log("Client", "Connecting to $deviceId with address ${connection.address} port ${connection.port}")
-        establishConnection(connection.address, connection.port, deviceId, connectionJob, winnerGate)
+        establishConnection(connection.address, connection.port, deviceId, connectionJob, winnerGate, punchThrough)
           // TCP dial failures (peer not listening, connection refused, peer closed
           // mid-handshake) are routine on a flaky LAN. Keep the on-device log,
           // skip Sentry.
@@ -321,9 +381,12 @@ class ClientImpl(
             // NOTE: a loser cancelled by the watcher below throws a plain CancellationException,
             // not TimeoutCancellationException, so a winning sibling never causes this endpoint
             // to be wrongly invalidated.
+            // NOTE (T10): punch-through failures never invalidate — the endpoint was already
+            // judged by the direct dial above; the punch-through dial failing means the
+            // firewall path did not open, not that the endpoint is stale.
             val refused = cause.isConnectionRefused()
             val timedOut = cause is kotlinx.coroutines.TimeoutCancellationException
-            if (refused || timedOut) {
+            if ((refused || timedOut) && !punchThrough) {
               val reason = if (refused) "connection refused" else "connect/handshake timeout"
               log("Client", "Dial to $deviceId @ ${connection.address}:${connection.port} failed ($reason) — invalidating stale endpoint")
               visibleDevices.invalidateKlardropEndpoint(deviceId, connection.address, connection.port)
@@ -352,6 +415,7 @@ class ClientImpl(
     deviceId: String,
     connectionJob: CompletableDeferred<ConnectOutcome>,
     winnerGate: CompletableDeferred<Job>,
+    punchThrough: Boolean = false,
   ): Result<Unit> {
     // Tracks the socket across the whole attempt so the `finally` below can always close it
     // on any non-success exit — including a plain CancellationException thrown mid-suspend
@@ -374,16 +438,60 @@ class ClientImpl(
       // any other advertised address is tried.  socketTimeout only applies to
       // read/write I/O, not to connect, so withTimeout is the correct mechanism.
       socket = withTimeout(TCP_CONNECT_TIMEOUT_MS) {
-        aSocket(selectorManager).tcp().connect(address, port) {
-          // Coarse OS-level backstop. The application-level heartbeat is the
-          // primary liveness mechanism; keep-alive only helps if the heartbeat
-          // coroutine is itself wedged.
-          keepAlive = true
+        if (punchThrough) {
+          // T10 firewall punch-through: bind the dial socket to our own listening port so
+          // the outbound SYN creates conntrack state for the peer's inbound SYN to us.
+          val ownPort = serverPort.value
+          log("Client", "Punch-through dial to $deviceId from local :$ownPort (remote $address:$port)")
+          punchThroughConnect(selectorManager, InetSocketAddress(address, port), ownPort)
+            ?: error("Punch-through dial to $address:$port failed")
+        } else {
+          aSocket(selectorManager).tcp().connect(address, port) {
+            // Coarse OS-level backstop. The application-level heartbeat is the
+            // primary liveness mechanism; keep-alive only helps if the heartbeat
+            // coroutine is itself wedged.
+            keepAlive = true
+          }
         }
       }
       val activeSocket = checkNotNull(socket)
       log("Client", "Connected to $address:$port. Sending greetings")
 
+      handedOff = handshakeAndRegister(activeSocket, address, port, deviceId, connectionJob, winnerGate)
+      }
+    } finally {
+      // Backstop for any exit that didn't already close/hand off the socket — most notably a
+      // CancellationException thrown by one of the withTimeout blocks above when the watcher in
+      // raceTcpConnections cancels this attempt (loser) while it's suspended mid-handshake.
+      // runCatching only catches synchronously-thrown exceptions that already unwound past this
+      // point; it does NOT prevent this finally from running, so this still closes the socket even
+      // though runCatching's Result ends up a Failure wrapping the CancellationException.
+      if (!handedOff) socket?.close()
+    }
+  }
+
+  /**
+   * Shared post-connect phase of a dial: greeting exchange, UKEY2 initiator handshake,
+   * endpoint-race gate, and pool registration. Used by [establishConnection] for normal
+   * dials and by the T10 punch-through tests for pre-connected (locally bound) sockets.
+   *
+   * Closes [activeSocket] itself before rethrowing any failure, so the caller's
+   * finally-close is an idempotent backstop. Returns true when the socket's lifecycle has
+   * been handed off — registered with the pool, managed by the same-device-id server path,
+   * or explicitly closed as a lost race — and the caller must not close it again.
+   *
+   * [winnerGate] is null on paths with no sibling attempts (punch-through tests): the
+   * winner-takes-all check is skipped.
+   */
+  internal suspend fun handshakeAndRegister(
+    activeSocket: io.ktor.network.sockets.Socket,
+    address: String,
+    port: Int,
+    deviceId: String,
+    connectionJob: CompletableDeferred<ConnectOutcome>,
+    winnerGate: CompletableDeferred<Job>?,
+  ): Boolean {
+    try {
       val self = currentDeviceProvider.get()
       val handshakeMessage = HandshakeMessage(
         deviceId = self.shortDeviceId,
@@ -421,8 +529,6 @@ class ClientImpl(
 
       if (serverHandshakeMessage.deviceId != deviceId) {
         log("Client", "cant connect. Device $deviceId found is wrong: ${serverHandshakeMessage.deviceId}")
-        activeSocket.close()
-        handedOff = true
         // Thrown (not a direct connectionJob.complete) so a sibling endpoint still racing (F7) isn't
         // aborted by this one's failure — connectionJob only resolves Failed once every address is
         // exhausted (see raceTcpConnections / performDial). CompletableDeferred discards a losing
@@ -434,8 +540,6 @@ class ClientImpl(
       // than silently falling back to cleartext.
       if (!serverHandshakeMessage.supportsEncryption) {
         log("Client", "Device $deviceId does not support encrypted transport; refusing (encryption required)")
-        activeSocket.close()
-        handedOff = true
         error("Peer $deviceId does not support encrypted transport")
       }
 
@@ -462,11 +566,12 @@ class ClientImpl(
       // pool slot (which is what used to close an already-Connected socket out from under a caller).
       // winnerGate carries the winning attempt's own Job (see raceTcpConnections) so the
       // cancellation watcher can spare it once it wins.
-      if (!winnerGate.complete(coroutineContext[Job] ?: error("establishConnection must run inside a Job"))) {
+      if (winnerGate != null &&
+        !winnerGate.complete(coroutineContext[Job] ?: error("handshakeAndRegister must run inside a Job"))
+      ) {
         log("Client", "Lost the endpoint race for $deviceId @ $address:$port; closing redundant socket")
         activeSocket.close()
-        handedOff = true
-        return@runCatching
+        return true
       }
 
       // Check if client and server have the same device ID (test scenario). The UKEY2 handshake
@@ -501,17 +606,11 @@ class ClientImpl(
         }
       }
 
-      handedOff = true
       connectionJob.complete(ConnectOutcome.Connected)
-      }
-    } finally {
-      // Backstop for any exit that didn't already close/hand off the socket — most notably a
-      // CancellationException thrown by one of the withTimeout blocks above when the watcher in
-      // raceTcpConnections cancels this attempt (loser) while it's suspended mid-handshake.
-      // runCatching only catches synchronously-thrown exceptions that already unwound past this
-      // point; it does NOT prevent this finally from running, so this still closes the socket even
-      // though runCatching's Result ends up a Failure wrapping the CancellationException.
-      if (!handedOff) socket?.close()
+      return true
+    } catch (t: Throwable) {
+      runCatching { activeSocket.close() }
+      throw t
     }
   }
 

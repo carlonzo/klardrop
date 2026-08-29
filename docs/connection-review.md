@@ -138,3 +138,151 @@ undermines it:
 
 Deferred (revisit after the above land): parallel-happy-eyeballs address preference beyond the
 IPv6 filter, per-write send timeouts (F15), browse-debounce tuning (F10/V10).
+
+## Troubleshooting: discovered but offline
+
+For the situation where a device shows up in the list but stays offline (no green dot, sends
+fail, or a pair request never arrives). Work through the recipes in order — each fixes one of
+the failure modes observed in the 2026-08-28 diagnosis that motivated this document.
+
+### 1. Multiple desktop instances (duplicate advertisements)
+
+**Symptom:** the same desktop appears several times in the phone's list (names like
+"omarchy (2)", "(3)…"), or a pair request lands on a different instance than the one you are
+looking at.
+
+**Cause:** more than one Klardrop process is running (e.g. an old installed binary plus a
+freshly launched one). Each instance advertises the same device id over mDNS, so peers see
+duplicates and requests are delivered to an arbitrary one.
+
+**Fix:** Klardrop now ships a single-instance guard — launching a second instance focuses the
+running window and exits instead of starting a second copy. To clean up an older setup:
+
+```bash
+pkill -f '.local/lib/klardrop/bin/klardrop'   # kill ALL instances
+pgrep -fc 'bin/klardrop'                      # must print 0
+# then start exactly one instance
+```
+
+### 2. Advertised port is dead (server/advertiser desync)
+
+**Symptom:** the device is visible, but connecting to its advertised port is refused while the
+app looks perfectly alive.
+
+**Check (desktop):** `avahi-browse -rt _klardrop._tcp` shows the advertised IP/port; then
+`nc -z -w 3 <ip> <port>` must succeed. On Android: `adb shell ss -tln` lists the real
+listeners — compare with the advertised port.
+
+**Fix:** Klardrop now re-publishes mDNS whenever the live server port drifts (after server
+restart, network change, and on a periodic check) and logs
+`[DiscoveryNetwork] WARNING: advertised port <p> has no listener` when the advertisement is
+stale. Restarting the app re-syncs advertisement and server.
+
+### 3. Device visible but never comes online (no re-probe)
+
+**Symptom:** the peer sits with no status dot or stuck "Connecting" forever, even though the
+other side is fine.
+
+**Cause (pre-fix):** a probe that never reached a terminal outcome left the reachability state
+wedged on `Probing`, and nothing ever re-probed a failed peer.
+
+**Fix:** two behaviors now prevent the wedge — a 15 s watchdog downgrades a stuck `Probing`
+to `Unknown` (logged as `[ConnectionPool] Watchdog: <deviceId> still Probing after 15s -> Unknown`),
+and the reachability connector re-probes `Unreachable`/`Unknown` devices every 30 s, logging
+each outcome (`[EagerReachabilityConnector] Probe <deviceId>: <outcome> (<detail>)`). A peer
+that comes back is recovered automatically within ~45 s; no manual interaction needed.
+
+### 4. Pair request never arrives / fails silently
+
+**Symptom:** you tap pair on one device; the other shows nothing, or the pairing button just
+resets with no explanation.
+
+**Causes (pre-fix):** the request was only sent over a freshly dialed connection (so a
+firewall-blocked dial killed it even though an inbound connection existed), the receiving UI
+dropped requests that arrived before the screen was composed or while a dialog was already
+open, and failures were logged but never shown.
+
+**Fix:** pair requests are now also delivered over an existing pooled inbound connection; the
+receiver queues concurrent requests, replays ones that arrived before the UI subscribed, and
+retains requests that arrive before any dialog callback exists. Failures surface in the UI
+next to the pair button with a reason: `no-endpoints` (device not visible), `connect-failed`
+(endpoints existed but every dial failed — previously misreported as "No Klardrop TCP or BLE
+connection is available"), `ack-timeout`, `session-timeout`, `rejected-by-peer`, or
+`clock-skew` (receiver clock off by more than 5 minutes — fix the device clock).
+
+### 5. Baseline recovery recipe
+
+When state looks suspect, restore a healthy baseline before diagnosing further:
+
+```bash
+# Desktop: exactly one fresh instance
+pkill -f '.local/lib/klardrop/bin/klardrop'
+nohup ~/.local/lib/klardrop/bin/klardrop >/tmp/klardrop-desktop.log 2>&1 &
+
+# Phone: restart the app
+adb shell am force-stop com.carlom.klardrop
+adb shell monkey -p com.carlom.klardrop 1
+
+# Verify the phone's advertisement accepts TCP
+avahi-browse -rt _klardrop._tcp          # note phone IP + port
+nc -z -w 3 <phone-ip> <port>             # must succeed
+```
+
+### 6. Firewall matrix: when discovery works but TCP does not
+
+The 2026-08-28 live repro: both devices saw each other via mDNS, yet client-to-client TCP was
+SYN-blackholed in **both** directions. The cause was split across the two devices — each side
+blocked a different direction:
+
+| Device | Blocker | Effect | Evidence-based check |
+|---|---|---|---|
+| Android phone | Battery Saver ON → netd `powersave` chain is default-deny; Klardrop's uid is not allowlisted | App egress dropped AND inbound SYNs to the app's port dropped (even loopback) | `adb shell settings get global low_power` → `1` means ON; `adb shell dumpsys network_management` → check whether the Klardrop uid appears in the `powersave` chain allowlist |
+| Android phone | App denied on metered networks (`metered_deny_user` chain) | Same drops when the active Wi-Fi is metered | `adb shell dumpsys network_management` → look for the Klardrop uid in `metered_deny_user` |
+| Desktop (Linux) | ufw active with `DEFAULT_INPUT_POLICY="DROP"` and no allow rule for the Klardrop port | Inbound SYNs die before the TCP stack (connection attempts time out, nothing in `ss`) | `sudo ufw status verbose` → shows `Status: active` and `Default: deny (incoming)` |
+
+**Phone fix:** use the in-app banner (see below) to grant the standard battery-optimization
+exemption, and re-enable the app on metered networks in Android's network settings if it was
+denied.
+
+**Desktop fix:** Klardrop dials with a punch-through that usually removes the need to open
+ports (see below), but if you control the firewall you can also allow the port explicitly.
+
+### 7. Firewall punch-through (automatic)
+
+Klardrop now retries failed dials as a **TCP simultaneous open**: the dial socket is bound to
+the device's own listening port, so the outbound SYN creates connection state whose reverse
+direction is the peer's inbound SYN. Stateful firewalls (ufw/nft) accept reply-direction
+packets as ESTABLISHED, so the peer's firewall lets it through with zero configuration —
+neither side has to open a port. Both peers attempt this on the periodic re-probe, so the
+dial windows overlap. Logged as `[Client] Punch-through dial to <peer> from local :<ownPort>`.
+This does not defeat Battery Saver (which drops by app uid, not by direction) — use the
+exemption flow for that.
+
+### 8. Battery-saver / metered restriction banner (Android)
+
+When Battery Saver is blocking Klardrop (or the app is denied on metered networks), the
+discovery screen shows a banner — "Battery saver is blocking Klardrop — Tap to allow" or
+"Klardrop is blocked on metered networks — Tap to check settings". Tapping it launches the
+standard OS dialog (`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) or the app's network
+settings; no port configuration involved. Pairing/connect failures that coincide with the
+restriction say so in the failure reason (e.g. "connect failed — Battery saver is blocking
+Klardrop"). The monitor also logs
+`[ConnectivityRestriction] battery-saver=<bool> battery-optimization-exempt=<bool> metered-denied=<bool>`
+on every change.
+
+### 9. Hotspot verification recipe
+
+If both firewall checks above are clean but TCP still fails on the LAN, isolate the network
+itself: enable the phone's hotspot and connect the desktop to it, then re-run the `nc -z`
+check from recipe 5. On the hotspot there is no AP isolation and no third-party firewall —
+if pairing works there but not on your Wi-Fi, the Wi-Fi network (router AP isolation or an
+advanced firewall) is the blocker.
+
+### 10. Stale entry after reinstalling the app
+
+Reinstalling regenerates the device's short id **and** its identity key. Old entries on other
+devices therefore reference an id that no longer exists and a key that can never validate —
+they show up as a dead peer but they **never block re-pairing**: pairing the new install
+simply creates a fresh trust entry. To clean up the stale entry, unpair it manually on the
+device that holds it (`TrustManager.removeTrust`); that also purges the stale known-device
+identity from the trusted-devices directory. No file editing required.

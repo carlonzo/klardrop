@@ -9,6 +9,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import com.carlom.klardrop.common.ble.BleTransport
+import com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.AndroidConnectionInfoJoiner
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
@@ -51,6 +52,12 @@ actual class InternalPlatformDependencies(private val context: Context, private 
   private val permissionsMonitor by lazy { PermissionsMonitor(context, foregroundState) }
 
   actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
+
+  private val connectivityRestrictionMonitor by lazy {
+    ConnectivityRestrictionMonitor(context, foregroundState)
+  }
+
+  actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
 
   private val notifier by lazy { Notifier(context) }
 

@@ -46,7 +46,15 @@ data class AckTimeoutConfig(
   /**
    * Backoff multiplier for retry delays
    */
-  val retryBackoffMultiplier: Double = 1.5
+  val retryBackoffMultiplier: Double = 1.5,
+
+  /**
+   * How long a single send attempt stays pending waiting for a connection to appear (our
+   * re-dial or the peer's inbound dial landing in the pool) before that attempt gives up
+   * and the retry loop moves on. One exhausted budget must NOT abort the whole send —
+   * the loop keeps retrying until [maxRetries] is consumed.
+   */
+  val connectionWaitTimeout: Duration = 15.seconds,
 ) {
   fun timeoutFor(ackType: AckType, hasPayload: Boolean): Duration = when (ackType) {
     AckType.READY -> readyAckTimeout

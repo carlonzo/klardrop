@@ -48,6 +48,13 @@ class PairingProtocolCoordinator(
     var onPairingCompleted: ((deviceId: String, deviceName: String, success: Boolean) -> Unit)? = null
 
     /**
+     * Callback for when a pairing attempt failed, with the machine-readable reason from
+     * [PairingEvent.PairingFailed]. Consumers (DiscoveryController) surface it to the user
+     * as a per-device error message.
+     */
+    var onPairingFailed: ((deviceId: String, reason: String) -> Unit)? = null
+
+    /**
      * Emits whenever a verified peer revocation has been applied locally — typically because
      * the peer tapped "Forget device" on their end (or because we contacted a peer who no
      * longer trusts us and they replied with a revocation). Consumers (DiscoveryController)
@@ -84,6 +91,17 @@ class PairingProtocolCoordinator(
                     is PairingEvent.PairingCompleted -> {
                         println("🔐 [PairingProtocolCoordinator] Pairing completed for ${event.deviceName} (${event.deviceId}), success: ${event.success}")
                         onPairingCompleted?.invoke(event.deviceId, event.deviceName, event.success)
+                    }
+
+                    is PairingEvent.PairingFailed -> {
+                        log("PairingProtocolCoordinator", "Pairing failed for ${event.deviceId} (reason=${event.reason})")
+                        onPairingFailed?.invoke(event.deviceId, event.reason)
+                    }
+
+                    is PairingEvent.PairingSucceeded -> {
+                        // Trust is stored; the UI's trusted state is already driven by the
+                        // PairingCompleted(success=true) event above.
+                        log("PairingProtocolCoordinator", "Pairing succeeded for ${event.deviceId}")
                     }
 
                     is PairingEvent.PeerRevokedTrust -> {
@@ -227,20 +245,20 @@ class PairingProtocolCoordinator(
                 
                 is MessengerSendProgress.Error -> {
                     println("🔐 [PairingProtocolCoordinator] ❌ Failed to send pairing request: ${sendResult.message}")
-                    // Notify TrustManager of send failure for cleanup
-                    trustManager.onPairingRequestFailed(targetDeviceId)
+                    // Notify TrustManager of send failure for cleanup + UI surfacing
+                    trustManager.onPairingRequestFailed(targetDeviceId, sendResult.reason ?: "send-failed")
                     Result.failure(Exception("Failed to send pairing request: ${sendResult.message}"))
                 }
                 
                 else -> {
                     println("🔐 [PairingProtocolCoordinator] ❌ Unexpected send result: $sendResult")
-                    trustManager.onPairingRequestFailed(targetDeviceId)
+                    trustManager.onPairingRequestFailed(targetDeviceId, "send-failed")
                     Result.failure(Exception("Unexpected send result: $sendResult"))
                 }
             }
         } catch (e: Exception) {
             println("🔐 [PairingProtocolCoordinator] ❌ Exception sending pairing request: ${e.message}")
-            trustManager.onPairingRequestFailed(targetDeviceId)
+            trustManager.onPairingRequestFailed(targetDeviceId, "send-failed(${e::class.simpleName})")
             Result.failure(e)
         }
     }
@@ -263,6 +281,12 @@ class PairingProtocolCoordinator(
                 
                 is MessengerSendProgress.Error -> {
                     println("🔐 [PairingProtocolCoordinator] ❌ Failed to send pairing response: ${sendResult.message}")
+                    // The acceptor has already stored trust, but the initiator can never
+                    // finalize without the response — surface the delivery failure.
+                    trustManager.onPairingResponseDeliveryFailed(
+                        targetDeviceId,
+                        sendResult.reason ?: "response-delivery-failed",
+                    )
                 }
                 
                 else -> {

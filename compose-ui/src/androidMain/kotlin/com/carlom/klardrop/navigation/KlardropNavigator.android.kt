@@ -25,6 +25,7 @@ import com.carlom.klardrop.TrustStatus
 import com.carlom.klardrop.UiDependencies
 import com.carlom.klardrop.WideLayout
 import com.carlom.klardrop.chat.DeviceChatScreen
+import com.carlom.klardrop.common.connectivity.ConnectivityRestriction
 import com.carlom.klardrop.common.permissions.Capability
 
 @Composable
@@ -34,11 +35,37 @@ actual fun KlardropNavigator(
   isLargeScreen: Boolean,
   modifier: Modifier,
 ) {
+  val context = LocalContext.current
+
+  // T11: the OS-standard exemption flow. Launching via the activity-result
+  // launcher lets us re-snapshot restriction state the moment the system
+  // dialog returns (its Allow writes the device-idle whitelist; no broadcast
+  // reaches our receivers on every OS version, so we refresh explicitly —
+  // same contract as PermissionsMonitor.refresh() after a runtime prompt).
+  val batteryExemptionLauncher = rememberLauncherForActivityResult(
+    ActivityResultContracts.StartActivityForResult()
+  ) { discoveryController.refreshConnectivityRestrictions() }
+
+  val onRequestExemption: (ConnectivityRestriction) -> Unit = { restriction ->
+    when (restriction) {
+      ConnectivityRestriction.BatterySaverBlocking,
+      ConnectivityRestriction.BatteryOptimizationNotExempt,
+      -> {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+          data = Uri.parse("package:${context.packageName}")
+        }
+        runCatching { batteryExemptionLauncher.launch(intent) }
+      }
+      ConnectivityRestriction.MeteredNetworkDenied -> openAppSettings(context)
+    }
+  }
+
   if (isLargeScreen) {
     WideLayout(
       modifier = modifier,
       discoveryController = discoveryController,
       uiDependencies = uiDependencies,
+      onRequestExemption = onRequestExemption,
     )
     return
   }
@@ -51,7 +78,6 @@ actual fun KlardropNavigator(
 
   val currentTarget = chatTarget
   if (currentTarget == null) {
-    val context = LocalContext.current
     val requestedPerms = remember { mutableListOf<String>() }
     val permsLauncher = rememberLauncherForActivityResult(
       ActivityResultContracts.RequestMultiplePermissions()
@@ -81,6 +107,7 @@ actual fun KlardropNavigator(
           permsLauncher.launch(perms.toTypedArray())
         }
       },
+      onRequestExemption = onRequestExemption,
     )
   } else {
     val (deviceId, deviceName) = currentTarget

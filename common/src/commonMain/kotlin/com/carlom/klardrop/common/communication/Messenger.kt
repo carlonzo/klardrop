@@ -195,7 +195,7 @@ class MessengerImpl(
         if (pendingRowId != null) {
           messageRepository.updateMessageSendStatus(pendingRowId, SendStatus.FAILED)
         }
-        flow.emit(Error("$friendlyName is not visible"))
+        flow.emit(Error("$friendlyName is not visible", reason = "no-endpoints"))
         return
       }
 
@@ -286,7 +286,7 @@ class MessengerImpl(
         TransportChoice.NEARBY -> handleNearbyTransfer(deviceId, messageRequest, flow)
         null -> {
           log("Messenger", "Wanted to send a message to $deviceId but it has no connection")
-          flow.emit(Error("$deviceId but it has no connection"))
+          flow.emit(Error("$deviceId but it has no connection", reason = "no-endpoints"))
           false
         }
       }
@@ -399,11 +399,31 @@ class MessengerImpl(
         // discovered-but-unconnected peers promptly, so a send issued before any connection exists
         // simply waits here until that connection appears, instead of failing fast.
         log("Messenger", "[DEBUG] Getting or establishing connection to $deviceId (attempt $attempt, preferBle=$preferBle)")
-        val connectionMessenger = awaitOrEstablishConnection(deviceId, preferBle, CONNECTION_WAIT_TIMEOUT)
+        val connectionMessenger = awaitOrEstablishConnection(deviceId, preferBle, config.connectionWaitTimeout)
 
         if (connectionMessenger == null) {
-          log("Messenger", "[DEBUG] No connection to $deviceId within ${CONNECTION_WAIT_TIMEOUT}; giving up (attempt $attempt)")
-          flow.emit(Error("Could not connect to $deviceId"))
+          log("Messenger", "[DEBUG] No connection to $deviceId within ${config.connectionWaitTimeout} (attempt $attempt)")
+          // One exhausted connection-wait budget is a retryable failure, not a terminal one:
+          // the loop must consume ALL configured retries before giving up (a peer's inbound
+          // dial or a fresh mDNS endpoint can still land within the later attempts).
+          if (attempt <= maxRetries) {
+            connectionsPool.closeConnection(deviceId)
+            log("Messenger", "[DEBUG] Closed connection to $deviceId, starting backoff delay")
+
+            val delay = (1.seconds * config.retryBackoffMultiplier.pow(attempt - 1))
+            log("Messenger", "[DEBUG] Waiting ${delay.inWholeMilliseconds}ms before retry (attempt $attempt)")
+            withContext(coroutines.mainDispatcher) {
+              kotlinx.coroutines.delay(delay)
+            }
+
+            return@runCatching false // Signal to retry
+          }
+          flow.emit(
+            Error(
+              "Could not connect to $deviceId",
+              reason = "connect-failed(TimeoutCancellationException)",
+            )
+          )
           return false
         }
 
@@ -459,7 +479,12 @@ class MessengerImpl(
         } else {
           log("Messenger", "Transfer to $deviceId failed after $attempt attempts", exception)
           val errorMessage = exception.message ?: "Unknown connection error"
-          flow.emit(Error("Transfer failed: $errorMessage"))
+          flow.emit(
+            Error(
+              "Transfer failed: $errorMessage",
+              reason = classifyTransportFailure(exception),
+            )
+          )
           return false
         }
       }
@@ -476,9 +501,26 @@ class MessengerImpl(
 
     // All retries exhausted
     log("Messenger", "[DEBUG] All retries exhausted for $deviceId after $maxRetries attempts")
-    flow.emit(Error("Transfer failed after $maxRetries retry attempts"))
+    flow.emit(
+      Error(
+        "Transfer failed after $maxRetries retry attempts",
+        reason = "connect-failed(TimeoutCancellationException)",
+      )
+    )
     return false
   }
+
+  /**
+   * Machine-readable failure class for a terminal transport exception. ACK timeouts get their
+   * own class (the connection was fine; the peer just never answered) — everything else is a
+   * connect/send failure tagged with the cause's class name.
+   */
+  private fun classifyTransportFailure(exception: Throwable): String =
+    if (exception.message?.startsWith("ACK timeout", ignoreCase = true) == true) {
+      "ack-timeout"
+    } else {
+      "connect-failed(${exception::class.simpleName})"
+    }
 
 
   /**
@@ -647,15 +689,6 @@ private fun transportPreferenceFor(request: SendMessageRequest): List<TransportC
   }
 }
 
-/**
- * How long a send stays pending while waiting for a connection to appear (from our re-dial or the
- * peer dialing in). The real reconnection fix is the eager connector's short cooldown + clear-on-
- * reappear; this window just needs to cover a couple of discovery→dial→handshake cycles so a send
- * fired in the gap doesn't fail instantly. Past this we give up — a long retry is pointless: if
- * nothing connected in ~15s the peer is genuinely unreachable.
- */
-private val CONNECTION_WAIT_TIMEOUT = 15.seconds
-
 /** How often, while waiting, we re-check the pool for an inbound connection before re-dialing. */
 private val RECONNECT_PROBE_INTERVAL = 1.5.seconds
 
@@ -706,7 +739,16 @@ sealed interface MessengerSendProgress {
    */
   data object AwaitingRecipient : MessengerSendProgress
   data object Completed : MessengerSendProgress
-  data class Error(val message: String = "") : MessengerSendProgress
+
+  /**
+   * [message] is the human-readable text; [reason] is the machine-readable failure class for
+   * callers that need to distinguish outcomes (pairing UI surfaces them differently):
+   *   - "no-endpoints" — device not visible and no pooled connection
+   *   - "connect-failed(<cause class>)" — endpoints existed but every dial/send failed
+   *   - "ack-timeout" — connected, but the peer never acknowledged
+   * Null for legacy failure sites that have no classified cause.
+   */
+  data class Error(val message: String = "", val reason: String? = null) : MessengerSendProgress
 
   fun isCompleted(): Boolean = this is Completed || this is Error
 }

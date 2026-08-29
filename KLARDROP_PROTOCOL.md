@@ -89,7 +89,7 @@ short device id) is centralised in `BleAdvertisePayload.kt` and unit-tested in
 sequenceDiagram
     participant Client as Client<br/>(ClientImpl)
     participant CPool as ConnectionsPool
-    participant Server as UnifiedServer
+    participant Server as Server
     participant SPool as Server ConnectionsPool
     
     Note over Client,SPool: 1. Connection Initiation
@@ -127,8 +127,8 @@ sequenceDiagram
 - Sends handshake: `writeChannel.sendMessage(handshakeMessage, serializer)`
 
 #### 3. Server Accepts Connection
-**Method:** `UnifiedServer.handleKlardropConnection()`
-- Location: `common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/UnifiedServer.kt:200`
+**Method:** `Server.handleKlardropConnection()`
+- Location: `common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/Server.kt`
 - Validates sender with `isAcceptedSender()`
 - Creates `ConnectionMessenger` instance
 - Stores connection: `connectionsPool.updateConnection(deviceId, connectionMessenger)`
@@ -382,9 +382,9 @@ sealed interface ReceiveMessageStatus {
   - `onMessageIncoming()` - Process incoming messages and send ACKs
   - `onSendingMessage()` - Route outgoing messages to handlers
 
-#### UnifiedServer
+#### Server
 - **Purpose:** Accept connections and detect protocol type
-- **Location:** `common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/UnifiedServer.kt:80`
+- **Location:** `common/src/commonMain/kotlin/com/carlom/klardrop/common/communication/Server.kt`
 - **Key Methods:**
   - `startServer()` - Start listening for connections
   - `handleKlardropConnection()` - Process Klardrop protocol connections
@@ -430,7 +430,7 @@ sealed interface ReceiveMessageStatus {
 ## Message Listening Loops
 
 ### Server-Side Listening
-**Where:** `UnifiedServer.handleKlardropConnection()`
+**Where:** `Server.handleKlardropConnection()`
 ```kotlin
 serverScope.launch {
     connectionMessenger.acceptIncomingMessages() // Continuous loop

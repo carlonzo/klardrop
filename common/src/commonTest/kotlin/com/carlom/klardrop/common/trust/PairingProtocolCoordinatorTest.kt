@@ -13,6 +13,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,6 +81,51 @@ class PairingProtocolCoordinatorTest {
       message.contains("Failed to send pairing request"),
       "Failure should identify pairing-send path, got: $message"
     )
+  }
+
+  @Test
+  fun pairingFailedEmittedWithConnectFailedReasonWhenAllDialsFail() = runTest {
+    // Endpoints existed but every dial failed: Messenger reports the terminal Error with a
+    // connect-failed(<cause class>) reason, and TrustManager must surface it as
+    // PairingFailed so the UI can tell the user the device was unreachable.
+    val trustManager = newTrustManager(aliceId)
+    val messenger = RecordingMessenger(
+      response = MessengerSendProgress.Error(
+        message = "Transfer failed: Could not connect to bob00002",
+        reason = "connect-failed(ConnectException)",
+      )
+    )
+    val coordinator = PairingProtocolCoordinator(trustManager, messenger)
+
+    val failed = CompletableDeferred<PairingEvent.PairingFailed>()
+    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+      trustManager.pairingEvents.collect { if (it is PairingEvent.PairingFailed) failed.complete(it) }
+    }
+
+    coordinator.initiatePairing(bobId)
+
+    val event = failed.await()
+    assertEquals(bobId, event.deviceId)
+    assertEquals("connect-failed(ConnectException)", event.reason)
+  }
+
+  @Test
+  fun pairingSucceededEmittedOnFinalize() = runTest {
+    val alice = newTrustManager(aliceId)
+    val messenger = RecordingMessenger(response = MessengerSendProgress.Completed)
+    val coordinator = PairingProtocolCoordinator(alice, messenger)
+
+    val succeeded = CompletableDeferred<PairingEvent.PairingSucceeded>()
+    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+      alice.pairingEvents.collect { if (it is PairingEvent.PairingSucceeded) succeeded.complete(it) }
+    }
+
+    val bob = newTrustManager(bobId)
+    val request = alice.createPairingRequest(bobId).getOrThrow()
+    val response = bob.createPairingAcceptance(request).getOrThrow()
+    alice.finalizePairing(response)
+
+    assertEquals(bobId, succeeded.await().deviceId)
   }
 
   @Test

@@ -76,8 +76,11 @@ private fun Throwable.matchesKnownNoise(): Boolean {
         msg.startsWith("connect failed:", ignoreCase = true)
 
     // Dial-on-open / chat open when no transport is ready — UX failure, not a crash.
+    // Matches both the current "no known route" wording and the pre-T5 text still present
+    // in older on-device logs.
     "IllegalArgumentException" ->
-      msg.contains("No Klardrop TCP or BLE connection is available", ignoreCase = true)
+      msg.contains("No known route", ignoreCase = true) ||
+        msg.contains("No Klardrop TCP or BLE connection is available", ignoreCase = true)
 
     else -> false
   }

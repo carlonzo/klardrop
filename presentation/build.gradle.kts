@@ -152,6 +152,9 @@ kotlin {
         implementation(kotlin("test"))
         implementation(deps.turbine)
         implementation(deps.kotlinx.coroutines.test)
+        // ktor-network types (InetSocketAddress) appear in the VisibleDevices interface
+        // faked by DiscoveryControllerPairingQueueTest.
+        implementation(deps.ktor.network)
       }
     }
 

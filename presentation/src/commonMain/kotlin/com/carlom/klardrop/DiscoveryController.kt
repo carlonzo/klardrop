@@ -14,6 +14,8 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
+import com.carlom.klardrop.common.connectivity.ConnectivityRestrictions
+import com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.TrustedDevicesDirectory
@@ -59,6 +61,7 @@ class DiscoveryController(
   private val connectionInfoJoiner: ConnectionInfoJoiner,
   reachability: StateFlow<Map<String, Reachability>>,
   private val permissionsMonitor: PermissionsMonitor,
+  private val connectivityRestrictionMonitor: ConnectivityRestrictionMonitor,
   private val notifier: Notifier,
   private val foregroundState: ForegroundState,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
@@ -78,11 +81,21 @@ class DiscoveryController(
     commonComponent.connectionInfoJoiner(),
     commonComponent.reachability(),
     commonComponent.permissionsMonitor(),
+    commonComponent.connectivityRestrictionMonitor(),
     commonComponent.notifier(),
     commonComponent.foregroundState(),
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
+
+  /**
+   * Pairing-failure messages per device. Lives OUTSIDE the DeviceUi list because
+   * [ShowDevicesControllerHelper] rebuilds that list from discovery on every tick, which
+   * would wipe a field set directly on the rows — the map is merged back in at collect time.
+   * Accessed only from [controllerScope] (single-threaded main dispatcher).
+   */
+  private val pairingErrors = mutableMapOf<String, String>()
+
   private val showDevicesHelper = ShowDevicesControllerHelper(
     controllerScope,
     visibleDevices.visibleDevices,
@@ -93,6 +106,20 @@ class DiscoveryController(
 
   val permissionsState: StateFlow<PermissionsState> = permissionsMonitor.observe()
     .stateIn(controllerScope, SharingStarted.Eagerly, PermissionsState.EMPTY)
+
+  /**
+   * OS-level connectivity restrictions on THIS device (battery saver, metered deny).
+   * Surfaced as a banner and used to prefix pairing-failure reasons — a connect
+   * failure while restricted is this device's OS dropping packets, not the peer.
+   */
+  val connectivityRestrictions: StateFlow<ConnectivityRestrictions> =
+    connectivityRestrictionMonitor.observe()
+      .stateIn(controllerScope, SharingStarted.Eagerly, ConnectivityRestrictions.EMPTY)
+
+  /** Re-read restriction state on demand — called after the OS exemption prompt returns. */
+  fun refreshConnectivityRestrictions() {
+    connectivityRestrictionMonitor.refresh()
+  }
 
   /**
    * Re-read permission state on demand. Called by the platform app right after
@@ -129,6 +156,17 @@ class DiscoveryController(
   )
   private val pendingPairings = mutableMapOf<String, PendingPairing>()
 
+  /**
+   * Pairing requests that arrived while another dialog was active, FIFO. Presented by
+   * [presentNextQueuedPairing] when the active dialog resolves (accept/reject/dismiss).
+   */
+  private data class QueuedPairingRequest(
+    val deviceId: String,
+    val deviceName: String,
+    val deviceType: String,
+  )
+  private val queuedPairingRequests = ArrayDeque<QueuedPairingRequest>()
+
   val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
 
   private var activeChatDeviceId: String? = null
@@ -147,7 +185,11 @@ class DiscoveryController(
     controllerScope.launch {
       showDevicesHelper.devicesFlow.collect {
         screenStateFlow.update { state ->
-          state.copy(devices = it.toList())
+          state.copy(
+            devices = it.toList().map { device ->
+              device.copy(pairingError = pairingErrors[device.deviceId])
+            }
+          )
         }
       }
     }
@@ -189,10 +231,24 @@ class DiscoveryController(
       if (success) {
         log("DiscoveryController", "Updating UI to show device $deviceName as Trusted")
         updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
+        setPairingError(deviceId, null)
       } else {
         log("DiscoveryController", "Updating UI to show device $deviceName as Untrusted (pairing failed)")
         updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
       }
+    }
+
+    // Surface pairing failures (send failure, ack/session timeout, peer rejection, response
+    // delivery failure) as a per-device error message. The PairingFailed event is the single
+    // source of truth for these — onAddToTrusted's own failure path only resets trust status.
+    pairingProtocolCoordinator.onPairingFailed = { deviceId, reason ->
+      val deviceName = screenStateFlow.value.devices
+        .firstOrNull { it.deviceId == deviceId }
+        ?.deviceName
+        ?: deviceId
+      log("DiscoveryController", "Pairing failed for $deviceName ($deviceId): $reason")
+      updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+      setPairingError(deviceId, pairingFailureText(deviceName, reason).withRestrictionPrefix())
     }
 
     // Route system-notification action taps back into the same accept/reject
@@ -351,16 +407,19 @@ class DiscoveryController(
   override fun onAddToTrusted(deviceUi: DeviceUi) {
     log("DiscoveryController", "onAddToTrusted() called for device: ${deviceUi.deviceName} (${deviceUi.deviceId})")
     log("DiscoveryController", "Adding device ${deviceUi.deviceName} to trusted")
-    
+
+    // Next interaction clears the previous attempt's error.
+    setPairingError(deviceUi.deviceId, null)
+
     // Update UI to show pairing state
     log("DiscoveryController", "Updating UI to show Pairing state")
     updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Pairing)
-    
+
     coroutines.appScope.launch {
       log("DiscoveryController", "Calling pairingProtocolCoordinator.initiatePairing(${deviceUi.deviceId})")
       val result = pairingProtocolCoordinator.initiatePairing(deviceUi.deviceId)
       log("DiscoveryController", "pairingProtocolCoordinator.initiatePairing() returned: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
-      
+
       result.fold(
         onSuccess = {
           log("DiscoveryController", "SUCCESS: Pairing initiation succeeded for ${deviceUi.deviceName}")
@@ -370,7 +429,8 @@ class DiscoveryController(
         onFailure = { error ->
           log("DiscoveryController", "FAILURE: Pairing initiation failed for ${deviceUi.deviceName}: ${error.message}")
           log("DiscoveryController", "Failed to initiate pairing with ${deviceUi.deviceName}: ${error.message}")
-          // Reset to untrusted state on failure
+          // Reset to untrusted state on failure. The error text itself is surfaced via the
+          // PairingFailed event (see onPairingFailed above) — single source of truth.
           updateDeviceTrustStatus(deviceUi.deviceId, TrustStatus.Untrusted)
         }
       )
@@ -424,6 +484,43 @@ class DiscoveryController(
     }
   }
 
+  private fun setPairingError(deviceId: String, message: String?) {
+    if (message == null) pairingErrors.remove(deviceId) else pairingErrors[deviceId] = message
+    screenStateFlow.update { currentState ->
+      currentState.copy(
+        devices = currentState.devices.map { device ->
+          if (device.deviceId == deviceId) device.copy(pairingError = message) else device
+        }
+      )
+    }
+  }
+
+  /**
+   * Human-readable phrasing for a [PairingEvent.PairingFailed] reason. The raw reason strings
+   * ("connect-failed(IOException)", …) are for logs and tests; this is what the user reads.
+   */
+  private fun pairingFailureText(deviceName: String, reason: String): String = when {
+    reason == "no-endpoints" || reason.startsWith("connect-failed") ->
+      "Could not reach $deviceName — the device may be offline or a firewall blocks direct connections"
+    reason == "ack-timeout" ->
+      "$deviceName did not respond in time — check that both devices are on the same network"
+    reason == "session-timeout" ->
+      "Pairing with $deviceName timed out — try again"
+    reason == "rejected-by-peer" ->
+      "$deviceName declined the pairing request"
+    else -> "Could not pair with $deviceName"
+  }
+
+  /**
+   * T11: when this device's OS is actively blocking connections (battery saver /
+   * metered deny), prefix the failure reason so the user looks HERE first instead
+   * of suspecting the peer.
+   */
+  private fun String.withRestrictionPrefix(): String {
+    val notice = connectivityRestrictions.value.activeBlockerNotice() ?: return this
+    return "$notice — $this"
+  }
+
   // Implementation of PairingApprovalCallback
   override fun onPairingRequested(
     deviceId: String,
@@ -436,37 +533,64 @@ class DiscoveryController(
     pendingPairings[deviceId] = PendingPairing(deviceName, onAccept, onReject)
 
     controllerScope.launch {
-      screenStateFlow.update { currentState ->
-        // Check if a pairing dialog is already active
-        if (currentState.pairingDialogState != null) {
-          log("DiscoveryController", "Ignoring duplicate/concurrent pairing request for $deviceId. A dialog is already active.")
-          return@update currentState // Don't update the state
+      val active = screenStateFlow.value.pairingDialogState
+      when {
+        // Duplicate/replayed request for a device we are already showing or already
+        // queued: one dialog per device.
+        active?.deviceId == deviceId || queuedPairingRequests.any { it.deviceId == deviceId } ->
+          log("DiscoveryController", "Duplicate pairing request for $deviceId (already showing or queued); ignoring")
+
+        active != null -> {
+          log("DiscoveryController", "A pairing dialog is already active; queueing request for $deviceName ($deviceId)")
+          queuedPairingRequests.addLast(QueuedPairingRequest(deviceId, deviceName, deviceType))
         }
 
-        log("DiscoveryController", "Creating PairingDialogState for $deviceName")
-        currentState.copy(
-          pairingDialogState = PairingDialogState(
-            deviceId = deviceId,
-            deviceName = deviceName,
-            deviceType = deviceType,
-            onAccept = { controllerScope.launch { acceptPairing(deviceId) } },
-            onReject = { controllerScope.launch { rejectPairing(deviceId) } }
-          )
-        )
+        else -> presentPairingDialog(deviceId, deviceName, deviceType)
       }
+    }
+  }
 
-      // System notification only fires when the user can't see the in-app
-      // dialog. Foreground state is observed reactively but the request
-      // arrives once, so we sample the current value here.
-      if (!foregroundState.isForeground.value) {
-        log("DiscoveryController", "App backgrounded; posting pairing notification for $deviceName")
-        notifier.show(
-          AppNotification.IncomingPairing(
-            id = deviceId,
-            deviceId = deviceId,
-            deviceName = deviceName,
-          )
+  private fun presentPairingDialog(deviceId: String, deviceName: String, deviceType: String) {
+    log("DiscoveryController", "Creating PairingDialogState for $deviceName")
+    screenStateFlow.update { currentState ->
+      if (currentState.pairingDialogState != null) return@update currentState
+      currentState.copy(
+        pairingDialogState = PairingDialogState(
+          deviceId = deviceId,
+          deviceName = deviceName,
+          deviceType = deviceType,
+          onAccept = { controllerScope.launch { acceptPairing(deviceId) } },
+          onReject = { controllerScope.launch { rejectPairing(deviceId) } }
         )
+      )
+    }
+
+    // System notification only fires when the user can't see the in-app
+    // dialog. Foreground state is observed reactively but the request
+    // arrives once, so we sample the current value here.
+    if (!foregroundState.isForeground.value) {
+      log("DiscoveryController", "App backgrounded; posting pairing notification for $deviceName")
+      notifier.show(
+        AppNotification.IncomingPairing(
+          id = deviceId,
+          deviceId = deviceId,
+          deviceName = deviceName,
+        )
+      )
+    }
+  }
+
+  /**
+   * Present the next queued pairing request, if the dialog slot is free. Requests resolved
+   * out-of-band while queued (e.g. a notification action) are skipped.
+   */
+  private fun presentNextQueuedPairing() {
+    while (screenStateFlow.value.pairingDialogState == null && queuedPairingRequests.isNotEmpty()) {
+      val next = queuedPairingRequests.removeFirst()
+      if (pendingPairings.containsKey(next.deviceId)) {
+        presentPairingDialog(next.deviceId, next.deviceName, next.deviceType)
+      } else {
+        log("DiscoveryController", "Skipping queued pairing request for ${next.deviceId}: already resolved")
       }
     }
   }
@@ -486,6 +610,7 @@ class DiscoveryController(
         if (state.pairingDialogState?.deviceId == deviceId) state.copy(pairingDialogState = null)
         else state
       }
+      presentNextQueuedPairing()
       updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
       log("DiscoveryController", "Pairing accepted for ${pending.deviceName}")
     } catch (e: Exception) {
@@ -517,6 +642,7 @@ class DiscoveryController(
         if (state.pairingDialogState?.deviceId == deviceId) state.copy(pairingDialogState = null)
         else state
       }
+      presentNextQueuedPairing()
       updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
       log("DiscoveryController", "Pairing rejected for ${pending.deviceName}")
     } catch (e: Exception) {
@@ -537,6 +663,7 @@ class DiscoveryController(
 
   fun dismissPairingDialog() {
     screenStateFlow.update { it.copy(pairingDialogState = null) }
+    presentNextQueuedPairing()
   }
 
   fun loadDeviceNames() {
@@ -608,6 +735,12 @@ data class DeviceUi(
   val hasUnreadMessages: Boolean = false,
   val trustStatus: TrustStatus = TrustStatus.Unknown,
   val reachability: Reachability = Reachability.Unknown,
+  /**
+   * Transient pairing-failure message for this device, rendered as red helper text under the
+   * row. Single source of truth lives in [DiscoveryController]'s error map (which survives
+   * discovery-tick rebuilds of this model); cleared on the next pairing interaction.
+   */
+  val pairingError: String? = null,
 )
 
 sealed interface TrustStatus {

@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.ble.BleTransport
+import com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.features.ConnectionInfoJoiner
@@ -19,6 +20,7 @@ expect class InternalPlatformDependencies {
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun networkLifecycleMonitor(): NetworkLifecycleMonitor
   fun permissionsMonitor(): PermissionsMonitor
+  fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor
   fun notifier(): Notifier
   fun foregroundState(): ForegroundState
   fun bleTransport(): BleTransport
