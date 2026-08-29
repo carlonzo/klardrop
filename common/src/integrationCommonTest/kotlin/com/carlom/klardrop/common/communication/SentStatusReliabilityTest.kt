@@ -59,7 +59,15 @@ class SentStatusReliabilityTest {
   private val clientDeviceId = "clientCC"
   private val serverDeviceId = "serverDD"
 
-  /** Short ACK timeouts + bounded retries so a retry-to-exhaustion scenario plays out quickly. */
+  /**
+   * Short ACK timeouts + bounded retries so a retry-to-exhaustion scenario plays out quickly.
+   *
+   * [AckTimeoutConfig.connectionWaitTimeout] must stay above Messenger's RECONNECT_PROBE_INTERVAL
+   * (1.5s): a fast-failing first dial enters a probe delay of exactly that length, and with a
+   * budget below it every attempt stalls out without ever re-dialing — that is what starved the
+   * happy path on slow native runners (budget is consumed on the virtual test clock while the
+   * real localhost handshake proceeds on Dispatchers.IO). 5s = the 2s ACK scale + 2 probe cycles.
+   */
   private val fastAckConfig = AckTimeoutConfig(
     noPayloadAckTimeout = 2.seconds,
     readyAckTimeout = 2.seconds,
@@ -67,7 +75,7 @@ class SentStatusReliabilityTest {
     userResponseTimeout = 2.seconds,
     maxRetries = 2,
     retryBackoffMultiplier = 1.0,
-    connectionWaitTimeout = 1.seconds,
+    connectionWaitTimeout = 5.seconds,
   )
 
   private fun runReliabilityTest(
@@ -303,7 +311,7 @@ class SentStatusReliabilityTest {
 
       // The connect-failed(TimeoutCancellationException) reason is only emitted once the loop has
       // run out of attempts, i.e. after attempt 3 started — which takes at least the first two
-      // 1s connection-wait budgets plus backoffs. Pre-fix, attempt 1's exhausted budget aborted
+      // connection-wait budgets plus backoffs. Pre-fix, attempt 1's exhausted budget aborted
       // the whole send with reason=null.
       val elapsedRealMs = startReal.elapsedNow().inWholeMilliseconds
       assertTrue(
