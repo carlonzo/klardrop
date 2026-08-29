@@ -178,8 +178,8 @@ alongside each release.
 
 Requires **JDK 21**. For mobile / native targets you also need the platform toolchain
 (Xcode for iOS and macOS, the Android SDK for Android). Everything else — Kotlin,
-Compose, Ktor, jmDNS, the cryptography library, the protobuf generator — is pulled in
-by Gradle, so there's no separate setup step.
+Compose, Ktor, jmDNS, dbus-java, the cryptography library, the protobuf generator —
+is pulled in by Gradle, so there's no separate setup step.
 
 ```bash
 # Desktop (JVM) on the current host
