@@ -1,3 +1,5 @@
+@file:OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+
 plugins {
   alias(deps.plugins.android.application)
   alias(deps.plugins.jetbrains.compose)
@@ -42,6 +44,13 @@ dependencies {
 
   debugImplementation(compose.uiTooling)
   implementation(compose.preview)
+
+  testImplementation(deps.junit4)
+
+  androidTestImplementation(deps.androidx.test.core)
+  androidTestImplementation(deps.androidx.test.ext.junit)
+  androidTestImplementation(deps.androidx.test.runner)
+  androidTestImplementation(deps.compose.ui.test.junit4)
 }
 
 android {
@@ -56,6 +65,7 @@ android {
     targetSdk = 36
     versionCode = klardropVersionCode
     versionName = klardropVersionName
+    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
   }
 

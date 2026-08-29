@@ -90,7 +90,113 @@ class DiscoveryControllerPairingQueueTest {
     }
   }
 
-  private fun newController(): DiscoveryController {
+  /**
+   * T11: a pairing/connect failure while this device's OS actively blocks
+   * connectivity (battery saver) must be prefixed with the restriction so the
+   * user looks at THIS device first, not the peer.
+   */
+  @Test
+  fun pairingFailureWhileRestrictedIsPrefixedWithTheRestriction() = runTest(dispatcher) {
+    val monitor = com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor(
+      com.carlom.klardrop.common.connectivity.ConnectivityRestrictions(
+        batterySaverBlocking = true,
+        batteryOptimizationNotExempt = true,
+      )
+    )
+    val visibleDevices = FakeVisibleDevices()
+    val coordinator = PairingProtocolCoordinator(
+      TrustManager(
+        crypto = TrustCrypto(),
+        storage = InMemoryTrustStorage(),
+        clock = Clock(),
+        currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository("controller01")),
+      ),
+      FakeMessenger(),
+    )
+    val controller = newController(monitor, visibleDevices, coordinator)
+    try {
+      visibleDevices.push(
+        DiscoveryDevice(
+          deviceInfo = com.carlom.klardrop.common.discovery.DeviceInfo(
+            deviceId = "ghost",
+            name = "Ghost",
+            deviceType = com.carlom.klardrop.common.utils.DeviceType.DESKTOP,
+          ),
+          deviceConnections = listOf(
+            DeviceConnection.KlardropConnection(address = "10.0.2.2", port = 1)
+          ),
+          lastSeenTimestamp = 0L,
+        )
+      )
+      advanceUntilIdle()
+
+      // Drive the same callback the coordinator fires on a real connect failure.
+      coordinator.onPairingFailed?.invoke("ghost", "connect-failed(IOException)")
+      advanceUntilIdle()
+
+      val error = controller.screenStateFlow.value.devices
+        .first { it.deviceId == "ghost" }
+        .pairingError
+      assertEquals(
+        "Battery saver is blocking Klardrop — " +
+          "Could not reach Ghost — the device may be offline or a firewall blocks direct connections",
+        error,
+      )
+    } finally {
+      controller.dispose()
+    }
+  }
+
+  @Test
+  fun pairingFailureWhileUnrestrictedIsNotPrefixed() = runTest(dispatcher) {
+    val visibleDevices = FakeVisibleDevices()
+    val coordinator = PairingProtocolCoordinator(
+      TrustManager(
+        crypto = TrustCrypto(),
+        storage = InMemoryTrustStorage(),
+        clock = Clock(),
+        currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository("controller01")),
+      ),
+      FakeMessenger(),
+    )
+    val controller = newController(visibleDevices = visibleDevices, pairingProtocolCoordinator = coordinator)
+    try {
+      visibleDevices.push(
+        DiscoveryDevice(
+          deviceInfo = com.carlom.klardrop.common.discovery.DeviceInfo(
+            deviceId = "ghost",
+            name = "Ghost",
+            deviceType = com.carlom.klardrop.common.utils.DeviceType.DESKTOP,
+          ),
+          deviceConnections = listOf(
+            DeviceConnection.KlardropConnection(address = "10.0.2.2", port = 1)
+          ),
+          lastSeenTimestamp = 0L,
+        )
+      )
+      advanceUntilIdle()
+
+      coordinator.onPairingFailed?.invoke("ghost", "connect-failed(IOException)")
+      advanceUntilIdle()
+
+      val error = controller.screenStateFlow.value.devices
+        .first { it.deviceId == "ghost" }
+        .pairingError
+      assertEquals(
+        "Could not reach Ghost — the device may be offline or a firewall blocks direct connections",
+        error,
+      )
+    } finally {
+      controller.dispose()
+    }
+  }
+
+  private fun newController(
+    connectivityRestrictionMonitor: com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor =
+      com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor(),
+    visibleDevices: FakeVisibleDevices = FakeVisibleDevices(),
+    pairingProtocolCoordinator: PairingProtocolCoordinator? = null,
+  ): DiscoveryController {
     val coroutines = FakeCoroutines(dispatcher)
     val trustStorage = InMemoryTrustStorage()
     val trustManager = TrustManager(
@@ -101,8 +207,9 @@ class DiscoveryControllerPairingQueueTest {
     )
     val messenger = FakeMessenger()
     val localProperties = FakeLocalPropertiesRepository("controller01")
+    val coordinator = pairingProtocolCoordinator ?: PairingProtocolCoordinator(trustManager, messenger)
     val trustedDevicesDirectory = TrustedDevicesDirectory(
-      visibleDevices = FakeVisibleDevices(),
+      visibleDevices = visibleDevices,
       knownDevicesRepository = FakeKnownDevicesRepository(),
       trustStorage = trustStorage,
       trustChanges = emptyFlow(),
@@ -110,19 +217,20 @@ class DiscoveryControllerPairingQueueTest {
     )
     return DiscoveryController(
       coroutines = coroutines,
-      visibleDevices = FakeVisibleDevices(),
+      visibleDevices = visibleDevices,
       messenger = messenger,
       platformFileSystem = FakePlatformFileSystem(),
       clipboardManager = ClipboardManager(coroutines, com.carlom.klardrop.common.features.ClipboardReaderWriter()),
       messageRepository = QueueTestMessageRepository(),
       trustedDevicesDirectory = trustedDevicesDirectory,
       trustManager = trustManager,
-      pairingProtocolCoordinator = PairingProtocolCoordinator(trustManager, messenger),
+      pairingProtocolCoordinator = coordinator,
       currentDeviceProvider = CurrentDeviceProvider(localProperties),
       localPropertiesRepository = localProperties,
       connectionInfoJoiner = FakeConnectionInfoJoiner(),
       reachability = MutableStateFlow(emptyMap<String, Reachability>()),
       permissionsMonitor = com.carlom.klardrop.common.permissions.PermissionsMonitor(),
+      connectivityRestrictionMonitor = connectivityRestrictionMonitor,
       notifier = com.carlom.klardrop.common.notifications.Notifier(),
       foregroundState = com.carlom.klardrop.common.notifications.ForegroundState(),
     )
@@ -140,7 +248,14 @@ private class FakeCoroutines(private val dispatcher: CoroutineDispatcher) : Coro
 
 /** Mirrors the fake in TrustedDevicesDirectoryTest: no periodic staleness sweep to spin on. */
 private class FakeVisibleDevices : VisibleDevices {
-  override val visibleDevices: StateFlow<Map<String, DiscoveryDevice>> = MutableStateFlow(emptyMap())
+  private val devices = MutableStateFlow(emptyMap<String, DiscoveryDevice>())
+  override val visibleDevices: StateFlow<Map<String, DiscoveryDevice>> = devices
+
+  /** Test seam: make a device visible without going through discovery. */
+  fun push(device: DiscoveryDevice) {
+    devices.value = devices.value + (device.deviceInfo.deviceId to device)
+  }
+
   override suspend fun onNewDeviceVisible(deviceInfo: com.carlom.klardrop.common.discovery.DeviceInfo, deviceConnection: DeviceConnection) = Unit
   override fun isDeviceVisible(deviceId: String) = false
   override fun getDevice(deviceId: String): DiscoveryDevice? = null

@@ -9,6 +9,7 @@ import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.notifications.ForegroundState
 import com.carlom.klardrop.common.notifications.Notifier
+import com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor
 import com.carlom.klardrop.common.permissions.PermissionsMonitor
 import com.carlom.klardrop.common.trust.DesktopTrustStorage
 import com.carlom.klardrop.common.trust.TrustStorage
@@ -37,6 +38,10 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
   private val permissionsMonitor by lazy { PermissionsMonitor() }
 
   actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
+
+  private val connectivityRestrictionMonitor by lazy { ConnectivityRestrictionMonitor() }
+
+  actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
 
   private val notifier by lazy { Notifier() }
 

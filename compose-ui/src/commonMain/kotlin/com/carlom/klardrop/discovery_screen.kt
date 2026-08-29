@@ -64,6 +64,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
+import com.carlom.klardrop.common.connectivity.ConnectivityRestriction
+import com.carlom.klardrop.common.connectivity.ConnectivityRestrictions
 import com.carlom.klardrop.common.permissions.Capability
 import com.carlom.klardrop.components.DeviceRow
 import com.carlom.klardrop.components.KdAvatarStyle
@@ -94,9 +96,11 @@ fun DiscoveryScreen(
     uiDependencies: UiDependencies,
     onNavigateToChat: (deviceId: String, deviceName: String) -> Unit,
     onRequestCapability: (Capability) -> Unit = {},
+    onRequestExemption: (ConnectivityRestriction) -> Unit = {},
 ) {
     val discoveryState by discoveryController.screenStateFlow.collectAsState()
     val permissionsState by discoveryController.permissionsState.collectAsState()
+    val connectivityRestrictions by discoveryController.connectivityRestrictions.collectAsState()
     val backgroundDiscoveryEnabled by discoveryController.backgroundDiscoveryEnabled.collectAsState()
 
     val updateBannerController = remember(uiDependencies) { uiDependencies.updateBannerController() }
@@ -141,10 +145,12 @@ fun DiscoveryScreen(
         isLargeScreen = isLargeScreen,
         state = discoveryState,
         permissionsState = permissionsState,
+        connectivityRestrictions = connectivityRestrictions,
         onDeviceActionListener = dashboardListener,
         receiveCallbacks = discoveryController,
         onDeviceRename = { newName -> discoveryController.saveCustomDeviceName(newName) },
         onRequestCapability = onRequestCapability,
+        onRequestExemption = onRequestExemption,
         onSettingsClick = { showSettings = true },
         updateBanner = {
             UpdateBanner(
@@ -228,10 +234,12 @@ private fun DiscoveryDashboard(
     isLargeScreen: Boolean = false,
     state: DiscoveryScreenState,
     permissionsState: com.carlom.klardrop.common.permissions.PermissionsState,
+    connectivityRestrictions: ConnectivityRestrictions,
     onDeviceActionListener: OnDeviceActionListener,
     receiveCallbacks: ReceiveNotificationsCallbacks,
     onDeviceRename: (String) -> Unit,
     onRequestCapability: (Capability) -> Unit,
+    onRequestExemption: (ConnectivityRestriction) -> Unit = {},
     onSettingsClick: () -> Unit = {},
     updateBanner: @Composable () -> Unit = {},
 ) {
@@ -278,6 +286,17 @@ private fun DiscoveryDashboard(
 
                 // Update-available banner (desktop only; renders nothing otherwise).
                 updateBanner()
+
+                // OS-level connectivity restrictions (battery saver / metered deny) —
+                // T11: these silently drop Klardrop's packets while discovery keeps
+                // working, so they get the loudest slot on the screen.
+                if (connectivityRestrictions.restricted) {
+                    ConnectivityRestrictionBanner(
+                        restrictions = connectivityRestrictions,
+                        onRequestExemption = onRequestExemption,
+                        modifier = Modifier.padding(horizontal = spacing.s4, vertical = spacing.s2),
+                    )
+                }
 
                 val motion = KdTheme.motion
                 AnimatedVisibility(
@@ -898,6 +917,35 @@ private fun RenameForm(
             }
         }
     }
+}
+
+/**
+ * T11 banner for OS-level connectivity restrictions. Tapping requests the
+ * OS-standard fix: the battery-optimization exemption dialog for the battery
+ * variants, the app's network settings for the metered variant. The platform
+ * app owns the intent launch — same split as PermissionsPanel/onRequestCapability.
+ */
+@Composable
+internal fun ConnectivityRestrictionBanner(
+    restrictions: ConnectivityRestrictions,
+    onRequestExemption: (ConnectivityRestriction) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val restriction = when {
+        restrictions.batterySaverBlocking -> ConnectivityRestriction.BatterySaverBlocking
+        restrictions.batteryOptimizationNotExempt -> ConnectivityRestriction.BatteryOptimizationNotExempt
+        else -> ConnectivityRestriction.MeteredNetworkDenied
+    }
+    val text = when (restriction) {
+        ConnectivityRestriction.MeteredNetworkDenied ->
+            "Klardrop is blocked on metered networks — Tap to check settings"
+        else -> "Battery saver is blocking Klardrop connections — Tap to allow"
+    }
+    Banner(
+        tone = KdBannerTone.Warn,
+        title = text,
+        modifier = modifier.clickable(onClick = { onRequestExemption(restriction) }),
+    )
 }
 
 // Sub-line policy: only show text when something is happening or wrong. The

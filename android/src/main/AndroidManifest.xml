@@ -17,6 +17,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
     <!-- MulticastLock so mDNS discovery/announcements keep flowing while backgrounded. -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
+    <!-- T11: lets the app show the OS-standard battery-optimization exemption dialog
+         (ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) from the restriction banner —
+         the sanctioned fix for Battery Saver's powersave chain dropping our packets. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <!-- Reading the gallery for the attachment chooser's inline recent-media rail.
          Granular media perms on Android 13+, VISUAL_USER_SELECTED for Android 14

@@ -14,6 +14,8 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
+import com.carlom.klardrop.common.connectivity.ConnectivityRestrictions
+import com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.TrustedDevicesDirectory
@@ -59,6 +61,7 @@ class DiscoveryController(
   private val connectionInfoJoiner: ConnectionInfoJoiner,
   reachability: StateFlow<Map<String, Reachability>>,
   private val permissionsMonitor: PermissionsMonitor,
+  private val connectivityRestrictionMonitor: ConnectivityRestrictionMonitor,
   private val notifier: Notifier,
   private val foregroundState: ForegroundState,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
@@ -78,6 +81,7 @@ class DiscoveryController(
     commonComponent.connectionInfoJoiner(),
     commonComponent.reachability(),
     commonComponent.permissionsMonitor(),
+    commonComponent.connectivityRestrictionMonitor(),
     commonComponent.notifier(),
     commonComponent.foregroundState(),
   )
@@ -102,6 +106,20 @@ class DiscoveryController(
 
   val permissionsState: StateFlow<PermissionsState> = permissionsMonitor.observe()
     .stateIn(controllerScope, SharingStarted.Eagerly, PermissionsState.EMPTY)
+
+  /**
+   * OS-level connectivity restrictions on THIS device (battery saver, metered deny).
+   * Surfaced as a banner and used to prefix pairing-failure reasons — a connect
+   * failure while restricted is this device's OS dropping packets, not the peer.
+   */
+  val connectivityRestrictions: StateFlow<ConnectivityRestrictions> =
+    connectivityRestrictionMonitor.observe()
+      .stateIn(controllerScope, SharingStarted.Eagerly, ConnectivityRestrictions.EMPTY)
+
+  /** Re-read restriction state on demand — called after the OS exemption prompt returns. */
+  fun refreshConnectivityRestrictions() {
+    connectivityRestrictionMonitor.refresh()
+  }
 
   /**
    * Re-read permission state on demand. Called by the platform app right after
@@ -230,7 +248,7 @@ class DiscoveryController(
         ?: deviceId
       log("DiscoveryController", "Pairing failed for $deviceName ($deviceId): $reason")
       updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
-      setPairingError(deviceId, pairingFailureText(deviceName, reason))
+      setPairingError(deviceId, pairingFailureText(deviceName, reason).withRestrictionPrefix())
     }
 
     // Route system-notification action taps back into the same accept/reject
@@ -491,6 +509,16 @@ class DiscoveryController(
     reason == "rejected-by-peer" ->
       "$deviceName declined the pairing request"
     else -> "Could not pair with $deviceName"
+  }
+
+  /**
+   * T11: when this device's OS is actively blocking connections (battery saver /
+   * metered deny), prefix the failure reason so the user looks HERE first instead
+   * of suspecting the peer.
+   */
+  private fun String.withRestrictionPrefix(): String {
+    val notice = connectivityRestrictions.value.activeBlockerNotice() ?: return this
+    return "$notice — $this"
   }
 
   // Implementation of PairingApprovalCallback
