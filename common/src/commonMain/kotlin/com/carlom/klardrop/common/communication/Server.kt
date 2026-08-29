@@ -269,6 +269,13 @@ class Server(
 
     log("Server", "Klardrop connection request from: $remoteAddress - ${request.deviceId}")
 
+    // Log-only diagnostic: a claimed id absent from the visible map usually means mDNS loss
+    // or a regenerated id on the peer. Legitimate cases exist (BLE-only visibility, races
+    // between discovery and connect), so the connection proceeds regardless.
+    if (!visibleDevices.isDeviceVisible(request.deviceId)) {
+      log("Server", "Inbound connection claims deviceId ${request.deviceId} which is not in visible devices (mDNS loss or id change)")
+    }
+
     // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
     // than silently falling back to cleartext.
     if (!request.supportsEncryption) {

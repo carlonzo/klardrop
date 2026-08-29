@@ -339,12 +339,18 @@ internal class ConnectionsPoolImpl(
     val scope = watchdogScope ?: return
     val job = scope.launch {
       delay(PROBING_WATCHDOG_MS)
-      reachabilityFlow.update { current ->
+      // getAndUpdate returns the map the successful CAS replaced, so comparing it tells us
+      // exactly whether THIS call performed the downgrade — no false log when a terminal
+      // call (updateConnection/markUnreachable) raced the watchdog.
+      val previous = reachabilityFlow.getAndUpdate { current ->
         if (current[deviceId] == Reachability.Probing) {
           current.toMutableMap().apply { put(deviceId, Reachability.Unknown) }
         } else {
           current
         }
+      }
+      if (previous[deviceId] == Reachability.Probing) {
+        log("ConnectionPool", "Watchdog: $deviceId still Probing after ${PROBING_WATCHDOG_MS / 1000}s -> Unknown")
       }
     }
     // Atomically swap in the new job and cancel whatever was previously armed for this device.
