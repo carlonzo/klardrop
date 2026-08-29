@@ -24,6 +24,9 @@ composenativetray = "2.1.3"
 sqldelight = "2.3.2"
 cryptography = "0.6.0"
 coil3 = "3.6.0"
+# Linux BLE transport talks to BlueZ over D-Bus. 6.x (JDK 21 line) is announced but
+# NOT yet released — Maven Central's latest is 5.2.0, which needs JDK 17+ and runs on 21.
+dbus-java = "5.2.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -49,6 +52,8 @@ kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.re
 
 
 jmdns = { module = "org.jmdns:jmdns", version = "3.6.3" }
+dbus-java-core = { module = "com.github.hypfvieh:dbus-java-core", version.ref = "dbus-java" }
+dbus-java-transport-native-unixsocket = { module = "com.github.hypfvieh:dbus-java-transport-native-unixsocket", version.ref = "dbus-java" }
 jna = { module = "net.java.dev.jna:jna", version = "5.19.1" }
 jna-platform = { module = "net.java.dev.jna:jna-platform", version = "5.19.1" }
 ukey2 = { module = "com.carlonzo.ukey2:ukey2-kmp", version = "1.0" }

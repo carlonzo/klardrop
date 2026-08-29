@@ -104,6 +104,9 @@ kotlin {
         implementation(deps.jna.platform)
         implementation(deps.sqldelight.sqlite.driver)
         implementation(deps.kotlinx.serialization.json)
+        // Linux BLE: BlueZ over D-Bus (system bus, unix-socket transport).
+        implementation(deps.dbus.java.core)
+        implementation(deps.dbus.java.transport.native.unixsocket)
       }
     }
 
