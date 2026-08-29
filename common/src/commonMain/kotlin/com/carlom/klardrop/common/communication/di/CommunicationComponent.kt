@@ -45,6 +45,7 @@ import com.carlom.klardrop.common.trust.TrustStorage
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import kotlinx.serialization.protobuf.ProtoBuf
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class CommunicationModule(
   private val coroutines: Coroutines,
@@ -75,6 +76,10 @@ class CommunicationModule(
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
+
+  // T10: the server's bound port, published by Server on bind and read by the client's
+  // punch-through dial so it can bind its sockets to our own listening port.
+  private val serverPort = MutableStateFlow(0)
 
   // Trust system components - now injected via constructor
   // (trustStorage is passed via constructor parameter)
@@ -148,6 +153,7 @@ class CommunicationModule(
       ackTimeoutConfig,
       heartbeatConfig,
       bleTransport,
+      serverPort,
     )
   }
 
@@ -214,6 +220,7 @@ class CommunicationModule(
       trustManager,
       ackTimeoutConfig,
       heartbeatConfig,
+      serverPort,
     )
   }
 

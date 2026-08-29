@@ -20,6 +20,7 @@ import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.protobuf.ProtoBuf
 
@@ -89,6 +90,11 @@ class Server(
   private val trustManager: TrustManager,
   private val ackTimeoutConfig: AckTimeoutConfig = AckTimeoutConfig.DEFAULT,
   private val heartbeatConfig: HeartbeatConfig = HeartbeatConfig.DEFAULT,
+  /**
+   * Published with the bound port as soon as the listener is up (0 while unknown). The
+   * client's T10 punch-through dial reads it to bind its sockets to our listening port.
+   */
+  private val serverPort: MutableStateFlow<Int>? = null,
 ) {
   data class ServerConfig(val host: String, val port: Int)
 
@@ -106,11 +112,19 @@ class Server(
    */
   suspend fun startServer(): ServerConfig {
     val selectorManager = SelectorManager(coroutines.ioDispatcher)
-    val serverSocket = aSocket(selectorManager).tcp().bind("0.0.0.0", 0)
+    val serverSocket = aSocket(selectorManager).tcp().bind("0.0.0.0", 0) {
+      // T10: the punch-through dial socket co-binds this port (on a specific local address)
+      // while the listener holds it. Linux refuses that co-bind with SO_REUSEADDR alone when
+      // the existing socket is LISTENing — SO_REUSEPORT on BOTH sockets is what permits it
+      // (the dial socket never listens, so SYNs are still dispatched only to the listener).
+      reuseAddress = true
+      reusePort = true
+    }
 
     val localAddress = serverSocket.localAddress as InetSocketAddress
     val actualPort = localAddress.port
     val host = localAddress.hostname
+    serverPort?.value = actualPort
 
     log("Server", "Unified server started on $host:$actualPort")
 

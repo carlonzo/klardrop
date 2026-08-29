@@ -59,6 +59,9 @@ class ConnectionMessenger internal constructor(
   /** True when this messenger is bound to a BLE GATT session rather than a TCP socket. */
   val isBleTransport: Boolean get() = connection is Connection.Ble
 
+  /** Window on the underlying TCP transport (null for BLE); used by the T10 punch-through tests. */
+  internal val tcpConnection: Connection.Tcp? get() = connection as? Connection.Tcp
+
   // Test-only constructor that lets a test override every ACK timeout with a single value.
   internal constructor(
     coroutines: Coroutines,
