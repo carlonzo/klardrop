@@ -191,14 +191,72 @@ class DiscoveryControllerPairingQueueTest {
     }
   }
 
+  /**
+   * Not every PairingFailed means "we are not paired". The acceptor emits
+   * response-delivery-failed AFTER it has already persisted trust, and the receiver emits
+   * clock-skew for a peer that may be trusted already. Downgrading the row on those would
+   * show a paired device as unpaired while the trust store says otherwise, so the store —
+   * not the event — decides the trust status. The error message still surfaces.
+   */
+  @Test
+  fun pairingFailureForAnAlreadyTrustedDeviceKeepsItTrusted() = runTest(dispatcher) {
+    val trustStorage = InMemoryTrustStorage()
+    trustStorage.storeTrustedDevice("ghost", ByteArray(1))
+    val visibleDevices = FakeVisibleDevices()
+    val coordinator = PairingProtocolCoordinator(
+      TrustManager(
+        crypto = TrustCrypto(),
+        storage = trustStorage,
+        clock = Clock(),
+        currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository("controller01")),
+      ),
+      FakeMessenger(),
+    )
+    val controller = newController(
+      visibleDevices = visibleDevices,
+      pairingProtocolCoordinator = coordinator,
+      trustStorage = trustStorage,
+    )
+    try {
+      visibleDevices.push(
+        DiscoveryDevice(
+          deviceInfo = com.carlom.klardrop.common.discovery.DeviceInfo(
+            deviceId = "ghost",
+            name = "Ghost",
+            deviceType = com.carlom.klardrop.common.utils.DeviceType.DESKTOP,
+          ),
+          deviceConnections = listOf(
+            DeviceConnection.KlardropConnection(address = "10.0.2.2", port = 1)
+          ),
+          lastSeenTimestamp = 0L,
+        )
+      )
+      advanceUntilIdle()
+      assertEquals(
+        TrustStatus.Trusted,
+        controller.screenStateFlow.value.devices.first { it.deviceId == "ghost" }.trustStatus,
+      )
+
+      // The acceptor's own trust is already stored; only the response never made it out.
+      coordinator.onPairingFailed?.invoke("ghost", "response-delivery-failed")
+      advanceUntilIdle()
+
+      val device = controller.screenStateFlow.value.devices.first { it.deviceId == "ghost" }
+      assertEquals(TrustStatus.Trusted, device.trustStatus)
+      assertEquals("Could not pair with Ghost", device.pairingError)
+    } finally {
+      controller.dispose()
+    }
+  }
+
   private fun newController(
     connectivityRestrictionMonitor: com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor =
       com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor(),
     visibleDevices: FakeVisibleDevices = FakeVisibleDevices(),
     pairingProtocolCoordinator: PairingProtocolCoordinator? = null,
+    trustStorage: InMemoryTrustStorage = InMemoryTrustStorage(),
   ): DiscoveryController {
     val coroutines = FakeCoroutines(dispatcher)
-    val trustStorage = InMemoryTrustStorage()
     val trustManager = TrustManager(
       crypto = TrustCrypto(),
       storage = trustStorage,

@@ -134,6 +134,7 @@ class CommonComponent(
 
   fun discoveryNetwork() = discoveryNetwork
   fun server() = communicationModule.server()
+  fun serverPort() = communicationModule.serverPort()
   fun bleServerListener() = communicationModule.bleServerListener()
   fun bleEagerConnector() = communicationModule.bleEagerConnector()
   fun eagerReachabilityConnector() = communicationModule.eagerReachabilityConnector()

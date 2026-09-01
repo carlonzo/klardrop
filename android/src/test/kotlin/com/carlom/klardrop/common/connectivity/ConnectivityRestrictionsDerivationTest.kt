@@ -56,7 +56,10 @@ class ConnectivityRestrictionsDerivationTest {
     )
     assertFalse(r.batterySaverBlocking)
     assertTrue(r.batteryOptimizationNotExempt)
-    assertTrue(r.restricted)
+    // A risk flag is not a blocker: it is reported in `reasons` but must not raise the
+    // banner, or every app that was never whitelisted shows a permanent warning.
+    assertFalse(r.restricted)
+    assertNull(r.activeBlocker)
     assertEquals(setOf(ConnectivityRestriction.BatteryOptimizationNotExempt), r.reasons)
   }
 
@@ -149,7 +152,7 @@ class ConnectivityRestrictionsDerivationTest {
       activeNetworkMetered = false,
       userDeniedOnMetered = false,
     )
-    assertTrue(r.restricted)
+    assertFalse(r.restricted)
     assertNull(r.activeBlockerNotice())
     assertNull(ConnectivityRestrictions.EMPTY.activeBlockerNotice())
   }

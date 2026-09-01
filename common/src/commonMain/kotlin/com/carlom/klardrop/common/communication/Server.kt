@@ -106,20 +106,43 @@ class Server(
   private val serverScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
 
   /**
+   * Binds the listening socket, preferring SO_REUSEPORT.
+   *
+   * T10: the punch-through dial socket co-binds this port (on a specific local address)
+   * while the listener holds it. Linux refuses that co-bind with SO_REUSEADDR alone when
+   * the existing socket is LISTENing — SO_REUSEPORT on BOTH sockets is what permits it
+   * (the dial socket never listens, so SYNs are still dispatched only to the listener).
+   *
+   * SO_REUSEPORT is not universally available, and ktor resolves it reflectively from
+   * `java.net.StandardSocketOptions` — a field Android only gained in API 33 (we ship
+   * minSdk 24) and which Windows does not support at all. Without the fallback below the
+   * option's absence throws out of bind() and the whole server never starts, which reads
+   * to the user as "discovery works but nothing ever connects". Punch-through is a
+   * best-effort optimisation; the server is not, so an unavailable option degrades to a
+   * plain bind instead of taking the listener down with it.
+   */
+  private suspend fun bindListener(selectorManager: SelectorManager): ServerSocket = try {
+    aSocket(selectorManager).tcp().bind("0.0.0.0", 0) {
+      reuseAddress = true
+      reusePort = true
+    }
+  } catch (e: kotlinx.coroutines.CancellationException) {
+    throw e
+  } catch (e: Exception) {
+    log("Server", "SO_REUSEPORT unavailable (${e.message}); binding without it — punch-through disabled")
+    aSocket(selectorManager).tcp().bind("0.0.0.0", 0) {
+      reuseAddress = true
+    }
+  }
+
+  /**
    * Starts the unified server that handles both protocols.
    *
    * @return ServerConfig containing the host and port the server is listening on
    */
   suspend fun startServer(): ServerConfig {
     val selectorManager = SelectorManager(coroutines.ioDispatcher)
-    val serverSocket = aSocket(selectorManager).tcp().bind("0.0.0.0", 0) {
-      // T10: the punch-through dial socket co-binds this port (on a specific local address)
-      // while the listener holds it. Linux refuses that co-bind with SO_REUSEADDR alone when
-      // the existing socket is LISTENing — SO_REUSEPORT on BOTH sockets is what permits it
-      // (the dial socket never listens, so SYNs are still dispatched only to the listener).
-      reuseAddress = true
-      reusePort = true
-    }
+    val serverSocket = bindListener(selectorManager)
 
     val localAddress = serverSocket.localAddress as InetSocketAddress
     val actualPort = localAddress.port

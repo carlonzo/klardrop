@@ -23,3 +23,10 @@ internal expect suspend fun punchThroughConnect(
   remoteAddress: InetSocketAddress,
   localBindPort: Int,
 ): Socket?
+
+/**
+ * Whether this platform can perform the bound dial at all. False on targets whose
+ * [punchThroughConnect] is a stub, so callers skip the burst instead of paying its full
+ * attempt/backoff schedule for dials that are guaranteed to return null.
+ */
+internal expect val punchThroughSupported: Boolean

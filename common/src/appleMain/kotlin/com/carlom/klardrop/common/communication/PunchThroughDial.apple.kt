@@ -12,3 +12,6 @@ internal actual suspend fun punchThroughConnect(
   remoteAddress: InetSocketAddress,
   localBindPort: Int,
 ): Socket? = null
+
+// No bound dial here (see the stub above), so the burst is pure latency.
+internal actual val punchThroughSupported: Boolean = false

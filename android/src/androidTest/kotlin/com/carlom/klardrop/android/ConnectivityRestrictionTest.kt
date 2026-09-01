@@ -78,11 +78,12 @@ class ConnectivityRestrictionTest {
 
   @Test
   fun batterySaverToggleReachesMonitorBannerAndClearsAfterWhitelist() {
-    // Baseline: saver off, app NOT exempt → the not-exempt risk flag alone shows the banner.
+    // Baseline: saver off, app NOT exempt → the not-exempt risk flag is reported but is NOT
+    // an active blocker, so no banner yet. Only battery saver actually engaging raises one.
     setBatterySaver(on = false)
     shell("dumpsys", "deviceidle", "whitelist", "-$packageName")
-    awaitRestrictions { it.batteryOptimizationNotExempt && !it.batterySaverBlocking }
-    waitUntilShown(batteryBannerText)
+    awaitRestrictions { it.batteryOptimizationNotExempt && !it.batterySaverBlocking && !it.restricted }
+    waitUntilGone(batteryBannerText)
 
     // Battery Saver ON → powersave chain default-denies our uid → batterySaverBlocking.
     setBatterySaver(on = true)

@@ -9,13 +9,17 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.nonFatalCoroutineExceptionHandler
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
@@ -70,15 +74,23 @@ class TrustManager(
   // Keychain never need to export private bytes.
   private var deviceECDSAPublicKey: TrustCrypto.ECDSAPublicKey? = null
 
-  // Callback for UI approval dialogs
+  // Callback for UI approval dialogs. Written by the platform UI thread and read from the
+  // server's Dispatchers.Default intake path, so the write has to be visible across threads.
+  @Volatile
   private var pairingApprovalCallback: PairingApprovalCallback? = null
 
   /**
    * Requests that arrived while [pairingApprovalCallback] was still null — the server can
    * accept an inbound pairing before the platform UI has composed and registered. Retained
    * (oldest first, capped) and re-emitted with a decision once the callback registers.
+   *
+   * A StateFlow rather than a plain deque because the two sides of this race genuinely run on
+   * different threads: entries are appended from [handleIncomingPairingRequest] on
+   * Dispatchers.Default while the drain happens on whichever thread registers the callback
+   * (the UI's). That is exactly the window this queue exists to cover, so its own updates
+   * have to be atomic.
    */
-  private val unclaimedPairingRequests = ArrayDeque<UnclaimedPairingRequest>()
+  private val unclaimedPairingRequests = MutableStateFlow<List<UnclaimedPairingRequest>>(emptyList())
 
   private data class UnclaimedPairingRequest(val request: TrustPairingRequest, val senderAddress: String)
 
@@ -230,9 +242,8 @@ class TrustManager(
     val decision = decisionFor(request)
     if (decision == null) {
       log("TrustManager", "No approval callback registered yet; retaining request from ${request.deviceName} (${request.deviceId}) for later delivery")
-      unclaimedPairingRequests.addLast(UnclaimedPairingRequest(request, senderAddress))
-      while (unclaimedPairingRequests.size > MAX_UNCLAIMED_PAIRING_REQUESTS) {
-        unclaimedPairingRequests.removeFirst()
+      unclaimedPairingRequests.update { retained ->
+        (retained + UnclaimedPairingRequest(request, senderAddress)).takeLast(MAX_UNCLAIMED_PAIRING_REQUESTS)
       }
     }
 
@@ -689,8 +700,9 @@ class TrustManager(
    */
   fun setPairingApprovalCallback(callback: PairingApprovalCallback) {
     this.pairingApprovalCallback = callback
-    while (unclaimedPairingRequests.isNotEmpty()) {
-      val unclaimed = unclaimedPairingRequests.removeFirst()
+    // Claim the whole backlog in one atomic swap: a request appended concurrently either
+    // lands in this batch or stays queued for the next registration, never half-applied.
+    unclaimedPairingRequests.getAndUpdate { emptyList() }.forEach { unclaimed ->
       log("TrustManager", "Delivering retained pairing request from ${unclaimed.request.deviceName} (${unclaimed.request.deviceId})")
       _pairingEvents.tryEmit(
         PairingEvent.PairingRequestReceived(unclaimed.request, unclaimed.senderAddress, decisionFor(unclaimed.request))
