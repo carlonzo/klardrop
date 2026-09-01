@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.2"
+agp = "9.4.0"
 # Capped at 2.4.10 by SKIE: 0.10.14 — the latest — supports Kotlin 2.0.0 through
 # 2.4.10 and rejects anything newer at Gradle configuration time. Swift export gained
 # sealed-class support in 2.4.20-RC, which covers the last SKIE feature we depend on,
