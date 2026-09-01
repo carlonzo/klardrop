@@ -225,16 +225,20 @@ class DiscoveryController(
       }
     }
 
-    // Register pairing completion callback
+    // Register pairing completion callback. The coordinator fires its callbacks on its own
+    // Dispatchers.Default scope, so every one of them hops onto controllerScope first —
+    // [pairingErrors] is a plain map confined to the main dispatcher.
     pairingProtocolCoordinator.onPairingCompleted = { deviceId, deviceName, success ->
-      log("DiscoveryController", "Pairing completion callback: $deviceName ($deviceId), success: $success")
-      if (success) {
-        log("DiscoveryController", "Updating UI to show device $deviceName as Trusted")
-        updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
-        setPairingError(deviceId, null)
-      } else {
-        log("DiscoveryController", "Updating UI to show device $deviceName as Untrusted (pairing failed)")
-        updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+      controllerScope.launch {
+        log("DiscoveryController", "Pairing completion callback: $deviceName ($deviceId), success: $success")
+        if (success) {
+          log("DiscoveryController", "Updating UI to show device $deviceName as Trusted")
+          updateDeviceTrustStatus(deviceId, TrustStatus.Trusted)
+          setPairingError(deviceId, null)
+        } else {
+          log("DiscoveryController", "Updating UI to show device $deviceName as Untrusted (pairing failed)")
+          markUntrustedUnlessStored(deviceId)
+        }
       }
     }
 
@@ -242,13 +246,15 @@ class DiscoveryController(
     // delivery failure) as a per-device error message. The PairingFailed event is the single
     // source of truth for these — onAddToTrusted's own failure path only resets trust status.
     pairingProtocolCoordinator.onPairingFailed = { deviceId, reason ->
-      val deviceName = screenStateFlow.value.devices
-        .firstOrNull { it.deviceId == deviceId }
-        ?.deviceName
-        ?: deviceId
-      log("DiscoveryController", "Pairing failed for $deviceName ($deviceId): $reason")
-      updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
-      setPairingError(deviceId, pairingFailureText(deviceName, reason).withRestrictionPrefix())
+      controllerScope.launch {
+        val deviceName = screenStateFlow.value.devices
+          .firstOrNull { it.deviceId == deviceId }
+          ?.deviceName
+          ?: deviceId
+        log("DiscoveryController", "Pairing failed for $deviceName ($deviceId): $reason")
+        markUntrustedUnlessStored(deviceId)
+        setPairingError(deviceId, pairingFailureText(deviceName, reason).withRestrictionPrefix())
+      }
     }
 
     // Route system-notification action taps back into the same accept/reject
@@ -471,6 +477,20 @@ class DiscoveryController(
     }
     // Always remove the notification once the user has acted on it.
     onNotificationDismissed(notificationId)
+  }
+
+  /**
+   * Show the device as untrusted — unless the trust store says we ARE paired with it.
+   *
+   * Not every pairing failure means "we are not paired with this peer": the acceptor emits
+   * response-delivery-failed AFTER trust is persisted, the receiver emits clock-skew for a
+   * peer that may already be trusted, and a peer's rejection of a re-pair does not erase the
+   * key we still hold. Downgrading the row on those contradicts the store, so the store —
+   * not the event — decides the status. The failure text is surfaced either way.
+   */
+  private fun markUntrustedUnlessStored(deviceId: String) {
+    if (trustedDevicesDirectory.trustedDevices.value.containsKey(deviceId)) return
+    updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
   }
 
   private fun updateDeviceTrustStatus(deviceId: String, newStatus: TrustStatus) {

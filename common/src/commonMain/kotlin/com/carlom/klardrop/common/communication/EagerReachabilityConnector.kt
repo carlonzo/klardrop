@@ -10,7 +10,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
@@ -62,7 +64,12 @@ class EagerReachabilityConnector(
   // timer pattern as ConnectionsPool's debounce and Probing watchdog — rather than a TimeSource
   // mark: "in cooldown" simply means a clear job is still pending, expiry is exact, and tests can
   // drive it on the virtual clock.
-  private val failureCooldownJobs = mutableMapOf<String, Job>()
+  //
+  // Held in a StateFlow rather than a plain map: the visibleDevices collector, the re-probe
+  // ticker, the expiry jobs and the probe callbacks all touch it from the multi-threaded IO
+  // dispatcher, where a plain map can drop entries or throw ConcurrentModificationException
+  // out of the network-change collector — killing it for the rest of the process.
+  private val failureCooldownJobs = MutableStateFlow<Map<String, Job>>(emptyMap())
   private val cooldownDuration = 5.seconds
 
   fun start() {
@@ -99,7 +106,7 @@ class EagerReachabilityConnector(
     lifecycleJob = scope.launch {
       networkLifecycleMonitor.observe().collect {
         log(TAG, "Network change observed; clearing reachability cooldowns")
-        failureCooldownJobs.keys.toList().forEach { clearCooldown(it) }
+        failureCooldownJobs.value.keys.toList().forEach { clearCooldown(it) }
       }
     }
   }
@@ -135,18 +142,28 @@ class EagerReachabilityConnector(
     probe(deviceId, device)
   }
 
-  private fun shouldSkip(deviceId: String): Boolean = failureCooldownJobs.containsKey(deviceId)
+  private fun shouldSkip(deviceId: String): Boolean = failureCooldownJobs.value.containsKey(deviceId)
 
   private fun clearCooldown(deviceId: String) {
-    failureCooldownJobs.remove(deviceId)?.cancel()
+    var removed: Job? = null
+    failureCooldownJobs.update { cooldowns ->
+      removed = cooldowns[deviceId]
+      if (removed == null) cooldowns else cooldowns - deviceId
+    }
+    removed?.cancel()
   }
 
   private fun armCooldown(deviceId: String) {
-    clearCooldown(deviceId)
-    failureCooldownJobs[deviceId] = scope.launch {
+    val expiry = scope.launch {
       delay(cooldownDuration)
-      failureCooldownJobs.remove(deviceId)
+      failureCooldownJobs.update { it - deviceId }
     }
+    var replaced: Job? = null
+    failureCooldownJobs.update { cooldowns ->
+      replaced = cooldowns[deviceId]
+      cooldowns + (deviceId to expiry)
+    }
+    replaced?.cancel()
   }
 
   private fun probe(deviceId: String, device: DiscoveryDevice) {

@@ -40,16 +40,15 @@ class SingleInstance private constructor(
     runCatching { lockChannel.close() }
   }
 
+  /**
+   * Opens the focus socket. Best effort: we already hold the lock and ARE the primary
+   * instance, so a socket we cannot bind (no UNIX-socket support on this filesystem, a
+   * path over the ~104-char sun_path limit, a permission problem) costs us the
+   * focus-an-existing-window nicety and nothing else. Letting it throw would take the
+   * whole app down at startup over a convenience feature.
+   */
   private fun startFocusServer() {
-    val address = UnixDomainSocketAddress.of(socketFile.toPath())
-    val server = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
-    try {
-      server.bind(address)
-    } catch (e: Exception) {
-      // Stale socket from a previous run: file locks die with the process, socket files don't.
-      socketFile.delete()
-      server.bind(address)
-    }
+    val server = openFocusSocket() ?: return
     this.server = server
     Thread({
       while (true) {
@@ -65,6 +64,32 @@ class SingleInstance private constructor(
       start()
     }
   }
+
+  /**
+   * Opens the focus socket, or returns null when it cannot be had. UnixDomainSocketAddress.of
+   * rejects a path over the platform's sun_path limit, and the bind can fail for reasons that
+   * have nothing to do with a stale file, so both live inside the guard.
+   */
+  private fun openFocusSocket(): ServerSocketChannel? = runCatching {
+    val address = UnixDomainSocketAddress.of(socketFile.toPath())
+    val channel = ServerSocketChannel.open(StandardProtocolFamily.UNIX)
+    try {
+      try {
+        channel.bind(address)
+      } catch (e: Exception) {
+        // Stale socket from a previous run: file locks die with the process, socket files
+        // don't. Nothing live can own this one — we hold the lock.
+        socketFile.delete()
+        channel.bind(address)
+      }
+    } catch (e: Exception) {
+      runCatching { channel.close() }
+      throw e
+    }
+    channel
+  }.onFailure {
+    println("Klardrop: single-instance focus socket unavailable (${it.message}); continuing without it")
+  }.getOrNull()
 
   private fun handleFocusClient(client: SocketChannel) {
     val buffer = ByteBuffer.allocate(FOCUS.toByteArray().size)

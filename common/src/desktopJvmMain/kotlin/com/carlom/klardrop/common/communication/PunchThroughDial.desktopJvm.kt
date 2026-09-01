@@ -59,3 +59,6 @@ internal actual suspend fun punchThroughConnect(
     throw t
   }
 }.getOrNull()
+
+// The bound dial is implemented; an individual attempt may still fail and return null.
+internal actual val punchThroughSupported: Boolean = true

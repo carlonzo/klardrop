@@ -62,6 +62,9 @@ class Klardrop(
 
         val serverConfig = commonComponent.server().startServer()
         val serverPort = serverConfig.port
+        // The live port, which a future server restart moves — the watchdog below must read
+        // this rather than the startup value it published from, or it can never see drift.
+        val livePort = commonComponent.serverPort()
 
         // Publish discovery for both protocols on the same port
         if (applicationInfo.enableKlardropServer) {
@@ -76,10 +79,10 @@ class Klardrop(
         // server port drifted (covers any future server restart path), and warn
         // when nothing listens on the advertised port anymore. delay() is
         // virtual-time friendly; no real sleeps.
-        discoveryNetwork.republishIfPortChanged(serverPort)
+        discoveryNetwork.republishIfPortChanged(livePort.value)
         while (true) {
           delay(60.seconds)
-          discoveryNetwork.republishIfPortChanged(serverPort)
+          discoveryNetwork.republishIfPortChanged(livePort.value)
           discoveryNetwork.checkAdvertisedPortAlive()
         }
       }

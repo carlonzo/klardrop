@@ -46,6 +46,7 @@ import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import kotlinx.serialization.protobuf.ProtoBuf
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 class CommunicationModule(
   private val coroutines: Coroutines,
@@ -247,6 +248,13 @@ class CommunicationModule(
 
   fun client() = client
   fun server() = server
+
+  /**
+   * The live port the unified server is bound to (0 before the first bind). Exposed so the
+   * mDNS port-sync watchdog compares the advertisement against the CURRENT port rather than
+   * the one captured at startup.
+   */
+  fun serverPort(): StateFlow<Int> = serverPort
   fun bleServerListener() = bleServerListener
   fun bleEagerConnector() = bleEagerConnector
   fun eagerReachabilityConnector() = eagerReachabilityConnector

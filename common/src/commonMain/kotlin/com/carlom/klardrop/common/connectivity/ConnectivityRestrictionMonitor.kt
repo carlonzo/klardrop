@@ -44,8 +44,24 @@ data class ConnectivityRestrictions(
   val batteryOptimizationNotExempt: Boolean = false,
   val meteredNetworkDenied: Boolean = false,
 ) {
+  /**
+   * The restriction currently dropping our packets, or null when nothing is.
+   *
+   * [batteryOptimizationNotExempt] is deliberately NOT one of these: it is true for every
+   * app that has never been whitelisted, so treating it as a blocker pins a permanent
+   * warning banner on the screen (and, worse, one that says battery saver is blocking us
+   * while battery saver is off). It stays reported as a latent risk for callers that want
+   * it; only an ACTIVE blocker earns the banner.
+   */
+  val activeBlocker: ConnectivityRestriction?
+    get() = when {
+      batterySaverBlocking -> ConnectivityRestriction.BatterySaverBlocking
+      meteredNetworkDenied -> ConnectivityRestriction.MeteredNetworkDenied
+      else -> null
+    }
+
   val restricted: Boolean
-    get() = batterySaverBlocking || batteryOptimizationNotExempt || meteredNetworkDenied
+    get() = activeBlocker != null
 
   val reasons: Set<ConnectivityRestriction>
     get() = buildSet {
@@ -60,9 +76,9 @@ data class ConnectivityRestrictions(
    * a peer bug when it's this device's OS doing the blocking. Only ACTIVE
    * blockers qualify: not being exempt yet never blocked anything.
    */
-  fun activeBlockerNotice(): String? = when {
-    batterySaverBlocking -> "Battery saver is blocking Klardrop"
-    meteredNetworkDenied -> "Klardrop is blocked on metered networks"
+  fun activeBlockerNotice(): String? = when (activeBlocker) {
+    ConnectivityRestriction.BatterySaverBlocking -> "Battery saver is blocking Klardrop"
+    ConnectivityRestriction.MeteredNetworkDenied -> "Klardrop is blocked on metered networks"
     else -> null
   }
 

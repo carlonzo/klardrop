@@ -313,14 +313,17 @@ class ClientImpl(
    * second connection — ConnectionsPool.updateConnection's tie-break dedupes the pair.
    *
    * Tight burst ([PUNCH_THROUGH_ATTEMPTS] attempts, [PUNCH_THROUGH_ATTEMPT_INTERVAL_MS]
-   * apart) before the caller falls back to its normal cadence. Skipped entirely when our
-   * own server port is unknown (nothing to punch through from).
+   * apart) before the caller falls back to its normal cadence. Skipped entirely when our own
+   * server port is unknown (nothing to punch through from) or when the platform has no bound
+   * dial ([punchThroughSupported]) — there every attempt fails by construction, so the burst
+   * would only add its whole schedule of delays ahead of the BLE fallback.
    */
   private suspend fun CoroutineScope.punchThroughBurst(
     tcpConnections: List<DeviceConnection.KlardropConnection>,
     deviceId: String,
     connectionJob: CompletableDeferred<ConnectOutcome>,
   ) {
+    if (!punchThroughSupported) return
     val ownPort = serverPort.value
     if (ownPort <= 0) return
     log("Client", "Direct dial to $deviceId failed; starting punch-through burst from local :$ownPort")

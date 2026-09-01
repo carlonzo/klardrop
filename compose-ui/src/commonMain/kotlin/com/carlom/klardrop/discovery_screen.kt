@@ -931,11 +931,9 @@ internal fun ConnectivityRestrictionBanner(
     onRequestExemption: (ConnectivityRestriction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val restriction = when {
-        restrictions.batterySaverBlocking -> ConnectivityRestriction.BatterySaverBlocking
-        restrictions.batteryOptimizationNotExempt -> ConnectivityRestriction.BatteryOptimizationNotExempt
-        else -> ConnectivityRestriction.MeteredNetworkDenied
-    }
+    // Only an active blocker is worth a banner, and it names the blocker that is actually
+    // dropping packets — never "battery saver" while battery saver is off.
+    val restriction = restrictions.activeBlocker ?: return
     val text = when (restriction) {
         ConnectivityRestriction.MeteredNetworkDenied ->
             "Klardrop is blocked on metered networks — Tap to check settings"
