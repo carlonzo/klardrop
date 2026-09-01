@@ -109,7 +109,7 @@ class LinuxBlePeripheralTest {
       sessions.map { it.deviceId },
     )
     assertTrue(sessions.all { it.isOpen })
-    assertTrue(sessions.all { it.mtu == BleConstants.DEFAULT_MTU })
+    assertTrue(sessions.all { it.mtu == BleConstants.DEFAULT_MTU - BleConstants.ATT_HEADER_SIZE })
 
     collector.cancelAndJoin()
   }
@@ -151,7 +151,7 @@ class LinuxBlePeripheralTest {
     assertEquals(listOf("dev_A" to listOf<Byte>(9, 8, 7)), facade.notified.toList())
 
     // Contract: oversize chunk and closed session are rejected.
-    assertFailsWith<IllegalArgumentException> { session.sendChunk(ByteArray(BleConstants.DEFAULT_MTU + 1)) }
+    assertFailsWith<IllegalArgumentException> { session.sendChunk(ByteArray(session.mtu + 1)) }
     session.close()
     assertFailsWith<IllegalStateException> { session.sendChunk(byteArrayOf(1)) }
 
@@ -264,6 +264,6 @@ class LinuxBlePeripheralTest {
     assertEquals(app.rxPath, changed.path)
     assertEquals("org.bluez.GattCharacteristic1", changed.getInterfaceName())
     assertEquals(byteArrayOf(9).toList(), (changed.getPropertiesChanged().getValue("Value").value as ByteArray).toList())
-    assertEquals(byteArrayOf(9).toList(), app.rx.getValue().toList())
+    assertEquals(byteArrayOf(9).toList(), app.rx.ReadValue(emptyMap()).toList())
   }
 }

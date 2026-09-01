@@ -38,9 +38,10 @@ class LinuxBlePeripheral(private val facade: BlueZFacade) {
       }
     }
 
-    facade.exportApplication()
-
     try {
+      // Inside the try: a failed export must still unwind the listeners registered above
+      // (unregisterApplication is a no-op when nothing was exported).
+      facade.exportApplication()
       awaitClose()
     } finally {
       withContext(NonCancellable) {

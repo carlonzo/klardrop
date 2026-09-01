@@ -89,8 +89,8 @@ class LinuxBleIntegrationTest {
 
     override suspend fun probeCapability() = BlueZCapability(true, listOf("/org/bluez/hci0"))
 
-    // mtu stays the interface default (BleConstants.DEFAULT_MTU) — the conservative
-    // no-MTU-property BlueZ case, so both bridges chunk at 23 bytes.
+    // mtu stays the interface default (DEFAULT_MTU minus the ATT header) — the
+    // conservative no-MTU-property BlueZ case, so both bridges chunk at 20 bytes.
 
     override suspend fun exportApplication() {
       exportCompleted.complete(Unit)
@@ -132,7 +132,7 @@ class LinuxBleIntegrationTest {
       connectCalls += address
       notifySink = onNotify
       return BlueZPeerLink(
-        mtu = BleConstants.DEFAULT_MTU,
+        mtu = BleConstants.DEFAULT_MTU - BleConstants.ATT_HEADER_SIZE,
         // Over the air: a central TX write arrives as a characteristic write on the peripheral.
         writeTx = { value -> writeListener?.invoke(CENTRAL_ID, value) },
       )
@@ -190,8 +190,8 @@ class LinuxBleIntegrationTest {
       withTimeout(5.seconds) { while (serverSessions.isEmpty()) yield() }
       val serverSession = serverSessions.single()
 
-      assertEquals(BleConstants.DEFAULT_MTU, clientSession.mtu)
-      assertEquals(BleConstants.DEFAULT_MTU, serverSession.mtu)
+      assertEquals(BleConstants.DEFAULT_MTU - BleConstants.ATT_HEADER_SIZE, clientSession.mtu)
+      assertEquals(BleConstants.DEFAULT_MTU - BleConstants.ATT_HEADER_SIZE, serverSession.mtu)
       assertTrue(clientSession.isOpen)
       assertTrue(serverSession.isOpen)
 

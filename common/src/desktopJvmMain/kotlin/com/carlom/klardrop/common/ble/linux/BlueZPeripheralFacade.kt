@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.freedesktop.dbus.DBusPath
 import org.freedesktop.dbus.connections.impl.DBusConnection
+import org.freedesktop.dbus.errors.PropertyReadOnly
+import org.freedesktop.dbus.errors.UnknownProperty
 import org.freedesktop.dbus.interfaces.ObjectManager
 import org.freedesktop.dbus.interfaces.Properties
 import org.freedesktop.dbus.messages.Message
@@ -113,8 +115,7 @@ class BlueZPeripheralFacade(
   private fun checkAdapterPowered() {
     val powered = runCatching {
       val props = connection.getRemoteObject(BlueZConnection.BLUEZ_SERVICE, adapterPath, Properties::class.java)
-      val raw = props.Get<Any>(ADAPTER1, "Powered")
-      (raw as? Variant<*>)?.value ?: raw
+      unwrapVariant(props.Get<Any>(ADAPTER1, "Powered"))
     }.getOrNull() as? Boolean
     if (powered == false) {
       log(TAG, "[LinuxBle] adapter $adapterPath not powered")
@@ -162,8 +163,11 @@ class BlueZPeripheralFacade(
 /**
  * The exported GATT application object graph. The application root implements
  * ObjectManager so BlueZ can walk the tree during RegisterApplication; the service and
- * characteristic objects expose JavaBean getters matching the @DBusProperty declarations
- * (dbus-java strips the get/is prefix without decapitalizing).
+ * characteristic objects additionally serve their own properties over
+ * org.freedesktop.DBus.Properties, which BlueZ reads for anything it did not take from
+ * GetManagedObjects. Class-level @DBusProperty only feeds dbus-java's introspection XML —
+ * it does NOT make an exported object answer Get/GetAll — so the property map is spelled
+ * out here (see [DBusProperties]).
  */
 internal class GattApplication(
   private val onTxWrite: (String, ByteArray) -> Unit,
@@ -198,27 +202,11 @@ internal class GattApplication(
 
   override fun getObjectPath() = appPath
 
+  /** Same property maps the objects serve over Properties.GetAll — one source of truth. */
   override fun GetManagedObjects(): Map<DBusPath, Map<String, Map<String, Variant<*>>>> = mapOf(
-    DBusPath(servicePath) to mapOf(
-      "org.bluez.GattService1" to mapOf(
-        "UUID" to Variant(BleConstants.SERVICE_UUID),
-        "Primary" to Variant(true),
-      ),
-    ),
-    DBusPath(txPath) to mapOf(
-      "org.bluez.GattCharacteristic1" to mapOf(
-        "UUID" to Variant(BleConstants.TX_CHARACTERISTIC_UUID),
-        "Service" to Variant(DBusPath(servicePath)),
-        "Flags" to Variant(TX_FLAGS, "as"),
-      ),
-    ),
-    DBusPath(rxPath) to mapOf(
-      "org.bluez.GattCharacteristic1" to mapOf(
-        "UUID" to Variant(BleConstants.RX_CHARACTERISTIC_UUID),
-        "Service" to Variant(DBusPath(servicePath)),
-        "Flags" to Variant(RX_FLAGS, "as"),
-      ),
-    ),
+    DBusPath(servicePath) to mapOf(GATT_SERVICE1_INTERFACE to service.properties()),
+    DBusPath(txPath) to mapOf(GATT_CHARACTERISTIC1_INTERFACE to tx.properties()),
+    DBusPath(rxPath) to mapOf(GATT_CHARACTERISTIC1_INTERFACE to rx.properties()),
   )
 
   /** Updates the RX value and emits PropertiesChanged for subscribed centrals. */
@@ -231,13 +219,43 @@ internal class GattApplication(
   }
 }
 
+/**
+ * Serves a fixed property map over org.freedesktop.DBus.Properties for an exported
+ * object. dbus-java only auto-answers Get/GetAll for methods annotated
+ * `@DBusBoundProperty`; a class-level `@DBusProperty` is introspection metadata only, so
+ * without this an exported object replies UnknownProperty/UnknownMethod to BlueZ — which
+ * is fatal for LEAdvertisement1, whose whole payload BlueZ reads via GetAll.
+ *
+ * All Klardrop-exported properties are read-only: Set always fails.
+ */
+internal abstract class DBusProperties(private val servedInterface: String) : Properties {
+
+  /** The property map served for [servedInterface], re-read per call (Value changes). */
+  abstract fun properties(): Map<String, Variant<*>>
+
+  @Suppress("UNCHECKED_CAST")
+  override fun <A : Any?> Get(interfaceName: String, propertyName: String): A =
+    (properties()[propertyName] ?: throw UnknownProperty("$interfaceName.$propertyName")) as A
+
+  override fun <A : Any?> Set(interfaceName: String, propertyName: String, value: A): Unit =
+    throw PropertyReadOnly("$interfaceName.$propertyName is read-only")
+
+  /** An unknown interface gets an empty dict, per the D-Bus Properties specification. */
+  override fun GetAll(interfaceName: String): Map<String, Variant<*>> =
+    if (interfaceName.isEmpty() || interfaceName == servedInterface) properties() else emptyMap()
+}
+
 internal class ExportedGattService(
   private val path: String,
   private val uuid: String = BleConstants.SERVICE_UUID,
-) : GattService1 {
+) : GattService1, DBusProperties(GATT_SERVICE1_INTERFACE) {
+
   override fun getObjectPath() = path
-  fun getUUID(): String = uuid
-  fun isPrimary(): Boolean = true
+
+  override fun properties(): Map<String, Variant<*>> = mapOf(
+    "UUID" to Variant(uuid),
+    "Primary" to Variant(true),
+  )
 }
 
 internal class ExportedGattCharacteristic(
@@ -249,24 +267,26 @@ internal class ExportedGattCharacteristic(
   private val onSubscribe: ((String, Boolean) -> Unit)? = null,
   private val emitSignal: (Message) -> Unit = {},
   private val resolveCentralId: () -> String,
-) : GattCharacteristic1 {
+) : GattCharacteristic1, DBusProperties(GATT_CHARACTERISTIC1_INTERFACE) {
 
   @Volatile private var value: ByteArray = ByteArray(0)
   @Volatile private var notifying = false
 
   override fun getObjectPath() = path
 
-  fun getUUID(): String = uuid
-  fun getService(): DBusPath = DBusPath(servicePath)
-  fun getFlags(): List<String> = flags
-  fun getValue(): ByteArray = value
-  fun isNotifying(): Boolean = notifying
+  override fun properties(): Map<String, Variant<*>> = mapOf(
+    "UUID" to Variant(uuid),
+    "Service" to Variant(DBusPath(servicePath)),
+    "Flags" to Variant(flags, "as"),
+    "Value" to Variant(value, "ay"),
+    "Notifying" to Variant(notifying),
+  )
 
   override fun ReadValue(options: Map<String, Variant<*>>): ByteArray = value
 
   override fun WriteValue(value: ByteArray, options: Map<String, Variant<*>>) {
     this.value = value
-    val centralId = options["device"]?.value?.toString() ?: resolveCentralId()
+    val centralId = unwrapVariant(options["device"])?.toString() ?: resolveCentralId()
     onWrite?.invoke(centralId, value)
   }
 
@@ -287,8 +307,8 @@ internal class ExportedGattCharacteristic(
     emitSignal(
       Properties.PropertiesChanged(
         path,
-        "org.bluez.GattCharacteristic1",
-        mapOf("Value" to Variant(value)),
+        GATT_CHARACTERISTIC1_INTERFACE,
+        mapOf("Value" to Variant(value, "ay")),
         emptyList(),
       ),
     )
@@ -296,30 +316,29 @@ internal class ExportedGattCharacteristic(
 }
 
 /**
- * The exported LEAdvertisement1. Bean getters match the @DBusProperty declarations
- * (dbus-java strips the get/is prefix without decapitalizing). Mirrors
- * `klardropAdvertisePayload`: service UUID in the primary advertisement, shortDeviceId
- * as service data — only the 8-char id ever goes on the air.
+ * The exported LEAdvertisement1. BlueZ reads the whole advertisement through
+ * `Properties.GetAll` during RegisterAdvertisement, so [DBusProperties] is what puts the
+ * payload on the air. Mirrors `klardropAdvertisePayload`: service UUID in the primary
+ * advertisement, shortDeviceId as service data — only the 8-char id ever goes on the air.
  */
 internal class ExportedAdvertisement(
   private val shortDeviceId: String,
   private val path: String = ADVERTISEMENT_PATH,
-) : LEAdvertisement1 {
+) : LEAdvertisement1, DBusProperties(LE_ADVERTISEMENT1_INTERFACE) {
 
   override fun getObjectPath() = path
 
-  fun getType(): String = "peripheral"
-
-  fun getServiceUUIDs(): List<String> = listOf(BleConstants.SERVICE_UUID)
-
   /** a{sv} keyed by service UUID; byte-array values carry the explicit "ay" signature. */
-  fun getServiceData(): Map<String, Variant<*>> = mapOf(
-    BleConstants.SERVICE_UUID to Variant(shortDeviceId.encodeToByteArray(), "ay"),
+  override fun properties(): Map<String, Variant<*>> = mapOf(
+    "Type" to Variant("peripheral"),
+    "ServiceUUIDs" to Variant(listOf(BleConstants.SERVICE_UUID), "as"),
+    "ServiceData" to Variant(
+      mapOf(BleConstants.SERVICE_UUID to Variant(shortDeviceId.encodeToByteArray(), "ay")),
+      "a{sv}",
+    ),
+    "LocalName" to Variant(shortDeviceId),
+    "Includes" to Variant(listOf("tx-power"), "as"),
   )
-
-  fun getLocalName(): String = shortDeviceId
-
-  fun getIncludes(): List<String> = listOf("tx-power")
 
   /** BlueZ releases the advertisement itself on adapter power-off; nothing to reclaim. */
   override fun Release() {
@@ -331,3 +350,7 @@ internal class ExportedAdvertisement(
     const val ADVERTISEMENT_PATH = "/com/carlom/klardrop/ble/advertisement0"
   }
 }
+
+internal const val GATT_SERVICE1_INTERFACE = "org.bluez.GattService1"
+internal const val GATT_CHARACTERISTIC1_INTERFACE = "org.bluez.GattCharacteristic1"
+internal const val LE_ADVERTISEMENT1_INTERFACE = "org.bluez.LEAdvertisement1"
