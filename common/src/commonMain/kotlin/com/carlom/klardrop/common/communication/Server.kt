@@ -126,7 +126,7 @@ class Server(
       reuseAddress = true
       reusePort = true
     }
-  } catch (e: CancellationException) {
+  } catch (e: kotlinx.coroutines.CancellationException) {
     throw e
   } catch (e: Exception) {
     log("Server", "SO_REUSEPORT unavailable (${e.message}); binding without it — punch-through disabled")
