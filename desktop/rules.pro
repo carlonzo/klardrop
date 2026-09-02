@@ -158,6 +158,26 @@
 -dontwarn org.slf4j.**
 
 # -------------------------------------------------------------------------
+# FileKit — `filekit-dialogs-compose` ships an ImageBitmap→ByteArray helper
+# (ImageBitmapExt_nonAndroid) that calls
+# org.jetbrains.skia.Image.encodeToData(EncodedImageFormat, int). Skiko dropped
+# that overload, so against the Skiko that Compose 1.12 bundles the call is an
+# unresolved *program* class member and ProGuard aborts the whole minified
+# build ("there were 1 unresolved references to program class members. Please
+# correct the above warnings first.") — the same failure mode as the
+# BouncyCastle and Sentry-integration blocks above, and what broke the nightly
+# Linux app-image build.
+#
+# The dead reference is harmless: that helper backs FileKit's camera-picker /
+# save-image-to-gallery path, which is Android-only in practice. Desktop only
+# uses the file and media *pickers* (rememberFilePickerLauncher and friends),
+# so nothing on the desktop runtime ever reaches encodeToByteArray. Scoped to
+# the one package so a genuinely broken FileKit reference elsewhere still fails
+# the build.
+# -------------------------------------------------------------------------
+-dontwarn io.github.vinceglb.filekit.dialogs.compose.util.**
+
+# -------------------------------------------------------------------------
 # Compose Native Tray — Linux StatusNotifierItem via JNI. The library loads a
 # bundled .so reflectively; shrinking it (or JNA, if a transitive still pulls
 # it) produces a missing/untinted tray icon and dead clicks in release builds.
