@@ -19,11 +19,12 @@ interface BlueZFacade {
   suspend fun probeCapability(): BlueZCapability
 
   /**
-   * Negotiated ATT MTU for GATT sessions. BlueZ only exposes `GattCharacteristic1.MTU`
-   * for fd-acquired characteristics, so plain write/notify keeps the conservative
-   * ATT default (correct, just not maximal throughput).
+   * Payload bytes per chunk for GATT sessions, i.e. `BleSession.mtu`: the negotiated ATT
+   * MTU minus the 3-byte ATT header, like Android and Apple. BlueZ only exposes
+   * `GattCharacteristic1.MTU` for fd-acquired characteristics, so plain write/notify
+   * keeps the conservative ATT default (correct, just not maximal throughput).
    */
-  val mtu: Int get() = BleConstants.DEFAULT_MTU
+  val mtu: Int get() = BleConstants.DEFAULT_MTU - BleConstants.ATT_HEADER_SIZE
 
   /**
    * Exports the Klardrop GATT application (service + TX write + RX notify characteristics)

@@ -17,10 +17,6 @@ import kotlinx.coroutines.withTimeout
  * [LinuxBleSession]s to peers (`Device1.Connect` → characteristic resolve → MTU →
  * `StartNotify` on RX). Behavioral mirror of the Apple transport: connect resolves
  * from the scan cache and refuses never-seen addresses.
- *
- * ponytail: notifications that arrive before the session exists are dropped by the
- * `session?` guard — impossible in the Klardrop protocol, where the central speaks
- * first (the peer only notifies in response to the handshake).
  */
 class LinuxBleCentral(private val facade: BlueZFacade) {
 
@@ -54,13 +50,13 @@ class LinuxBleCentral(private val facade: BlueZFacade) {
    */
   suspend fun connectCentral(address: String, remoteShortDeviceId: String): BleSession {
     check(address in seenAddresses) { "Peer $address not in scan cache; scan first" }
-    var session: LinuxBleSession? = null
+    val pending = PendingSession()
     val link = try {
       withTimeout(CONNECT_TIMEOUT_MS) {
         facade.connect(
           address,
-          onNotify = { value -> session?.pushIncoming(value) },
-          onDisconnected = { session?.markRemoteClosed() },
+          onNotify = pending::pushIncoming,
+          onDisconnected = pending::markRemoteClosed,
         )
       }
     } catch (e: TimeoutCancellationException) {
@@ -70,10 +66,45 @@ class LinuxBleCentral(private val facade: BlueZFacade) {
       deviceId = remoteShortDeviceId,
       mtu = link.mtu,
       notify = { value -> link.writeTx(value) },
-    ).also { session = it }
+    ).also(pending::attach)
   }
 
   private companion object {
     const val CONNECT_TIMEOUT_MS = 10_000L
+  }
+}
+
+/**
+ * Bridges the gap between wiring the facade's callbacks and having a session to hand
+ * them to: [BlueZFacade.connect] subscribes to RX notifications and to the peer's
+ * disconnect signal before it returns the link the session is built from, so both can
+ * fire on a D-Bus signal thread while [attach] has not run yet. Buffering here (rather
+ * than reading a plain captured `var`, which is neither published safely to that thread
+ * nor able to remember an early disconnect) means no chunk is dropped and a peer that
+ * drops immediately still closes the session.
+ */
+private class PendingSession {
+
+  private val lock = Any()
+  private var session: LinuxBleSession? = null
+  private val buffered = mutableListOf<ByteArray>()
+  private var remoteClosed = false
+
+  fun pushIncoming(value: ByteArray): Unit = synchronized(lock) {
+    val live = session
+    if (live == null) buffered.add(value) else live.pushIncoming(value)
+  }
+
+  fun markRemoteClosed(): Unit = synchronized(lock) {
+    val live = session
+    if (live == null) remoteClosed = true else live.markRemoteClosed()
+  }
+
+  /** Publishes [newSession] under the lock, then replays what arrived before it existed. */
+  fun attach(newSession: LinuxBleSession) = synchronized(lock) {
+    session = newSession
+    buffered.forEach(newSession::pushIncoming)
+    buffered.clear()
+    if (remoteClosed) newSession.markRemoteClosed()
   }
 }

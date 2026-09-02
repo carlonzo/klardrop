@@ -35,6 +35,10 @@ class LinuxBleCentralTest {
     private val mtuProperty: Int? = 185,
     /** When true, connect() never completes (drives the 10s timeout). */
     private val hangConnect: Boolean = false,
+    /** Chunks BlueZ notifies before connect() returns — i.e. before a session exists. */
+    private val notifyBeforeReturn: List<ByteArray> = emptyList(),
+    /** When true, the peer drops before connect() returns the link. */
+    private val disconnectBeforeReturn: Boolean = false,
   ) : BlueZFacade {
 
     @Volatile var foundListener: ((BlePeerEvent.Found) -> Unit)? = null
@@ -75,6 +79,10 @@ class LinuxBleCentralTest {
       notifySink = onNotify
       disconnectSink = onDisconnected
       if (hangConnect) awaitCancellation()
+      // BlueZ has been notifying on RX and watching Connected since StartNotify — both
+      // can fire on a signal thread before the caller has a session to route them to.
+      notifyBeforeReturn.forEach(onNotify)
+      if (disconnectBeforeReturn) onDisconnected()
       return BlueZPeerLink(
         mtu = negotiatedMtu(mtuProperty),
         writeTx = { value -> synchronized(txWrites) { txWrites.add(value.toList()) } },
@@ -211,7 +219,8 @@ class LinuxBleCentralTest {
 
     assertEquals(listOf("AA:BB:CC:DD:EE:FF"), facade.connectCalls)
     assertEquals("abcd1234", session.deviceId)
-    assertEquals(185, session.mtu)
+    // BleSession.mtu is a payload size: the 185-byte ATT MTU minus the 3-byte ATT header.
+    assertEquals(185 - BleConstants.ATT_HEADER_SIZE, session.mtu)
     assertTrue(session.isOpen)
 
     // Central → peer: sendChunk lands as a WriteValue on the peer's TX characteristic.
@@ -239,7 +248,46 @@ class LinuxBleCentralTest {
 
     val session = central.connectCentral("AA:BB:CC:DD:EE:FF", "abcd1234")
 
-    assertEquals(BleConstants.DEFAULT_MTU, session.mtu)
+    assertEquals(BleConstants.DEFAULT_MTU - BleConstants.ATT_HEADER_SIZE, session.mtu)
+
+    collector.cancelAndJoin()
+  }
+
+  @Test
+  fun notificationsArrivingBeforeTheSessionExistsAreReplayed() = runTest {
+    val facade = FakeBlueZFacade(notifyBeforeReturn = listOf(byteArrayOf(1, 2), byteArrayOf(3)))
+    val central = LinuxBleCentral(facade)
+
+    val events = mutableListOf<BlePeerEvent>()
+    val collector = startScanning(facade, central, events)
+    facade.deviceAppears("AA:BB:CC:DD:EE:FF", mapOf(BleConstants.SERVICE_UUID to "abcd1234".encodeToByteArray()))
+    awaitEvents(events, count = 1)
+
+    val session = central.connectCentral("AA:BB:CC:DD:EE:FF", "abcd1234")
+
+    // Buffered while the session did not exist yet, replayed in arrival order.
+    assertEquals(listOf<Byte>(1, 2), session.receiveChunk()!!.toList())
+    assertEquals(listOf<Byte>(3), session.receiveChunk()!!.toList())
+    assertTrue(session.isOpen)
+
+    collector.cancelAndJoin()
+  }
+
+  @Test
+  fun peerDroppingBeforeTheSessionExistsStillClosesIt() = runTest {
+    val facade = FakeBlueZFacade(disconnectBeforeReturn = true)
+    val central = LinuxBleCentral(facade)
+
+    val events = mutableListOf<BlePeerEvent>()
+    val collector = startScanning(facade, central, events)
+    facade.deviceAppears("AA:BB:CC:DD:EE:FF", mapOf(BleConstants.SERVICE_UUID to "abcd1234".encodeToByteArray()))
+    awaitEvents(events, count = 1)
+
+    val session = central.connectCentral("AA:BB:CC:DD:EE:FF", "abcd1234")
+
+    // The disconnect must not be lost just because it beat the session into existence.
+    assertFalse(session.isOpen)
+    assertNull(session.receiveChunk())
 
     collector.cancelAndJoin()
   }

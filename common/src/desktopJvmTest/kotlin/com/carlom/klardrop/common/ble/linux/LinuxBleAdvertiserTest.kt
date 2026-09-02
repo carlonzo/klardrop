@@ -65,14 +65,14 @@ class LinuxBleAdvertiserTest {
     await { facade.startCount == 1 }
 
     assertEquals(device, facade.lastDevice)
-    val adv = facade.registered!!
+    val props = facade.registered!!.GetAll(LE_ADVERTISEMENT1_INTERFACE)
     val payload = klardropAdvertisePayload(device.shortDeviceId)
     // Primary adv: service UUID in the standard ServiceUUIDs field (scan-filter matchable).
-    assertEquals(payload.primary.serviceUuids, adv.getServiceUUIDs())
+    assertEquals(payload.primary.serviceUuids, props.getValue("ServiceUUIDs").value)
     // Scan response: shortDeviceId bytes keyed under SERVICE_UUID, exactly as peers decode.
     assertEquals(
       payload.scanResponse!!.serviceData.mapValues { it.value.toList() },
-      adv.getServiceData().mapValues { (it.value.value as ByteArray).toList() },
+      serviceDataBytes(props.getValue("ServiceData")).mapValues { it.value.toList() },
     )
   }
 
@@ -132,12 +132,16 @@ class LinuxBleAdvertiserTest {
     val shortId = device.shortDeviceId
     val adv = ExportedAdvertisement(shortId)
 
-    assertEquals("peripheral", adv.getType())
-    assertEquals(listOf(BleConstants.SERVICE_UUID), adv.getServiceUUIDs())
-    assertEquals(shortId, adv.getLocalName())
-    assertEquals(listOf("tx-power"), adv.getIncludes())
+    // BlueZ reads all of this through Properties.GetAll during RegisterAdvertisement.
+    val props = adv.GetAll(LE_ADVERTISEMENT1_INTERFACE)
+    assertEquals("peripheral", props.getValue("Type").value)
+    assertEquals(listOf(BleConstants.SERVICE_UUID), props.getValue("ServiceUUIDs").value)
+    assertEquals(shortId, props.getValue("LocalName").value)
+    assertEquals(listOf("tx-power"), props.getValue("Includes").value)
     // BT2 lesson: byte-array service data must carry the explicit "ay" signature.
-    val data = adv.getServiceData().getValue(BleConstants.SERVICE_UUID)
+    @Suppress("UNCHECKED_CAST")
+    val serviceData = props.getValue("ServiceData").value as Map<String, Variant<*>>
+    val data = serviceData.getValue(BleConstants.SERVICE_UUID)
     assertEquals("ay", data.sig)
     assertEquals(shortId.encodeToByteArray().toList(), (data.value as ByteArray).toList())
     assertEquals("/com/carlom/klardrop/ble/advertisement0", adv.getObjectPath())

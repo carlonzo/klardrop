@@ -32,6 +32,30 @@ Implementation lives in
 (`LinuxBlueZTransport`, `BlueZConnection`, `BlueZCentralFacade`,
 `BlueZPeripheralFacade`).
 
+### dbus-java traps
+
+Four API shapes here fail silently rather than loudly, and none of them shows up
+in a fake-facade test — `BlueZDBusContractTest` pins each one:
+
+- **`addSigHandler(Class, String, handler)`** — that `String` is the *sender's
+  unique bus name* (validated against `^:[0-9]*\.[0-9]*$`), not an object path.
+  Subscribe by object path with a `DBusMatchRuleBuilder` rule instead, and never
+  pin the sender: BlueZ's signals arrive under its unique name, so a rule reading
+  `sender='org.bluez'` passes the daemon and is then dropped by dbus-java's own
+  client-side re-check.
+- **`ObjectManager.InterfacesAdded/Removed`** — `objectPath` is the *emitting*
+  path, which is `/` for every device since BlueZ emits from its root
+  ObjectManager. The added/removed device path is the signal's first argument,
+  `signalSource`.
+- **`Properties.Get`** — its return type is a type variable, and dbus-java
+  unwraps the wire `Variant` for those, so the value arrives bare. Casting the
+  result to `Variant` yields null every time.
+- **`@DBusProperty`** — introspection metadata only. An exported object answers
+  `Get`/`GetAll` only if it implements `Properties` (what the exported GATT and
+  advertisement objects do) or annotates getters `@DBusBoundProperty`. This is
+  load-bearing for `LEAdvertisement1`, whose entire payload BlueZ reads via
+  `GetAll` during `RegisterAdvertisement`.
+
 ## macOS (helper process)
 
 macOS uses the out-of-process Swift helper (`klardrop-ble-helper`) because the
