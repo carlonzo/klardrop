@@ -270,8 +270,19 @@ class MessengerImpl(
       // Preference is based on the *application* message shape (file vs lightweight), not
       // the trust envelope. TrustedMessage wrapping only applies to the Klardrop wire path.
       val preference = transportPreferenceFor(finalMessageRequest)
+      val isKlardropControl = finalMessageRequest.message is TrustPairingRequest ||
+        finalMessageRequest.message is TrustPairingResponse ||
+        finalMessageRequest.message is TrustRevocationMessage
       val chosen = when {
-        device != null -> preference.firstOrNull { it.isAvailable(device) }
+        device != null -> preference.firstOrNull { choice ->
+          if (choice == TransportChoice.KLARDROP_TCP && isKlardropControl) {
+            // Nearby advertises the same unified TCP listener. Pairing frames cannot
+            // go on the Nearby Share text path; Client.performDial maps Nearby→Klardrop.
+            device.hasKlardropConnection() || device.hasNearbyConnection()
+          } else {
+            choice.isAvailable(device)
+          }
+        }
         // Not visible but pooled: only the Klardrop path can ride the pooled connection —
         // Nearby/BLE availability both come from the visible-map entry we don't have.
         else -> TransportChoice.KLARDROP_TCP
@@ -672,10 +683,7 @@ private enum class TransportChoice {
   NEARBY;
 
   fun isAvailable(device: com.carlom.klardrop.common.discovery.DiscoveryDevice): Boolean = when (this) {
-    // Nearby Share advertises the same unified TCP listener. Client.performDial already
-    // maps NearbyConnection → KlardropConnection; pairing/revocation are Klardrop frames
-    // and cannot go on the Nearby Share text path.
-    KLARDROP_TCP -> device.hasKlardropConnection() || device.hasNearbyConnection()
+    KLARDROP_TCP -> device.hasKlardropConnection()
     KLARDROP_BLE -> device.hasBleConnection()
     NEARBY -> device.hasNearbyConnection()
   }
