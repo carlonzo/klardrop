@@ -10,5 +10,14 @@ data class ApplicationInfo(
 
   val enableNearbyServer: Boolean = true,
 
+  /** BLE advertise / scan / GATT. Independent of the TCP servers so tests can isolate transports. */
+  val enableBle: Boolean = true,
+
+  /**
+   * Loopback HTTP control port for autonomous UI-equivalent actions (pair, send, accept).
+   * Null means do not start the server. Only honored when [isDebug] is true.
+   */
+  val controlPort: Int? = null,
+
   val appVersion: String = KlardropVersion.VERSION
 )

@@ -298,6 +298,7 @@ class Server(
     if (!visibleDevices.isDeviceVisible(request.deviceId)) {
       log("Server", "Inbound connection claims deviceId ${request.deviceId} which is not in visible devices (mDNS loss or id change)")
     }
+    rememberInboundPeer(visibleDevices, request, socket)
 
     // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
     // than silently falling back to cleartext.
@@ -317,6 +318,8 @@ class Server(
       osType = self.osType,
       deviceType = self.deviceType,
       supportsEncryption = true,
+      listenPort = serverPort?.value ?: 0,
+      claimsTrust = trustManager.isTrusted(request.deviceId),
     )
     log("Server", "Sending Klardrop greetings back to ${request.deviceId} on $remoteAddress")
     writeChannel.sendMessage(intro, serializer)
@@ -363,6 +366,12 @@ class Server(
     serverScope.launch {
       connectionMessenger.acceptIncomingMessages()
     }
+    serverScope.launchStaleTrustRevocation(
+      messenger = connectionMessenger,
+      trustManager = trustManager,
+      peerId = request.deviceId,
+      peerClaimsTrust = request.claimsTrust,
+    )
   }
 
   /**

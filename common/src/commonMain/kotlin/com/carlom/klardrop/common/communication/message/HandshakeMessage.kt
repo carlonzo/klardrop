@@ -29,6 +29,18 @@ data class HandshakeMessage(
   val deviceType: DeviceType = DeviceType.UNKNOWN,
   override val id: Int = Random.nextInt(),
   val supportsEncryption: Boolean = false,
+  /**
+   * The sender's TCP listen port so an inbound connection can re-seed VisibleDevices with a
+   * dialable endpoint. 0 = unknown (older peers, BLE). Appended after [supportsEncryption]
+   * so existing field numbers stay stable.
+   */
+  val listenPort: Int = 0,
+  /**
+   * True when the sender currently holds a trust entry for the recipient. Combined with the
+   * recipient's local store this is how a reconnecting peer learns it has been unpaired
+   * without waiting for the next TrustedMessage.
+   */
+  val claimsTrust: Boolean = false,
 ) : Message() {
   override val type: MessageType = MessageType.HANDSHAKE
   override val hasPayload: Boolean = false

@@ -1,0 +1,326 @@
+#!/usr/bin/env bash
+# Drive the Klardrop debug-control HTTP API on the desktop JVM app or an
+# ADB-connected Android debug build. Same actions as tapping the UI.
+#
+#   scripts/klardrop-ctl desktop state
+#   scripts/klardrop-ctl android pair abcdef12
+#   scripts/klardrop-ctl desktop send-text abcdef12 "hello"
+#
+# Environment:
+#   KLARDROP_DESKTOP_PORT  default 8765
+#   KLARDROP_ANDROID_PORT  default 8766 (host side of adb forward)
+#   KLARDROP_ANDROID_PKG   default com.carlom.klardrop.debug
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/klardrop-ctl <desktop|android> <command> [args]
+
+Commands:
+  health
+  state
+  logs [limit]
+  pair <deviceId>
+  unpair <deviceId>
+  accept-pair <deviceId>
+  reject-pair <deviceId>
+  send-text <deviceId> <text>
+  send-file <deviceId> <path>
+  accept-incoming [--device <id>|--receive <id>]
+  reject-incoming --receive <id>
+  reset-identity
+  refresh-permissions
+
+  wait-for-device <deviceId> [timeout_s]   poll /state until the id appears
+  wait-for-reachable <deviceId> [timeout_s]
+  wait-for-pairing-dialog [timeout_s]
+  wait-for-incoming [timeout_s]
+  wait-for-trusted <deviceId> [timeout_s]
+
+  launch-desktop [--klardrop-only|--nearby-only|--ble-only] [--data-dir DIR]
+  launch-android [--klardrop-only|--nearby-only|--ble-only]
+  stop-desktop
+  stop-android
+  grant-android-permissions
+  write-android-config [--klardrop-only|--nearby-only|--ble-only]
+  forward-android
+  collect-logs <out-dir>
+EOF
+  exit 2
+}
+
+[[ $# -ge 1 ]] || usage
+TARGET="$1"
+shift
+
+DESKTOP_PORT="${KLARDROP_DESKTOP_PORT:-8765}"
+ANDROID_PORT="${KLARDROP_ANDROID_PORT:-8766}"
+ANDROID_PKG="${KLARDROP_ANDROID_PKG:-com.carlom.klardrop.debug}"
+ANDROID_ACTIVITY="com.carlom.klardrop.android.MainActivity"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DESKTOP_DATA_DIR="${KLARDROP_HOME:-/tmp/klardrop-e2e-desktop}"
+
+port_for() {
+  case "$1" in
+    desktop) echo "$DESKTOP_PORT" ;;
+    android) echo "$ANDROID_PORT" ;;
+    *) echo "unknown target $1" >&2; exit 2 ;;
+  esac
+}
+
+base_url() {
+  echo "http://127.0.0.1:$(port_for "$TARGET")"
+}
+
+ensure_android_forward() {
+  if [[ "$TARGET" == android ]]; then
+    adb forward "tcp:${ANDROID_PORT}" "tcp:${ANDROID_PORT}" >/dev/null
+  fi
+}
+
+http_get() {
+  local path="$1"
+  ensure_android_forward
+  curl -fsS --max-time 5 "$(base_url)${path}"
+}
+
+http_post() {
+  local path="$1"
+  local body="${2:-{}}"
+  ensure_android_forward
+  curl -fsS --max-time 15 -X POST \
+    -H 'Content-Type: application/json' \
+    -d "$body" \
+    "$(base_url)${path}"
+}
+
+json_device() {
+  printf '{"deviceId":"%s"}' "$1"
+}
+
+wait_until() {
+  local timeout="${1:-30}"
+  local description="$2"
+  shift 2
+  local deadline=$((SECONDS + timeout))
+  while (( SECONDS < deadline )); do
+    if "$@" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "timeout after ${timeout}s waiting for ${description}" >&2
+  http_get /state >&2 || true
+  return 1
+}
+
+py_state() {
+  http_get /state | python3 -c "$1"
+}
+
+state_has_device() {
+  local id="$1"
+  py_state "import json,sys
+want='$id'
+s=json.load(sys.stdin)
+sys.exit(0 if any(d.get('deviceId','').startswith(want) or want.startswith(d.get('deviceId','')) for d in s.get('devices',[])) else 1)"
+}
+
+state_reachable() {
+  local id="$1"
+  py_state "import json,sys
+want='$id'
+s=json.load(sys.stdin)
+sys.exit(0 if any((d.get('deviceId','').startswith(want) or want.startswith(d.get('deviceId',''))) and d.get('reachability')=='reachable' for d in s.get('devices',[])) else 1)"
+}
+
+state_trusted() {
+  local id="$1"
+  py_state "import json,sys
+want='$id'
+s=json.load(sys.stdin)
+ids=s.get('trustedIds',[])
+if any(t.startswith(want) or want.startswith(t) for t in ids):
+    raise SystemExit(0)
+sys.exit(0 if any((d.get('deviceId','').startswith(want) or want.startswith(d.get('deviceId',''))) and d.get('trustStatus')=='trusted' for d in s.get('devices',[])) else 1)"
+}
+
+state_has_pairing_dialog() {
+  py_state 'import json,sys; s=json.load(sys.stdin); sys.exit(0 if s.get("pairingDialog") else 1)'
+}
+
+state_has_incoming() {
+  py_state 'import json,sys; s=json.load(sys.stdin); sys.exit(0 if s.get("incoming") else 1)'
+}
+
+protocol_flags() {
+  local k=true n=true b=true
+  for arg in "$@"; do
+    case "$arg" in
+      --klardrop-only) k=true; n=false; b=false ;;
+      --nearby-only) k=false; n=true; b=false ;;
+      --ble-only) k=false; n=false; b=true ;;
+    esac
+  done
+  echo "$k" "$n" "$b"
+}
+
+launch_desktop() {
+  local extra=()
+  local data_dir="$DESKTOP_DATA_DIR"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --data-dir) data_dir="$2"; shift 2 ;;
+      --klardrop-only|--nearby-only|--ble-only) extra+=("$1"); shift ;;
+      *) extra+=("$1"); shift ;;
+    esac
+  done
+  mkdir -p "$data_dir"
+  echo "Launching desktop debug app data-dir=$data_dir extra=${extra[*]-}" >&2
+  # shellcheck disable=SC2086
+  ( cd "$ROOT" && ./gradlew :desktop:run --args="--debug --data-dir=${data_dir} --control-port=${DESKTOP_PORT} ${extra[*]-}" ) &
+  echo $! > /tmp/klardrop-desktop.pid
+  wait_until 90 "desktop /health" bash -c "curl -fsS --max-time 2 http://127.0.0.1:${DESKTOP_PORT}/health >/dev/null"
+}
+
+stop_desktop() {
+  if [[ -f /tmp/klardrop-desktop.pid ]]; then
+    kill "$(cat /tmp/klardrop-desktop.pid)" 2>/dev/null || true
+    rm -f /tmp/klardrop-desktop.pid
+  fi
+  pkill -f 'com.carlom.klardrop.desktop' 2>/dev/null || true
+  pkill -f 'desktop.MainKt' 2>/dev/null || true
+}
+
+write_android_config() {
+  local k n b
+  read -r k n b < <(protocol_flags "$@")
+  local json
+  json=$(printf '{"controlPort":%s,"enableKlardrop":%s,"enableNearby":%s,"enableBle":%s}' \
+    "$ANDROID_PORT" "$k" "$n" "$b")
+  echo "Writing android debug config: $json" >&2
+  adb shell "run-as ${ANDROID_PKG} sh -c 'cat > files/klardrop-debug.json'" <<<"$json"
+}
+
+grant_android_permissions() {
+  local perms=(
+    android.permission.POST_NOTIFICATIONS
+    android.permission.BLUETOOTH_SCAN
+    android.permission.BLUETOOTH_ADVERTISE
+    android.permission.BLUETOOTH_CONNECT
+    android.permission.ACCESS_FINE_LOCATION
+    android.permission.ACCESS_COARSE_LOCATION
+    android.permission.NEARBY_WIFI_DEVICES
+  )
+  for p in "${perms[@]}"; do
+    adb shell pm grant "$ANDROID_PKG" "$p" 2>/dev/null || true
+  done
+}
+
+launch_android() {
+  ( cd "$ROOT" && ./gradlew :android:installDebug )
+  grant_android_permissions
+  write_android_config "$@"
+  adb shell am force-stop "$ANDROID_PKG"
+  adb shell am start -n "${ANDROID_PKG}/${ANDROID_ACTIVITY}"
+  adb forward "tcp:${ANDROID_PORT}" "tcp:${ANDROID_PORT}" >/dev/null
+  wait_until 90 "android /health" bash -c "curl -fsS --max-time 2 http://127.0.0.1:${ANDROID_PORT}/health >/dev/null"
+}
+
+stop_android() {
+  adb shell am force-stop "$ANDROID_PKG" || true
+}
+
+collect_logs() {
+  local out="${1:-/tmp/klardrop-e2e-logs}"
+  mkdir -p "$out"
+  if [[ "$TARGET" == desktop ]]; then
+    http_get /logs > "$out/desktop-control-logs.json" || true
+  else
+    http_get /logs > "$out/android-control-logs.json" || true
+    adb logcat -d -v time > "$out/android-logcat.txt" || true
+  fi
+  echo "$out"
+}
+
+CMD="${1:-}"
+[[ -n "$CMD" ]] || usage
+shift || true
+
+case "$TARGET" in
+  desktop|android) ;;
+  *) usage ;;
+esac
+
+case "$CMD" in
+  health) http_get /health ;;
+  state) http_get /state ;;
+  logs) http_get "/logs?limit=${1:-400}" ;;
+  pair) http_post /pair "$(json_device "${1:?deviceId}")" ;;
+  unpair) http_post /unpair "$(json_device "${1:?deviceId}")" ;;
+  accept-pair) http_post /accept-pair "$(json_device "${1:?deviceId}")" ;;
+  reject-pair) http_post /reject-pair "$(json_device "${1:?deviceId}")" ;;
+  send-text)
+    body=$(python3 -c 'import json,sys; print(json.dumps({"deviceId":sys.argv[1],"text":sys.argv[2]}))' "${1:?deviceId}" "${2:?text}")
+    http_post /send-text "$body"
+    ;;
+  send-file)
+    body=$(python3 -c 'import json,sys; print(json.dumps({"deviceId":sys.argv[1],"path":sys.argv[2]}))' "$1" "$2")
+    http_post /send-file "$body"
+    ;;
+  accept-incoming)
+    if [[ "${1:-}" == "--device" ]]; then
+      http_post /accept-incoming "$(json_device "$2")"
+    elif [[ "${1:-}" == "--receive" ]]; then
+      http_post /accept-incoming "$(printf '{"receiveId":%s}' "$2")"
+    else
+      http_post /accept-incoming "$(json_device "${1:?deviceId or --device/--receive}")"
+    fi
+    ;;
+  reject-incoming)
+    [[ "${1:-}" == "--receive" ]] || { echo "reject-incoming --receive <id>" >&2; exit 2; }
+    http_post /reject-incoming "$(printf '{"receiveId":%s}' "$2")"
+    ;;
+  reset-identity) http_post /reset-identity '{}' ;;
+  refresh-permissions) http_post /refresh-permissions '{}' ;;
+  wait-for-device)
+    id="${1:?deviceId}"; timeout="${2:-45}"
+    wait_until "$timeout" "device $id" state_has_device "$id"
+    http_get /state
+    ;;
+  wait-for-reachable)
+    id="${1:?deviceId}"; timeout="${2:-45}"
+    wait_until "$timeout" "reachable $id" state_reachable "$id"
+    http_get /state
+    ;;
+  wait-for-pairing-dialog)
+    timeout="${1:-30}"
+    wait_until "$timeout" "pairing dialog" state_has_pairing_dialog
+    http_get /state
+    ;;
+  wait-for-incoming)
+    timeout="${1:-30}"
+    wait_until "$timeout" "incoming transfer" state_has_incoming
+    http_get /state
+    ;;
+  wait-for-trusted)
+    id="${1:?deviceId}"; timeout="${2:-45}"
+    wait_until "$timeout" "trusted $id" state_trusted "$id"
+    http_get /state
+    ;;
+  launch-desktop)
+    [[ "$TARGET" == desktop ]] || { echo "use: klardrop-ctl desktop launch-desktop" >&2; exit 2; }
+    launch_desktop "$@"
+    ;;
+  launch-android)
+    [[ "$TARGET" == android ]] || { echo "use: klardrop-ctl android launch-android" >&2; exit 2; }
+    launch_android "$@"
+    ;;
+  stop-desktop) stop_desktop ;;
+  stop-android) stop_android ;;
+  grant-android-permissions) grant_android_permissions ;;
+  write-android-config) write_android_config "$@" ;;
+  forward-android) adb forward "tcp:${ANDROID_PORT}" "tcp:${ANDROID_PORT}" ;;
+  collect-logs) collect_logs "${1:-}" ;;
+  *) usage ;;
+esac

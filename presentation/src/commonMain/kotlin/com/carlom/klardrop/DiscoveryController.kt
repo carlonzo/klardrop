@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformWhile
@@ -281,6 +282,18 @@ class DiscoveryController(
     coroutines.appScope.launch {
       messenger.send(deviceId, TextMessage(text = text).toSimpleSendRequest())
         .untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
+    }
+  }
+
+  suspend fun debugSendTextAndWait(deviceId: String, text: String): String {
+    val finalStatus = messenger.send(deviceId, TextMessage(text = text).toSimpleSendRequest())
+      .untilCompleted()
+      .lastOrNull()
+    return when (finalStatus) {
+      is com.carlom.klardrop.common.communication.MessengerSendProgress.Completed -> "completed"
+      is com.carlom.klardrop.common.communication.MessengerSendProgress.Error ->
+        "error:${finalStatus.message}"
+      else -> "unknown:$finalStatus"
     }
   }
 
@@ -704,6 +717,77 @@ class DiscoveryController(
       currentDeviceProvider.updateCustomDeviceName(customName)
       loadDeviceNames()
     }
+  }
+
+  // --- Debug-control entry points. Same methods the UI buttons call, keyed by device id. ---
+
+  fun debugPair(deviceId: String) {
+    onAddToTrusted(requireDevice(deviceId))
+  }
+
+  fun debugUnpair(deviceId: String) {
+    controllerScope.launch { debugUnpairAndWait(deviceId) }
+  }
+
+  suspend fun debugUnpairAndWait(deviceId: String) {
+    log("DiscoveryController", "debugUnpairAndWait($deviceId)")
+    pairingProtocolCoordinator.unpair(deviceId, reason = "user_unpaired")
+    updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
+  }
+
+  fun debugAcceptPairing(deviceId: String) {
+    controllerScope.launch { acceptPairing(deviceId) }
+  }
+
+  fun debugRejectPairing(deviceId: String) {
+    controllerScope.launch { rejectPairing(deviceId) }
+  }
+
+  fun debugSendText(deviceId: String, text: String) {
+    sendText(deviceId, text)
+  }
+
+  fun debugSendFile(deviceId: String, path: String) {
+    sendFiles(deviceId, listOf(platformFileFromPath(path)))
+  }
+
+  fun debugAcceptIncoming(receiveId: Int) {
+    decideIncoming(receiveId, accept = true)
+  }
+
+  fun debugRejectIncoming(receiveId: Int) {
+    decideIncoming(receiveId, accept = false)
+  }
+
+  fun debugAcceptIncomingFrom(deviceId: String) {
+    val match = screenStateFlow.value.receivingMessages.entries.firstOrNull { (_, update) ->
+      update.status is ReceiveMessageStatus.PendingAuthorization &&
+        (update.device?.deviceId == deviceId || update.device?.deviceId?.startsWith(deviceId) == true)
+    } ?: error("No pending incoming transfer from $deviceId")
+    decideIncoming(match.key, accept = true)
+  }
+
+  private fun decideIncoming(receiveId: Int, accept: Boolean) {
+    val update = screenStateFlow.value.receivingMessages[receiveId]
+      ?: error("No incoming transfer with receiveId=$receiveId")
+    val status = update.status as? ReceiveMessageStatus.PendingAuthorization
+      ?: error("Incoming $receiveId is not awaiting authorization (status=${update.status})")
+    status.acceptTransfer(accept)
+  }
+
+  private fun findDevice(deviceId: String): DeviceUi? {
+    val devices = screenStateFlow.value.devices
+    return devices.firstOrNull { it.deviceId == deviceId }
+      ?: devices.firstOrNull { it.deviceId.startsWith(deviceId) }
+      ?: devices.firstOrNull { deviceId.startsWith(it.deviceId) }
+  }
+
+  private fun requireDevice(deviceId: String): DeviceUi {
+    return findDevice(deviceId)
+      ?: error(
+        "No device matching '$deviceId' in the list " +
+          "(${screenStateFlow.value.devices.map { it.deviceId }})"
+      )
   }
 }
 

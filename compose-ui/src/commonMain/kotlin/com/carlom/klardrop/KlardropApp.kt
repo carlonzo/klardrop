@@ -7,11 +7,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.Klardrop
+import com.carlom.klardrop.debug.DebugControl
 import com.carlom.klardrop.navigation.KlardropNavigator
 import com.carlom.klardrop.theme.AppTheme
 import com.carlom.klardrop.theme.KdTheme
@@ -26,6 +28,10 @@ fun KlardropApp(
 ) {
   val uiDependencies = remember { UiDependencies(klardrop.commonComponent) }
   val visibleDevicesController = remember { uiDependencies.discoveryController() }
+
+  LaunchedEffect(visibleDevicesController) {
+    DebugControl.bind(visibleDevicesController, klardrop)
+  }
 
   AppTheme {
     // Desktop uses the deep slate shell (#0E1115) so the floating bg1 sidebar

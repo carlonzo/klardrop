@@ -255,7 +255,7 @@ class ClientImpl(
       return ConnectOutcome.Failed
     }
 
-    val tcpConnections = discoveryDevice.getKlardropConnection()
+    val tcpConnections = discoveryDevice.getKlardropConnection().filter { it.port > 0 }
     val bleConnections = discoveryDevice.getBleConnection()
 
     require(tcpConnections.isNotEmpty() || bleConnections.isNotEmpty()) {
@@ -502,6 +502,8 @@ class ClientImpl(
         osType = self.osType,
         deviceType = self.deviceType,
         supportsEncryption = true,
+        listenPort = serverPort.value,
+        claimsTrust = trustManager.isTrusted(deviceId),
       )
       val writeChannel = activeSocket.openWriteChannel(autoFlush = true)
       // Bound the handshake write to match the connect and read phases.  On most
@@ -607,6 +609,12 @@ class ClientImpl(
         clientScope.launch {
           connectionMessenger.acceptIncomingMessages()
         }
+        clientScope.launchStaleTrustRevocation(
+          messenger = connectionMessenger,
+          trustManager = trustManager,
+          peerId = deviceId,
+          peerClaimsTrust = serverHandshakeMessage.claimsTrust,
+        )
       }
 
       connectionJob.complete(ConnectOutcome.Connected)
@@ -637,6 +645,8 @@ class ClientImpl(
         osType = self.osType,
         deviceType = self.deviceType,
         supportsEncryption = true,
+        listenPort = serverPort.value,
+        claimsTrust = trustManager.isTrusted(deviceId),
       ),
       serializer,
     )
@@ -699,6 +709,12 @@ class ClientImpl(
     )
     connectionsPool.updateConnection(deviceId, connectionMessenger)
     clientScope.launch { connectionMessenger.acceptIncomingMessages() }
+    clientScope.launchStaleTrustRevocation(
+      messenger = connectionMessenger,
+      trustManager = trustManager,
+      peerId = deviceId,
+      peerClaimsTrust = serverHandshake.claimsTrust,
+    )
     connectionJob.complete(ConnectOutcome.Connected)
   }
 }

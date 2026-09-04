@@ -91,26 +91,31 @@ class Klardrop(
     // start clipboard monitoring
     commonComponent.clipboardSyncManager().startClipboardMonitoring()
 
-    // start discovery jobs
-    discoveryNetwork.discoveryKlardropDevices()
-    discoveryNetwork.discoveryNearbyShareDevices()
+    // start discovery jobs — browse only the transports this process is willing to use
+    if (applicationInfo.enableKlardropServer) {
+      discoveryNetwork.discoveryKlardropDevices()
+    }
+    if (applicationInfo.enableNearbyServer) {
+      discoveryNetwork.discoveryNearbyShareDevices()
+    }
 
     // BLE is a fallback transport for when peers aren't on the same Wi-Fi.
     // Platform implementations return isSupported()=false when unavailable, so these
-    // calls are no-ops on targets that don't have a BLE actual yet.
-    if (applicationInfo.enableKlardropServer) {
+    // calls are no-ops on targets that don't have a BLE actual yet. Gated independently
+    // of the TCP servers so a test can isolate BLE from Klardrop/Nearby.
+    if (applicationInfo.enableBle) {
       discoveryNetwork.startPublishBle()
       commonComponent.bleServerListener()?.start()
+      discoveryNetwork.discoverBleDevices()
+      // BLE is one discovery medium alongside mDNS. To populate the friendly
+      // identity (name + OS + device type) for BLE-only peers without waiting on
+      // user action, the role-selector-picked initiator opens an eager GATT
+      // session as soon as a BLE peer is discovered. The other transports
+      // (mDNS/Klardrop, Nearby) continue to work in parallel; for transfers, the
+      // Client picks the best available transport and falls back to BLE only
+      // when no Wi-Fi reachability exists.
+      commonComponent.bleEagerConnector()?.start()
     }
-    discoveryNetwork.discoverBleDevices()
-    // BLE is one discovery medium alongside mDNS. To populate the friendly
-    // identity (name + OS + device type) for BLE-only peers without waiting on
-    // user action, the role-selector-picked initiator opens an eager GATT
-    // session as soon as a BLE peer is discovered. The other transports
-    // (mDNS/Klardrop, Nearby) continue to work in parallel; for transfers, the
-    // Client picks the best available transport and falls back to BLE only
-    // when no Wi-Fi reachability exists.
-    commonComponent.bleEagerConnector()?.start()
 
     // Probe TCP-discovered peers as soon as they're announced so "visible"
     // implies "reachable" — without this the user only finds out at send time

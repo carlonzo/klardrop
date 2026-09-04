@@ -5,23 +5,27 @@ import com.klardrop.common.CrashReporter
 
 fun log(message: String) {
   nativeLogger("Klardrop", message)
+  LogBuffer.append("[Klardrop]: $message")
   CrashReporter.leaveBreadcrumb(message, BreadcrumbType.LOG)
 }
 
 fun log(message: String, throwable: Throwable) {
   nativeLoggerException("Klardrop", message, throwable)
+  LogBuffer.append("[Klardrop]: $message (${throwable.message})")
   CrashReporter.leaveBreadcrumb(message, type = BreadcrumbType.ERROR)
   CrashReporter.notify(throwable)
 }
 
 fun log(tag: String, message: String, throwable: Throwable) {
   nativeLoggerException(tag, message, throwable)
+  LogBuffer.append("[$tag]: $message (${throwable.message})")
   CrashReporter.leaveBreadcrumb("[$tag]: $message", type = BreadcrumbType.ERROR)
   CrashReporter.notify(throwable)
 }
 
 fun log(tag: String, message: String) {
   nativeLogger(tag, message)
+  LogBuffer.append("[$tag]: $message")
   CrashReporter.leaveBreadcrumb("[$tag]: $message", type = BreadcrumbType.LOG)
 }
 

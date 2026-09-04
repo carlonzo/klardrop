@@ -100,6 +100,7 @@ class BleServerListener(
           osType = self.osType,
           deviceType = self.deviceType,
           supportsEncryption = true,
+          claimsTrust = trustManager.isTrusted(clientHandshake.deviceId),
         ),
         serializer,
       )
@@ -129,6 +130,12 @@ class BleServerListener(
       connectionsPool.updateConnection(clientHandshake.deviceId, connectionMessenger)
 
       scope.launch { connectionMessenger.acceptIncomingMessages() }
+      scope.launchStaleTrustRevocation(
+        messenger = connectionMessenger,
+        trustManager = trustManager,
+        peerId = clientHandshake.deviceId,
+        peerClaimsTrust = clientHandshake.claimsTrust,
+      )
     } catch (t: Throwable) {
       log(TAG, "Handshake failed with BLE central ${session.deviceId}: ${t.message}", t)
       bridge.close()

@@ -144,6 +144,8 @@ kotlin {
         api(deps.kotlinx.coroutines.core)
         api(deps.filekit.core)
         api(deps.kotlinx.io.core)
+        implementation(deps.ktor.network)
+        implementation(deps.kotlinx.serialization.json)
       }
     }
 

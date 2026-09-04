@@ -20,20 +20,27 @@ class KlarDropApplication : Application() {
   override fun onCreate() {
     super.onCreate()
 
-    val applicationInfo = ApplicationInfo()
+    // `ApplicationInfo.isDebug` is a desktop/CLI concept on other platforms — it comes
+    // from the `--debug` command-line flag. On Android read the debuggable flag off the
+    // installed package instead, which is exactly what bugsnag-android derived its
+    // "development" release stage from.
+    val isDebuggable =
+      (getApplicationInfo().flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    val debugConfig = if (isDebuggable) AndroidDebugConfig.load(filesDir) else AndroidDebugConfig()
+    val applicationInfo = ApplicationInfo(
+      isDebug = isDebuggable,
+      enableKlardropServer = debugConfig.enableKlardrop,
+      enableNearbyServer = debugConfig.enableNearby,
+      enableBle = debugConfig.enableBle,
+      controlPort = if (isDebuggable) debugConfig.controlPort else null,
+    )
 
     // Only emit events from production builds. Development churn (debug builds, hot
     // reload, manual disconnect tests) was filling the dashboard with peer-hangup noise
     // that masked real production issues. Expected protocol noise (peer reset, connect
     // refused, BLE handshake disconnect) is dropped by CrashReporter.notify itself, so
     // there is no per-platform onError hook to keep in sync any more.
-    // `ApplicationInfo.isDebug` is a desktop/CLI concept — it comes from the `--debug`
-    // command-line flag and is always false here, so it cannot be used to tell a debug
-    // build apart. Read the debuggable flag off the installed package instead, which is
-    // exactly what bugsnag-android derived its "development" release stage from.
-    val isDebuggable =
-      (getApplicationInfo().flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-
     initCrashReporter(
       context = this,
       appVersion = applicationInfo.appVersion,

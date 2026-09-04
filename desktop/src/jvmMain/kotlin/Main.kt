@@ -73,14 +73,43 @@ fun main(args: Array<String>) {
 
   val debug = args.contains("--debug")
   val inMemory = args.contains("--no-persistence")
-  val disableKlardrop = args.contains("--no-klardrop")
-  val disableNearby = args.contains("--no-nearby")
+  val dataDir = args.firstOrNull { it.startsWith("--data-dir=") }?.substringAfter("=")
+    ?: System.getenv("KLARDROP_HOME")
+  val controlPort = args.firstOrNull { it.startsWith("--control-port=") }?.substringAfter("=")?.toIntOrNull()
+    ?: if (debug) 8765 else null
+
+  var enableKlardrop = !args.contains("--no-klardrop")
+  var enableNearby = !args.contains("--no-nearby")
+  var enableBle = !args.contains("--no-ble")
+  when {
+    args.contains("--klardrop-only") -> {
+      enableKlardrop = true
+      enableNearby = false
+      enableBle = false
+    }
+    args.contains("--nearby-only") -> {
+      enableKlardrop = false
+      enableNearby = true
+      enableBle = false
+    }
+    args.contains("--ble-only") -> {
+      enableKlardrop = false
+      enableNearby = false
+      enableBle = true
+    }
+  }
+
+  if (dataDir != null) {
+    System.setProperty("klardrop.data.dir", dataDir)
+  }
 
   val applicationInfo = ApplicationInfo(
     isDebug = debug,
     disablePersistence = inMemory,
-    enableKlardropServer = !disableKlardrop,
-    enableNearbyServer = !disableNearby,
+    enableKlardropServer = enableKlardrop,
+    enableNearbyServer = enableNearby,
+    enableBle = enableBle,
+    controlPort = controlPort,
   )
 
   initCrashReporter(
@@ -119,7 +148,15 @@ fun main(args: Array<String>) {
     exitProcess(0)
   }
 
-  FileKit.init("klardrop")
+  if (dataDir != null) {
+    val filesDir = java.io.File(dataDir)
+    val cacheDir = java.io.File(dataDir, "cache")
+    filesDir.mkdirs()
+    cacheDir.mkdirs()
+    FileKit.init("klardrop", filesDir, cacheDir)
+  } else {
+    FileKit.init("klardrop")
+  }
 
   val k = Klardrop(
     applicationInfo = applicationInfo,

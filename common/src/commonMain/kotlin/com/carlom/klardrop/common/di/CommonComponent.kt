@@ -138,6 +138,8 @@ class CommonComponent(
     )
   }
 
+  fun applicationInfo() = applicationInfo
+
   fun discoveryNetwork() = discoveryNetwork
   fun server() = communicationModule.server()
   fun serverPort() = communicationModule.serverPort()

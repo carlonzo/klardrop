@@ -121,6 +121,24 @@ class TrustManager(
     log("🔐 TrustManager", "Device identity ready")
   }
 
+  /** True while [createPairingRequest] has stored a session that [finalizePairing] has not yet consumed. */
+  fun hasOpenPairingSession(deviceId: String): Boolean = pairingSessions.containsKey(deviceId)
+
+  /**
+   * Wipe every stored pairing and this device's signing identity, then generate a fresh
+   * keypair. Combined with [CurrentDeviceProvider.rotateDeviceId] this is the in-process
+   * stand-in for "uninstall and reinstall the app".
+   */
+  suspend fun resetIdentity() {
+    storage.clearAllTrustedDevices()
+    storage.deleteDevicePrivateKey()
+    deviceECDSAPublicKey = null
+    pairingSessions.clear()
+    _trustChanges.tryEmit(Unit)
+    initialize()
+    log("🔐 TrustManager", "Device identity reset")
+  }
+
   /**
    * Create a pairing request for a target device.
    * Returns the request data to be sent by PairingProtocolCoordinator.
