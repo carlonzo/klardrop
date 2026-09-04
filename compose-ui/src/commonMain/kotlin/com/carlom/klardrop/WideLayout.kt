@@ -1,5 +1,6 @@
 package com.carlom.klardrop
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,26 +8,35 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.LaptopMac
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,6 +61,9 @@ import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.connectivity.ConnectivityRestriction
 import com.carlom.klardrop.common.connectivity.ConnectivityRestrictions
 import com.carlom.klardrop.common.utils.DeviceType
+import com.carlom.klardrop.common.update.InstallProgress
+import com.carlom.klardrop.common.update.UpdateAction
+import com.carlom.klardrop.common.update.UpdateStatus
 import com.carlom.klardrop.components.ChatHeader
 import com.carlom.klardrop.components.DeviceRow
 import com.carlom.klardrop.components.KdAvatarStyle
@@ -59,6 +72,8 @@ import com.carlom.klardrop.components.KdRowState
 import com.carlom.klardrop.components.KdStatus
 import com.carlom.klardrop.components.SectionHead
 import com.carlom.klardrop.components.Sidebar
+import com.carlom.klardrop.components.UpdateBanner
+import com.carlom.klardrop.components.UpdateSettingsSection
 import com.carlom.klardrop.theme.KdTheme
 import com.carlom.klardrop.theme.LocalContentInsets
 
@@ -76,11 +91,17 @@ fun WideLayout(
 ) {
     val state by discoveryController.screenStateFlow.collectAsState()
     val connectivityRestrictions by discoveryController.connectivityRestrictions.collectAsState()
+    val backgroundDiscoveryEnabled by discoveryController.backgroundDiscoveryEnabled.collectAsState()
+
+    val updateBannerController = remember { uiDependencies.updateBannerController() }
+    val updateStatus by updateBannerController.status.collectAsState()
+    val updateInstallProgress by updateBannerController.installProgress.collectAsState()
+
+    var isSettingsOpen by remember { mutableStateOf(false) }
     var activeDeviceId by remember { mutableStateOf<String?>(null) }
     var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
     var showAddDevicePicker by remember { mutableStateOf(false) }
     var showRenameSheet by remember { mutableStateOf(false) }
-    var showReportProblem by remember { mutableStateOf(false) }
     var pendingForget by remember { mutableStateOf<DeviceUi?>(null) }
 
     val hasTrustedDevice = state.devices.any { it.trustStatus == TrustStatus.Trusted }
@@ -119,6 +140,7 @@ fun WideLayout(
                 val next = visible[nextIndex]
                 discoveryController.onDeviceClick(next)
                 activeDeviceId = next.deviceId
+                isSettingsOpen = false
                 true
             }
     ) {
@@ -133,16 +155,24 @@ fun WideLayout(
             connectivityRestrictions = connectivityRestrictions,
             onRequestExemption = onRequestExemption,
             activeDeviceId = activeDeviceId,
+            isSettingsOpen = isSettingsOpen,
+            onCloseSettings = { isSettingsOpen = false },
+            onOpenSettings = { isSettingsOpen = true },
             sidebarWidth = resolvedSidebarWidth,
             showSidebar = maxWidth > WideBreakpoint,
             callbacks = discoveryController,
+            discoveryController = discoveryController,
+            backgroundDiscoveryEnabled = backgroundDiscoveryEnabled,
+            updateBannerController = updateBannerController,
+            updateStatus = updateStatus,
+            updateInstallProgress = updateInstallProgress,
             onDeviceSelected = { device ->
                 discoveryController.onDeviceClick(device)
                 activeDeviceId = device.deviceId
+                isSettingsOpen = false
             },
             onAddDeviceClick = { showAddDevicePicker = true },
             onRenameLocalDevice = { showRenameSheet = true },
-            onReportProblem = { showReportProblem = true },
             onSendData = { device, data -> discoveryController.onSendData(device, data) },
             onNotificationDismissed = discoveryController::onNotificationDismissed,
             onNotificationPair = discoveryController::onNotificationPair,
@@ -162,10 +192,6 @@ fun WideLayout(
             },
             onDismiss = { pendingForget = null },
         )
-    }
-
-    if (showReportProblem) {
-        ReportProblemDialog(onDismiss = { showReportProblem = false })
     }
 
     if (showRenameSheet) {
@@ -224,13 +250,20 @@ private fun WideContent(
     connectivityRestrictions: ConnectivityRestrictions,
     onRequestExemption: (ConnectivityRestriction) -> Unit,
     activeDeviceId: String?,
+    isSettingsOpen: Boolean,
+    onCloseSettings: () -> Unit,
+    onOpenSettings: () -> Unit,
     sidebarWidth: Dp,
     showSidebar: Boolean,
     callbacks: ReceiveNotificationsCallbacks,
+    discoveryController: DiscoveryController,
+    backgroundDiscoveryEnabled: Boolean,
+    updateBannerController: UpdateBannerController,
+    updateStatus: UpdateStatus,
+    updateInstallProgress: InstallProgress,
     onDeviceSelected: (DeviceUi) -> Unit,
     onAddDeviceClick: () -> Unit,
     onRenameLocalDevice: () -> Unit,
-    onReportProblem: () -> Unit,
     onSendData: (DeviceUi, OnDataToSend) -> Unit,
     onNotificationDismissed: (Int) -> Unit,
     onNotificationPair: (Int) -> Unit,
@@ -288,7 +321,7 @@ private fun WideContent(
                         trusted.forEach { device ->
                             SidebarDeviceRow(
                                 device = device,
-                                isActive = device.deviceId == activeDeviceId,
+                                isActive = !isSettingsOpen && device.deviceId == activeDeviceId,
                                 onClick = { onDeviceSelected(device) },
                                 onDropData = { data -> onSendData(device, data) },
                                 onForget = { onForgetTrustedDevice(device) },
@@ -306,7 +339,7 @@ private fun WideContent(
                         nearby.forEach { device ->
                             SidebarDeviceRow(
                                 device = device,
-                                isActive = device.deviceId == activeDeviceId,
+                                isActive = !isSettingsOpen && device.deviceId == activeDeviceId,
                                 onClick = { onDeviceSelected(device) },
                                 onDropData = { data -> onSendData(device, data) },
                             )
@@ -316,14 +349,28 @@ private fun WideContent(
                 localDeviceName = localDeviceName,
                 localDeviceSub = null,
                 onLocalDeviceClick = onRenameLocalDevice,
-                footerMenu = { AppMenu(onReportProblem = onReportProblem) },
+                footerMenu = {
+                    AppMenu(
+                        onOpenSettings = onOpenSettings,
+                        onReportProblem = onOpenSettings,
+                    )
+                },
             )
         }
 
         Column(
             modifier = Modifier.fillMaxSize(),
         ) {
-            if (activeDevice != null) {
+            if (updateStatus is UpdateStatus.Available) {
+                UpdateBanner(
+                    status = updateStatus,
+                    installProgress = updateInstallProgress,
+                    onAction = updateBannerController::onAction,
+                    onRestart = updateBannerController::onRestart,
+                )
+            }
+
+            if (!isSettingsOpen && activeDevice != null) {
                 ChatHeader(
                     deviceName = activeDevice.deviceName,
                     subText = chatHeaderSubText(activeDevice),
@@ -352,7 +399,23 @@ private fun WideContent(
             )
 
             Box(modifier = Modifier.fillMaxSize()) {
-                if (activeDeviceId != null && activeDevice != null) {
+                if (isSettingsOpen) {
+                    SettingsPane(
+                        onClose = onCloseSettings,
+                        supportsBackgroundDiscovery = discoveryController.supportsBackgroundDiscovery,
+                        backgroundDiscoveryEnabled = backgroundDiscoveryEnabled,
+                        onBackgroundDiscoveryChange = { discoveryController.setBackgroundDiscoveryEnabled(it) },
+                        updatesSupported = updateBannerController.updatesSupported,
+                        currentVersion = updateBannerController.currentVersion,
+                        releaseChannel = updateBannerController.releaseChannel,
+                        updateStatus = updateStatus,
+                        updateInstallProgress = updateInstallProgress,
+                        onCheck = updateBannerController::recheck,
+                        onAction = updateBannerController::onAction,
+                        onRestart = updateBannerController::onRestart,
+                        onOpenUrl = updateBannerController::openUrl,
+                    )
+                } else if (activeDeviceId != null && activeDevice != null) {
                     val chatViewModel = remember(activeDeviceId) {
                         uiDependencies.deviceChatViewModelFactory(activeDeviceId)
                     }
@@ -452,12 +515,15 @@ private fun SidebarRowMenu(onForget: () -> Unit) {
 }
 
 /**
- * App-level overflow menu in the sidebar footer. The wide layout has no settings screen — the one
- * setting we have is Android-only — so this is where the "Report a problem" entry lives on desktop,
- * mirroring the phone layout's Settings sheet.
+ * App-level overflow menu in the sidebar footer.
+ * Provides entry points to Settings and "Report a problem", both of which open
+ * the desktop Settings pane.
  */
 @Composable
-private fun AppMenu(onReportProblem: () -> Unit) {
+private fun AppMenu(
+    onOpenSettings: () -> Unit,
+    onReportProblem: () -> Unit,
+) {
     val colors = KdTheme.colors
     val typography = KdTheme.typography
     var expanded by remember { mutableStateOf(false) }
@@ -481,6 +547,26 @@ private fun AppMenu(onReportProblem: () -> Unit) {
             DropdownMenuItem(
                 text = {
                     Text(
+                        text = "Settings",
+                        style = typography.body.copy(color = colors.text),
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = colors.text2,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onOpenSettings()
+                },
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
                         text = "Report a problem",
                         style = typography.body.copy(color = colors.text),
                     )
@@ -489,6 +575,104 @@ private fun AppMenu(onReportProblem: () -> Unit) {
                     expanded = false
                     onReportProblem()
                 },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsPane(
+    onClose: () -> Unit,
+    supportsBackgroundDiscovery: Boolean,
+    backgroundDiscoveryEnabled: Boolean,
+    onBackgroundDiscoveryChange: (Boolean) -> Unit,
+    updatesSupported: Boolean,
+    currentVersion: String,
+    releaseChannel: String,
+    updateStatus: UpdateStatus,
+    updateInstallProgress: InstallProgress,
+    onCheck: () -> Unit,
+    onAction: (UpdateAction) -> Boolean,
+    onRestart: () -> Unit,
+    onOpenUrl: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+    val radii = KdTheme.radii
+
+    Surface(
+        modifier = modifier,
+        shape = radii.shapeSheet,
+        color = colors.bg1,
+        border = BorderStroke(1.dp, colors.border),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(spacing.s5),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Settings",
+                    style = typography.title.copy(color = colors.text),
+                )
+                IconButton(onClick = onClose) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = colors.text2,
+                    )
+                }
+            }
+
+            if (supportsBackgroundDiscovery) {
+                Spacer(Modifier.height(spacing.s4))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Stay discoverable in background",
+                            style = typography.body.copy(color = colors.text),
+                        )
+                        Text(
+                            text = "Keep this device visible and able to receive when the app is closed. " +
+                                "Shows a persistent notification and uses more battery.",
+                            style = typography.caption.copy(color = colors.text2),
+                        )
+                    }
+                    Spacer(Modifier.width(spacing.s3))
+                    Switch(
+                        checked = backgroundDiscoveryEnabled,
+                        onCheckedChange = onBackgroundDiscoveryChange,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(spacing.s5))
+
+            ReportProblemSection()
+
+            Spacer(Modifier.height(spacing.s5))
+
+            UpdateSettingsSection(
+                visible = updatesSupported,
+                currentVersion = currentVersion,
+                releaseChannel = releaseChannel,
+                status = updateStatus,
+                installProgress = updateInstallProgress,
+                onCheck = onCheck,
+                onAction = onAction,
+                onRestart = onRestart,
+                onOpenUrl = onOpenUrl,
             )
         }
     }

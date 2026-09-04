@@ -16,6 +16,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +30,7 @@ import androidx.compose.ui.window.Dialog
 import com.carlom.klardrop.theme.KdTheme
 import com.klardrop.common.CrashReporter
 import com.klardrop.common.ReportOutcome
+import kotlinx.coroutines.delay
 
 /**
  * "Report a problem" — sends what the user typed to Sentry as user feedback, which drags the last
@@ -98,6 +100,12 @@ private fun ReportProblemForm(onDone: () -> Unit) {
     var description by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var outcome by remember { mutableStateOf<ReportOutcome?>(null) }
+    LaunchedEffect(outcome) {
+        if (outcome == ReportOutcome.Sent) {
+            delay(1200)
+            onDone()
+        }
+    }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = colors.accent,
