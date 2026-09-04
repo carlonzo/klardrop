@@ -40,7 +40,9 @@ class FakeVisibleDevices : VisibleDevices {
     get() = _visibleDevices
 
   override suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection) {
-    error("not required to be implemented for this test")
+    val discoveryDevice = DiscoveryDevice(deviceInfo, listOf(deviceConnection), lastSeenTimestamp = 0L)
+    devices.add(discoveryDevice)
+    _visibleDevices.value = _visibleDevices.value + (deviceInfo.deviceId to discoveryDevice)
   }
 
   override fun isDeviceVisible(deviceId: String): Boolean {

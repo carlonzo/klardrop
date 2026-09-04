@@ -389,17 +389,21 @@ class Server(
       log("Server", "Inbound ${handshake.deviceId} from $host has no listenPort; not adding a dialable endpoint")
       return
     }
-    visibleDevices.onNewDeviceVisible(
-      DeviceInfo(
-        deviceId = handshake.deviceId,
-        name = handshake.deviceName.ifBlank { handshake.deviceId },
-        deviceType = handshake.deviceType,
-        osType = handshake.osType,
-      ),
-      DeviceConnection.KlardropConnection(host, port),
-    )
-    log("Server", "Recorded inbound peer ${handshake.deviceId} @ $host:$port")
-    dropSupersededTrust(handshake.deviceId, host, visibleDevices, trustManager)
+    runCatching {
+      visibleDevices.onNewDeviceVisible(
+        DeviceInfo(
+          deviceId = handshake.deviceId,
+          name = handshake.deviceName.ifBlank { handshake.deviceId },
+          deviceType = handshake.deviceType,
+          osType = handshake.osType,
+        ),
+        DeviceConnection.KlardropConnection(host, port),
+      )
+      dropSupersededTrust(handshake.deviceId, host, visibleDevices, trustManager)
+      log("Server", "Recorded inbound peer ${handshake.deviceId} @ $host:$port")
+    }.onFailure {
+      log("Server", "Failed recording inbound peer ${handshake.deviceId} @ $host:$port", it)
+    }
   }
 
   /**
