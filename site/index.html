@@ -381,6 +381,91 @@
   .sub-links a:hover{ border-color:var(--accent); color:var(--accent-text); }
   .sub-links a small{ display:block; font-family:var(--font-mono); font-size:10px; color:var(--muted-2); font-weight:400; letter-spacing:.06em; text-transform:uppercase; margin-bottom:2px; }
 
+  /* ---------- linux section ---------- */
+  .linux-section{ padding:20px 0 110px; }
+  .linux-hero-card{
+    margin-top:36px;
+    border:1px solid var(--line-2);
+    border-radius:22px;
+    padding:36px 34px 30px;
+    background:
+      radial-gradient(540px 240px at 85% -10%, var(--accent-dim), transparent 70%),
+      linear-gradient(180deg, var(--bg-2), var(--bg));
+  }
+  .linux-pill{
+    display:inline-flex; align-items:center; gap:7px;
+    font-family:var(--font-mono); font-size:11.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--accent-text); background:var(--accent-dim); border:1px solid var(--accent-glow);
+    padding:5px 12px; border-radius:100px; margin-bottom:14px;
+  }
+  .linux-hero-card h3{
+    font-family:var(--font-display); font-weight:700; font-size:26px; letter-spacing:-.02em;
+  }
+  .linux-hero-desc{
+    margin-top:8px; margin-bottom:20px; color:var(--muted); font-size:16.5px; max-width:68ch; text-wrap:pretty;
+  }
+  .linux-hero-card .code{
+    margin-bottom:14px;
+  }
+  .linux-note{
+    font-size:14px; color:var(--muted-2); line-height:1.5;
+  }
+  .linux-note code{
+    font-family:var(--font-mono); font-size:12.5px; color:var(--accent-text);
+    background:var(--bg-3); padding:2px 6px; border-radius:5px; border:1px solid var(--line);
+  }
+  .linux-grid{
+    margin-top:22px;
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:18px;
+  }
+  .linux-pkg-card{
+    display:flex; flex-direction:column; justify-content:space-between;
+    padding:28px 26px 26px;
+  }
+  .linux-pkg-head{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px;
+  }
+  .linux-pkg-title h3{
+    font-family:var(--font-display); font-weight:600; font-size:20px; letter-spacing:-.01em;
+  }
+  .linux-pkg-tag{
+    display:block; font-family:var(--font-mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted-2); margin-top:3px;
+  }
+  .linux-pkg-tag b{ color:var(--accent-text); font-weight:500; }
+  .linux-pkg-icon{
+    width:40px; height:40px; border-radius:10px; background:var(--bg-3);
+    border:1px solid var(--line-2); display:grid; place-items:center; color:var(--accent); flex:none;
+  }
+  .linux-pkg-icon svg{ width:22px; height:22px; }
+  .linux-pkg-desc{
+    font-size:14.5px; color:var(--muted); line-height:1.5; margin-bottom:18px; flex:1; text-wrap:pretty;
+  }
+  .linux-pkg-action{
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .linux-cmd-wrap{
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .linux-cmd-label{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted-2);
+  }
+  .linux-dl-btn{
+    width:100%; justify-content:center; padding:12px 18px; font-size:15px; text-align:center;
+  }
+  .linux-size{
+    font-family:var(--font-mono); font-size:12.5px; opacity:.85; font-weight:400;
+  }
+  .linux-card-hint{
+    margin-top:10px; font-family:var(--font-mono); font-size:11.5px; color:var(--muted-2);
+  }
+  .linux-card-hint code{
+    color:var(--accent-text); background:var(--bg-3); padding:1px 5px; border-radius:4px;
+  }
+
   /* footer */
   footer{ border-top:1px solid var(--line); padding:40px 0 60px; }
   .foot-in{ display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap; }
@@ -393,6 +478,8 @@
     .hero-grid{ grid-template-columns:1fr; gap:36px; }
     .scene{ height:360px; }
     .feat-grid{ grid-template-columns:1fr; }
+    .linux-grid{ grid-template-columns:1fr; }
+    .linux-hero-card{ padding:26px 20px; }
     .nav-links{ display:none; }
     .trow{ grid-template-columns:1fr 40px 1fr; }
     .trow .feels-cell{ display:none; }
@@ -416,6 +503,7 @@
       <a href="#why">Why Klardrop</a>
       <a href="#platforms">Platforms</a>
       <a href="#features">Features</a>
+      <a href="#linux">Linux</a>
       <a href="https://github.com/carlonzo/klardrop" target="_blank" rel="noopener">GitHub</a>
     </div>
     <a class="btn btn-primary" href="#download">Download</a>
@@ -607,6 +695,139 @@
   </div>
 </section>
 
+<!-- ======= LINUX DOWNLOADS ======= -->
+<section class="blk linux-section" id="linux">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="sec-tag">Linux Downloads &amp; Packages</p>
+      <h2>Get Klardrop on Linux.</h2>
+      <p class="sec-sub">Install via your distribution's package manager, or use our self-updating universal installer.</p>
+    </div>
+
+    <!-- Primary Universal Installer card -->
+    <div class="linux-hero-card card">
+      <div class="linux-hero-header">
+        <span class="linux-pill">Universal Installer · Recommended</span>
+        <h3>One-line self-updating install</h3>
+        <p class="linux-hero-desc">Installs Klardrop with a private, bundled Java runtime, registers desktop shortcuts and icons, and manages in-place updates automatically.</p>
+      </div>
+      <div class="code linux-code">
+        <code>curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash</code>
+        <button class="copy" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+      </div>
+      <p class="linux-note">Distro-agnostic, installs to <code>~/.local</code> (no root required) and self-updates in place. Or run with <code>sudo</code> for a system-wide <code>/opt</code> install.</p>
+    </div>
+
+    <!-- Distro Packages Grid -->
+    <div class="linux-grid">
+      <!-- Arch Linux (AUR) -->
+      <div class="card linux-pkg-card">
+        <div class="linux-pkg-head">
+          <div class="linux-pkg-title">
+            <h3>Arch Linux</h3>
+            <span class="linux-pkg-tag">AUR · <b>klardrop-bin</b></span>
+          </div>
+          <div class="linux-pkg-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5L2.2 21.5h4.6l2.1-4.2c1.2.7 2.2 1.1 3.3 1.1 1.1 0 2.1-.4 3.3-1.1l2.1 4.2h4.6L12 2.5zm0 5.8l2.9 5.8c-.9-.4-1.9-.7-2.9-.7s-2 .3-2.9.7L12 8.3z"/></svg>
+          </div>
+        </div>
+        <p class="linux-pkg-desc">Maintained in the Arch User Repository as <code>klardrop-bin</code>. Includes desktop integration and automatic updates via your AUR helper.</p>
+        <div class="linux-pkg-action">
+          <div class="linux-cmd-wrap">
+            <div class="linux-cmd-label">Install command</div>
+            <div class="code">
+              <code>yay -S klardrop-bin</code>
+              <button class="copy" type="button" data-copy="yay -S klardrop-bin" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+            </div>
+          </div>
+          <p class="linux-card-hint">Also works with <code>paru -S klardrop-bin</code></p>
+        </div>
+      </div>
+
+      <!-- Debian · Ubuntu · Mint -->
+      <div class="card linux-pkg-card">
+        <div class="linux-pkg-head">
+          <div class="linux-pkg-title">
+            <h3>Debian · Ubuntu · Mint</h3>
+            <span class="linux-pkg-tag">Native <b>.deb</b> · x86_64</span>
+          </div>
+          <div class="linux-pkg-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="15.5" cy="6" r="1.5" fill="currentColor"/><circle cx="15.5" cy="18" r="1.5" fill="currentColor"/><path d="M6.8 12a5.5 5.5 0 0 0 6.7 5.3M13.5 6.7a5.5 5.5 0 0 1 0 10.6M13.5 6.7A5.5 5.5 0 0 0 6.8 12"/></svg>
+          </div>
+        </div>
+        <p class="linux-pkg-desc">Standard Debian package with desktop menu entry, icons, and dependencies for Debian, Ubuntu, Linux Mint, and Pop!_OS.</p>
+        <div class="linux-pkg-action">
+          <a class="btn btn-primary linux-dl-btn" id="linux-deb-btn" href="https://github.com/carlonzo/klardrop/releases/latest" rel="noopener">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span>Download .deb</span><span class="linux-size" id="linux-deb-size"></span>
+          </a>
+          <div class="linux-cmd-wrap">
+            <div class="linux-cmd-label">Install command</div>
+            <div class="code">
+              <code id="linux-deb-cmd">sudo apt install ./klardrop_amd64.deb</code>
+              <button class="copy" id="linux-deb-copy" type="button" data-copy="sudo apt install ./klardrop_amd64.deb" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fedora · RHEL · openSUSE -->
+      <div class="card linux-pkg-card">
+        <div class="linux-pkg-head">
+          <div class="linux-pkg-title">
+            <h3>Fedora · RHEL · openSUSE</h3>
+            <span class="linux-pkg-tag">Native <b>.rpm</b> · x86_64</span>
+          </div>
+          <div class="linux-pkg-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16.5 9.4-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12.5 20.71 7"/><line x1="12" y1="22.5" x2="12" y2="12.5"/></svg>
+          </div>
+        </div>
+        <p class="linux-pkg-desc">Native RPM package with bundled runtime and desktop launcher for Fedora, RHEL, CentOS Stream, openSUSE, and AlmaLinux.</p>
+        <div class="linux-pkg-action">
+          <a class="btn btn-primary linux-dl-btn" id="linux-rpm-btn" href="https://github.com/carlonzo/klardrop/releases/latest" rel="noopener">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span>Download .rpm</span><span class="linux-size" id="linux-rpm-size"></span>
+          </a>
+          <div class="linux-cmd-wrap">
+            <div class="linux-cmd-label">Install command</div>
+            <div class="code">
+              <code id="linux-rpm-cmd">sudo rpm -Uvh ./klardrop.x86_64.rpm</code>
+              <button class="copy" id="linux-rpm-copy" type="button" data-copy="sudo rpm -Uvh ./klardrop.x86_64.rpm" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Standalone Tarball (Any Distro) -->
+      <div class="card linux-pkg-card">
+        <div class="linux-pkg-head">
+          <div class="linux-pkg-title">
+            <h3>Standalone Tarball</h3>
+            <span class="linux-pkg-tag">Portable <b>.tar.gz</b> · Any Distro</span>
+          </div>
+          <div class="linux-pkg-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+          </div>
+        </div>
+        <p class="linux-pkg-desc">Portable archive with an embedded JRE runtime. Extract to any directory and launch immediately with zero dependencies or root access.</p>
+        <div class="linux-pkg-action">
+          <a class="btn btn-primary linux-dl-btn" id="linux-tarball-btn" href="https://github.com/carlonzo/klardrop/releases/latest/download/klardrop-linux-x64.tar.gz" rel="noopener">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span>Download .tar.gz</span><span class="linux-size" id="linux-tarball-size"></span>
+          </a>
+          <div class="linux-cmd-wrap">
+            <div class="linux-cmd-label">Extract &amp; run</div>
+            <div class="code">
+              <code>tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop/bin/klardrop</code>
+              <button class="copy" type="button" data-copy="tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop/bin/klardrop" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ======= DOWNLOAD MODAL ======= -->
 <div class="modal-back" id="dlModal" role="dialog" aria-modal="true" aria-labelledby="dlTitle">
   <div class="modal">
@@ -636,6 +857,7 @@
     <div class="foot-links">
       <a href="https://github.com/carlonzo/klardrop" target="_blank" rel="noopener">GitHub</a>
       <a href="https://github.com/carlonzo/klardrop/releases/latest" target="_blank" rel="noopener">Releases</a>
+      <a href="#linux">Linux</a>
       <a href="privacy.html">Privacy</a>
       <a href="https://github.com/carlonzo/klardrop/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
     </div>
@@ -766,7 +988,8 @@
         ].filter(Boolean).join("");
         extra = `<div class="modal-or">or use your package manager</div>`
           + `<div><div class="opt-label">Arch Linux (AUR)</div>${codeBlock(AUR_CMD)}</div>`
-          + (pkgLinks ? `<div class="sub-links">${pkgLinks}</div>` : "");
+          + (pkgLinks ? `<div class="sub-links">${pkgLinks}</div>` : "")
+          + `<div style="text-align:center;margin-top:6px;"><a href="#linux" class="dl-note" style="color:var(--accent-text);text-decoration:underline;" onclick="document.getElementById('dlModal').classList.remove('open');document.body.style.overflow=''">View all Linux packages &amp; commands →</a></div>`;
       }
       return `<div><div class="opt-label">Install with one command</div>${codeBlock(cmd)}`
         + `<p class="dl-note" style="text-align:left">${note}</p></div>`
@@ -881,8 +1104,8 @@
       body.querySelectorAll('.mpane').forEach(p => p.classList.toggle('on', p.dataset.pane === id));
     });
 
-    // copy-to-clipboard (delegated — works for dynamically inserted code blocks)
-    body.addEventListener('click', async e => {
+    // copy-to-clipboard (delegated — works for dynamically inserted code blocks and on-page elements)
+    document.addEventListener('click', async e => {
       const btn = e.target.closest('.copy');
       if(!btn) return;
       const text = btn.dataset.copy;
@@ -899,12 +1122,60 @@
       setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = COPY_ICON; }, 1600);
     });
 
+    // dynamically update Linux package links, size badges, and install commands from latest.json
+    function updateLinuxDownloads(d){
+      if(!d || !d.platforms) return;
+      const deb = d.platforms['linux-deb'];
+      const rpm = d.platforms['linux-rpm'];
+      const tgz = d.platforms['linux-tarball'];
+
+      if(deb && deb.url){
+        const btn = document.getElementById('linux-deb-btn');
+        if(btn) btn.href = deb.url;
+        const sz = document.getElementById('linux-deb-size');
+        if(sz && deb.size) sz.textContent = fmtSize(deb.size);
+        const debFile = deb.url.split('/').pop();
+        const cmd = `sudo apt install ./${debFile}`;
+        const cmdEl = document.getElementById('linux-deb-cmd');
+        if(cmdEl) cmdEl.textContent = cmd;
+        const cpEl = document.getElementById('linux-deb-copy');
+        if(cpEl) cpEl.dataset.copy = cmd;
+      }
+
+      if(rpm && rpm.url){
+        const btn = document.getElementById('linux-rpm-btn');
+        if(btn) btn.href = rpm.url;
+        const sz = document.getElementById('linux-rpm-size');
+        if(sz && rpm.size) sz.textContent = fmtSize(rpm.size);
+        const rpmFile = rpm.url.split('/').pop();
+        const cmd = `sudo rpm -Uvh ./${rpmFile}`;
+        const cmdEl = document.getElementById('linux-rpm-cmd');
+        if(cmdEl) cmdEl.textContent = cmd;
+        const cpEl = document.getElementById('linux-rpm-copy');
+        if(cpEl) cpEl.dataset.copy = cmd;
+      }
+
+      if(tgz && tgz.url){
+        const btn = document.getElementById('linux-tarball-btn');
+        if(btn) btn.href = tgz.url;
+        const sz = document.getElementById('linux-tarball-size');
+        if(sz && tgz.size) sz.textContent = fmtSize(tgz.size);
+      }
+    }
+
     // fetch latest.json so download links & version resolve to the newest release.
     // If it fails (e.g. no release yet), buttons gracefully fall back to the releases page.
-    fetch(LATEST_JSON, { cache: "no-store" })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(d => { DATA = d; })
-      .catch(() => { DATA = null; });
+    function loadLatest(){
+      fetch(LATEST_JSON, { cache: "no-store" })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(d => {
+          DATA = d;
+          updateLinuxDownloads(d);
+        })
+        .catch(() => { DATA = null; });
+    }
+    loadLatest();
+
     fetch(NIGHTLY_JSON, { cache: "no-store" })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(d => { NDATA = d; })
