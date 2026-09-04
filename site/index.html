@@ -503,7 +503,6 @@
       <a href="#why">Why Klardrop</a>
       <a href="#platforms">Platforms</a>
       <a href="#features">Features</a>
-      <a href="#linux">Linux</a>
       <a href="https://github.com/carlonzo/klardrop" target="_blank" rel="noopener">GitHub</a>
     </div>
     <a class="btn btn-primary" href="#download">Download</a>
@@ -740,7 +739,7 @@
               <button class="copy" type="button" data-copy="yay -S klardrop-bin" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
             </div>
           </div>
-          <p class="linux-card-hint">Also works with <code>paru -S klardrop-bin</code></p>
+          <p class="linux-card-hint">AUR package registration pending · Install via one-line script below</p>
         </div>
       </div>
 
@@ -757,9 +756,9 @@
         </div>
         <p class="linux-pkg-desc">Standard Debian package with desktop menu entry, icons, and dependencies for Debian, Ubuntu, Linux Mint, and Pop!_OS.</p>
         <div class="linux-pkg-action">
-          <a class="btn btn-primary linux-dl-btn" id="linux-deb-btn" href="https://github.com/carlonzo/klardrop/releases/latest" rel="noopener">
+          <a class="btn btn-primary linux-dl-btn" id="linux-deb-btn" href="https://github.com/carlonzo/klardrop/releases" rel="noopener">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <span>Download .deb</span><span class="linux-size" id="linux-deb-size"></span>
+            <span>Download .deb</span><span class="linux-size" id="linux-deb-size"> (releases)</span>
           </a>
           <div class="linux-cmd-wrap">
             <div class="linux-cmd-label">Install command</div>
@@ -768,6 +767,7 @@
               <button class="copy" id="linux-deb-copy" type="button" data-copy="sudo apt install ./klardrop_amd64.deb" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
             </div>
           </div>
+          <p class="linux-card-hint">Available on releases · Or install via one-line script below</p>
         </div>
       </div>
 
@@ -784,9 +784,9 @@
         </div>
         <p class="linux-pkg-desc">Native RPM package with bundled runtime and desktop launcher for Fedora, RHEL, CentOS Stream, openSUSE, and AlmaLinux.</p>
         <div class="linux-pkg-action">
-          <a class="btn btn-primary linux-dl-btn" id="linux-rpm-btn" href="https://github.com/carlonzo/klardrop/releases/latest" rel="noopener">
+          <a class="btn btn-primary linux-dl-btn" id="linux-rpm-btn" href="https://github.com/carlonzo/klardrop/releases" rel="noopener">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <span>Download .rpm</span><span class="linux-size" id="linux-rpm-size"></span>
+            <span>Download .rpm</span><span class="linux-size" id="linux-rpm-size"> (releases)</span>
           </a>
           <div class="linux-cmd-wrap">
             <div class="linux-cmd-label">Install command</div>
@@ -795,6 +795,7 @@
               <button class="copy" id="linux-rpm-copy" type="button" data-copy="sudo rpm -Uvh ./klardrop.x86_64.rpm" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
             </div>
           </div>
+          <p class="linux-card-hint">Available on releases · Or install via one-line script below</p>
         </div>
       </div>
 
@@ -975,20 +976,24 @@
       return `<div class="mtabs">${heads}</div>${panes}`;
     }
     // a Linux download channel: install command + tarball link. `packages` adds the
-    // native-package row (AUR command + .deb/.rpm) — stable only, since the nightly
-    // prerelease publishes just the tarball.
-    function linuxChannel(cmd, tarballUrl, size, note, packages){
-      const debUrl = DATA && DATA.platforms && DATA.platforms["linux-deb"];
-      const rpmUrl = DATA && DATA.platforms && DATA.platforms["linux-rpm"];
+    // native-package row (AUR command + .deb/.rpm).
+    function linuxChannel(cmd, tarballUrl, size, note, packages, isNightly){
+      const dataSrc = isNightly ? NDATA : DATA;
+      const debUrl = dataSrc && dataSrc.platforms && dataSrc.platforms["linux-deb"];
+      const rpmUrl = dataSrc && dataSrc.platforms && dataSrc.platforms["linux-rpm"];
       let extra = "";
       if (packages) {
+        const debHref = debUrl ? esc(debUrl.url) : `https://github.com/${REPO}/releases`;
+        const rpmHref = rpmUrl ? esc(rpmUrl.url) : `https://github.com/${REPO}/releases`;
+        const debSz = debUrl ? (isNightly ? nsizeFor("linux-deb") : sizeFor("linux-deb")) : "";
+        const rpmSz = rpmUrl ? (isNightly ? nsizeFor("linux-rpm") : sizeFor("linux-rpm")) : "";
         const pkgLinks = [
-          debUrl ? `<a href="${esc(debUrl.url)}" rel="noopener"><small>Debian · Ubuntu</small>.deb${sizeFor("linux-deb")}</a>` : "",
-          rpmUrl ? `<a href="${esc(rpmUrl.url)}" rel="noopener"><small>Fedora · openSUSE</small>.rpm${sizeFor("linux-rpm")}</a>` : "",
-        ].filter(Boolean).join("");
+          `<a href="${debHref}" rel="noopener"><small>Debian · Ubuntu</small>.deb${debSz}</a>`,
+          `<a href="${rpmHref}" rel="noopener"><small>Fedora · openSUSE</small>.rpm${rpmSz}</a>`,
+        ].join("");
         extra = `<div class="modal-or">or use your package manager</div>`
           + `<div><div class="opt-label">Arch Linux (AUR)</div>${codeBlock(AUR_CMD)}</div>`
-          + (pkgLinks ? `<div class="sub-links">${pkgLinks}</div>` : "")
+          + `<div class="sub-links">${pkgLinks}</div>`
           + `<div style="text-align:center;margin-top:6px;"><a href="#linux" class="dl-note" style="color:var(--accent-text);text-decoration:underline;" onclick="document.getElementById('dlModal').classList.remove('open');document.body.style.overflow=''">View all Linux packages &amp; commands →</a></div>`;
       }
       return `<div><div class="opt-label">Install with one command</div>${codeBlock(cmd)}`
@@ -1024,10 +1029,11 @@
             { id:"stable", label:"Stable", panel: linuxChannel(CURL_CMD,
                 urlFor("linux-tarball", LINUX_TARBALL), sizeFor("linux-tarball"),
                 "Downloads the latest tarball, installs to <code>~/.local</code>, and links the <code>klardrop</code> binary. Uninstall later with the same command plus <code>-s -- --uninstall</code>.",
-                true) },
+                true, false) },
             { id:"nightly", label:"Nightly", panel: linuxChannel(CURL_NIGHTLY,
                 nurlFor("linux-tarball", NIGHTLY_TARBALL), nsizeFor("linux-tarball"),
-                "Latest tester build — newest features, less tested. Installs to <code>~/.local</code> and self-updates on the nightly channel.") },
+                "Latest tester build — newest features, less tested. Installs to <code>~/.local</code> and self-updates on the nightly channel.",
+                true, true) },
           ]);
         case "android": {
           const playReady = PLAY_STORE_URL && !PLAY_STORE_URL.includes('<');
@@ -1178,7 +1184,10 @@
 
     fetch(NIGHTLY_JSON, { cache: "no-store" })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(d => { NDATA = d; })
+      .then(d => {
+        NDATA = d;
+        if(!DATA) updateLinuxDownloads(d);
+      })
       .catch(() => { NDATA = null; });
   })();
 </script>
