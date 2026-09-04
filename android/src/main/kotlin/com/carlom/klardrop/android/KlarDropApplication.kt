@@ -2,12 +2,14 @@ package com.carlom.klardrop.android
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import com.carlom.klardrop.android.service.DiscoveryForegroundService
 import com.carlom.klardrop.android.share.AndroidTransferAnchor
 import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
 import com.klardrop.common.initCrashReporter
+import java.io.File
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -27,7 +29,7 @@ class KlarDropApplication : Application() {
     val isDebuggable =
       (getApplicationInfo().flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
-    val debugConfig = if (isDebuggable) AndroidDebugConfig.load(filesDir) else AndroidDebugConfig()
+    val debugConfig = if (isDebuggable) loadAndroidDebugConfig(filesDir) else AndroidDebugConfig()
     val applicationInfo = ApplicationInfo(
       isDebug = isDebuggable,
       enableKlardropServer = debugConfig.enableKlardrop,
@@ -72,3 +74,31 @@ class KlarDropApplication : Application() {
 
 fun Context.appKlardrop(): Klardrop =
   (applicationContext as KlarDropApplication).klardrop
+
+/** Written by `scripts/klardrop-ctl` via `adb shell run-as`. Missing file → all transports on. */
+private data class AndroidDebugConfig(
+  val controlPort: Int = 8766,
+  val enableKlardrop: Boolean = true,
+  val enableNearby: Boolean = true,
+  val enableBle: Boolean = true,
+)
+
+private fun loadAndroidDebugConfig(filesDir: File): AndroidDebugConfig {
+  val file = File(filesDir, "klardrop-debug.json")
+  if (!file.isFile) return AndroidDebugConfig()
+  return try {
+    val text = file.readText()
+    AndroidDebugConfig(
+      controlPort = Regex("\"controlPort\"\\s*:\\s*(-?\\d+)").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 8766,
+      enableKlardrop = boolField(text, "enableKlardrop") ?: true,
+      enableNearby = boolField(text, "enableNearby") ?: true,
+      enableBle = boolField(text, "enableBle") ?: true,
+    )
+  } catch (e: Exception) {
+    Log.w("KlarDropApplication", "Failed to parse ${file.absolutePath}: ${e.message}")
+    AndroidDebugConfig()
+  }
+}
+
+private fun boolField(json: String, key: String): Boolean? =
+  Regex("\"$key\"\\s*:\\s*(true|false)").find(json)?.groupValues?.get(1)?.toBooleanStrictOrNull()

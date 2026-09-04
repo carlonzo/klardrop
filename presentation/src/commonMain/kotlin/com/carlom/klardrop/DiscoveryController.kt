@@ -725,10 +725,6 @@ class DiscoveryController(
     onAddToTrusted(requireDevice(deviceId))
   }
 
-  fun debugUnpair(deviceId: String) {
-    controllerScope.launch { debugUnpairAndWait(deviceId) }
-  }
-
   suspend fun debugUnpairAndWait(deviceId: String) {
     log("DiscoveryController", "debugUnpairAndWait($deviceId)")
     pairingProtocolCoordinator.unpair(deviceId, reason = "user_unpaired")
@@ -741,10 +737,6 @@ class DiscoveryController(
 
   fun debugRejectPairing(deviceId: String) {
     controllerScope.launch { rejectPairing(deviceId) }
-  }
-
-  fun debugSendText(deviceId: String, text: String) {
-    sendText(deviceId, text)
   }
 
   fun debugSendFile(deviceId: String, path: String) {
