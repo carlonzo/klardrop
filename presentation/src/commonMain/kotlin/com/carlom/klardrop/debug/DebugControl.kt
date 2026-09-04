@@ -137,6 +137,7 @@ object DebugControl {
         val app = klardrop ?: error("not bound")
         val shortId = app.commonComponent.currentDeviceProvider().rotateDeviceId()
         app.commonComponent.trustManager().resetIdentity()
+        app.commonComponent.incomingAuthorizer().clearFirstContact()
         log("DebugControl", "reset-identity -> $shortId")
         HttpResponse(200, jsonOk(""" "deviceId":${jsonString(shortId)} """))
       }

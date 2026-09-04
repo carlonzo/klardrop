@@ -164,6 +164,8 @@ class CommonComponent(
 
   fun trustManager() = communicationModule.trustManager()
 
+  fun incomingAuthorizer() = communicationModule.incomingAuthorizer()
+
   fun pairingProtocolCoordinator() = communicationModule.pairingProtocolCoordinator()
 
   fun trustStorage() = communicationModule.trustStorage()

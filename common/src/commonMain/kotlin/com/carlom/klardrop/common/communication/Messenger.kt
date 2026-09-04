@@ -269,7 +269,7 @@ class MessengerImpl(
       //     For tiny chunks BLE is faster end-to-end than spinning up a Nearby session.
       // Preference is based on the *application* message shape (file vs lightweight), not
       // the trust envelope. TrustedMessage wrapping only applies to the Klardrop wire path.
-      val preference = transportPreferenceFor(messageRequest)
+      val preference = transportPreferenceFor(finalMessageRequest)
       val chosen = when {
         device != null -> preference.firstOrNull { it.isAvailable(device) }
         // Not visible but pooled: only the Klardrop path can ride the pooled connection —
@@ -672,15 +672,22 @@ private enum class TransportChoice {
   NEARBY;
 
   fun isAvailable(device: com.carlom.klardrop.common.discovery.DiscoveryDevice): Boolean = when (this) {
-    KLARDROP_TCP -> device.hasKlardropConnection()
+    // Nearby Share advertises the same unified TCP listener. Client.performDial already
+    // maps NearbyConnection → KlardropConnection; pairing/revocation are Klardrop frames
+    // and cannot go on the Nearby Share text path.
+    KLARDROP_TCP -> device.hasKlardropConnection() || device.hasNearbyConnection()
     KLARDROP_BLE -> device.hasBleConnection()
     NEARBY -> device.hasNearbyConnection()
   }
 }
 
 private fun transportPreferenceFor(request: SendMessageRequest): List<TransportChoice> {
+  val message = request.message
+  if (message is TrustPairingRequest || message is TrustPairingResponse || message is TrustRevocationMessage) {
+    return listOf(TransportChoice.KLARDROP_TCP)
+  }
   // `hasPayload` distinguishes streaming/file messages from short control/text messages.
-  return if (request.message.hasPayload) {
+  return if (message.hasPayload) {
     // Files: TCP > Nearby > BLE. BLE can't keep up with sustained writes; Nearby is fine.
     listOf(TransportChoice.KLARDROP_TCP, TransportChoice.NEARBY, TransportChoice.KLARDROP_BLE)
   } else {

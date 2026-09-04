@@ -261,6 +261,7 @@ class CommunicationModule(
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
   fun trustManager() = trustManager
+  fun incomingAuthorizer() = incomingAuthorizer
   fun pairingProtocolCoordinator() = pairingProtocolCoordinator
   fun trustStorage() = trustStorage
   fun clipboardSyncManager() = clipboardSyncManager

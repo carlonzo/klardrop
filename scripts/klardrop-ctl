@@ -86,7 +86,8 @@ http_get() {
 
 http_post() {
   local path="$1"
-  local body="${2:-{}}"
+  local body='{}'
+  [[ $# -ge 2 ]] && body="$2"
   ensure_android_forward
   curl -fsS --max-time 15 -X POST \
     -H 'Content-Type: application/json' \
