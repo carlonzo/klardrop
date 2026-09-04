@@ -225,6 +225,29 @@ class VisibleDevicesImplTest {
   }
 
   /**
+   * Regression guard: the local device must never appear in the visible list, no matter
+   * which transport delivers its own announcement (multi-NIC mDNS re-broadcast, protocol
+   * twin, stale publication). The filter is the choke point in onNewDeviceVisible so
+   * every transport is covered by construction.
+   */
+  @Test
+  fun selfDeviceAnnouncementIsFiltered() = runTest(coroutines.dispatcher) {
+    val selfId = device1.deviceId
+    val devices = VisibleDevicesImpl(coroutines, Clock(), selfDeviceId = { selfId })
+
+    // Self arrives via two different transports — both must be dropped.
+    devices.onNewDeviceVisible(device1, connection1)
+    devices.onNewDeviceVisible(device1, connection2)
+
+    // A genuine peer must still be visible.
+    devices.onNewDeviceVisible(device2, connection2)
+
+    assertNull(devices.getDevice(device1.deviceId), "self device must never appear in the visible list")
+    assertNotNull(devices.getDevice(device2.deviceId), "other devices must remain visible")
+    assertEquals(1, devices.visibleDevices.value.size)
+  }
+
+  /**
    * Core bug scenario: a dial to a cached endpoint is refused (peer restarted on a new
    * ephemeral port). [VisibleDevices.invalidateKlardropEndpoint] must remove only the
    * dead endpoint. If it was the device's only connection the device entry is also removed.
