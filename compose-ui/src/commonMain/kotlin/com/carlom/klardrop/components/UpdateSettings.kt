@@ -40,10 +40,11 @@ import kotlinx.coroutines.delay
  *
  * It always states the running version and how this copy was installed, then the
  * live check result: checking, up to date, failed, or a new version with the
- * upgrade path for this install channel. Renders nothing on platforms where the
- * store owns updates (Android/iOS) — see [visible].
+ * upgrade path for this install channel. On platforms where the store owns updates
+ * (Android/iOS), it shows the running version and notes that updates are managed
+ * by the store — see [visible].
  *
- * @param visible false on platforms without in-app updates; the section collapses away.
+ * @param visible false on platforms without in-app updates; only version info is shown.
  * @param currentVersion this build's version.
  * @param releaseChannel "stable" or "nightly" — only shown when it isn't stable.
  * @param onCheck manual re-check.
@@ -64,8 +65,6 @@ fun UpdateSettingsSection(
   onOpenUrl: (String) -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  if (!visible) return
-
   val colors = KdTheme.colors
   val typography = KdTheme.typography
   val spacing = KdTheme.spacing
@@ -82,46 +81,61 @@ fun UpdateSettingsSection(
     }
   }
 
+  val versionText = "Version $currentVersion" +
+    if (releaseChannel != "stable") " · $releaseChannel" else ""
+
   Column(modifier = modifier.fillMaxWidth()) {
     Text(text = "Updates", style = typography.headline.copy(color = colors.text))
     Spacer(Modifier.height(spacing.s2))
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-      Column(modifier = Modifier.weight(1f)) {
-        Text(
-          text = "Version $currentVersion" +
-            if (releaseChannel != "stable") " · $releaseChannel" else "",
-          style = typography.body.copy(color = colors.text),
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-          text = statusLine(status, installProgress),
-          style = typography.caption.copy(color = statusColor(status, installProgress)),
+    if (!visible) {
+      Text(
+        text = versionText,
+        style = typography.body.copy(color = colors.text),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+      )
+      Text(
+        text = "Updates are managed by your app store.",
+        style = typography.caption.copy(color = colors.text2),
+      )
+    } else {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = versionText,
+            style = typography.body.copy(color = colors.text),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+          Text(
+            text = statusLine(status, installProgress),
+            style = typography.caption.copy(color = statusColor(status, installProgress)),
+          )
+        }
+
+        Spacer(Modifier.width(spacing.s3))
+
+        // "Check for updates" stays available in every state except mid-check, so a
+        // failed check is one tap from a retry.
+        PillButton(
+          label = if (status is UpdateStatus.Checking) "Checking…" else "Check for updates",
+          enabled = status !is UpdateStatus.Checking,
+          onClick = onCheck,
         )
       }
 
-      Spacer(Modifier.width(spacing.s3))
-
-      // "Check for updates" stays available in every state except mid-check, so a
-      // failed check is one tap from a retry.
-      PillButton(
-        label = if (status is UpdateStatus.Checking) "Checking…" else "Check for updates",
-        enabled = status !is UpdateStatus.Checking,
-        onClick = onCheck,
-      )
-    }
-
-    if (available != null) {
-      Spacer(Modifier.height(spacing.s3))
-      UpdatePath(
-        available = available,
-        installProgress = installProgress,
-        copied = copied,
-        onAction = { if (onAction(it)) copied = true },
-        onRestart = onRestart,
-        onOpenUrl = onOpenUrl,
-      )
+      if (available != null) {
+        Spacer(Modifier.height(spacing.s3))
+        UpdatePath(
+          available = available,
+          installProgress = installProgress,
+          copied = copied,
+          onAction = { if (onAction(it)) copied = true },
+          onRestart = onRestart,
+          onOpenUrl = onOpenUrl,
+        )
+      }
     }
   }
 }

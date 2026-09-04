@@ -190,6 +190,11 @@ struct ReportProblemSheet: View {
             name: nil,
             email: email
         )
+        if outcome == .sent {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                onDismiss()
+            }
+        }
     }
 
     private func isSent(_ outcome: ReportOutcome?) -> Bool {
