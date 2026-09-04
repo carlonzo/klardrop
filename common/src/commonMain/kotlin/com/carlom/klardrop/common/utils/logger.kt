@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.utils
 
 import com.klardrop.common.BreadcrumbType
 import com.klardrop.common.CrashReporter
+import kotlin.concurrent.Volatile
 
 fun log(message: String) {
   nativeLogger("Klardrop", message)
