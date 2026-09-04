@@ -17,7 +17,6 @@ import com.carlom.klardrop.common.utils.OsType
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -45,7 +44,6 @@ class DiscoveryNetwork(
 ) {
 
   private val discoveryScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
-  private val currentDevice = discoveryScope.async(coroutines.ioDispatcher) { currentDeviceProvider.get() }
 
   private var nearbySharePublishJob: Job? = null
   private var klardropPublishJob: Job? = null
@@ -228,8 +226,7 @@ class DiscoveryNetwork(
 
           val deviceId = nearbyShareDiscoveryUtils.getDeviceId(event.serviceInfo)
 
-          if (deviceId == currentDevice.await().shortDeviceId) {
-//          log("DiscoveryNetwork", "Ignoring own service: ${event.serviceInfo}")
+          if (deviceId == currentDeviceProvider.get().shortDeviceId) {
             return@onEach
           }
 
@@ -267,8 +264,7 @@ class DiscoveryNetwork(
 
           val deviceId = klardropDiscoveryUtils.getDeviceId(event.serviceInfo)
 
-          if (deviceId == currentDevice.await().shortDeviceId) {
-//            log("DiscoveryNetwork", "Ignoring own service: ${event.serviceInfo}")
+          if (deviceId == currentDeviceProvider.get().shortDeviceId) {
             return@onEach
           }
 
@@ -461,7 +457,7 @@ class DiscoveryNetwork(
       bleTransport.scanForPeers()
         .onCompletion { log("DiscoveryNetwork", "BLE scan completed") }
         .onEach { event ->
-          val selfId = currentDevice.await().shortDeviceId
+          val selfId = currentDeviceProvider.get().shortDeviceId
           when (event) {
             is BlePeerEvent.Found -> {
               if (event.shortDeviceId == selfId) return@onEach

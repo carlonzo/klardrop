@@ -298,7 +298,7 @@ class Server(
     if (!visibleDevices.isDeviceVisible(request.deviceId)) {
       log("Server", "Inbound connection claims deviceId ${request.deviceId} which is not in visible devices (mDNS loss or id change)")
     }
-    rememberInboundPeer(visibleDevices, request, socket)
+    rememberInboundPeer(visibleDevices, request, socket, trustManager)
 
     // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
     // than silently falling back to cleartext.

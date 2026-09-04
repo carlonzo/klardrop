@@ -604,6 +604,12 @@ class ClientImpl(
         // Store the connection in the client's pool keyed by the server's device ID. From this
         // point on the socket is owned by the pool/messenger, not by this attempt.
         connectionsPool.updateConnection(deviceId, connectionMessenger)
+        com.carlom.klardrop.common.trust.dropSupersededTrust(
+          keepDeviceId = deviceId,
+          address = address,
+          visibleDevices = visibleDevices,
+          trustManager = trustManager,
+        )
 
         // Start listening for incoming messages (including ACKs) in a separate coroutine
         clientScope.launch {

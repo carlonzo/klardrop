@@ -47,6 +47,39 @@ class TrustHealTest {
   }
 
   @Test
+  fun supersededTrustedIdsDropsOldIdAtSameAddress() {
+    val old = com.carlom.klardrop.common.discovery.DiscoveryDevice(
+      deviceInfo = com.carlom.klardrop.common.discovery.DeviceInfo(
+        deviceId = "oldid001",
+        name = "Phone",
+        deviceType = com.carlom.klardrop.common.utils.DeviceType.MOBILE,
+      ),
+      deviceConnections = listOf(
+        com.carlom.klardrop.common.discovery.DeviceConnection.KlardropConnection("10.0.0.8", 1),
+      ),
+      lastSeenTimestamp = 1L,
+    )
+    val fresh = com.carlom.klardrop.common.discovery.DiscoveryDevice(
+      deviceInfo = com.carlom.klardrop.common.discovery.DeviceInfo(
+        deviceId = "newid002",
+        name = "Phone",
+        deviceType = com.carlom.klardrop.common.utils.DeviceType.MOBILE,
+      ),
+      deviceConnections = listOf(
+        com.carlom.klardrop.common.discovery.DeviceConnection.KlardropConnection("10.0.0.8", 2),
+      ),
+      lastSeenTimestamp = 2L,
+    )
+    val dropped = supersededTrustedIds(
+      keepDeviceId = "newid002",
+      address = "10.0.0.8",
+      devices = mapOf("oldid001" to old, "newid002" to fresh),
+      isTrusted = { it == "oldid001" },
+    )
+    kotlin.test.assertEquals(listOf("oldid001"), dropped)
+  }
+
+  @Test
   fun revocationWhenPeerClaimsTrustAfterLocalUnpair() = runTest {
     val alice = newManager(aliceId)
     val bob = newManager(bobId)

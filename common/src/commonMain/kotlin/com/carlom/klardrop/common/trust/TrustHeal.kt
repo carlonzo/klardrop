@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.trust
 
 import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
+import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.carlom.klardrop.common.utils.log
 
 /**
@@ -30,4 +31,44 @@ internal suspend fun revocationIfPeerStale(
   }
   log("TrustHeal", "Peer $peerId claims trust we no longer hold; sending revocation")
   return revocation
+}
+
+/**
+ * After a reinstall the same physical peer shows up under a new short id at the same
+ * IP, while we still hold trust for the old id (offline row). Those old ids are the
+ * ones sharing [address] with [keepDeviceId] and still marked trusted.
+ */
+internal suspend fun dropSupersededTrust(
+  keepDeviceId: String,
+  address: String,
+  visibleDevices: com.carlom.klardrop.common.discovery.VisibleDevices,
+  trustManager: TrustManager,
+) {
+  val trusted = trustManager.getTrustedDevices().map { it.deviceId }.toSet()
+  val ids = supersededTrustedIds(
+    keepDeviceId = keepDeviceId,
+    address = address,
+    devices = visibleDevices.visibleDevices.value,
+    isTrusted = { it in trusted },
+  )
+  for (id in ids) {
+    log("TrustHeal", "Dropping superseded trust $id (same address $address as $keepDeviceId)")
+    trustManager.removeTrust(id)
+  }
+}
+
+internal fun supersededTrustedIds(
+  keepDeviceId: String,
+  address: String,
+  devices: Map<String, DiscoveryDevice>,
+  isTrusted: (String) -> Boolean,
+): List<String> {
+  if (address.isBlank()) return emptyList()
+  return devices.values.mapNotNull { device ->
+    val id = device.deviceInfo.deviceId
+    if (id == keepDeviceId) return@mapNotNull null
+    if (!device.deviceConnections.any { it.address == address }) return@mapNotNull null
+    if (!isTrusted(id)) return@mapNotNull null
+    id
+  }
 }
