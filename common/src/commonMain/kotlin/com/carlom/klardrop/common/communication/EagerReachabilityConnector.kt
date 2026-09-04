@@ -132,7 +132,9 @@ class EagerReachabilityConnector(
    */
   private suspend fun probeIfEligible(deviceId: String, device: DiscoveryDevice, selfId: String) {
     if (deviceId == selfId) return
-    if (!device.hasKlardropConnection()) return
+    // Nearby Share advertises the same unified TCP listener; skipping those peers
+    // left them permanently Unknown/disconnected whenever Klardrop mDNS was off.
+    if (!device.hasKlardropConnection() && !device.hasNearbyConnection()) return
     if (shouldSkip(deviceId)) return
     if (connectionsPool.isAvailable(deviceId)) {
       clearCooldown(deviceId)

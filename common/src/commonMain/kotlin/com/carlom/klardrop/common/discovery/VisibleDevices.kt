@@ -322,6 +322,11 @@ class VisibleDevicesImpl(
         val incomingIsPlaceholder = deviceInfo.name == deviceInfo.deviceId &&
           deviceInfo.deviceType == DeviceType.UNKNOWN && deviceInfo.osType == OsType.UNKNOWN
         if (existing.deviceConnections.contains(deviceConnection) && (existingIsRicher || incomingIsPlaceholder)) {
+          // Same endpoint heard again — still a liveness signal. Without this the 5-min
+          // TTL evicts a peer whose mDNS record never changes (Nearby Share identity
+          // TXT is stable), which reads as "phone can't see desktop / desktop shows
+          // the phone then it vanishes".
+          touchLastSeen(deviceInfo.deviceId)
           return@ioDispatcher false
         }
 

@@ -306,6 +306,20 @@ class VisibleDevicesImplTest {
       "Healthy endpoint must survive")
   }
 
+  @Test
+  fun rediscoveryOfSameEndpointRefreshesLastSeen() = runTest(coroutines.dispatcher) {
+    var now = 1_000L
+    val devices = VisibleDevicesImpl(coroutines, Clock(), nowMs = { now })
+    devices.onNewDeviceVisible(device1, connection1)
+    val firstSeen = devices.getDevice(device1.deviceId)!!.lastSeenTimestamp
+
+    now += 60_000L
+    devices.onNewDeviceVisible(device1, connection1)
+    val secondSeen = devices.getDevice(device1.deviceId)!!.lastSeenTimestamp
+
+    assertEquals(true, secondSeen > firstSeen, "identical ServiceFound must refresh lastSeen so the 5-min TTL does not evict a still-advertising peer")
+  }
+
   val device1 = DeviceInfo("1", "device1", DeviceType.MOBILE)
   val device2 = DeviceInfo("2", "device2", DeviceType.DESKTOP)
 

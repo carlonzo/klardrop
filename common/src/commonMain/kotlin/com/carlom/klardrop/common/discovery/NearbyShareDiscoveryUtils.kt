@@ -100,6 +100,11 @@ class NearbyShareDiscoveryUtils {
     if (serviceInfo.port <= 0) return false
     if (!serviceInfo.hasReachableAddress()) return false
 
+    // Klardrop's Nearby advertisement always includes `di` (the short device id).
+    // That is enough to identify the peer even when the companion "n" blob is the
+    // short Google endpoint-info form (no plaintext name, size <= 18).
+    if (!serviceInfo.attributes["di"].isNullOrBlank()) return true
+
     // Require a parseable, non-empty device name in the endpoint info.
     // Without it, we can only fall back to a generic label and the peer is
     // almost always unreachable in practice.

@@ -255,11 +255,18 @@ class ClientImpl(
       return ConnectOutcome.Failed
     }
 
-    val tcpConnections = discoveryDevice.getKlardropConnection().filter { it.port > 0 }
+    val tcpConnections = (
+      discoveryDevice.getKlardropConnection() +
+        discoveryDevice.getNearbyConnection().map {
+          DeviceConnection.KlardropConnection(it.address, it.port)
+        }
+      )
+      .filter { it.port > 0 }
+      .distinctBy { it.address to it.port }
     val bleConnections = discoveryDevice.getBleConnection()
 
     require(tcpConnections.isNotEmpty() || bleConnections.isNotEmpty()) {
-      "Cant connect to $deviceId. No known route: device is visible but advertises no Klardrop TCP or BLE endpoint"
+      "Cant connect to $deviceId. No known route: device is visible but advertises no Klardrop TCP, Nearby TCP, or BLE endpoint"
     }
 
     // launch coroutine to connect and await for the connection to stay alive. TCP is
