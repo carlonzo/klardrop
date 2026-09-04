@@ -35,9 +35,9 @@ scripts/klardrop-ctl android launch-android --nearby-only
 scripts/klardrop-ctl android launch-android --ble-only
 ```
 
-That installs `:android:installDebug`, grants runtime permissions, writes `files/klardrop-debug.json`, force-stops, starts the activity, and forwards the port. Wait until `scripts/klardrop-ctl android health` returns `"ok":true`.
+That installs `:android:installDebug`, grants runtime permissions, writes `files/klardrop-debug.json`, force-stops, starts the activity, and forwards the port. Wait until `scripts/klardrop-ctl android health` returns `"ok":true`. Confirm `/state.protocols` matches the isolation flag — a previous `--nearby-only` process will still be running if you only `installDebug` without force-stop.
 
-`KlarDropApplication` reads the JSON **in `onCreate`**, so protocol flags only take effect on a cold start after the file is in place. Changing transports = rewrite config + `am force-stop` + `am start`.
+`KlarDropApplication` reads the JSON **in `onCreate`**, so protocol flags only take effect on a cold start after the file is in place. Changing transports = rewrite config + `am force-stop` + `am start`. Never write the JSON *after* start and expect the running process to pick it up.
 
 JSON shape (`<filesDir>/klardrop-debug.json`):
 

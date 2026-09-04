@@ -114,3 +114,4 @@ scripts/klardrop-ctl desktop launch-desktop --klardrop-only
 - Launch a second desktop instance on the same data dir (SingleInstance will FOCUS and exit)
 - Use the CLI module (`:cli:jvmRun`) as a stand-in for the desktop app — it is a different process with no Compose UI and no control server
 - Click the window, even if it is visible
+- `pkill -f` / `pgrep -f` on `/tmp/klardrop-e2e-desktop`, `:desktop:run`, `gradlew`, or `MainKt` — those strings match the **agent shell** and kill the session. Stop only with `scripts/klardrop-ctl desktop stop-desktop`

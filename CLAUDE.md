@@ -113,3 +113,13 @@ Each platform provides implementations for:
 ## Development Best Practices
 
 - After you completed your work, ensure that the project compiles and tests are passing
+
+## Autonomous device testing (DebugControl)
+
+Do not tap the desktop window or the phone. Drive both apps through the loopback HTTP control plane (`DebugControl` / `LoopbackHttpServer`) via `scripts/klardrop-ctl`.
+
+How-to lives in the repo skills — load these before any desktop↔Android pairing/transfer test:
+
+- `.grok/skills/klardrop-desktop-control/SKILL.md` — JVM app, `127.0.0.1:8765`, isolated `/tmp/klardrop-e2e-desktop`
+- `.grok/skills/klardrop-android-control/SKILL.md` — debug APK `com.carlom.klardrop.debug`, `adb forward` to device `:8766`
+- `.grok/skills/klardrop-connection-tests/SKILL.md` — case matrix (discovery, pair, unpair-offline, identity reset) per transport

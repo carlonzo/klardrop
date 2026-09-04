@@ -22,7 +22,7 @@ code. The parent reads the reports, then writes unit tests and fixes.
 4. Phone and desktop on the same LAN (or BLE in range for BLE-only cases).
 5. No extra Klardrop instances (second desktop, Play-store app, leftover `:cli`).
 
-Launch both sides with the **same** isolation flag for the group (`--klardrop-only`, `--nearby-only`, or `--ble-only`). Confirm `/state.protocols` matches on both before case 1 of that group.
+Launch both sides with the **same** isolation flag for the group (`--klardrop-only`, `--nearby-only`, or `--ble-only`). Confirm `/state.protocols` matches on both before case 1 of that group. A leftover `--nearby-only` desktop from a previous run is the usual "android can't see desktop" false alarm — `stop-desktop` + relaunch both with matching flags.
 
 ## Report format (every case)
 
@@ -50,6 +50,7 @@ FAIL = assertion missed. BLOCKED = could not even set up (no device in list afte
 | Paired | both `/state` have the peer in `trustedIds` **and** `trustStatus=trusted` |
 | Unpaired | peer absent from `trustedIds` and `trustStatus` is `untrusted` (or missing) |
 | Text arrived | receiver `/logs` or chat not exposed — use `/state.incoming` then `accept-incoming`, then `/logs` containing the text, or a follow-up `/state` with no pendingAuth failure |
+| `send-text` returned | ctl waits for the ACK. Untrusted send without `accept-incoming` on the receiver times out (~15s) as FAIL — that is not "text never left" |
 | Pairing dialog shown | `wait-for-pairing-dialog` on the acceptor |
 | Pairing request never arrived | 20s timeout on `wait-for-pairing-dialog` **and** acceptor `/logs` have no `onPairingRequested` |
 
