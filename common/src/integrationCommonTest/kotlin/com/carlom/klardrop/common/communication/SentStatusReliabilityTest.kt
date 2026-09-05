@@ -62,11 +62,12 @@ class SentStatusReliabilityTest {
   /**
    * Short ACK timeouts + bounded retries so a retry-to-exhaustion scenario plays out quickly.
    *
-   * [AckTimeoutConfig.connectionWaitTimeout] must stay above Messenger's RECONNECT_PROBE_INTERVAL
+   * [AckTimeoutConfig.connectionWaitTimeout] must stay well above Messenger's RECONNECT_PROBE_INTERVAL
    * (1.5s): a fast-failing first dial enters a probe delay of exactly that length, and with a
-   * budget below it every attempt stalls out without ever re-dialing — that is what starved the
-   * happy path on slow native runners (budget is consumed on the virtual test clock while the
-   * real localhost handshake proceeds on Dispatchers.IO). 5s = the 2s ACK scale + 2 probe cycles.
+   * budget below it every attempt stalls out without ever re-dialing. On slow native runners
+   * (macosArm64 and iosSimulatorArm64), the real localhost handshake proceeds on Dispatchers.IO
+   * while virtual time advances 4x faster during pump (200ms virtual per 50ms real), so 10s of
+   * virtual budget provides 2.5s of real time for the socket connection to complete under CI load.
    */
   private val fastAckConfig = AckTimeoutConfig(
     noPayloadAckTimeout = 2.seconds,
@@ -75,7 +76,7 @@ class SentStatusReliabilityTest {
     userResponseTimeout = 2.seconds,
     maxRetries = 2,
     retryBackoffMultiplier = 1.0,
-    connectionWaitTimeout = 5.seconds,
+    connectionWaitTimeout = 10.seconds,
   )
 
   private fun runReliabilityTest(

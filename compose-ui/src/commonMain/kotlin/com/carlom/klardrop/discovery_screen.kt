@@ -540,11 +540,10 @@ private fun SettingsSheet(
                 Spacer(Modifier.height(spacing.s4))
             }
 
-            // Renders nothing where the app store owns updates (Android/iOS).
-            updates()
+            ReportProblemSection()
             Spacer(Modifier.height(spacing.s4))
 
-            ReportProblemSection()
+            updates()
         }
     }
 }
