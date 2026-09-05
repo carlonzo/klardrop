@@ -30,7 +30,7 @@ import kotlinx.serialization.json.putJsonObject
  * Started only when [com.carlom.klardrop.common.ApplicationInfo.isDebug] is true and
  * [com.carlom.klardrop.common.ApplicationInfo.controlPort] is set. Binds 127.0.0.1.
  */
-object DebugControl {
+object DebugControl : DebugControlService {
   private val json = Json { ignoreUnknownKeys = true }
 
   @Volatile
@@ -40,14 +40,14 @@ object DebugControl {
   private var klardrop: Klardrop? = null
 
   @Volatile
-  var windowVisibilityProvider: (() -> Boolean)? = null
+  override var windowVisibilityProvider: (() -> Boolean)? = null
 
   @Volatile
-  var windowVisibilitySetter: ((Boolean) -> Unit)? = null
+  override var windowVisibilitySetter: ((Boolean) -> Unit)? = null
 
   private var server: LoopbackHttpServer? = null
 
-  suspend fun start(app: Klardrop) {
+  override suspend fun start(app: Klardrop) {
     klardrop = app
     val info = app.commonComponent.applicationInfo()
     if (!info.isDebug) return
@@ -66,12 +66,12 @@ object DebugControl {
     }
   }
 
-  suspend fun bind(discoveryController: DiscoveryController, app: Klardrop) {
+  override suspend fun bind(discoveryController: DiscoveryController, app: Klardrop) {
     controller = discoveryController
     start(app)
   }
 
-  fun stop() {
+  override fun stop() {
     server?.stop()
     server = null
   }

@@ -47,14 +47,17 @@ class MainActivity : ComponentActivity() {
     }
 
     setContent {
-
       AppTheme {
-
-        KlardropApp(klardrop)
-
+        KlardropApp(
+          klardrop = klardrop,
+          onDiscoveryControllerAvailable = { controller ->
+            com.carlom.klardrop.android.debug.AndroidDebugBridge.onDiscoveryControllerAvailable(
+              controller,
+              klardrop,
+            )
+          },
+        )
       }
-
-
     }
 
 

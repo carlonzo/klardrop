@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.components.ShareDialog
-import com.carlom.klardrop.debug.DebugControl
 import com.carlom.klardrop.navigation.KlardropNavigator
 import com.carlom.klardrop.theme.AppTheme
 import com.carlom.klardrop.theme.KdTheme
@@ -31,6 +30,7 @@ fun KlardropApp(
   isDesktop: Boolean = false,
   pendingFiles: List<String>? = null,
   onClearPendingFiles: () -> Unit = {},
+  onDiscoveryControllerAvailable: (DiscoveryController) -> Unit = {},
 ) {
   val uiDependencies = remember { UiDependencies(klardrop.commonComponent) }
   val visibleDevicesController = remember { uiDependencies.discoveryController() }
@@ -43,7 +43,7 @@ fun KlardropApp(
   }
 
   LaunchedEffect(visibleDevicesController) {
-    DebugControl.bind(visibleDevicesController, klardrop)
+    onDiscoveryControllerAvailable(visibleDevicesController)
   }
 
   AppTheme {

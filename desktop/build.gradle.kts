@@ -25,6 +25,7 @@ kotlin {
         implementation(project(":klardrop-common"))
         implementation(project(":presentation"))
         implementation(project(":compose-ui"))
+        implementation(project(":debug-control"))
         implementation(compose.desktop.currentOs)
         implementation(deps.kotlinx.coroutines.core)
         // Linux StatusNotifierItem tray so Omarchy (and other SNI hosts) can

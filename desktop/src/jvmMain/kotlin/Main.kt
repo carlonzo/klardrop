@@ -14,7 +14,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.carlom.klardrop.KlardropApp
-import com.carlom.klardrop.debug.DebugControl
+import com.carlom.klardrop.desktop.debug.DesktopDebugLoader
 import kotlinx.coroutines.launch
 import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.ApplicationInfo
@@ -175,7 +175,7 @@ fun main(args: Array<String>) {
 
   if (applicationInfo.isDebug && applicationInfo.controlPort != null) {
     k.commonComponent.coroutines().appScope.launch {
-      DebugControl.start(k)
+      DesktopDebugLoader.instance?.start(k)
     }
   }
 
@@ -203,10 +203,14 @@ fun main(args: Array<String>) {
 
     // Connect DebugControl programmatic window visibility endpoints
     LaunchedEffect(Unit) {
-      DebugControl.windowVisibilityProvider = { isWindowVisible }
-      DebugControl.windowVisibilitySetter = { visible ->
-        EventQueue.invokeLater {
-          isWindowVisible = visible
+      if (applicationInfo.isDebug) {
+        DesktopDebugLoader.instance?.let { debugControl ->
+          debugControl.windowVisibilityProvider = { isWindowVisible }
+          debugControl.windowVisibilitySetter = { visible ->
+            EventQueue.invokeLater {
+              isWindowVisible = visible
+            }
+          }
         }
       }
     }
@@ -310,6 +314,13 @@ fun main(args: Array<String>) {
             isDesktop = true,
             pendingFiles = pendingShareFiles,
             onClearPendingFiles = { pendingShareFiles = null },
+            onDiscoveryControllerAvailable = { controller ->
+              if (applicationInfo.isDebug) {
+                k.commonComponent.coroutines().appScope.launch {
+                  DesktopDebugLoader.instance?.bind(controller, k)
+                }
+              }
+            },
           )
         }
 
