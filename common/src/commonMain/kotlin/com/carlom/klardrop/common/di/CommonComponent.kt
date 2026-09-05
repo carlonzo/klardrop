@@ -74,7 +74,7 @@ class CommonComponent(
     VisibleDevicesImpl(
       coroutines,
       clock,
-      selfDeviceId = { currentDeviceProvider.get().shortDeviceId },
+      currentDeviceProvider = currentDeviceProvider,
     )
   }
 

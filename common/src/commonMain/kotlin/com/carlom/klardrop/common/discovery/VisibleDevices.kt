@@ -76,14 +76,14 @@ class VisibleDevicesImpl(
    */
   private val nowMs: () -> Long = { clock.currentTimeMillis() },
   /**
-   * Returns the local device's short id. Announcements carrying this id are the local
-   * machine seeing its own advertisement (multi-NIC bindings, protocol twin, stale
+   * Local device provider. Announcements carrying this device's id (full or short) are
+   * the local machine seeing its own advertisement (multi-NIC bindings, protocol twin, stale
    * publications) and must never enter the visible list. This is the single choke
    * point every transport routes through, so self-visibility is structurally
    * impossible regardless of per-transport filtering upstream. Null disables the
    * filter (tests, headless wiring).
    */
-  private val selfDeviceId: suspend () -> String? = { null },
+  private val currentDeviceProvider: CurrentDeviceProvider? = null,
 ) : VisibleDevices {
 
   private companion object {
@@ -190,7 +190,8 @@ class VisibleDevicesImpl(
     // Choke-point self filter: the local device's own announcement (re-broadcast
     // across our multiple mDNS bindings, or echoed by any transport) must never
     // become a visible "peer".
-    if (deviceInfo.deviceId == selfDeviceId()) {
+    val currentDevice = currentDeviceProvider?.get()
+    if (currentDevice != null && deviceInfo.deviceId == currentDevice.shortDeviceId) {
       log("VisibleDevices", "Ignoring self announcement (id=${deviceInfo.deviceId}, ${deviceConnection.deviceConnectionType})")
       return
     }

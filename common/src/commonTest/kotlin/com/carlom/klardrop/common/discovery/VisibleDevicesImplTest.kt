@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.discovery
 
+import FakeLocalPropertiesRepository
 import app.cash.turbine.test
 import TestCoroutines
 import com.carlom.klardrop.common.utils.Clock
@@ -233,7 +234,8 @@ class VisibleDevicesImplTest {
   @Test
   fun selfDeviceAnnouncementIsFiltered() = runTest(coroutines.dispatcher) {
     val selfId = device1.deviceId
-    val devices = VisibleDevicesImpl(coroutines, Clock(), selfDeviceId = { selfId })
+    val currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(selfId))
+    val devices = VisibleDevicesImpl(coroutines, Clock(), currentDeviceProvider = currentDeviceProvider)
 
     // Self arrives via two different transports — both must be dropped.
     devices.onNewDeviceVisible(device1, connection1)
