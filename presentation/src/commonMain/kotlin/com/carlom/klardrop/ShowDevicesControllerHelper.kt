@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -38,23 +39,33 @@ class ShowDevicesControllerHelper(
         trustedDevices,
       ) { devices, unreadCounts, reachabilityMap, trusted ->
 
-        val visibleRows = devices.values.map { device ->
-          val deviceInfo = device.deviceInfo
-          val unreadCount = unreadCounts[deviceInfo.deviceId] ?: 0L
+        val visibleRows = devices.values
+          .filter { device ->
+            val isTrusted = trusted.containsKey(device.deviceInfo.deviceId)
+            if (isTrusted) return@filter true
+            if (!device.hasKlardropConnection()) return@filter false
+            val info = device.deviceInfo
+            val isRawPlaceholder = info.name.isBlank() ||
+              (info.name == info.deviceId && info.deviceType == DeviceType.UNKNOWN)
+            !isRawPlaceholder
+          }
+          .map { device ->
+            val deviceInfo = device.deviceInfo
+            val unreadCount = unreadCounts[deviceInfo.deviceId] ?: 0L
 
-          val isTrusted = trusted.containsKey(deviceInfo.deviceId)
-          val trustStatus = if (isTrusted) TrustStatus.Trusted else TrustStatus.Untrusted
+            val isTrusted = trusted.containsKey(deviceInfo.deviceId)
+            val trustStatus = if (isTrusted) TrustStatus.Trusted else TrustStatus.Untrusted
 
-          DeviceUi(
-            deviceId = deviceInfo.deviceId,
-            deviceName = deviceInfo.name,
-            deviceType = deviceInfo.deviceType,
-            connectionTypes = device.deviceConnections.map { it.deviceConnectionType }.distinct(),
-            hasUnreadMessages = unreadCount > 0,
-            trustStatus = trustStatus,
-            reachability = reachabilityMap[deviceInfo.deviceId] ?: Reachability.Unknown,
-          )
-        }
+            DeviceUi(
+              deviceId = deviceInfo.deviceId,
+              deviceName = deviceInfo.name,
+              deviceType = deviceInfo.deviceType,
+              connectionTypes = device.deviceConnections.map { it.deviceConnectionType }.distinct(),
+              hasUnreadMessages = unreadCount > 0,
+              trustStatus = trustStatus,
+              reachability = reachabilityMap[deviceInfo.deviceId] ?: Reachability.Unknown,
+            )
+          }
 
         // A pairing outlives discovery: a trusted device that isn't announcing right now
         // still belongs in "Your devices" — flagged offline — so the user can reach its

@@ -191,7 +191,10 @@ class VisibleDevicesImpl(
     // across our multiple mDNS bindings, or echoed by any transport) must never
     // become a visible "peer".
     val currentDevice = currentDeviceProvider?.get()
-    if (currentDevice != null && deviceInfo.deviceId == currentDevice.shortDeviceId) {
+    if (currentDevice != null && (deviceInfo.deviceId == currentDevice.shortDeviceId ||
+        deviceInfo.deviceId == currentDevice.deviceId ||
+        (deviceInfo.deviceId.length >= 8 && currentDevice.shortDeviceId.length >= 8 &&
+          deviceInfo.deviceId.take(8) == currentDevice.shortDeviceId.take(8)))) {
       log("VisibleDevices", "Ignoring self announcement (id=${deviceInfo.deviceId}, ${deviceConnection.deviceConnectionType})")
       return
     }
@@ -298,9 +301,21 @@ class VisibleDevicesImpl(
   }
 
   override fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int) {
-    val staleConnection = DeviceConnection.KlardropConnection(address = address, port = port)
-    log("VisibleDevices", "Invalidating stale Klardrop endpoint for $deviceId @ $address:$port")
-    onDeviceLost(deviceId, staleConnection)
+    log("VisibleDevices", "Invalidating stale endpoint for $deviceId @ $address:$port")
+    visibleDevicesFlow.update { currentMap ->
+      currentMap.toMutableMap().also { map ->
+        val device = map[deviceId] ?: return@also
+        val newConnections = device.deviceConnections.filterNot {
+          (it is DeviceConnection.KlardropConnection && it.address == address && it.port == port) ||
+            (it is DeviceConnection.NearbyConnection && it.address == address && it.port == port)
+        }
+        if (newConnections.isEmpty()) {
+          map.remove(deviceId)
+        } else {
+          map[deviceId] = device.copy(deviceConnections = newConnections)
+        }
+      }
+    }
   }
 
   /**
@@ -308,13 +323,26 @@ class VisibleDevicesImpl(
    */
   private suspend fun addDevice(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection): Boolean {
     return coroutines.ioDispatcher {
-      val existing = visibleDevicesFlow.value[deviceInfo.deviceId]
-      val containsAlready = existing != null
+      val now = nowMs()
 
-      if (existing != null) {
-        // Skip the early return when the incoming DeviceInfo carries a richer
-        // identity than what's stored — we still need to fall through to the
-        // merge step below so the friendly name / type can land on the entry.
+      val connectionAddress = (deviceConnection as? DeviceConnection.KlardropConnection)?.address
+        ?: (deviceConnection as? DeviceConnection.NearbyConnection)?.address
+
+      val isKlardropAnnouncement = deviceConnection is DeviceConnection.KlardropConnection
+
+      val existing = visibleDevicesFlow.value[deviceInfo.deviceId]
+      val duplicatePeer = if (connectionAddress != null) {
+        visibleDevicesFlow.value.values.firstOrNull { dev ->
+          dev.deviceInfo.deviceId != deviceInfo.deviceId &&
+            dev.deviceConnections.any { conn ->
+              (conn is DeviceConnection.KlardropConnection || conn is DeviceConnection.NearbyConnection) &&
+                conn.address == connectionAddress
+            }
+        }
+      } else null
+
+      // If this exact endpoint was already heard for this deviceId and identity is rich, fast-path liveness
+      if (existing != null && duplicatePeer == null) {
         val existingIsRicher =
           (existing.deviceInfo.name.isNotBlank() && existing.deviceInfo.name != existing.deviceInfo.deviceId) &&
             existing.deviceInfo.deviceType != DeviceType.UNKNOWN &&
@@ -322,62 +350,109 @@ class VisibleDevicesImpl(
         val incomingIsPlaceholder = deviceInfo.name == deviceInfo.deviceId &&
           deviceInfo.deviceType == DeviceType.UNKNOWN && deviceInfo.osType == OsType.UNKNOWN
         if (existing.deviceConnections.contains(deviceConnection) && (existingIsRicher || incomingIsPlaceholder)) {
-          // Same endpoint heard again — still a liveness signal. Without this the 5-min
-          // TTL evicts a peer whose mDNS record never changes (Nearby Share identity
-          // TXT is stable), which reads as "phone can't see desktop / desktop shows
-          // the phone then it vanishes".
           touchLastSeen(deviceInfo.deviceId)
           return@ioDispatcher false
         }
-
       }
 
-      visibleDevicesFlow.update {
-        val now = nowMs()
-        // Seed from the existing entry if present, otherwise from the identity
-        // cache so a re-discovery after eviction picks up the previously-learned
-        // friendly identity.
-        val seedInfo = it[deviceInfo.deviceId]?.deviceInfo
-          ?: identityCache[deviceInfo.deviceId]
-          ?: deviceInfo
-        val storedDiscoveryDevice = it[deviceInfo.deviceId]
-          ?: DiscoveryDevice(seedInfo, lastSeenTimestamp = now)
+      var isNew = false
 
-        val newConnections = storedDiscoveryDevice.deviceConnections
-          // Same type+address (new TCP port) or a new BLE MAC (Android RPA rotation):
-          // keep only the latest BLE address so we don't GATT-connect a stale RPA.
+      visibleDevicesFlow.update { currentMap ->
+        val existingForId = currentMap[deviceInfo.deviceId]
+
+        val dupPeer = if (connectionAddress != null) {
+          currentMap.values.firstOrNull { dev ->
+            dev.deviceInfo.deviceId != deviceInfo.deviceId &&
+              dev.deviceConnections.any { conn ->
+                (conn is DeviceConnection.KlardropConnection || conn is DeviceConnection.NearbyConnection) &&
+                  conn.address == connectionAddress
+              }
+          }
+        } else null
+
+        // If the incoming connection is NOT Klardrop (e.g. NearbyConnection), but a device
+        // with a Klardrop connection ALREADY exists on this IP, attach the connection to that Klardrop device
+        // instead of creating a duplicate device entry.
+        if (!isKlardropAnnouncement && dupPeer != null && dupPeer.hasKlardropConnection()) {
+          log(
+            "VisibleDevices",
+            "Deduplicating non-Klardrop connection ($deviceConnection) to existing Klardrop peer ${dupPeer.deviceInfo.deviceId}"
+          )
+          val updatedConnections = dupPeer.deviceConnections
+            .filterNot {
+              it.deviceConnectionType == deviceConnection.deviceConnectionType &&
+                (it.address == deviceConnection.address || deviceConnection is DeviceConnection.BleConnection)
+            }
+            .plus(deviceConnection)
+
+          val mergedInfo = mergeDeviceInfo(dupPeer.deviceInfo, deviceInfo)
+          return@update currentMap.toMutableMap().apply {
+            put(
+              dupPeer.deviceInfo.deviceId,
+              dupPeer.copy(
+                deviceInfo = mergedInfo,
+                deviceConnections = updatedConnections,
+                lastSeenTimestamp = now,
+              )
+            )
+          }
+        }
+
+        val mutableMap = currentMap.toMutableMap()
+        var extraConnections: List<DeviceConnection> = emptyList()
+        var extraInfo: DeviceInfo? = null
+
+        if (dupPeer != null && isKlardropAnnouncement) {
+          log(
+            "VisibleDevices",
+            "Deduplicating: Klardrop announcement for ${deviceInfo.deviceId} supersedes ${dupPeer.deviceInfo.deviceId} at $connectionAddress"
+          )
+          mutableMap.remove(dupPeer.deviceInfo.deviceId)
+          extraConnections = dupPeer.deviceConnections.filterNot {
+            it.deviceConnectionType == deviceConnection.deviceConnectionType && it.address == deviceConnection.address
+          }
+          extraInfo = dupPeer.deviceInfo
+        }
+
+        val baseInfo = existingForId?.deviceInfo
+          ?: identityCache[deviceInfo.deviceId]
+          ?: extraInfo
+          ?: deviceInfo
+
+        val storedDiscoveryDevice = existingForId
+          ?: DiscoveryDevice(baseInfo, lastSeenTimestamp = now)
+
+        if (existingForId == null && dupPeer == null) {
+          isNew = true
+        }
+
+        val combinedConnections = (storedDiscoveryDevice.deviceConnections + extraConnections)
           .filterNot {
             it.deviceConnectionType == deviceConnection.deviceConnectionType &&
               (it.address == deviceConnection.address || deviceConnection is DeviceConnection.BleConnection)
           }
-          .toMutableList().also { it.add(deviceConnection) }
+          .plus(deviceConnection)
 
-        // Merge identity fields: prefer the richer one from either side. The BLE
-        // discovery layer surfaces a placeholder DeviceInfo with name=shortId and
-        // UNKNOWN type/os; the BLE handshake later supplies the real values. mDNS
-        // already arrives rich. Always upgrade, never downgrade.
-        val mergedInfo = mergeDeviceInfo(seedInfo, deviceInfo)
-        // Remember the enriched identity for future eviction-recovery cycles.
+        var mergedInfo = mergeDeviceInfo(baseInfo, deviceInfo)
+        if (extraInfo != null) {
+          mergedInfo = mergeDeviceInfo(extraInfo, mergedInfo)
+        }
+
         if (mergedInfo.name != mergedInfo.deviceId || mergedInfo.deviceType != DeviceType.UNKNOWN || mergedInfo.osType != OsType.UNKNOWN) {
           identityCache[deviceInfo.deviceId] = mergedInfo
         }
 
-        it.toMutableMap().apply {
+        mutableMap[deviceInfo.deviceId] = storedDiscoveryDevice.copy(
+          deviceInfo = mergedInfo,
+          deviceConnections = combinedConnections,
+          lastSeenTimestamp = now,
+        )
 
-          put(
-            deviceInfo.deviceId, storedDiscoveryDevice.copy(
-              deviceInfo = mergedInfo,
-              deviceConnections = newConnections,
-              lastSeenTimestamp = now
-            )
-          )
-        }
-
+        mutableMap
       }
 
-      !containsAlready
+      isNew
     }
-
   }
 
 }

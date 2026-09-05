@@ -55,7 +55,10 @@ actual class ServiceDiscoveryMdns {
   private val mutexMapMutex = Mutex()
 
   private suspend fun publishMutexFor(serviceType: String): Mutex =
-    mutexMapMutex.withLock { publishMutexByServiceType.getOrPut(serviceType) { Mutex() } }
+    mutexMapMutex.withLock {
+      val key = serviceType.removeSuffix(".local.").removeSuffix(".")
+      publishMutexByServiceType.getOrPut(key) { Mutex() }
+    }
 
 
   actual fun discoverServices(serviceType: String) = callbackFlow {

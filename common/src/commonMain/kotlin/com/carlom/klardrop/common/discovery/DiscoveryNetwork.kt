@@ -210,6 +210,9 @@ class DiscoveryNetwork(
         // Republish services if they were previously started
         nearbySharePort?.let { port -> republishNearbyShare(port, deviceInfo) }
         publishedKlardropPort?.let { port -> republishKlardrop(port, deviceInfo) }
+        if (bleAdvertiseJob != null) {
+          republishBle(deviceInfo)
+        }
       }
       .launchIn(discoveryScope)
   }
@@ -430,13 +433,19 @@ class DiscoveryNetwork(
 
   fun startPublishBle() {
     log("DiscoveryNetwork", "startPublishBle")
+    startDeviceFlowSubscriptionIfNeeded()
+    republishBle()
+  }
+
+  private fun republishBle(deviceInfo: CurrentDevice? = null) {
     bleAdvertiseJob?.cancel()
     bleAdvertiseJob = discoveryScope.launch {
       if (!bleTransport.isSupported()) {
         log("DiscoveryNetwork", "BLE not supported on this platform/device; skipping advertising")
         return@launch
       }
-      runCatching { bleTransport.startAdvertising(currentDeviceProvider.get()) }
+      val currentDeviceInfo = deviceInfo ?: currentDeviceProvider.get()
+      runCatching { bleTransport.startAdvertising(currentDeviceInfo) }
         .onFailure { log("DiscoveryNetwork", "BLE advertise failed: ${it.message}") }
     }
   }

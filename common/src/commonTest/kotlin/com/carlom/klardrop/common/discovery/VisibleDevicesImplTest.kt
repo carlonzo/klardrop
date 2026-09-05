@@ -307,6 +307,30 @@ class VisibleDevicesImplTest {
   }
 
   @Test
+  fun invalidateKlardropEndpoint_removesNearbyConnectionMatchingRefusedPort() = runTest(coroutines.dispatcher) {
+    val address = "10.79.71.245"
+    val stalePort = 49584
+    val klardropConn = DeviceConnection.KlardropConnection(address, stalePort)
+    val nearbyConn = DeviceConnection.NearbyConnection(address, stalePort)
+    val bleConn = DeviceConnection.BleConnection("7A:94:25:16:E6:AA")
+
+    visibleDevices.onNewDeviceVisible(device1, klardropConn)
+    visibleDevices.onNewDeviceVisible(device1, nearbyConn)
+    visibleDevices.onNewDeviceVisible(device1, bleConn)
+
+    visibleDevices.invalidateKlardropEndpoint(device1.deviceId, address, stalePort)
+
+    val device = visibleDevices.getDevice(device1.deviceId)!!
+    val hasStaleKlardrop = device.deviceConnections.any { it is DeviceConnection.KlardropConnection && it.address == address && it.port == stalePort }
+    val hasStaleNearby = device.deviceConnections.any { it is DeviceConnection.NearbyConnection && it.address == address && it.port == stalePort }
+    val hasBle = device.deviceConnections.any { it is DeviceConnection.BleConnection }
+
+    assertEquals(false, hasStaleKlardrop, "Stale Klardrop connection must be removed")
+    assertEquals(false, hasStaleNearby, "Stale Nearby connection matching address:port must be removed")
+    assertEquals(true, hasBle, "BLE connection must remain intact")
+  }
+
+  @Test
   fun addDevice_replacesStaleBleAddressWhenPeerRotatesRpa() = runTest(coroutines.dispatcher) {
     val oldAddress = DeviceConnection.BleConnection("AA:AA:AA:AA:AA:AA")
     val newAddress = DeviceConnection.BleConnection("BB:BB:BB:BB:BB:BB")
@@ -327,6 +351,57 @@ class VisibleDevicesImplTest {
     val secondSeen = devices.getDevice(device1.deviceId)!!.lastSeenTimestamp
 
     assertEquals(true, secondSeen > firstSeen, "identical ServiceFound must refresh lastSeen so the 5-min TTL does not evict a still-advertising peer")
+  }
+
+  @Test
+  fun addDevice_deduplicatesByKlardropDeviceIdWhenKlardropArrivesAfterNearbyOnSameIp() = runTest(coroutines.dispatcher) {
+    val ip = "10.0.0.5"
+    val nearbyInfo = DeviceInfo("nearby_id", "Carlo's Pixel", DeviceType.MOBILE)
+    val nearbyConn = DeviceConnection.NearbyConnection(ip, 44857)
+    val klardropInfo = DeviceInfo("klardrop_id", "Pixel 9 Pro XL", DeviceType.MOBILE)
+    val klardropConn = DeviceConnection.KlardropConnection(ip, 43175)
+
+    // 1. Nearby arrives first
+    visibleDevices.onNewDeviceVisible(nearbyInfo, nearbyConn)
+    assertEquals(true, visibleDevices.isDeviceVisible("nearby_id"))
+
+    // 2. Klardrop arrives second on same IP
+    visibleDevices.onNewDeviceVisible(klardropInfo, klardropConn)
+
+    // "nearby_id" must be superseded; "klardrop_id" is the authoritative device
+    assertEquals(false, visibleDevices.isDeviceVisible("nearby_id"), "Stale/Nearby ID must be superseded")
+    assertEquals(true, visibleDevices.isDeviceVisible("klardrop_id"), "Klardrop device must be visible")
+
+    val device = visibleDevices.getDevice("klardrop_id")!!
+    assertEquals("Pixel 9 Pro XL", device.deviceInfo.name)
+    assertEquals(2, device.deviceConnections.size)
+    assertContains(device.deviceConnections, klardropConn)
+    assertContains(device.deviceConnections, nearbyConn)
+  }
+
+  @Test
+  fun addDevice_deduplicatesByKlardropDeviceIdWhenNearbyArrivesAfterKlardropOnSameIp() = runTest(coroutines.dispatcher) {
+    val ip = "10.0.0.6"
+    val klardropInfo = DeviceInfo("klardrop_id_2", "Pixel 9 Pro XL", DeviceType.MOBILE)
+    val klardropConn = DeviceConnection.KlardropConnection(ip, 43175)
+    val nearbyInfo = DeviceInfo("nearby_id_2", "Carlo's Pixel", DeviceType.MOBILE)
+    val nearbyConn = DeviceConnection.NearbyConnection(ip, 44857)
+
+    // 1. Klardrop arrives first
+    visibleDevices.onNewDeviceVisible(klardropInfo, klardropConn)
+    assertEquals(true, visibleDevices.isDeviceVisible("klardrop_id_2"))
+
+    // 2. Nearby arrives second on same IP with different deviceId
+    visibleDevices.onNewDeviceVisible(nearbyInfo, nearbyConn)
+
+    // Must NOT create a separate device for "nearby_id_2"
+    assertEquals(false, visibleDevices.isDeviceVisible("nearby_id_2"), "Separate device must not be created for Nearby twin")
+    assertEquals(true, visibleDevices.isDeviceVisible("klardrop_id_2"))
+
+    val device = visibleDevices.getDevice("klardrop_id_2")!!
+    assertEquals(2, device.deviceConnections.size)
+    assertContains(device.deviceConnections, klardropConn)
+    assertContains(device.deviceConnections, nearbyConn)
   }
 
   val device1 = DeviceInfo("1", "device1", DeviceType.MOBILE)

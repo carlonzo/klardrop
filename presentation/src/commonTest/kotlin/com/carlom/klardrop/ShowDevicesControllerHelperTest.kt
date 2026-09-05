@@ -129,6 +129,29 @@ class ShowDevicesControllerHelperTest {
     assertEquals(TrustStatus.Untrusted, rows.getValue(phone.deviceId).trustStatus)
     assertNull(rows[laptop.deviceId])
   }
+
+  @Test
+  fun untrustedDeviceWithoutKlardropConnectionIsNotDisplayed() = runTest(dispatcher) {
+    // Untrusted device with only BleConnection or NearbyConnection must not be displayed
+    val bleOnlyPhone = phone.copy(deviceId = "ble-phone")
+    visibleDevices.value = visible(bleOnlyPhone, DeviceConnection.BleConnection("AA:BB:CC:DD:EE:FF"))
+
+    val rows = devices()
+    assertNull(rows[bleOnlyPhone.deviceId], "Untrusted peer without Klardrop connection should not be displayed")
+  }
+
+  @Test
+  fun untrustedDeviceWithPlaceholderIdentityIsNotDisplayed() = runTest(dispatcher) {
+    val placeholderDevice = DeviceInfo(
+      deviceId = "abc12345",
+      name = "abc12345",
+      deviceType = DeviceType.UNKNOWN,
+    )
+    visibleDevices.value = visible(placeholderDevice, DeviceConnection.KlardropConnection("10.0.0.4", 4444))
+
+    val rows = devices()
+    assertNull(rows[placeholderDevice.deviceId], "Untrusted placeholder peer should not be displayed")
+  }
 }
 
 private class FakeMessageRepository(
