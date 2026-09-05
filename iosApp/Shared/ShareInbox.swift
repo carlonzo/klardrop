@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 // ---------------------------------------------------------------------------
 // ShareInbox — the contract between the Share Extensions and the host app.
@@ -45,8 +46,39 @@ enum ShareInbox {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let name = src.lastPathComponent.isEmpty ? "shared_file" : src.lastPathComponent
         let dest = dir.appendingPathComponent(UUID().uuidString + "_" + name)
+
+        let accessing = src.startAccessingSecurityScopedResource()
+        defer {
+            if accessing {
+                src.stopAccessingSecurityScopedResource()
+            }
+        }
+
         do {
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try? FileManager.default.removeItem(at: dest)
+            }
             try FileManager.default.copyItem(at: src, to: dest)
+            return dest.path
+        } catch {
+            do {
+                let data = try Data(contentsOf: src)
+                try data.write(to: dest)
+                return dest.path
+            } catch {
+                return nil
+            }
+        }
+    }
+
+    /// Save raw data into the shared inbox. Returns the destination path on success.
+    static func ingest(data: Data, suggestedType: String) -> String? {
+        guard let dir = inboxDirectory(), !data.isEmpty else { return nil }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let ext = UTType(suggestedType)?.preferredFilenameExtension ?? "bin"
+        let dest = dir.appendingPathComponent("\(UUID().uuidString).\(ext)")
+        do {
+            try data.write(to: dest)
             return dest.path
         } catch {
             return nil
