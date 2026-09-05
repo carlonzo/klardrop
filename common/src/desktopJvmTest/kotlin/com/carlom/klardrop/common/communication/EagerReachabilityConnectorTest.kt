@@ -228,6 +228,8 @@ class EagerReachabilityConnectorTest {
       connector.start()
       awaitItem()
       awaitItem()
+      // Probe launches connectTo on Dispatchers.IO after markProbing; wait for it.
+      delay(500)
       cancelAndIgnoreRemainingEvents()
     }
     connector.stop()
