@@ -20,6 +20,7 @@ struct RootView: View {
 
     let bootstrap: KlardropBootstrap
     @Environment(\.kdColors) private var kd
+    @Environment(\.scenePhase) private var scenePhase
 
     // @State on an @Observable class: created exactly once per view lifetime.
     // @MainActor init is called synchronously on the main thread.
@@ -58,6 +59,14 @@ struct RootView: View {
             .task {
                 model.start()
             }
+            .onAppear {
+                drainAndShowShareInbox()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active {
+                    drainAndShowShareInbox()
+                }
+            }
             .onDisappear {
                 // Only the iOS-owned model stops here. The macOS app owns its
                 // model so the menu bar keeps discovering after the window closes.
@@ -80,12 +89,17 @@ struct RootView: View {
 
     private func handleShareURL(_ url: URL) {
         guard url.scheme == ShareInbox.urlScheme, url.host == ShareInbox.urlHost else { return }
+        drainAndShowShareInbox()
+    }
 
+    private func drainAndShowShareInbox() {
         // Drain the App Group inbox and re-home each file into our own temp
         // sandbox (mirrors FilePicking: Kotlin reads them asynchronously off the
         // main thread, so they must outlive this call and not depend on the
         // shared container). The shared-container copies are deleted right away.
         let paths = ShareInbox.drainPendingPaths()
+        guard !paths.isEmpty else { return }
+
         var files: [Filekit_corePlatformFile] = []
         for path in paths {
             if let local = copyIntoTemp(path) {
