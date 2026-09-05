@@ -3,12 +3,17 @@ package com.carlom.klardrop.common.communication
 import com.carlom.klardrop.common.communication.message.HandshakeMessage
 import com.carlom.klardrop.common.communication.message.Message
 import com.carlom.klardrop.common.communication.message.MessageType
+import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
+import com.carlom.klardrop.common.discovery.DeviceConnection
+import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandler
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.trust.TrustManager
+import com.carlom.klardrop.common.trust.dropSupersededTrust
+import com.carlom.klardrop.common.trust.revocationIfPeerStale
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import com.carlom.klardrop.common.utils.log
@@ -20,6 +25,7 @@ import io.ktor.network.selector.*
 import io.ktor.network.sockets.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -298,6 +304,7 @@ class Server(
     if (!visibleDevices.isDeviceVisible(request.deviceId)) {
       log("Server", "Inbound connection claims deviceId ${request.deviceId} which is not in visible devices (mDNS loss or id change)")
     }
+    recordInboundPeer(request, socket)
 
     // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
     // than silently falling back to cleartext.
@@ -317,6 +324,8 @@ class Server(
       osType = self.osType,
       deviceType = self.deviceType,
       supportsEncryption = true,
+      listenPort = serverPort?.value ?: 0,
+      claimsTrust = trustManager.isTrusted(request.deviceId),
     )
     log("Server", "Sending Klardrop greetings back to ${request.deviceId} on $remoteAddress")
     writeChannel.sendMessage(intro, serializer)
@@ -362,6 +371,38 @@ class Server(
     // This prevents blocking the connection establishment
     serverScope.launch {
       connectionMessenger.acceptIncomingMessages()
+    }
+    serverScope.launchStaleTrustRevocation(
+      messenger = connectionMessenger,
+      trustManager = trustManager,
+      peerId = request.deviceId,
+      peerClaimsTrust = request.claimsTrust,
+    )
+  }
+
+  private suspend fun recordInboundPeer(handshake: HandshakeMessage, socket: Socket) {
+    val address = socket.remoteAddress as? InetSocketAddress ?: return
+    val host = address.hostname.trim().removePrefix("/").substringBefore('%')
+    if (host.isBlank()) return
+    val port = handshake.listenPort
+    if (port <= 0) {
+      log("Server", "Inbound ${handshake.deviceId} from $host has no listenPort; not adding a dialable endpoint")
+      return
+    }
+    runCatching {
+      visibleDevices.onNewDeviceVisible(
+        DeviceInfo(
+          deviceId = handshake.deviceId,
+          name = handshake.deviceName.ifBlank { handshake.deviceId },
+          deviceType = handshake.deviceType,
+          osType = handshake.osType,
+        ),
+        DeviceConnection.KlardropConnection(host, port),
+      )
+      dropSupersededTrust(handshake.deviceId, host, visibleDevices, trustManager)
+      log("Server", "Recorded inbound peer ${handshake.deviceId} @ $host:$port")
+    }.onFailure {
+      log("Server", "Failed recording inbound peer ${handshake.deviceId} @ $host:$port", it)
     }
   }
 
@@ -522,4 +563,25 @@ internal suspend fun ByteWriteChannel.sendMessage(message: Message, serializer: 
   writeByteArray(introLengthBytes)
   writeByteArray(wireBytes)
   if (message.type == MessageType.FILE_CHUNK) transferLog.sent(wireBytes.size)
+}
+
+internal fun CoroutineScope.launchStaleTrustRevocation(
+  messenger: ConnectionMessenger,
+  trustManager: TrustManager,
+  peerId: String,
+  peerClaimsTrust: Boolean,
+) {
+  launch {
+    val revocation = runCatching {
+      revocationIfPeerStale(trustManager, peerId, peerClaimsTrust)
+    }.onFailure {
+      log("TrustHeal", "Failed building revocation for $peerId", it)
+    }.getOrNull() ?: return@launch
+    runCatching {
+      val flow = MutableSharedFlow<MessengerSendProgress>(extraBufferCapacity = 8)
+      messenger.send(revocation.toSimpleSendRequest(), flow)
+    }.onFailure {
+      log("TrustHeal", "Failed sending connect-time revocation to $peerId", it)
+    }
+  }
 }

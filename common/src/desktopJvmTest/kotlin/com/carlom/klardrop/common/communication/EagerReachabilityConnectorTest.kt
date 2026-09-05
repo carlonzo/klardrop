@@ -103,10 +103,43 @@ class EagerReachabilityConnectorTest {
   // Helper: build a connector for a given peer and client
   // -----------------------------------------------------------------------
 
+  private class NearbyOnlyPeerVisibleDevices(deviceId: String) : VisibleDevices {
+    private val device = DiscoveryDevice(
+      deviceInfo = DeviceInfo(
+        deviceId = deviceId,
+        name = "Nearby Peer",
+        deviceType = DeviceType.MOBILE,
+        osType = OsType.ANDROID,
+      ),
+      deviceConnections = listOf(DeviceConnection.NearbyConnection("10.0.0.2", 5050)),
+      lastSeenTimestamp = 0L,
+    )
+    private val flow = MutableStateFlow(mapOf(deviceId to device))
+    override val visibleDevices: StateFlow<Map<String, DiscoveryDevice>> = flow
+    override suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection) = Unit
+    override fun isDeviceVisible(deviceId: String) = flow.value.containsKey(deviceId)
+    override fun getDevice(deviceId: String) = flow.value[deviceId]
+    override fun cachedNameFor(deviceId: String) = null
+    override fun touchLastSeen(deviceId: String) = Unit
+    override fun onDeviceLost(deviceId: String) { flow.value = emptyMap() }
+    override fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection) = Unit
+    override fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int) = Unit
+    override fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice? = null
+  }
+
+  private class CountingClient : Client {
+    var connectCalls = 0
+    override suspend fun connectTo(deviceId: String): ConnectOutcome {
+      connectCalls++
+      return ConnectOutcome.Connected
+    }
+  }
+
   private fun buildConnector(
     peerId: String,
     client: Client,
     pool: FakeConnectionPool = FakeConnectionPool(),
+    visibleDevices: VisibleDevices = SinglePeerVisibleDevices(peerId),
   ): Pair<EagerReachabilityConnector, FakeConnectionPool> {
     // Self id is lexicographically smaller than the typical peer ids used in tests
     // so BleRoleSelector would say we should initiate — doesn't matter here because
@@ -118,7 +151,7 @@ class EagerReachabilityConnectorTest {
 
     val connector = EagerReachabilityConnector(
       coroutines = coroutines,
-      visibleDevices = SinglePeerVisibleDevices(peerId),
+      visibleDevices = visibleDevices,
       currentDeviceProvider = currentDeviceProvider,
       client = client,
       connectionsPool = pool,
@@ -180,6 +213,31 @@ class EagerReachabilityConnectorTest {
     }
 
     connector.stop()
+  }
+
+  @Test
+  fun nearbyOnlyPeerIsProbed() = runTest(timeout = 10.seconds) {
+    val peerId = "peerNEAR"
+    val client = CountingClient()
+    val (connector, pool) = buildConnector(
+      peerId = peerId,
+      client = client,
+      visibleDevices = NearbyOnlyPeerVisibleDevices(peerId),
+    )
+    pool.reachability.test {
+      connector.start()
+      awaitItem()
+      awaitItem()
+      // Probe launches connectTo on Dispatchers.IO after markProbing; wait for it.
+      delay(500)
+      cancelAndIgnoreRemainingEvents()
+    }
+    connector.stop()
+    assertEquals(
+      true,
+      client.connectCalls >= 1,
+      "Nearby-only peers advertise the unified TCP port and must be probed (calls=${client.connectCalls})",
+    )
   }
 
   /**

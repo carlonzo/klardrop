@@ -322,6 +322,11 @@ class VisibleDevicesImpl(
         val incomingIsPlaceholder = deviceInfo.name == deviceInfo.deviceId &&
           deviceInfo.deviceType == DeviceType.UNKNOWN && deviceInfo.osType == OsType.UNKNOWN
         if (existing.deviceConnections.contains(deviceConnection) && (existingIsRicher || incomingIsPlaceholder)) {
+          // Same endpoint heard again — still a liveness signal. Without this the 5-min
+          // TTL evicts a peer whose mDNS record never changes (Nearby Share identity
+          // TXT is stable), which reads as "phone can't see desktop / desktop shows
+          // the phone then it vanishes".
+          touchLastSeen(deviceInfo.deviceId)
           return@ioDispatcher false
         }
 
@@ -339,8 +344,12 @@ class VisibleDevicesImpl(
           ?: DiscoveryDevice(seedInfo, lastSeenTimestamp = now)
 
         val newConnections = storedDiscoveryDevice.deviceConnections
-          // removes connections same connection type and address. Probably new connection with new port that did not expire yet from mdns
-          .filterNot { it.deviceConnectionType == deviceConnection.deviceConnectionType && it.address == deviceConnection.address }
+          // Same type+address (new TCP port) or a new BLE MAC (Android RPA rotation):
+          // keep only the latest BLE address so we don't GATT-connect a stale RPA.
+          .filterNot {
+            it.deviceConnectionType == deviceConnection.deviceConnectionType &&
+              (it.address == deviceConnection.address || deviceConnection is DeviceConnection.BleConnection)
+          }
           .toMutableList().also { it.add(deviceConnection) }
 
         // Merge identity fields: prefer the richer one from either side. The BLE

@@ -111,4 +111,9 @@ open class IncomingAuthorizer(
     }
     return accepted
   }
+
+  /** Drop the process-scoped first-contact set. Used when this device rotates identity. */
+  suspend fun clearFirstContact() {
+    setMutex.withLock { firstContactAccepted.clear() }
+  }
 }

@@ -138,6 +138,8 @@ class CommonComponent(
     )
   }
 
+  fun applicationInfo() = applicationInfo
+
   fun discoveryNetwork() = discoveryNetwork
   fun server() = communicationModule.server()
   fun serverPort() = communicationModule.serverPort()
@@ -161,6 +163,8 @@ class CommonComponent(
   fun fileManager() = fileManager
 
   fun trustManager() = communicationModule.trustManager()
+
+  fun incomingAuthorizer() = communicationModule.incomingAuthorizer()
 
   fun pairingProtocolCoordinator() = communicationModule.pairingProtocolCoordinator()
 

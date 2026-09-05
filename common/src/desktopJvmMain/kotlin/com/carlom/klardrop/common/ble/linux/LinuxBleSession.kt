@@ -20,6 +20,7 @@ internal class LinuxBleSession(
   override val deviceId: String,
   override val mtu: Int,
   private val notify: suspend (ByteArray) -> Unit,
+  private val onClose: () -> Unit = {},
 ) : BleSession {
 
   private val incoming = Channel<ByteArray>(capacity = Channel.UNLIMITED)
@@ -40,6 +41,7 @@ internal class LinuxBleSession(
   override fun close() {
     if (!open) return
     open = false
+    runCatching { onClose() }
     runCatching { incoming.close() }
   }
 

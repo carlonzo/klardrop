@@ -60,6 +60,17 @@ class CurrentDeviceProvider(
   }
 
   /**
+   * Replace this device's persisted id with a fresh UUID (simulates uninstall/reinstall).
+   * Discovery republishes automatically via [deviceInfoFlow]. Returns the new 8-char short id.
+   */
+  suspend fun rotateDeviceId(): String {
+    val id = cleanDeviceId(Uuid.random().toString())
+    val properties = localPropertiesRepository.getProperty()
+    localPropertiesRepository.save(properties.copy(deviceId = id))
+    return id.take(8)
+  }
+
+  /**
    * Cleans the device ID by removing any non-letter and non-digit characters,
    * and converts any uppercase letters to lowercase.
    *

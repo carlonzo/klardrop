@@ -372,7 +372,8 @@ actual class BleTransport(private val context: Context) {
       addCharacteristic(
         BluetoothGattCharacteristic(
           txUuid,
-          BluetoothGattCharacteristic.PROPERTY_WRITE,
+          BluetoothGattCharacteristic.PROPERTY_WRITE or
+            BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE,
           BluetoothGattCharacteristic.PERMISSION_WRITE,
         )
       )
@@ -459,7 +460,7 @@ actual class BleTransport(private val context: Context) {
               deviceId = device.address,
               mtu = builder.negotiatedMtu,
             )
-            builder.session = session
+            builder.attach(session)
             // New subscriber → emit the session to the flow.
             trySend(session)
           }
@@ -597,9 +598,23 @@ private class AndroidCentralBleSession(
 private class PeripheralSessionBuilder(@Suppress("unused") val device: BluetoothDevice) {
   @Volatile var negotiatedMtu: Int = 20
   @Volatile var session: AndroidPeripheralBleSession? = null
+  private val pending = mutableListOf<ByteArray>()
+  private val lock = Any()
 
   fun pushIncoming(bytes: ByteArray) {
-    session?.onIncomingWrite(bytes)
+    synchronized(lock) {
+      val live = session
+      if (live != null) live.onIncomingWrite(bytes)
+      else pending.add(bytes.copyOf())
+    }
+  }
+
+  fun attach(newSession: AndroidPeripheralBleSession) {
+    synchronized(lock) {
+      session = newSession
+      pending.forEach { newSession.onIncomingWrite(it) }
+      pending.clear()
+    }
   }
 }
 

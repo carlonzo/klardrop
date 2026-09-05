@@ -304,4 +304,5 @@ internal suspend fun ByteWriteChannel.writeFrame(bytes: ByteArray) {
   length[3] = bytes.size.toByte()
   writeByteArray(length)
   writeByteArray(bytes)
+  flush()
 }

@@ -32,21 +32,36 @@ class NearbyShareDiscoveryUtilsTest {
   }
 
   @Test
-  fun zeroLengthDeviceNameIsRejected() {
+  fun zeroLengthDeviceNameWithoutDiIsRejected() {
     // This is the exact case that surfaced as "unknown device name" in the UI.
     val info = nearbyService(
       addresses = listOf("192.168.1.20"),
-      endpointInfo = buildEndpointInfo(name = "")
+      endpointInfo = buildEndpointInfo(name = ""),
+      attributes = mapOf("n" to urlSafeBase64EncodedString(buildEndpointInfo(""))),
     )
     assertFalse(utils.isValidService(info))
   }
 
   @Test
-  fun truncatedEndpointInfoIsRejected() {
+  fun shortEndpointInfoWithDiIsAccepted() {
+    val info = nearbyService(
+      addresses = listOf("192.168.1.20"),
+      endpointInfo = ByteArray(10),
+      attributes = mapOf(
+        "n" to urlSafeBase64EncodedString(ByteArray(10)),
+        "di" to urlSafeBase64EncodedString("abcd"),
+      ),
+    )
+    assertTrue(utils.isValidService(info))
+  }
+
+  @Test
+  fun truncatedEndpointInfoWithoutDiIsRejected() {
     // Less than the 19 bytes required to hold even a zero-length name field.
     val info = nearbyService(
       addresses = listOf("192.168.1.20"),
-      endpointInfo = ByteArray(10)
+      endpointInfo = ByteArray(10),
+      attributes = mapOf("n" to urlSafeBase64EncodedString(ByteArray(10))),
     )
     assertFalse(utils.isValidService(info))
   }
@@ -57,27 +72,28 @@ class NearbyShareDiscoveryUtilsTest {
     val bytes = ByteArray(25).also { it[17] = 50 }
     val info = nearbyService(
       addresses = listOf("192.168.1.20"),
-      endpointInfo = bytes
+      endpointInfo = bytes,
+      attributes = mapOf("n" to urlSafeBase64EncodedString(bytes)),
     )
     assertFalse(utils.isValidService(info))
   }
 
   @Test
-  fun malformedBase64EndpointInfoIsRejected() {
+  fun malformedBase64EndpointInfoWithoutDiIsRejected() {
     val info = nearbyService(
       addresses = listOf("192.168.1.20"),
-      attributes = mapOf("n" to "!!!not-base64!!!", "di" to urlSafeBase64EncodedString("abcd"))
+      attributes = mapOf("n" to "!!!not-base64!!!")
     )
     assertFalse(utils.isValidService(info))
   }
 
   @Test
-  fun missingEndpointInfoAttributeIsRejected() {
+  fun diWithoutEndpointInfoIsAccepted() {
     val info = nearbyService(
       addresses = listOf("192.168.1.20"),
       attributes = mapOf("di" to urlSafeBase64EncodedString("abcd"))
     )
-    assertFalse(utils.isValidService(info))
+    assertTrue(utils.isValidService(info))
   }
 
   @Test

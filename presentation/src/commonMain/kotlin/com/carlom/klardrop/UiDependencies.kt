@@ -6,13 +6,9 @@ import com.carlom.klardrop.common.di.CommonComponent
 // UiDependencies is now a class that holds CommonComponent
 class UiDependencies(private val commonComponent: CommonComponent) {
 
-    fun discoveryController(): DiscoveryController {
-        // Assuming DiscoveryController now takes CommonComponent directly for simplicity
-        // or specific dependencies from it like:
-        // return DiscoveryController(commonComponent.visibleDevices(), commonComponent.messenger(), commonComponent.coroutines())
-        // Matching the instantiation in KlardropApp.kt for now:
-        return DiscoveryController(commonComponent)
-    }
+    private val discoveryControllerInstance by lazy { DiscoveryController(commonComponent) }
+
+    fun discoveryController(): DiscoveryController = discoveryControllerInstance
 
     fun updateBannerController(): UpdateBannerController = UpdateBannerController(commonComponent)
 

@@ -80,9 +80,11 @@ class BlueZCentralFacade(
     )
     try {
       val adapter = connection.getRemoteObject(BlueZConnection.BLUEZ_SERVICE, adapterPath, Adapter1::class.java)
-      adapter.SetDiscoveryFilter(mapOf("UUIDs" to Variant(listOf(BleConstants.SERVICE_UUID), "as")))
+      adapter.SetDiscoveryFilter(discoveryFilter())
       adapter.StartDiscovery()
       scanHandlers = handlers
+      seedAlreadyKnownDevices()
+      log(TAG, "StartDiscovery on $adapterPath")
     } catch (e: Exception) {
       handlers.forEach { runCatching { it.close() } }
       throw e
@@ -109,7 +111,10 @@ class BlueZCentralFacade(
     try {
       device.Connect()
     } catch (e: Exception) {
-      throw IllegalStateException("BLE connect to $address failed", e)
+      val msg = e.message.orEmpty()
+      if ("Already Connected" !in msg && "InProgress" !in msg) {
+        throw IllegalStateException("BLE connect to $address failed", e)
+      }
     }
     if (!currentCoroutineContext().isActive) {
       // The 10s connect timeout (or the caller) gave up while we were blocked in Connect().
@@ -125,7 +130,7 @@ class BlueZCentralFacade(
     val notifyHandler = connection.addSigHandler(
       propertiesChangedRule(rxPath),
       DBusSigHandler<Properties.PropertiesChanged> { sig ->
-        (sig.propertiesChanged["Value"]?.value as? ByteArray)?.let(onNotify)
+        gattValueBytes(sig.propertiesChanged["Value"])?.let(onNotify)
       },
     )
     // Self-cleaning on remote disconnect: Connected=false removes both handlers.
@@ -147,9 +152,19 @@ class BlueZCentralFacade(
       runCatching { disconnectHandler?.close() }
       throw IllegalStateException("StartNotify failed on $rxPath", e)
     }
-    BlueZPeerLink(mtu = mtu, writeTx = { value ->
-      withContext(Dispatchers.IO) { tx.WriteValue(value, emptyMap()) }
-    })
+    BlueZPeerLink(
+      mtu = mtu,
+      writeTx = { value ->
+        withContext(Dispatchers.IO) {
+          tx.WriteValue(value, mapOf("type" to Variant("command")))
+        }
+      },
+      close = {
+        runCatching { notifyHandler.close() }
+        runCatching { disconnectHandler?.close() }
+        runCatching { device.Disconnect() }
+      },
+    )
   }
 
   // ── Scan signal plumbing ──────────────────────────────────────────────────
@@ -168,21 +183,29 @@ class BlueZCentralFacade(
   private fun onDevicePropertiesChanged(sig: Properties.PropertiesChanged) {
     if (sig.interfaceName != DEVICE1) return
     val devicePath = sig.path ?: return
-    if (sig.propertiesChanged.containsKey("ServiceData")) {
+    if (sig.propertiesChanged.keys.any { it == "ServiceData" || it == "UUIDs" || it == "Name" }) {
       // Late scan-response merge: re-read the full property set so Found carries Address/RSSI.
       val props = runCatching { allProperties(devicePath, DEVICE1) }.getOrNull() ?: return
       emitFoundIfKlardrop(devicePath, props)
     }
-    if (sig.propertiesChanged["Connected"]?.value == false) {
-      val address = knownDevices.remove(devicePath)
-      if (address != null) lostListener?.invoke(address)
+    // Connected=false is a dropped GATT link, not "peer left radio range". Treating it as
+    // Lost evicts a still-advertising device after a failed handshake and nothing re-adds
+    // it until BlueZ emits InterfacesAdded again. Lost comes from InterfacesRemoved.
+  }
+
+  /** BlueZ keeps Device1 objects from the previous scan; InterfacesAdded will not fire again. */
+  private fun seedAlreadyKnownDevices() {
+    val root = connection.getRemoteObject(BlueZConnection.BLUEZ_SERVICE, "/", ObjectManager::class.java)
+    for ((path, interfaces) in root.GetManagedObjects()) {
+      val device = interfaces[DEVICE1] ?: continue
+      emitFoundIfKlardrop(path.path, device)
     }
   }
 
   /** Emits Found only when the advertisement carries a decodable Klardrop shortDeviceId. */
   private fun emitFoundIfKlardrop(devicePath: String, device: Map<String, Variant<*>>) {
     val address = device["Address"]?.value?.toString() ?: return
-    val shortId = decodeShortDeviceId(serviceDataBytes(device["ServiceData"])) ?: return
+    val shortId = klardropShortIdFromDevice(device) ?: return
     val rssi = (device["RSSI"]?.value as? Number)?.toInt() ?: 0
     val localName = device["Name"]?.value?.toString()
     knownDevices[devicePath] = address
@@ -316,6 +339,25 @@ internal fun unwrapVariant(raw: Any?): Any? = (raw as? Variant<*>)?.value ?: raw
  * UUID). Returns null for absent/malformed service data — the device is skipped, never
  * crashed on.
  */
+/**
+ * BlueZ 5.87 SIGSEGVs in `is_filter_match()` when SetDiscoveryFilter includes UUIDs and a
+ * matching advertisement arrives (https://github.com/bluez/bluez/issues/2282). Filter in
+ * userspace instead; Transport=le still drops BR/EDR noise.
+ */
+internal fun discoveryFilter(): Map<String, Variant<*>> = mapOf(
+  "Transport" to Variant("le"),
+)
+
+/** ServiceData short id, or LocalName when the device advertises our service UUID. */
+internal fun klardropShortIdFromDevice(device: Map<String, Variant<*>>): String? {
+  decodeShortDeviceId(serviceDataBytes(device["ServiceData"]))?.let { return it }
+  val uuids = device["UUIDs"]?.value as? List<*> ?: return null
+  if (uuids.none { it.toString().equals(BleConstants.SERVICE_UUID, ignoreCase = true) }) return null
+  val name = device["Name"]?.value?.toString() ?: return null
+  if (name.isEmpty() || name.length > MAX_SHORT_DEVICE_ID_LEN || name.any { !it.isLetterOrDigit() }) return null
+  return name
+}
+
 internal fun decodeShortDeviceId(serviceData: Map<String, ByteArray>): String? {
   val bytes = serviceData[BleConstants.SERVICE_UUID] ?: return null
   if (bytes.isEmpty() || bytes.size > MAX_SHORT_DEVICE_ID_LEN) return null
@@ -342,6 +384,19 @@ internal fun negotiatedMtu(mtuProperty: Int?): Int =
  * deserialization path the values arrive as byte[] or List<Byte>. Tolerates both,
  * returns an empty map for anything else.
  */
+/** RX notification payload. BlueZ `ay` arrives as byte[] or List<Byte>. */
+internal fun gattValueBytes(raw: Any?): ByteArray? {
+  val v = unwrapVariant(raw) ?: return null
+  return when (v) {
+    is ByteArray -> v
+    is List<*> -> {
+      if (v.isEmpty()) ByteArray(0)
+      else ByteArray(v.size) { i -> (v[i] as? Number)?.toByte() ?: return null }
+    }
+    else -> null
+  }
+}
+
 internal fun serviceDataBytes(raw: Any?): Map<String, ByteArray> {
   val outer = unwrapVariant(raw) as? Map<*, *> ?: return emptyMap()
   val result = mutableMapOf<String, ByteArray>()

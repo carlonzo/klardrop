@@ -269,9 +269,20 @@ class MessengerImpl(
       //     For tiny chunks BLE is faster end-to-end than spinning up a Nearby session.
       // Preference is based on the *application* message shape (file vs lightweight), not
       // the trust envelope. TrustedMessage wrapping only applies to the Klardrop wire path.
-      val preference = transportPreferenceFor(messageRequest)
+      val preference = transportPreferenceFor(finalMessageRequest)
+      val isKlardropControl = finalMessageRequest.message is TrustPairingRequest ||
+        finalMessageRequest.message is TrustPairingResponse ||
+        finalMessageRequest.message is TrustRevocationMessage
       val chosen = when {
-        device != null -> preference.firstOrNull { it.isAvailable(device) }
+        device != null -> preference.firstOrNull { choice ->
+          if (choice == TransportChoice.KLARDROP_TCP && isKlardropControl) {
+            // Nearby advertises the same unified TCP listener. Pairing frames cannot
+            // go on the Nearby Share text path; Client.performDial maps Nearby→Klardrop.
+            device.hasKlardropConnection() || device.hasNearbyConnection()
+          } else {
+            choice.isAvailable(device)
+          }
+        }
         // Not visible but pooled: only the Klardrop path can ride the pooled connection —
         // Nearby/BLE availability both come from the visible-map entry we don't have.
         else -> TransportChoice.KLARDROP_TCP
@@ -679,8 +690,14 @@ private enum class TransportChoice {
 }
 
 private fun transportPreferenceFor(request: SendMessageRequest): List<TransportChoice> {
+  val message = request.message
+  if (message is TrustPairingRequest || message is TrustPairingResponse || message is TrustRevocationMessage) {
+    // Pairing frames are Klardrop protocol, including over BLE GATT. Nearby Share
+    // cannot carry them (handled by treating Nearby TCP as KLARDROP_TCP above).
+    return listOf(TransportChoice.KLARDROP_TCP, TransportChoice.KLARDROP_BLE)
+  }
   // `hasPayload` distinguishes streaming/file messages from short control/text messages.
-  return if (request.message.hasPayload) {
+  return if (message.hasPayload) {
     // Files: TCP > Nearby > BLE. BLE can't keep up with sustained writes; Nearby is fine.
     listOf(TransportChoice.KLARDROP_TCP, TransportChoice.NEARBY, TransportChoice.KLARDROP_BLE)
   } else {

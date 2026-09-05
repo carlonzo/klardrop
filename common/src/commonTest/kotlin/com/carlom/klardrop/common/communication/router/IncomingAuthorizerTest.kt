@@ -155,6 +155,40 @@ class IncomingAuthorizerTest {
   }
 
   @Test
+  fun clearFirstContactRePromptsOnNextText() = runTest(UnconfinedTestDispatcher()) {
+    val authorizer = IncomingAuthorizer(trustManagerWith(emptySet()))
+    val firstFlow = makeFlow()
+    val firstAuth = async {
+      authorizer.authorize(
+        fromDeviceId = "untrusted-id",
+        kind = IncomingAuthorizer.TransferKind.TEXT,
+        headers = listOf(TextMessage(text = "hi")),
+        receiveFlow = firstFlow,
+      )
+    }
+    (firstFlow.value.status as ReceiveMessageStatus.PendingAuthorization).acceptTransfer(true)
+    assertTrue(firstAuth.await())
+
+    authorizer.clearFirstContact()
+
+    val secondFlow = makeFlow()
+    val secondAuth = async {
+      authorizer.authorize(
+        fromDeviceId = "untrusted-id",
+        kind = IncomingAuthorizer.TransferKind.TEXT,
+        headers = listOf(TextMessage(text = "after reset")),
+        receiveFlow = secondFlow,
+      )
+    }
+    assertTrue(
+      secondFlow.value.status is ReceiveMessageStatus.PendingAuthorization,
+      "identity reset must re-prompt; got ${secondFlow.value.status}",
+    )
+    (secondFlow.value.status as ReceiveMessageStatus.PendingAuthorization).acceptTransfer(true)
+    assertTrue(secondAuth.await())
+  }
+
+  @Test
   fun untrustedFilesAlwaysPromptEvenAfterFirstContactAccepted() = runTest(UnconfinedTestDispatcher()) {
     val authorizer = IncomingAuthorizer(trustManagerWith(emptySet()))
 

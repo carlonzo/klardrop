@@ -239,7 +239,7 @@ class LinuxBlePeripheralTest {
     assertEquals(true, service.getValue("Primary").value)
     val tx = managed.getValue(DBusPath(app.txPath)).getValue("org.bluez.GattCharacteristic1")
     assertEquals(BleConstants.TX_CHARACTERISTIC_UUID, tx.getValue("UUID").value)
-    assertEquals(listOf("write"), tx.getValue("Flags").value)
+    assertEquals(listOf("write", "write-without-response"), tx.getValue("Flags").value)
     val rx = managed.getValue(DBusPath(app.rxPath)).getValue("org.bluez.GattCharacteristic1")
     assertEquals(BleConstants.RX_CHARACTERISTIC_UUID, rx.getValue("UUID").value)
     assertEquals(listOf("read", "notify"), rx.getValue("Flags").value)

@@ -66,6 +66,7 @@ class LinuxBleCentral(private val facade: BlueZFacade) {
       deviceId = remoteShortDeviceId,
       mtu = link.mtu,
       notify = { value -> link.writeTx(value) },
+      onClose = link.close,
     ).also(pending::attach)
   }
 

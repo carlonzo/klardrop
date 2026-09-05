@@ -94,6 +94,7 @@ class BlueZPeripheralFacade(
     try {
       connection.exportObject(adv.getObjectPath(), adv)
       advertisingManager().RegisterAdvertisement(DBusPath(adv.getObjectPath()), emptyMap())
+      log(TAG, "Registered LE advertisement as ${currentDevice.shortDeviceId}")
     } catch (e: Exception) {
       runCatching { connection.unExportObject(adv.getObjectPath()) }
       throw e
@@ -214,7 +215,7 @@ internal class GattApplication(
 
   companion object {
     const val APP_PATH_PREFIX = "/com/carlom/klardrop/ble"
-    val TX_FLAGS = listOf("write")
+    val TX_FLAGS = listOf("write", "write-without-response")
     val RX_FLAGS = listOf("read", "notify")
   }
 }

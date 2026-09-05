@@ -86,6 +86,15 @@ class BlueZDBusContractTest {
   // ── Property values ─────────────────────────────────────────────────────────
 
   @Test
+  fun gattValueBytesAcceptsByteArrayAndList() {
+    val payload = byteArrayOf(1, 2, 3)
+    assertTrue(gattValueBytes(payload)!!.contentEquals(payload))
+    assertTrue(gattValueBytes(Variant(payload))!!.contentEquals(payload))
+    assertTrue(gattValueBytes(listOf(1.toByte(), 2.toByte(), 3.toByte()))!!.contentEquals(payload))
+    assertEquals(null, gattValueBytes("nope"))
+  }
+
+  @Test
   fun variantUnwrappingTolerantOfBothShapes() {
     // Properties.Get has a type-variable return, and dbus-java unwraps the wire Variant
     // for those — so a `as? Variant<*>` cast on the result is always null.
@@ -106,6 +115,24 @@ class BlueZDBusContractTest {
   }
 
   // ── Exported objects ────────────────────────────────────────────────────────
+
+  @Test
+  fun discoveryFilterOmitsUuids() {
+    // BlueZ 5.87 SIGSEGVs in is_filter_match when UUIDs is set and a match arrives.
+    val filter = discoveryFilter()
+    assertEquals(setOf("Transport"), filter.keys)
+    assertEquals("le", filter.getValue("Transport").value)
+  }
+
+  @Test
+  fun klardropShortIdFallsBackToNameWhenServiceUuidIsAdvertised() {
+    val device = mapOf(
+      "UUIDs" to Variant(listOf(BleConstants.SERVICE_UUID), "as"),
+      "Name" to Variant("abcd1234"),
+    )
+    assertEquals("abcd1234", klardropShortIdFromDevice(device))
+    assertEquals(null, klardropShortIdFromDevice(mapOf("Name" to Variant("abcd1234"))))
+  }
 
   @Test
   fun advertisementServesItsPayloadOverProperties() {

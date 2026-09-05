@@ -501,6 +501,25 @@ class TrustManagerTest {
     )
   }
 
+  @Test
+  fun resetIdentityClearsTrustAndChangesSigningKey() = runTest {
+    val (alice, aliceStorage) = newManager(aliceId)
+    val (bob, _) = newManager(bobId)
+    val response = bob.createPairingAcceptance(alice.createPairingRequest(bobId).getOrThrow()).getOrThrow()
+    alice.finalizePairing(response)
+    assertTrue(alice.isTrusted(bobId))
+    val oldPub = assertNotNull(aliceStorage.getDevicePublicKey())
+
+    alice.resetIdentity()
+
+    assertFalse(alice.isTrusted(bobId), "resetIdentity must drop stored pairings")
+    val newPub = assertNotNull(aliceStorage.getDevicePublicKey())
+    assertFalse(
+      oldPub.contentEquals(newPub),
+      "resetIdentity must generate a new signing identity (simulates reinstall)",
+    )
+  }
+
   private fun syntheticRequest(timestamp: Long) = TrustPairingRequest(
     deviceId = "attacker",
     deviceName = "Attacker",

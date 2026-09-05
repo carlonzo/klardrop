@@ -97,8 +97,10 @@ interface BlueZFacade {
 class BlueZPeerLink(
   /** Negotiated ATT MTU (`GattCharacteristic1.MTU` when BlueZ exposes it, else DEFAULT_MTU). */
   val mtu: Int,
-  /** Write-with-response to the peer's TX characteristic. Throws when the write fails. */
+  /** Write to the peer's TX characteristic. Throws when the write fails. */
   val writeTx: suspend (ByteArray) -> Unit,
+  /** Drop the GATT link. Idempotent. */
+  val close: () -> Unit = {},
 )
 
 /** Result of probing BlueZ for BLE capability. */

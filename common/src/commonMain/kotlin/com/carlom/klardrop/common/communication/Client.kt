@@ -179,6 +179,9 @@ class ClientImpl(
   // dials; later callers await that in-flight attempt's outcome instead.
   private val inFlightMutex = Mutex()
   private val inFlightConnects = mutableMapOf<String, CompletableDeferred<ConnectOutcome>>()
+  // Linux (and many phones) reliably host one LE GATT at a time. A second connect
+  // (eager handshake to some other advertiser) drops notifies on the first.
+  private val bleConnectMutex = Mutex()
 
   override suspend fun connectTo(deviceId: String): ConnectOutcome = coroutines.ioDispatcher {
 
@@ -255,11 +258,18 @@ class ClientImpl(
       return ConnectOutcome.Failed
     }
 
-    val tcpConnections = discoveryDevice.getKlardropConnection()
+    val tcpConnections = (
+      discoveryDevice.getKlardropConnection() +
+        discoveryDevice.getNearbyConnection().map {
+          DeviceConnection.KlardropConnection(it.address, it.port)
+        }
+      )
+      .filter { it.port > 0 }
+      .distinctBy { it.address to it.port }
     val bleConnections = discoveryDevice.getBleConnection()
 
     require(tcpConnections.isNotEmpty() || bleConnections.isNotEmpty()) {
-      "Cant connect to $deviceId. No known route: device is visible but advertises no Klardrop TCP or BLE endpoint"
+      "Cant connect to $deviceId. No known route: device is visible but advertises no Klardrop TCP, Nearby TCP, or BLE endpoint"
     }
 
     // launch coroutine to connect and await for the connection to stay alive. TCP is
@@ -288,7 +298,7 @@ class ClientImpl(
         for (ble in bleConnections) {
           log("Client", "Connecting via BLE to $deviceId (address=${ble.address})")
           establishBleConnection(ble, deviceId, connectionJob)
-            .onFailure { logLocal("Client", "Failed BLE connect to $deviceId @ ${ble.address}", it) }
+            .onFailure { log("Client", "Failed BLE connect to $deviceId @ ${ble.address}", it) }
           if (connectionJob.isCompleted) return@launch
         }
       }
@@ -502,6 +512,8 @@ class ClientImpl(
         osType = self.osType,
         deviceType = self.deviceType,
         supportsEncryption = true,
+        listenPort = serverPort.value,
+        claimsTrust = trustManager.isTrusted(deviceId),
       )
       val writeChannel = activeSocket.openWriteChannel(autoFlush = true)
       // Bound the handshake write to match the connect and read phases.  On most
@@ -602,11 +614,23 @@ class ClientImpl(
         // Store the connection in the client's pool keyed by the server's device ID. From this
         // point on the socket is owned by the pool/messenger, not by this attempt.
         connectionsPool.updateConnection(deviceId, connectionMessenger)
+        com.carlom.klardrop.common.trust.dropSupersededTrust(
+          keepDeviceId = deviceId,
+          address = address,
+          visibleDevices = visibleDevices,
+          trustManager = trustManager,
+        )
 
         // Start listening for incoming messages (including ACKs) in a separate coroutine
         clientScope.launch {
           connectionMessenger.acceptIncomingMessages()
         }
+        clientScope.launchStaleTrustRevocation(
+          messenger = connectionMessenger,
+          trustManager = trustManager,
+          peerId = deviceId,
+          peerClaimsTrust = serverHandshakeMessage.claimsTrust,
+        )
       }
 
       connectionJob.complete(ConnectOutcome.Connected)
@@ -622,9 +646,11 @@ class ClientImpl(
     deviceId: String,
     connectionJob: CompletableDeferred<ConnectOutcome>,
   ) = runCatching {
+    bleConnectMutex.withLock {
     val transport = checkNotNull(bleTransport) { "No BLE transport injected" }
     val session = transport.connectCentral(bleConnection.address, deviceId)
     val bridge = BleChannelBridge(session, clientScope).start()
+    try {
 
     val self = currentDeviceProvider.get()
     // Central speaks first — send the rich handshake so the server can enrich its
@@ -637,6 +663,8 @@ class ClientImpl(
         osType = self.osType,
         deviceType = self.deviceType,
         supportsEncryption = true,
+        listenPort = serverPort.value,
+        claimsTrust = trustManager.isTrusted(deviceId),
       ),
       serializer,
     )
@@ -692,13 +720,25 @@ class ClientImpl(
       readChannel = bridge.readChannel,
       writeChannel = bridge.writeChannel,
       ackTimeoutConfig = ackTimeoutConfig,
-      heartbeatConfig = heartbeatConfig,
+      // GATT disconnect already ends the session; PING/PONG over notify is lossy on BLE.
+      heartbeatConfig = heartbeatConfig.copy(enabled = false),
       messageSerializer = serializer,
       cipher = cipher,
       initiatedByUs = true,
     )
     connectionsPool.updateConnection(deviceId, connectionMessenger)
     clientScope.launch { connectionMessenger.acceptIncomingMessages() }
+    clientScope.launchStaleTrustRevocation(
+      messenger = connectionMessenger,
+      trustManager = trustManager,
+      peerId = deviceId,
+      peerClaimsTrust = serverHandshake.claimsTrust,
+    )
     connectionJob.complete(ConnectOutcome.Connected)
+    } catch (t: Throwable) {
+      bridge.close()
+      throw t
+    }
+    }
   }
 }

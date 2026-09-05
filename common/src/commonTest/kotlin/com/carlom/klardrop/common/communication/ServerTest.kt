@@ -70,6 +70,21 @@ class ServerTest {
   }
 
   @Test
+  fun testDetectKlardropProtocolWithListenPortAndClaimsTrust() {
+    val handshakeMessage = HandshakeMessage(
+      deviceId = "test-device-id",
+      supportsEncryption = true,
+      listenPort = 35199,
+      claimsTrust = true,
+    )
+    val serializedHandshake = protoBuf.encodeToByteArray(HandshakeMessage.serializer(), handshakeMessage)
+    val payload = byteArrayOf(MessageType.HANDSHAKE.id) + serializedHandshake
+
+    val server = createTestServer()
+    assertEquals(Server.Protocol.KLARDROP, server.detectProtocol(payload))
+  }
+
+  @Test
   fun testDetectNearbyShareProtocol() {
     // Create a Nearby Share connection request
     val connectionRequest = OfflineFrame(
