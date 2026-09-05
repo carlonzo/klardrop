@@ -186,3 +186,11 @@
 -keep class com.sun.jna.** { *; }
 -dontwarn com.sun.jna.**
 -dontwarn dev.nucleusframework.composenativetray.**
+
+# -------------------------------------------------------------------------
+# Debug Control — strictly development/test infrastructure driven via klardrop-ctl.
+# Never keep com.carlom.klardrop.debug.** in release builds. ProGuard strips it
+# completely because DesktopDebugLoader accesses it only reflectively in debug runs.
+# -------------------------------------------------------------------------
+-dontwarn com.carlom.klardrop.debug.**
+

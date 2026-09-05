@@ -51,4 +51,29 @@ class SingleInstanceTest {
     assertTrue(dataDir.isDirectory, "acquire must create the data dir if missing")
     primary.close()
   }
+
+  @Test
+  fun `second instance sends files to share and primary receives them`() {
+    val dataDir = Files.createTempDirectory("klardrop-single-instance-send").toFile()
+    val sendReceived = CountDownLatch(1)
+    var receivedFiles: List<String>? = null
+
+    val primary = SingleInstance.acquire(dataDir)
+    assertNotNull(primary, "first acquire must win the lock")
+    primary.onSendFiles = { files ->
+      receivedFiles = files
+      sendReceived.countDown()
+    }
+
+    val filesToSend = listOf("/tmp/test1.png", "/tmp/test2.pdf")
+    val second = SingleInstance.acquire(dataDir, filesToSend)
+    assertNull(second, "second acquire must lose the lock and return null")
+
+    assertTrue(
+      sendReceived.await(5, TimeUnit.SECONDS),
+      "onSendFiles callback was not invoked on the primary instance",
+    )
+    kotlin.test.assertEquals(filesToSend, receivedFiles)
+    primary.close()
+  }
 }

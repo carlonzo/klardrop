@@ -46,7 +46,9 @@ import kotlinx.coroutines.delay
 import com.carlom.klardrop.components.KdDeviceKind
 import com.carlom.klardrop.components.KdShareDevice
 import com.carlom.klardrop.components.KdStatus
+import com.carlom.klardrop.components.SendStatus
 import com.carlom.klardrop.components.ShareSheet
+import com.carlom.klardrop.components.toKdShareDevice
 import com.carlom.klardrop.theme.AppTheme
 import com.carlom.klardrop.theme.KdTheme
 import io.github.vinceglb.filekit.PlatformFile
@@ -228,66 +230,4 @@ class ShareToDeviceActivity : ComponentActivity() {
     shareToDeviceController.dispose()
     super.onDestroy()
   }
-}
-
-/** In-sheet transfer status, fed by [ActiveSends]. Null/Pending means waiting on the receiver. */
-@Composable
-private fun SendStatus(progress: MessengerSendProgress?, onHide: () -> Unit) {
-  val spacing = KdTheme.spacing
-  Column(
-    modifier = Modifier
-      .fillMaxWidth()
-      .padding(spacing.s5),
-    horizontalAlignment = Alignment.CenterHorizontally,
-  ) {
-    when (progress) {
-      is MessengerSendProgress.InProgress -> {
-        LinearProgressIndicator(
-          progress = { progress.percentage / 100f },
-          modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(spacing.s3))
-        Text("Sending… ${progress.percentage}%", style = KdTheme.typography.body)
-      }
-
-      is MessengerSendProgress.Completed -> Text("Sent ✓", style = KdTheme.typography.body)
-
-      is MessengerSendProgress.Error ->
-        Text("Couldn't send: ${progress.message}", style = KdTheme.typography.body)
-
-      else -> { // null / Pending
-        CircularProgressIndicator()
-        Spacer(Modifier.height(spacing.s3))
-        Text("Waiting for receiver to accept…", style = KdTheme.typography.body)
-      }
-    }
-
-    Spacer(Modifier.height(spacing.s4))
-    val terminal = progress is MessengerSendProgress.Completed || progress is MessengerSendProgress.Error
-    TextButton(onClick = onHide) {
-      Text(if (terminal) "Close" else "Hide — keeps sending in background")
-    }
-    Spacer(Modifier.height(spacing.s5))
-  }
-}
-
-private fun DeviceUi.toKdShareDevice(): KdShareDevice = KdShareDevice(
-  id = deviceId,
-  name = deviceName,
-  kind = deviceType.toShareKind(),
-  isTrusted = trustStatus == TrustStatus.Trusted,
-  status = reachability.toKdStatus(),
-)
-
-private fun DeviceType.toShareKind(): KdDeviceKind = when (this) {
-  DeviceType.MOBILE -> KdDeviceKind.Android
-  DeviceType.DESKTOP -> KdDeviceKind.Pc
-  DeviceType.UNKNOWN -> KdDeviceKind.Unknown
-}
-
-private fun Reachability.toKdStatus(): KdStatus? = when (this) {
-  Reachability.Reachable -> KdStatus.Ok
-  Reachability.Unreachable -> KdStatus.Err
-  Reachability.Probing,
-  Reachability.Unknown -> null
 }

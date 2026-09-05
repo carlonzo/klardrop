@@ -8,12 +8,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.Klardrop
-import com.carlom.klardrop.debug.DebugControl
+import com.carlom.klardrop.components.ShareDialog
 import com.carlom.klardrop.navigation.KlardropNavigator
 import com.carlom.klardrop.theme.AppTheme
 import com.carlom.klardrop.theme.KdTheme
@@ -25,12 +28,22 @@ fun KlardropApp(
   klardrop: Klardrop,
   contentInsets: PaddingValues = PaddingValues(0.dp),
   isDesktop: Boolean = false,
+  pendingFiles: List<String>? = null,
+  onClearPendingFiles: () -> Unit = {},
+  onDiscoveryControllerAvailable: (DiscoveryController) -> Unit = {},
 ) {
   val uiDependencies = remember { UiDependencies(klardrop.commonComponent) }
   val visibleDevicesController = remember { uiDependencies.discoveryController() }
 
+  var activeShareFiles by remember { mutableStateOf<List<String>?>(null) }
+  LaunchedEffect(pendingFiles) {
+    if (!pendingFiles.isNullOrEmpty()) {
+      activeShareFiles = pendingFiles
+    }
+  }
+
   LaunchedEffect(visibleDevicesController) {
-    DebugControl.bind(visibleDevicesController, klardrop)
+    onDiscoveryControllerAvailable(visibleDevicesController)
   }
 
   AppTheme {
@@ -54,6 +67,18 @@ fun KlardropApp(
             isLargeScreen = isLargeScreen,
             modifier = Modifier.fillMaxSize()
           )
+
+          activeShareFiles?.let { files ->
+            ShareDialog(
+              files = files,
+              discoveryController = visibleDevicesController,
+              isLargeScreen = isLargeScreen,
+              onDismiss = {
+                activeShareFiles = null
+                onClearPendingFiles()
+              },
+            )
+          }
         }
       }
     }

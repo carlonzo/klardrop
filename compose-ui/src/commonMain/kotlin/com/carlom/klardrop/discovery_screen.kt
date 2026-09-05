@@ -80,6 +80,7 @@ import com.carlom.klardrop.components.ShareSheet
 import com.carlom.klardrop.components.Banner
 import com.carlom.klardrop.components.UpdateBanner
 import com.carlom.klardrop.components.UpdateSettingsSection
+import com.carlom.klardrop.components.toKdShareDevice
 import com.carlom.klardrop.theme.KdEaseOut
 import com.carlom.klardrop.theme.KdTheme
 import io.github.vinceglb.filekit.dialogs.FileKitMode
@@ -975,11 +976,3 @@ private fun deviceRowState(device: DeviceUi): KdRowState = when {
     device.trustStatus == TrustStatus.Trusted -> KdRowState.Idle
     else -> KdRowState.PairPrompt
 }
-
-private fun DeviceUi.toKdShareDevice(): KdShareDevice = KdShareDevice(
-    id = deviceId,
-    name = deviceName,
-    kind = deviceType.toKdDeviceKind(),
-    isTrusted = trustStatus == TrustStatus.Trusted,
-    status = reachabilityStatus(),
-)

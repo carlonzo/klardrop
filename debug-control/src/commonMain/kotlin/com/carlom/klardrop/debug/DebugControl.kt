@@ -12,6 +12,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -29,7 +30,7 @@ import kotlinx.serialization.json.putJsonObject
  * Started only when [com.carlom.klardrop.common.ApplicationInfo.isDebug] is true and
  * [com.carlom.klardrop.common.ApplicationInfo.controlPort] is set. Binds 127.0.0.1.
  */
-object DebugControl {
+object DebugControl : DebugControlService {
   private val json = Json { ignoreUnknownKeys = true }
 
   @Volatile
@@ -38,10 +39,15 @@ object DebugControl {
   @Volatile
   private var klardrop: Klardrop? = null
 
+  @Volatile
+  override var windowVisibilityProvider: (() -> Boolean)? = null
+
+  @Volatile
+  override var windowVisibilitySetter: ((Boolean) -> Unit)? = null
+
   private var server: LoopbackHttpServer? = null
 
-  suspend fun bind(discoveryController: DiscoveryController, app: Klardrop) {
-    controller = discoveryController
+  override suspend fun start(app: Klardrop) {
     klardrop = app
     val info = app.commonComponent.applicationInfo()
     if (!info.isDebug) return
@@ -60,7 +66,12 @@ object DebugControl {
     }
   }
 
-  fun stop() {
+  override suspend fun bind(discoveryController: DiscoveryController, app: Klardrop) {
+    controller = discoveryController
+    start(app)
+  }
+
+  override fun stop() {
     server?.stop()
     server = null
   }
@@ -71,6 +82,26 @@ object DebugControl {
     return when {
       request.method == "GET" && path == "/health" ->
         HttpResponse(200, jsonOk(""" "port":${server?.boundPort ?: 0} """))
+
+      request.method == "GET" && path == "/window" -> {
+        val visible = windowVisibilityProvider?.invoke() ?: false
+        val payload = buildJsonObject {
+          put("ok", true)
+          put("visible", visible)
+        }.toString()
+        HttpResponse(200, payload)
+      }
+
+      request.method == "POST" && path == "/window" -> {
+        val visible = body.boolean("visible") ?: error("missing visible")
+        log("DebugControl", "action window visible=$visible")
+        windowVisibilitySetter?.invoke(visible)
+        val payload = buildJsonObject {
+          put("ok", true)
+          put("visible", visible)
+        }.toString()
+        HttpResponse(200, payload)
+      }
 
       request.method == "GET" && path == "/state" ->
         HttpResponse(200, snapshotState())
@@ -171,6 +202,9 @@ object DebugControl {
 
   private fun JsonObject.int(key: String): Int? =
     this[key]?.jsonPrimitive?.intOrNull
+
+  private fun JsonObject.boolean(key: String): Boolean? =
+    this[key]?.jsonPrimitive?.booleanOrNull
 
   private suspend fun snapshotState(): String {
     val app = klardrop ?: error("not bound")
