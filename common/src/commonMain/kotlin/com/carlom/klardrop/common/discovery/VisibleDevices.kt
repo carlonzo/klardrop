@@ -344,8 +344,12 @@ class VisibleDevicesImpl(
           ?: DiscoveryDevice(seedInfo, lastSeenTimestamp = now)
 
         val newConnections = storedDiscoveryDevice.deviceConnections
-          // removes connections same connection type and address. Probably new connection with new port that did not expire yet from mdns
-          .filterNot { it.deviceConnectionType == deviceConnection.deviceConnectionType && it.address == deviceConnection.address }
+          // Same type+address (new TCP port) or a new BLE MAC (Android RPA rotation):
+          // keep only the latest BLE address so we don't GATT-connect a stale RPA.
+          .filterNot {
+            it.deviceConnectionType == deviceConnection.deviceConnectionType &&
+              (it.address == deviceConnection.address || deviceConnection is DeviceConnection.BleConnection)
+          }
           .toMutableList().also { it.add(deviceConnection) }
 
         // Merge identity fields: prefer the richer one from either side. The BLE

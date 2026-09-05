@@ -179,6 +179,9 @@ class ClientImpl(
   // dials; later callers await that in-flight attempt's outcome instead.
   private val inFlightMutex = Mutex()
   private val inFlightConnects = mutableMapOf<String, CompletableDeferred<ConnectOutcome>>()
+  // Linux (and many phones) reliably host one LE GATT at a time. A second connect
+  // (eager handshake to some other advertiser) drops notifies on the first.
+  private val bleConnectMutex = Mutex()
 
   override suspend fun connectTo(deviceId: String): ConnectOutcome = coroutines.ioDispatcher {
 
@@ -295,7 +298,7 @@ class ClientImpl(
         for (ble in bleConnections) {
           log("Client", "Connecting via BLE to $deviceId (address=${ble.address})")
           establishBleConnection(ble, deviceId, connectionJob)
-            .onFailure { logLocal("Client", "Failed BLE connect to $deviceId @ ${ble.address}", it) }
+            .onFailure { log("Client", "Failed BLE connect to $deviceId @ ${ble.address}", it) }
           if (connectionJob.isCompleted) return@launch
         }
       }
@@ -643,9 +646,11 @@ class ClientImpl(
     deviceId: String,
     connectionJob: CompletableDeferred<ConnectOutcome>,
   ) = runCatching {
+    bleConnectMutex.withLock {
     val transport = checkNotNull(bleTransport) { "No BLE transport injected" }
     val session = transport.connectCentral(bleConnection.address, deviceId)
     val bridge = BleChannelBridge(session, clientScope).start()
+    try {
 
     val self = currentDeviceProvider.get()
     // Central speaks first — send the rich handshake so the server can enrich its
@@ -715,7 +720,8 @@ class ClientImpl(
       readChannel = bridge.readChannel,
       writeChannel = bridge.writeChannel,
       ackTimeoutConfig = ackTimeoutConfig,
-      heartbeatConfig = heartbeatConfig,
+      // GATT disconnect already ends the session; PING/PONG over notify is lossy on BLE.
+      heartbeatConfig = heartbeatConfig.copy(enabled = false),
       messageSerializer = serializer,
       cipher = cipher,
       initiatedByUs = true,
@@ -729,5 +735,10 @@ class ClientImpl(
       peerClaimsTrust = serverHandshake.claimsTrust,
     )
     connectionJob.complete(ConnectOutcome.Connected)
+    } catch (t: Throwable) {
+      bridge.close()
+      throw t
+    }
+    }
   }
 }

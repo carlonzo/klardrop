@@ -692,7 +692,9 @@ private enum class TransportChoice {
 private fun transportPreferenceFor(request: SendMessageRequest): List<TransportChoice> {
   val message = request.message
   if (message is TrustPairingRequest || message is TrustPairingResponse || message is TrustRevocationMessage) {
-    return listOf(TransportChoice.KLARDROP_TCP)
+    // Pairing frames are Klardrop protocol, including over BLE GATT. Nearby Share
+    // cannot carry them (handled by treating Nearby TCP as KLARDROP_TCP above).
+    return listOf(TransportChoice.KLARDROP_TCP, TransportChoice.KLARDROP_BLE)
   }
   // `hasPayload` distinguishes streaming/file messages from short control/text messages.
   return if (message.hasPayload) {

@@ -123,7 +123,7 @@ class BleServerListener(
         readChannel = bridge.readChannel,
         writeChannel = bridge.writeChannel,
         ackTimeoutConfig = ackTimeoutConfig,
-        heartbeatConfig = heartbeatConfig,
+        heartbeatConfig = heartbeatConfig.copy(enabled = false),
         messageSerializer = serializer,
         cipher = cipher,
       )

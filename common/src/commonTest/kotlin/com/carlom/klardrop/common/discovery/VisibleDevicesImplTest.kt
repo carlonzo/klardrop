@@ -307,6 +307,15 @@ class VisibleDevicesImplTest {
   }
 
   @Test
+  fun addDevice_replacesStaleBleAddressWhenPeerRotatesRpa() = runTest(coroutines.dispatcher) {
+    val oldAddress = DeviceConnection.BleConnection("AA:AA:AA:AA:AA:AA")
+    val newAddress = DeviceConnection.BleConnection("BB:BB:BB:BB:BB:BB")
+    visibleDevices.onNewDeviceVisible(device1, oldAddress)
+    visibleDevices.onNewDeviceVisible(device1, newAddress)
+    assertEquals(listOf(newAddress), visibleDevices.getDevice(device1.deviceId)!!.deviceConnections)
+  }
+
+  @Test
   fun rediscoveryOfSameEndpointRefreshesLastSeen() = runTest(coroutines.dispatcher) {
     var now = 1_000L
     val devices = VisibleDevicesImpl(coroutines, Clock(), nowMs = { now })
