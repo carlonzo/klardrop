@@ -70,7 +70,13 @@ class CommonComponent(
   private val protoBuf = ProtoBuf
   private val currentDeviceProvider by lazy { CurrentDeviceProvider(localProperties) }
   private val platformFileSystem: PlatformFileSystem by lazy { PlatformFileSystemImpl(internalPlatformDependency, coroutines) }
-  private val visibleDevices: VisibleDevices by lazy { VisibleDevicesImpl(coroutines, clock) }
+  private val visibleDevices: VisibleDevices by lazy {
+    VisibleDevicesImpl(
+      coroutines,
+      clock,
+      currentDeviceProvider = currentDeviceProvider,
+    )
+  }
 
   private val communicationModule by lazy {
     CommunicationModule(

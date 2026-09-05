@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.discovery
 
+import FakeLocalPropertiesRepository
 import app.cash.turbine.test
 import TestCoroutines
 import com.carlom.klardrop.common.utils.Clock
@@ -222,6 +223,30 @@ class VisibleDevicesImplTest {
     // Only the fresh port must survive; the stale port must have been evicted.
     assertEquals(1, klardropConnections.size)
     assertEquals(portB, klardropConnections.first().port)
+  }
+
+  /**
+   * Regression guard: the local device must never appear in the visible list, no matter
+   * which transport delivers its own announcement (multi-NIC mDNS re-broadcast, protocol
+   * twin, stale publication). The filter is the choke point in onNewDeviceVisible so
+   * every transport is covered by construction.
+   */
+  @Test
+  fun selfDeviceAnnouncementIsFiltered() = runTest(coroutines.dispatcher) {
+    val selfId = device1.deviceId
+    val currentDeviceProvider = CurrentDeviceProvider(FakeLocalPropertiesRepository(selfId))
+    val devices = VisibleDevicesImpl(coroutines, Clock(), currentDeviceProvider = currentDeviceProvider)
+
+    // Self arrives via two different transports — both must be dropped.
+    devices.onNewDeviceVisible(device1, connection1)
+    devices.onNewDeviceVisible(device1, connection2)
+
+    // A genuine peer must still be visible.
+    devices.onNewDeviceVisible(device2, connection2)
+
+    assertNull(devices.getDevice(device1.deviceId), "self device must never appear in the visible list")
+    assertNotNull(devices.getDevice(device2.deviceId), "other devices must remain visible")
+    assertEquals(1, devices.visibleDevices.value.size)
   }
 
   /**
