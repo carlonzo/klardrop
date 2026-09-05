@@ -1,6 +1,7 @@
 @file:Suppress("DEPRECATION")
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -13,6 +14,8 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.carlom.klardrop.KlardropApp
+import com.carlom.klardrop.debug.DebugControl
+import kotlinx.coroutines.launch
 import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
@@ -140,11 +143,17 @@ fun main(args: Array<String>) {
     }
   }
 
+  val filesToSend = parseSendFiles(args)
+
   // Single-instance guard: before touching any app state, make sure no other instance
-  // owns the data dir. A second launch focuses the first window and exits.
-  val instanceGuard = SingleInstance.acquire()
+  // owns the data dir. A second launch focuses the first window (and forwards any files to send) and exits.
+  val instanceGuard = if (dataDir != null) {
+    SingleInstance.acquire(java.io.File(dataDir), filesToSend)
+  } else {
+    SingleInstance.acquire(sendFiles = filesToSend)
+  }
   if (instanceGuard == null) {
-    println("Klardrop is already running — focusing existing window")
+    println("Klardrop is already running — passed request to existing instance")
     exitProcess(0)
   }
 
@@ -164,11 +173,18 @@ fun main(args: Array<String>) {
   )
   k.init()
 
+  if (applicationInfo.isDebug && applicationInfo.controlPort != null) {
+    k.commonComponent.coroutines().appScope.launch {
+      DebugControl.start(k)
+    }
+  }
 
   application {
 
     val windowState = rememberWindowState()
     var isWindowVisible by remember { mutableStateOf(true) }
+    var activeWindow by remember { mutableStateOf<AwtWindow?>(null) }
+    var pendingShareFiles by remember { mutableStateOf<List<String>?>(filesToSend.ifEmpty { null }) }
 
     val trayAvailable = remember { klardropTrayAvailable() }
     val visibleDevices by k.visibleDevices().visibleDevices.collectAsState()
@@ -185,70 +201,130 @@ fun main(args: Array<String>) {
       trayUpdateLabel(updateStatus, updateInstall)
     }
 
+    // Connect DebugControl programmatic window visibility endpoints
+    LaunchedEffect(Unit) {
+      DebugControl.windowVisibilityProvider = { isWindowVisible }
+      DebugControl.windowVisibilitySetter = { visible ->
+        EventQueue.invokeLater {
+          isWindowVisible = visible
+        }
+      }
+    }
+
+    // A second launch asked us to come forward: raise and focus the window on the
+    // UI thread (the focus server thread itself must not touch AWT).
+    // Wired at the application level so requests are handled whether the window is open or closed.
+    LaunchedEffect(instanceGuard) {
+      instanceGuard.onFocus = {
+        EventQueue.invokeLater {
+          isWindowVisible = true
+          activeWindow?.toFront()
+          activeWindow?.requestFocusInWindow()
+        }
+      }
+      instanceGuard.onSendFiles = { files ->
+        EventQueue.invokeLater {
+          pendingShareFiles = files
+          isWindowVisible = true
+          activeWindow?.toFront()
+          activeWindow?.requestFocusInWindow()
+        }
+      }
+    }
+
+    // When the window is closed, it is completely torn down and removed from composition.
+    // Explicitly call System.gc() after disposal to immediately signal the JVM to release
+    // unreferenced UI objects, close Skiko rendering surfaces, and uncommit memory.
+    LaunchedEffect(isWindowVisible) {
+      if (!isWindowVisible) {
+        EventQueue.invokeLater {
+          System.gc()
+        }
+      }
+    }
+
     if (trayAvailable) {
       KlardropTray(
         peers = peers,
         isWindowVisible = isWindowVisible,
         updateLabel = updateLabel,
         onToggleWindow = { isWindowVisible = !isWindowVisible },
-        onShowWindow = { isWindowVisible = true },
+        onShowWindow = {
+          isWindowVisible = true
+          activeWindow?.toFront()
+          activeWindow?.requestFocusInWindow()
+        },
       )
     }
 
-    Window(
-      title = "",
-      icon = painterResource("icons/app-icon.svg"),
-      onCloseRequest = {
-        if (trayAvailable) {
-          isWindowVisible = false
-        } else {
-          exitApplication()
-        }
-      },
-      visible = isWindowVisible,
-      resizable = true,
-      state = windowState
-    ) {
+    if (isWindowVisible) {
+      Window(
+        title = "",
+        icon = painterResource("icons/app-icon.svg"),
+        onCloseRequest = {
+          if (trayAvailable) {
+            isWindowVisible = false
+          } else {
+            exitApplication()
+          }
+        },
+        resizable = true,
+        state = windowState
+      ) {
 
-      LaunchedEffect(window) {
-        // On macOS this hides the title-bar border + title text and lets the
-        // dark content extend under the chrome, keeping only the traffic
-        // lights visible. No-ops on other platforms.
-        runCatching {
-          window.rootPane.putClientProperty("apple.awt.fullWindowContent", true)
-          window.rootPane.putClientProperty("apple.awt.transparentTitleBar", true)
-          window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
-        }
-        if (isMacOs) {
-          // Push the traffic lights down into a taller, Xcode-style title
-          // bar. JBR-only — silently no-ops on stock OpenJDK.
-          applyMacCustomTitleBar(window, MAC_TITLE_BAR_HEIGHT)
-        }
-      }
-
-      // A second launch asked us to come forward: raise and focus the window on the
-      // UI thread (the focus server thread itself must not touch AWT).
-      LaunchedEffect(instanceGuard) {
-        instanceGuard.onFocus = {
-          EventQueue.invokeLater {
-            isWindowVisible = true
-            window.toFront()
-            window.requestFocusInWindow()
+        DisposableEffect(window) {
+          activeWindow = window
+          onDispose {
+            activeWindow = null
           }
         }
+
+        LaunchedEffect(window) {
+          window.toFront()
+          window.requestFocusInWindow()
+
+          // On macOS this hides the title-bar border + title text and lets the
+          // dark content extend under the chrome, keeping only the traffic
+          // lights visible. No-ops on other platforms.
+          runCatching {
+            window.rootPane.putClientProperty("apple.awt.fullWindowContent", true)
+            window.rootPane.putClientProperty("apple.awt.transparentTitleBar", true)
+            window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
+          }
+          if (isMacOs) {
+            // Push the traffic lights down into a taller, Xcode-style title
+            // bar. JBR-only — silently no-ops on stock OpenJDK.
+            applyMacCustomTitleBar(window, MAC_TITLE_BAR_HEIGHT)
+          }
+        }
+
+        val chromeInsets = if (isMacOs)
+          PaddingValues(top = MAC_TITLE_BAR_HEIGHT.dp)
+        else
+          PaddingValues(0.dp)
+
+        AppTheme {
+          KlardropApp(
+            k,
+            contentInsets = chromeInsets,
+            isDesktop = true,
+            pendingFiles = pendingShareFiles,
+            onClearPendingFiles = { pendingShareFiles = null },
+          )
+        }
+
       }
-
-      val chromeInsets = if (isMacOs)
-        PaddingValues(top = MAC_TITLE_BAR_HEIGHT.dp)
-      else
-        PaddingValues(0.dp)
-
-      AppTheme {
-
-        KlardropApp(k, contentInsets = chromeInsets, isDesktop = true)
-      }
-
     }
   }
 
+}
+
+private fun parseSendFiles(args: Array<String>): List<String> {
+  val nonFlags = args.filter { !it.startsWith("--") && !it.startsWith("-D") }
+  val candidates = if (nonFlags.firstOrNull() == "send") {
+    nonFlags.drop(1)
+  } else {
+    nonFlags
+  }
+  return candidates.map { java.io.File(it).absolutePath }
 }

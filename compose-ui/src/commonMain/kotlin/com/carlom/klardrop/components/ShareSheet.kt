@@ -28,7 +28,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.DeviceUi
+import com.carlom.klardrop.TrustStatus
+import com.carlom.klardrop.common.communication.Reachability
+import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.theme.KdTheme
+import com.carlom.klardrop.toKdDeviceKind
 
 // ---------------------------------------------------------------------------
 // C11 · ShareSheet
@@ -41,6 +46,21 @@ data class KdShareDevice(
     val isTrusted: Boolean,
     val status: KdStatus? = null,
 )
+
+fun DeviceUi.toKdShareDevice(): KdShareDevice = KdShareDevice(
+    id = deviceId,
+    name = deviceName,
+    kind = deviceType.toKdDeviceKind(),
+    isTrusted = trustStatus == TrustStatus.Trusted,
+    status = reachability.toKdStatus(),
+)
+
+fun Reachability.toKdStatus(): KdStatus? = when (this) {
+    Reachability.Reachable -> KdStatus.Ok
+    Reachability.Unreachable -> KdStatus.Err
+    Reachability.Probing,
+    Reachability.Unknown -> null
+}
 
 /**
  * Bottom-sheet content for sharing files.

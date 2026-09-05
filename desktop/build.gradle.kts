@@ -50,6 +50,18 @@ kotlin {
 compose.desktop {
   application {
     mainClass = "MainKt"
+    jvmArgs(
+      "-Xms24m",
+      "-Xmx192m",
+      "-XX:+UseG1GC",
+      "-XX:G1PeriodicGCInterval=10000",
+      "-XX:+ShrinkHeapInSteps",
+      "-XX:MinHeapFreeRatio=20",
+      "-XX:MaxHeapFreeRatio=40",
+      "-XX:MaxMetaspaceSize=128m",
+      "-XX:ReservedCodeCacheSize=64m",
+      "-XX:+UseStringDeduplication",
+    )
     nativeDistributions {
       targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
       // Local builds install under their own name so a dev build and an installed release can

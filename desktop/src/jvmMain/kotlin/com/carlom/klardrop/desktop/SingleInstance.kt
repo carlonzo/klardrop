@@ -32,6 +32,10 @@ class SingleInstance private constructor(
   @Volatile
   var onFocus: (() -> Unit)? = null
 
+  /** Invoked on the focus-server thread when a second instance sends files to share. */
+  @Volatile
+  var onSendFiles: ((List<String>) -> Unit)? = null
+
   private var server: ServerSocketChannel? = null
 
   /** Releases the lock and stops the focus server. The OS also does both on process death. */
@@ -92,26 +96,51 @@ class SingleInstance private constructor(
   }.getOrNull()
 
   private fun handleFocusClient(client: SocketChannel) {
-    val buffer = ByteBuffer.allocate(FOCUS.toByteArray().size)
-    while (buffer.hasRemaining() && client.read(buffer) >= 0) {
+    val baos = java.io.ByteArrayOutputStream()
+    val buffer = ByteBuffer.allocate(1024)
+    while (client.read(buffer) > 0) {
+      buffer.flip()
+      baos.write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining())
+      buffer.clear()
+      val current = baos.toString(StandardCharsets.UTF_8.name())
+      if (current.startsWith(FOCUS) || current.endsWith("\n\n")) {
+        break
+      }
     }
-    if (String(buffer.array(), StandardCharsets.UTF_8) == FOCUS) {
-      onFocus?.invoke()
-      client.write(ByteBuffer.wrap(OK.toByteArray()))
+    val message = baos.toString(StandardCharsets.UTF_8.name())
+    when {
+      message.startsWith(FOCUS) -> {
+        onFocus?.invoke()
+        client.write(ByteBuffer.wrap(OK.toByteArray()))
+      }
+      message.startsWith(SEND_PREFIX) -> {
+        val paths = message.removePrefix(SEND_PREFIX)
+          .trim()
+          .lines()
+          .map { it.trim() }
+          .filter { it.isNotEmpty() }
+        onFocus?.invoke()
+        onSendFiles?.invoke(paths)
+        client.write(ByteBuffer.wrap(OK.toByteArray()))
+      }
     }
   }
 
   companion object {
     private const val FOCUS = "FOCUS\n"
+    private const val SEND_PREFIX = "SEND\n"
     private const val OK = "OK\n"
     private const val FOCUS_TIMEOUT_MS = 2_000L
 
     /**
      * Takes the single-instance lock for [dataDir]. Returns the guard if this process is
      * the primary instance, or null if another instance is running — in which case a
-     * focus request has been sent to it (best effort, 2s timeout) and the caller should exit.
+     * focus request (or send files request) has been sent to it (best effort, 2s timeout) and the caller should exit.
      */
-    fun acquire(dataDir: File = defaultDataDir()): SingleInstance? {
+    fun acquire(
+      dataDir: File = defaultDataDir(),
+      sendFiles: List<String> = emptyList(),
+    ): SingleInstance? {
       dataDir.mkdirs()
       // Closing the channel closes the underlying RandomAccessFile (bidirectionally linked),
       // so holding the channel open holds the lock.
@@ -123,7 +152,11 @@ class SingleInstance private constructor(
       }
       if (lock == null) {
         lockChannel.close()
-        requestFocus(File(dataDir, "instance.sock"))
+        if (sendFiles.isNotEmpty()) {
+          requestSend(File(dataDir, "instance.sock"), sendFiles)
+        } else {
+          requestFocus(File(dataDir, "instance.sock"))
+        }
         return null
       }
       return SingleInstance(lockChannel, File(dataDir, "instance.sock")).also { it.startFocusServer() }
@@ -144,6 +177,26 @@ class SingleInstance private constructor(
           it.write(ByteBuffer.wrap(FOCUS.toByteArray()))
           // Blocking SocketChannel reads have no read timeout; poll via a non-blocking
           // selector so a wedged primary can't hang the second launch.
+          it.configureBlocking(false)
+          Selector.open().use { selector ->
+            it.register(selector, java.nio.channels.SelectionKey.OP_READ)
+            val buffer = ByteBuffer.allocate(OK.toByteArray().size)
+            while (buffer.hasRemaining()) {
+              if (selector.select(FOCUS_TIMEOUT_MS) == 0) return
+              if (it.read(buffer) < 0) break
+            }
+          }
+        }
+      }
+    }
+
+    /** Sends SEND with file paths to the primary instance and waits for OK. Best effort; never throws. */
+    private fun requestSend(socketFile: File, files: List<String>) {
+      runCatching {
+        val channel = SocketChannel.open(UnixDomainSocketAddress.of(socketFile.toPath()))
+        channel.use {
+          val payload = "$SEND_PREFIX${files.joinToString("\n")}\n\n"
+          it.write(ByteBuffer.wrap(payload.toByteArray(StandardCharsets.UTF_8)))
           it.configureBlocking(false)
           Selector.open().use { selector ->
             it.register(selector, java.nio.channels.SelectionKey.OP_READ)

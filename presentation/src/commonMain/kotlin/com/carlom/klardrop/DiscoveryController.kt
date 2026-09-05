@@ -1,6 +1,7 @@
 package com.carlom.klardrop
 
 import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.notifications.AppNotification
@@ -297,7 +298,11 @@ class DiscoveryController(
     }
   }
 
-  private fun sendFiles(deviceId: String, files: List<PlatformFile>) {
+  fun sendFiles(
+    deviceId: String,
+    files: List<PlatformFile>,
+    onProgress: ((MessengerSendProgress) -> Unit)? = null,
+  ) {
     coroutines.appScope.launch {
       files.forEach { file ->
 
@@ -305,13 +310,22 @@ class DiscoveryController(
           .onFailure { log("DiscoveryController", "Unable to resolve file at path $file. File cannot be sent!", it) }
           .getOrNull() ?: return@forEach
 
-        messenger.send(
+        val flow = messenger.send(
           deviceId, FileMessage(
             fileData.fileName,
             fileData.fileSize,
             fileData.mimeType
           ).toSendRequest(file)
-        ).untilCompleted().let { showDevicesHelper.collectProgress(it, deviceId) }
+        ).untilCompleted()
+
+        if (onProgress != null) {
+          launch {
+            flow.collect { progress ->
+              onProgress(progress)
+            }
+          }
+        }
+        showDevicesHelper.collectProgress(flow, deviceId)
       }
     }
   }
