@@ -390,6 +390,13 @@ class Server(
       return
     }
     runCatching {
+      val existingDevice = visibleDevices.getDevice(handshake.deviceId)
+      existingDevice?.deviceConnections?.filter {
+        (it is DeviceConnection.KlardropConnection && it.address == host && it.port != port) ||
+          (it is DeviceConnection.NearbyConnection && it.address == host && it.port != port)
+      }?.forEach { stale ->
+        visibleDevices.onDeviceLost(handshake.deviceId, stale)
+      }
       visibleDevices.onNewDeviceVisible(
         DeviceInfo(
           deviceId = handshake.deviceId,

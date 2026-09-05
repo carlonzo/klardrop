@@ -31,10 +31,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.coroutineContext
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Per-address TCP connect timeout (milliseconds), enforced via [withTimeout].
@@ -308,7 +310,13 @@ class ClientImpl(
     }
 
     // await for the connection to be established and connectionpool to be updated
-    val outcome = connectionJob.await()
+    val outcome = withTimeoutOrNull(40.seconds) {
+      connectionJob.await()
+    } ?: run {
+      log("Client", "Dial to $deviceId timed out awaiting outcome")
+      if (!connectionJob.isCompleted) connectionJob.complete(ConnectOutcome.Failed)
+      ConnectOutcome.Failed
+    }
     log("Client", "On client connection completed with $deviceId: outcome: $outcome")
     return outcome
   }
@@ -651,90 +659,91 @@ class ClientImpl(
     val session = transport.connectCentral(bleConnection.address, deviceId)
     val bridge = BleChannelBridge(session, clientScope).start()
     try {
-
-    val self = currentDeviceProvider.get()
-    // Central speaks first — send the rich handshake so the server can enrich its
-    // VisibleDevices entry. BLE advertisements only carry the bare shortDeviceId
-    // for privacy; this is the first place the friendly name is revealed.
-    bridge.writeChannel.sendMessage(
-      HandshakeMessage(
-        deviceId = self.shortDeviceId,
-        deviceName = self.deviceName,
-        osType = self.osType,
-        deviceType = self.deviceType,
-        supportsEncryption = true,
-        listenPort = serverPort.value,
-        claimsTrust = trustManager.isTrusted(deviceId),
-      ),
-      serializer,
-    )
-    val serverHandshake = bridge.readChannel.readMessage(serializer) as HandshakeMessage
-
-    if (serverHandshake.deviceId != deviceId) {
-      log("Client", "BLE handshake id mismatch: expected $deviceId got ${serverHandshake.deviceId}")
-      bridge.close()
-      connectionJob.complete(ConnectOutcome.Failed)
-      return@runCatching
-    }
-
-    // Encryption is required: refuse peers (e.g. older builds) that don't advertise it.
-    if (!serverHandshake.supportsEncryption) {
-      log("Client", "BLE peer $deviceId does not support encrypted transport; refusing (encryption required)")
-      bridge.close()
-      connectionJob.complete(ConnectOutcome.Failed)
-      return@runCatching
-    }
-
-    // Server's reply may carry rich identity — enrich our VisibleDevices entry so
-    // the BLE peer shows up with friendly name + OS/device type instead of the
-    // shortDeviceId placeholder.
-    if (serverHandshake.deviceName.isNotEmpty()) {
-      runCatching {
-        visibleDevices.onNewDeviceVisible(
-          com.carlom.klardrop.common.discovery.DeviceInfo(
-            deviceId = serverHandshake.deviceId,
-            name = serverHandshake.deviceName,
-            deviceType = serverHandshake.deviceType,
-            osType = serverHandshake.osType,
+      withTimeout(UKEY2_HANDSHAKE_TIMEOUT_MS) {
+        val self = currentDeviceProvider.get()
+        // Central speaks first — send the rich handshake so the server can enrich its
+        // VisibleDevices entry. BLE advertisements only carry the bare shortDeviceId
+        // for privacy; this is the first place the friendly name is revealed.
+        bridge.writeChannel.sendMessage(
+          HandshakeMessage(
+            deviceId = self.shortDeviceId,
+            deviceName = self.deviceName,
+            osType = self.osType,
+            deviceType = self.deviceType,
+            supportsEncryption = true,
+            listenPort = serverPort.value,
+            claimsTrust = trustManager.isTrusted(deviceId),
           ),
-          bleConnection,
+          serializer,
         )
+        val serverHandshake = bridge.readChannel.readMessage(serializer) as HandshakeMessage
+
+        if (serverHandshake.deviceId != deviceId) {
+          log("Client", "BLE handshake id mismatch: expected $deviceId got ${serverHandshake.deviceId}")
+          bridge.close()
+          connectionJob.complete(ConnectOutcome.Failed)
+          return@withTimeout
+        }
+
+        // Encryption is required: refuse peers (e.g. older builds) that don't advertise it.
+        if (!serverHandshake.supportsEncryption) {
+          log("Client", "BLE peer $deviceId does not support encrypted transport; refusing (encryption required)")
+          bridge.close()
+          connectionJob.complete(ConnectOutcome.Failed)
+          return@withTimeout
+        }
+
+        // Server's reply may carry rich identity — enrich our VisibleDevices entry so
+        // the BLE peer shows up with friendly name + OS/device type instead of the
+        // shortDeviceId placeholder.
+        if (serverHandshake.deviceName.isNotEmpty()) {
+          runCatching {
+            visibleDevices.onNewDeviceVisible(
+              com.carlom.klardrop.common.discovery.DeviceInfo(
+                deviceId = serverHandshake.deviceId,
+                name = serverHandshake.deviceName,
+                deviceType = serverHandshake.deviceType,
+                osType = serverHandshake.osType,
+              ),
+              bleConnection,
+            )
+          }
+        }
+
+        // We (the central) spoke first, so we are the UKEY2 initiator — same role mapping as the
+        // TCP client. Runs over the BLE bridge channels before any messenger exists.
+        val cipher = KlardropEncryptedTransport.runInitiatorHandshake(
+          readChannel = bridge.readChannel,
+          writeChannel = bridge.writeChannel,
+          selfDeviceId = self.shortDeviceId,
+          peerDeviceId = deviceId,
+          trustManager = trustManager,
+        )
+
+        val connection = Connection.Ble(session, deviceId)
+        val connectionMessenger = ConnectionMessenger(
+          coroutines = coroutines,
+          connection = connection,
+          messagesRouter = messagesRouter,
+          readChannel = bridge.readChannel,
+          writeChannel = bridge.writeChannel,
+          ackTimeoutConfig = ackTimeoutConfig,
+          // GATT disconnect already ends the session; PING/PONG over notify is lossy on BLE.
+          heartbeatConfig = heartbeatConfig.copy(enabled = false),
+          messageSerializer = serializer,
+          cipher = cipher,
+          initiatedByUs = true,
+        )
+        connectionsPool.updateConnection(deviceId, connectionMessenger)
+        clientScope.launch { connectionMessenger.acceptIncomingMessages() }
+        clientScope.launchStaleTrustRevocation(
+          messenger = connectionMessenger,
+          trustManager = trustManager,
+          peerId = deviceId,
+          peerClaimsTrust = serverHandshake.claimsTrust,
+        )
+        connectionJob.complete(ConnectOutcome.Connected)
       }
-    }
-
-    // We (the central) spoke first, so we are the UKEY2 initiator — same role mapping as the
-    // TCP client. Runs over the BLE bridge channels before any messenger exists.
-    val cipher = KlardropEncryptedTransport.runInitiatorHandshake(
-      readChannel = bridge.readChannel,
-      writeChannel = bridge.writeChannel,
-      selfDeviceId = self.shortDeviceId,
-      peerDeviceId = deviceId,
-      trustManager = trustManager,
-    )
-
-    val connection = Connection.Ble(session, deviceId)
-    val connectionMessenger = ConnectionMessenger(
-      coroutines = coroutines,
-      connection = connection,
-      messagesRouter = messagesRouter,
-      readChannel = bridge.readChannel,
-      writeChannel = bridge.writeChannel,
-      ackTimeoutConfig = ackTimeoutConfig,
-      // GATT disconnect already ends the session; PING/PONG over notify is lossy on BLE.
-      heartbeatConfig = heartbeatConfig.copy(enabled = false),
-      messageSerializer = serializer,
-      cipher = cipher,
-      initiatedByUs = true,
-    )
-    connectionsPool.updateConnection(deviceId, connectionMessenger)
-    clientScope.launch { connectionMessenger.acceptIncomingMessages() }
-    clientScope.launchStaleTrustRevocation(
-      messenger = connectionMessenger,
-      trustManager = trustManager,
-      peerId = deviceId,
-      peerClaimsTrust = serverHandshake.claimsTrust,
-    )
-    connectionJob.complete(ConnectOutcome.Connected)
     } catch (t: Throwable) {
       bridge.close()
       throw t

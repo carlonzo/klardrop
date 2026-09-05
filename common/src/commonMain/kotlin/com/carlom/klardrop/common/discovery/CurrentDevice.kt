@@ -7,11 +7,13 @@ import com.carlom.klardrop.common.utils.OsType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 data class CurrentDevice(
-  private val deviceId: String,
+  val deviceId: String,
   val deviceName: String,
   val deviceType: DeviceType,
   val osType: OsType,
@@ -27,27 +29,39 @@ data class CurrentDevice(
 class CurrentDeviceProvider(
   private val localPropertiesRepository: LocalPropertiesRepository
 ) {
-  
+
+  private val mutex = Mutex()
+  private var inMemoryDeviceId: String? = null
+
   /**
    * Flow that emits CurrentDevice whenever device properties change
    */
   val deviceInfoFlow: Flow<CurrentDevice> = localPropertiesRepository.properties.map { properties ->
-    val deviceId = properties.deviceId.ifEmpty {
-      val id = cleanDeviceId(Uuid.random().toString())
-      localPropertiesRepository.save(properties.copy(deviceId = id))
-      id
+    val deviceId = if (properties.deviceId.isNotBlank()) {
+      mutex.withLock {
+        inMemoryDeviceId = properties.deviceId
+        properties.deviceId
+      }
+    } else {
+      mutex.withLock {
+        inMemoryDeviceId ?: run {
+          val id = cleanDeviceId(Uuid.random().toString())
+          inMemoryDeviceId = id
+          localPropertiesRepository.save(properties.copy(deviceId = id))
+          id
+        }
+      }
     }
 
-    
     // Prioritize custom device name with fallback to system name
     val deviceName = properties.customDeviceName?.takeIf { it.isNotBlank() } ?: CommonPlatformDependencies.getDeviceName()
-    
+
     val deviceType = CommonPlatformDependencies.deviceType()
     val osType = CommonPlatformDependencies.osType()
 
     CurrentDevice(deviceId, deviceName, deviceType, osType)
   }
-  
+
   suspend fun get(): CurrentDevice {
     return deviceInfoFlow.first()
   }
@@ -65,8 +79,11 @@ class CurrentDeviceProvider(
    */
   suspend fun rotateDeviceId(): String {
     val id = cleanDeviceId(Uuid.random().toString())
-    val properties = localPropertiesRepository.getProperty()
-    localPropertiesRepository.save(properties.copy(deviceId = id))
+    mutex.withLock {
+      inMemoryDeviceId = id
+      val properties = localPropertiesRepository.getProperty()
+      localPropertiesRepository.save(properties.copy(deviceId = id))
+    }
     return id.take(8)
   }
 
