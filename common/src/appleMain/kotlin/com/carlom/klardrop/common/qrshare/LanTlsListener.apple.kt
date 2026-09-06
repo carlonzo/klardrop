@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import platform.CoreFoundation.*
@@ -126,8 +127,12 @@ actual class LanTlsListener actual constructor() {
         val idToClean = identity
         identity = null
 
-        connsToClose.addAll(activeConnections)
-        activeConnections.clear()
+        runBlocking {
+            mutex.withLock {
+                connsToClose.addAll(activeConnections)
+                activeConnections.clear()
+            }
+        }
 
         for (conn in connsToClose) {
             try {
@@ -194,25 +199,37 @@ actual class LanTlsListener actual constructor() {
             close = { closeConn() }
         )
 
-        activeConnections.add(tlsConnection)
+        fun removeConnection() {
+            scope.launch {
+                mutex.withLock {
+                    activeConnections.remove(tlsConnection)
+                }
+            }
+        }
 
         // Start receive loop
         scheduleReceive(connection, inputChannel) {
             closeConn()
-            activeConnections.remove(tlsConnection)
+            removeConnection()
         }
 
         // Start send loop
         scheduleSend(connection, outputChannel) {
             closeConn()
-            activeConnections.remove(tlsConnection)
+            removeConnection()
         }
 
         scope.launch {
+            mutex.withLock {
+                activeConnections.add(tlsConnection)
+            }
             try {
                 connectionsChannel.send(tlsConnection)
             } catch (_: Exception) {
                 closeConn()
+                mutex.withLock {
+                    activeConnections.remove(tlsConnection)
+                }
             }
         }
     }
@@ -283,8 +300,8 @@ actual class LanTlsListener actual constructor() {
                                     sendDone.complete(Unit)
                                 }
                             }
+                            sendDone.await()
                         }
-                        sendDone.await()
                     }
                 }
             } catch (_: Exception) {
@@ -311,9 +328,15 @@ actual class LanTlsListener actual constructor() {
         val cfData = pkcs12Bytes.usePinned { pinned ->
             CFDataCreate(null, pinned.addressOf(0).reinterpret(), pkcs12Bytes.size.toLong())!!
         }
+        val options = CFDictionaryCreateMutable(null, 0, kCFTypeDictionaryKeyCallBacks.ptr, kCFTypeDictionaryValueCallBacks.ptr)!!
+        val passphrase = CFStringCreateWithCString(null, QrTlsCertGenerator.PKCS12_PASSWORD, kCFStringEncodingUTF8)
+        CFDictionarySetValue(options, kSecImportExportPassphrase, passphrase)
+        if (passphrase != null) {
+            CFRelease(passphrase)
+        }
         try {
             val itemsVar = alloc<CFArrayRefVar>()
-            val status = SecPKCS12Import(cfData, null, itemsVar.ptr)
+            val status = SecPKCS12Import(cfData, options, itemsVar.ptr)
             if (status != errSecSuccess) {
                 log("LanTlsListener", "SecPKCS12Import failed: $status")
                 return null
@@ -326,6 +349,7 @@ actual class LanTlsListener actual constructor() {
             CFRetain(idRef)
             idRef
         } finally {
+            CFRelease(options)
             CFRelease(cfData)
         }
     }
