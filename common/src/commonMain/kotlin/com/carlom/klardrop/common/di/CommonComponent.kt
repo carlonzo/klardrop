@@ -25,6 +25,10 @@ import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
+import com.carlom.klardrop.common.qrshare.LanHttpShareServer
+import com.carlom.klardrop.common.qrshare.LanTlsListener
+
+import com.carlom.klardrop.common.qrshare.QrShareSession
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.CoroutinesImpl
@@ -189,6 +193,25 @@ class CommonComponent(
   fun foregroundState() = internalPlatformDependency.foregroundState()
 
   fun updateChecker() = updateChecker
+
+  private val qrShareSession: QrShareSession by lazy {
+    val server = LanHttpShareServer(
+      coroutines = coroutines,
+      fileManager = fileManager,
+      tls = LanTlsListener(),
+      clock = kotlin.time.Clock.System,
+    )
+    QrShareSession(
+      coroutines = coroutines,
+      fileManager = fileManager,
+      transferAnchor = transferAnchor,
+      lanAddressSelector = internalPlatformDependency.lanAddressSelector(),
+      clock = kotlin.time.Clock.System,
+      server = server,
+    )
+  }
+
+  fun qrShareSession(): QrShareSession = qrShareSession
 
   /** Hand a URL to the system handler (browser, etc.). Used by the update banner. */
   suspend fun openUrl(url: String) = internalPlatformDependency.openUrl(url)

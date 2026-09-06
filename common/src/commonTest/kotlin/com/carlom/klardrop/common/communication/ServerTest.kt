@@ -275,6 +275,7 @@ internal fun createTestServer(
   visibleDevices: VisibleDevices = FakeVisibleDevices(),
   messageReceiver: MessageReceiver = MessageReceiverImpl(coroutines, visibleDevices),
   messagesRouter: MessagesRouter = FakeMessagesRouter(),
+  preferredPort: Int = 0,
 ): Server {
   val currentDeviceProvider = CurrentDeviceProvider(localPropertiesRepository)
 
@@ -339,5 +340,6 @@ internal fun createTestServer(
     messageReceiver = messageReceiver,
     protoBuf = ProtoBuf,
     trustManager = trustManager,
+    preferredPort = preferredPort,
   )
 }

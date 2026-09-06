@@ -33,11 +33,20 @@ internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
     jmdnsInstances
   }
 
+  private fun getPreferredLocalAddress(): Inet4Address? = runCatching {
+    java.net.DatagramSocket().use { datagram ->
+      datagram.connect(java.net.InetAddress.getByName("8.8.8.8"), 10002)
+      datagram.localAddress as? Inet4Address
+    }
+  }.getOrNull()
+
   private fun getAddresses(): List<Inet4Address> {
+    val preferred = getPreferredLocalAddress()
     val addresses = mutableListOf<Inet4Address>()
     NetworkInterface.getNetworkInterfaces().iterator().forEach { networkInterface ->
       if (networkInterface.isLoopback) return@forEach
       if (!networkInterface.isUp) return@forEach
+      val candidateIps = mutableListOf<Inet4Address>()
       networkInterface.inetAddresses.iterator().forEach { inetAddress ->
         if (inetAddress.isLoopbackAddress) return@forEach
         if (inetAddress !is Inet4Address) return@forEach
@@ -49,8 +58,13 @@ internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
           log("JmDnsMdns", "Skipping CGNAT/Tailscale address ${inetAddress.hostAddress} for mDNS")
           return@forEach
         }
-        addresses.add(inetAddress)
+        candidateIps.add(inetAddress)
       }
+      if (candidateIps.isEmpty()) return@forEach
+      // Pick at most ONE IPv4 address per interface to prevent JmDNS self-collision.
+      // If one matches the preferred outbound route, choose it; otherwise take the first candidate.
+      val selected = candidateIps.firstOrNull { it == preferred } ?: candidateIps.first()
+      addresses.add(selected)
     }
     return addresses
   }
@@ -81,10 +95,15 @@ internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
 
   override suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
     val jmdns = acquireJmdns()
+    val serviceType = if (registerServiceInfo.serviceType.endsWith("local.")) {
+      registerServiceInfo.serviceType
+    } else {
+      "${registerServiceInfo.serviceType}local."
+    }
     suspendCancellableCoroutine<Unit> {
       val registrations = jmdns.map { instance ->
         val jmdnsServiceInfo = javax.jmdns.ServiceInfo.create(
-          registerServiceInfo.serviceType,
+          serviceType,
           registerServiceInfo.serviceName,
           registerServiceInfo.port,
           0,
@@ -95,7 +114,7 @@ internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
         jmdnsServiceInfo
       }
 
-      log("JmDnsMdns", "publishing service: $registerServiceInfo")
+      log("JmDnsMdns", "publishing service: $registerServiceInfo (type=$serviceType)")
 
       it.invokeOnCancellation {
         registrations.forEach { jmdnsServiceInfo ->
@@ -133,6 +152,7 @@ internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
     return object : ServiceListener {
       override fun serviceAdded(event: ServiceEvent) {
         log("JmDnsMdns", "serviceAdded: type=${event.type} name=${event.name}")
+        event.dns.requestServiceInfo(event.type, event.name, true)
       }
 
       override fun serviceRemoved(event: ServiceEvent) {
@@ -142,7 +162,11 @@ internal class JmDnsServiceDiscoveryMdns : ServiceDiscoveryMdnsBackend {
 
       override fun serviceResolved(event: ServiceEvent) {
         log("JmDnsMdns", "serviceResolved: name=${event.name} addrs=${event.info.inet4Addresses.map { it.hostAddress }} txt=${event.info.propertyNames.toList()}")
-        if (event.info.inet4Addresses.isEmpty()) return
+        if (event.info.inet4Addresses.isEmpty()) {
+          log("JmDnsMdns", "serviceResolved with empty inet4Addresses, re-requesting info for ${event.name}")
+          event.dns.requestServiceInfo(event.type, event.name, true)
+          return
+        }
         producerScope.trySend(ServiceDiscoveryEvent.ServiceFound(event.toServiceInfo()))
       }
     }

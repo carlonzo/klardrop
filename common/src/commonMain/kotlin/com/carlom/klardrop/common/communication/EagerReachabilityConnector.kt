@@ -173,6 +173,10 @@ class EagerReachabilityConnector(
     armCooldown(deviceId)
     connectionsPool.markProbing(deviceId)
     scope.launch {
+      if (connectionsPool.isAvailable(deviceId)) {
+        clearCooldown(deviceId)
+        return@launch
+      }
       runCatching { client.connectTo(deviceId) }
         .onSuccess { outcome ->
           when (outcome) {
@@ -193,14 +197,24 @@ class EagerReachabilityConnector(
               // Client collapses the per-endpoint causes (refused / timeout / handshake
               // mismatch / encryption refusal — each logged there) into this one outcome.
               log(TAG, "Probe $deviceId: Error (all ${device.deviceConnections.size} endpoint(s) exhausted)")
-              connectionsPool.markUnreachable(deviceId)
+              if (!connectionsPool.isAvailable(deviceId)) {
+                connectionsPool.markUnreachable(deviceId)
+              } else {
+                log(TAG, "Probe $deviceId: outcome Failed but connection is available in pool; keeping Reachable")
+                clearCooldown(deviceId)
+              }
             }
           }
         }
         .onFailure { cause ->
           val (outcome, detail) = classifyProbeFailure(cause)
           log(TAG, "Probe $deviceId: $outcome ($detail)")
-          connectionsPool.markUnreachable(deviceId)
+          if (!connectionsPool.isAvailable(deviceId)) {
+            connectionsPool.markUnreachable(deviceId)
+          } else {
+            log(TAG, "Probe $deviceId: failure ($outcome) but connection is available in pool; keeping Reachable")
+            clearCooldown(deviceId)
+          }
         }
     }
   }

@@ -212,7 +212,7 @@ internal fun String.isReachableAddress(): Boolean {
 }
 
 /** True for the 100.64.0.0/10 carrier-grade-NAT range that Tailscale (and CGNAT) use. */
-private fun String.isCgnatIpv4(): Boolean {
+internal fun String.isCgnatIpv4(): Boolean {
   val octets = substringBefore('%').split('.')
   if (octets.size != 4) return false
   val first = octets[0].toIntOrNull() ?: return false

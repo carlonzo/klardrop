@@ -70,6 +70,10 @@ android {
     proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
   }
 
+  testOptions {
+    unitTests.isReturnDefaultValues = true
+  }
+
   signingConfigs {
     // Shared debug key, committed at android/debug.keystore so every machine + CI
     // signs debug builds identically (well-known creds — no secrecy intended).

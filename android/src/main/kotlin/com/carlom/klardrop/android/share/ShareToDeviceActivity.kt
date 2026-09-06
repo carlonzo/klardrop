@@ -43,9 +43,14 @@ import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.delay
+import com.carlom.klardrop.common.qrshare.QrSharePayload
+import com.carlom.klardrop.common.qrshare.QrShareSession
+import com.carlom.klardrop.common.qrshare.QrShareState
+import com.carlom.klardrop.common.qrshare.SharedFile
 import com.carlom.klardrop.components.KdDeviceKind
 import com.carlom.klardrop.components.KdShareDevice
 import com.carlom.klardrop.components.KdStatus
+import com.carlom.klardrop.components.QrShareSheet
 import com.carlom.klardrop.components.SendStatus
 import com.carlom.klardrop.components.ShareSheet
 import com.carlom.klardrop.components.toKdShareDevice
@@ -60,7 +65,12 @@ class ShareToDeviceActivity : ComponentActivity() {
   private val klardrop: Klardrop
     get() = appKlardrop()
 
+  private val qrShareSession: QrShareSession
+    get() = klardrop.commonComponent.qrShareSession()
+
   private lateinit var shareToDeviceController: ShareToDeviceController
+
+  private val showQrSheetState = mutableStateOf(false)
 
   // What this share invocation carries; populated from the launch intent. Exactly one is non-empty.
   private var pendingText: String? = null
@@ -74,12 +84,22 @@ class ShareToDeviceActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     shareToDeviceController = ShareToDeviceController(klardrop.commonComponent)
 
-    parseIntent()
-    // Large transfers post a progress notification from FileTransferService; ask up-front so it can show.
-    maybeRequestNotificationPermission()
+    val currentState = qrShareSession.state.value
+    val isReattach = currentState is QrShareState.QrVisible ||
+      (currentState is QrShareState.Serving && currentState.qrStillVisible)
+    if (isReattach) {
+      showQrSheetState.value = true
+      parseIntent()
+    } else {
+      qrShareSession.cancel()
+      showQrSheetState.value = false
+      parseIntent()
+      maybeRequestNotificationPermission()
+    }
 
     setContent {
       AppTheme {
+        val qrState by qrShareSession.state.collectAsState()
         val devices by shareToDeviceController.devicesFlow.collectAsState(emptyList<DeviceUi>())
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
         var selectedId by remember { mutableStateOf<String?>(null) }
@@ -113,38 +133,121 @@ class ShareToDeviceActivity : ComponentActivity() {
         }
 
         ModalBottomSheet(
-          onDismissRequest = { dismissed = true },
+          onDismissRequest = {
+            if (showQrSheetState.value) {
+              dismissQrSheet()
+            } else {
+              dismissed = true
+            }
+          },
           sheetState = sheetState,
           shape = KdTheme.radii.shapeSheet,
           containerColor = KdTheme.colors.bg1,
         ) {
-          if (transferId == null) {
-            ShareSheet(
-              trustedDevices = trustedShare,
-              nearbyDevices = nearbyShare,
-              selectedId = selectedId,
-              onSelectDevice = { selectedId = it.id },
-              onSend = { share ->
-                val target = share?.id?.let(byId::get) ?: return@ShareSheet
-                // Hand the payload to FileTransferService (file) while we still hold the read grant, or
-                // fire-and-forget the text. Files keep the sheet open to show status; text dismisses.
-                lifecycleScope.launch {
-                  try {
-                    val id = dispatch(target.deviceId)
-                    if (id == null) dismissed = true else transferId = id
-                  } catch (e: Throwable) {
-                    log("ShareToDeviceActivity", "Failed to dispatch share to ${target.deviceId}", e)
-                    dismissed = true
+          when {
+            showQrSheetState.value -> {
+              QrShareSheet(
+                state = qrState,
+                onDismiss = { dismissQrSheet() },
+                onCancel = {
+                  qrShareSession.cancel()
+                  finish()
+                },
+                isText = pendingText != null,
+              )
+            }
+            transferId == null -> {
+              ShareSheet(
+                trustedDevices = trustedShare,
+                nearbyDevices = nearbyShare,
+                selectedId = selectedId,
+                onSelectDevice = { selectedId = it.id },
+                onShareViaQr = {
+                  maybeRequestNotificationPermission(isQr = true)
+                  showQrSheetState.value = true
+                  lifecycleScope.launch {
+                    try {
+                      val (files, payload) = buildQrPayload()
+                      FileTransferService.startQrSession(this@ShareToDeviceActivity, files)
+                      qrShareSession.start(payload)
+                      FileTransferService.onQrSessionStartCompleted()
+                    } catch (e: Throwable) {
+                      log("ShareToDeviceActivity", "Failed to start QR share", e)
+                      FileTransferService.clearQrSessionHeld()
+                    }
                   }
-                }
-              },
-            )
-          } else {
-            SendStatus(progress = sendProgress, onHide = { dismissed = true })
+                },
+                onSend = { share ->
+                  val target = share?.id?.let(byId::get) ?: return@ShareSheet
+                  // Hand the payload to FileTransferService (file) while we still hold the read grant, or
+                  // fire-and-forget the text. Files keep the sheet open to show status; text dismisses.
+                  lifecycleScope.launch {
+                    try {
+                      val id = dispatch(target.deviceId)
+                      if (id == null) dismissed = true else transferId = id
+                    } catch (e: Throwable) {
+                      log("ShareToDeviceActivity", "Failed to dispatch share to ${target.deviceId}", e)
+                      dismissed = true
+                    }
+                  }
+                },
+              )
+            }
+            else -> {
+              SendStatus(progress = sendProgress, onHide = { dismissed = true })
+            }
           }
         }
       }
     }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    val currentState = qrShareSession.state.value
+    val isReattach = currentState is QrShareState.QrVisible ||
+      (currentState is QrShareState.Serving && currentState.qrStillVisible)
+    if (isReattach) {
+      // restore QR UI, ignore new SHARE payload
+      showQrSheetState.value = true
+    } else {
+      setIntent(intent)
+      qrShareSession.cancel()
+      showQrSheetState.value = false
+      parseIntent()
+      maybeRequestNotificationPermission()
+    }
+  }
+
+  private fun dismissQrSheet() {
+    qrShareSession.dismissQrSheet()
+    finish()
+  }
+
+  private suspend fun buildQrPayload(): Pair<List<FileTransferService.SendFile>, QrSharePayload> {
+    val text = pendingText
+    if (text != null) {
+      return emptyList<FileTransferService.SendFile>() to QrSharePayload.Text(text)
+    }
+
+    val fileSystem = klardrop.commonComponent.platformFileSystem()
+    val ioDispatcher = klardrop.commonComponent.coroutines().ioDispatcher
+
+    val resolved = withContext(ioDispatcher) {
+      pendingUris.map { uri ->
+        val platformFile = PlatformFile(uri)
+        val data = fileSystem.getResolvedFileData(platformFile)
+        val sendFile = FileTransferService.SendFile(uri, data.fileName, data.fileSize, data.mimeType)
+        val sharedFile = SharedFile(
+          file = platformFile,
+          fileName = data.fileName,
+          mimeType = data.mimeType,
+          fileSize = data.fileSize,
+        )
+        sendFile to sharedFile
+      }
+    }
+    return resolved.map { it.first } to QrSharePayload.Files(resolved.map { it.second })
   }
 
   private fun parseIntent() {
@@ -200,10 +303,11 @@ class ShareToDeviceActivity : ComponentActivity() {
     return transferId
   }
 
-  private fun maybeRequestNotificationPermission() {
+  private fun maybeRequestNotificationPermission(isQr: Boolean = false) {
     // Only file shares can spin up FileTransferService (and its progress notification). A text share
     // never does, so don't pester the user with a permission prompt for one.
-    if (pendingUris.isEmpty()) return
+    // For QR shares (even text), FileTransferService is always started.
+    if (!isQr && pendingUris.isEmpty()) return
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
     val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
       PackageManager.PERMISSION_GRANTED
@@ -227,6 +331,10 @@ class ShareToDeviceActivity : ComponentActivity() {
     }.orEmpty()
 
   override fun onDestroy() {
+    val currentState = qrShareSession.state.value
+    if (isFinishing && !isChangingConfigurations && currentState is QrShareState.QrVisible && !qrShareSession.hasClaimed) {
+      qrShareSession.cancel()
+    }
     shareToDeviceController.dispose()
     super.onDestroy()
   }

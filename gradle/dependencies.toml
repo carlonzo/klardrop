@@ -27,6 +27,7 @@ coil3 = "3.6.2"
 # Linux BLE transport talks to BlueZ over D-Bus. 6.x (JDK 21 line) is announced but
 # NOT yet released — Maven Central's latest is 5.2.0, which needs JDK 17+ and runs on 21.
 dbus-java = "5.2.0"
+qrcode-kotlin = "4.5.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -73,6 +74,7 @@ cryptography-provider-optimal = { module = "dev.whyoleg.cryptography:cryptograph
 cryptography-random = { module = "dev.whyoleg.cryptography:cryptography-random", version.ref = "cryptography" }
 
 coil3-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil3" }
+qrcode-kotlin = { module = "io.github.g0dkar:qrcode-kotlin", version.ref = "qrcode-kotlin" }
 
 junit4 = { module = "junit:junit", version = "4.13.2" }
 androidx-test-core = { module = "androidx.test:core-ktx", version = "1.7.0" }

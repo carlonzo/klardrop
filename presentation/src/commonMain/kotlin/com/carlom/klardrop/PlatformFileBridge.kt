@@ -1,5 +1,6 @@
 package com.carlom.klardrop
 
+import com.carlom.klardrop.common.qrshare.SharedFile
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.io.files.Path
 
@@ -9,3 +10,5 @@ import kotlinx.io.files.Path
  * PlatformFile(Path(sourcePath)) usage in DeviceChatViewModel.retryFileTransfer.
  */
 fun platformFileFromPath(path: String): PlatformFile = PlatformFile(Path(path))
+
+fun sharedFileFromPlatformFile(file: PlatformFile): SharedFile = SharedFile(file)

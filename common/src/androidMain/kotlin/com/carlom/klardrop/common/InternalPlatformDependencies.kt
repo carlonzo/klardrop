@@ -45,6 +45,9 @@ actual class InternalPlatformDependencies(private val context: Context, private 
 
   actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
+  actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
+    com.carlom.klardrop.common.qrshare.PlatformLanAddressSelector(context)
+
   private val foregroundState by lazy { ForegroundState(context) }
 
   actual fun foregroundState(): ForegroundState = foregroundState

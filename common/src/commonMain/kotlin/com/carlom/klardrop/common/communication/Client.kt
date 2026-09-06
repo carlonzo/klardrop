@@ -317,8 +317,14 @@ class ClientImpl(
       if (!connectionJob.isCompleted) connectionJob.complete(ConnectOutcome.Failed)
       ConnectOutcome.Failed
     }
-    log("Client", "On client connection completed with $deviceId: outcome: $outcome")
-    return outcome
+    val finalOutcome = if (outcome == ConnectOutcome.Failed && connectionsPool.isAvailable(deviceId)) {
+      log("Client", "Dial outcome was Failed for $deviceId, but connection is available in pool -> Connected")
+      ConnectOutcome.Connected
+    } else {
+      outcome
+    }
+    log("Client", "On client connection completed with $deviceId: outcome: $finalOutcome")
+    return finalOutcome
   }
 
   /**
@@ -407,7 +413,7 @@ class ClientImpl(
             // firewall path did not open, not that the endpoint is stale.
             val refused = cause.isConnectionRefused()
             val timedOut = cause is kotlinx.coroutines.TimeoutCancellationException
-            if ((refused || timedOut) && !punchThrough) {
+            if ((refused || timedOut) && !punchThrough && !connectionsPool.isAvailable(deviceId)) {
               val reason = if (refused) "connection refused" else "connect/handshake timeout"
               log("Client", "Dial to $deviceId @ ${connection.address}:${connection.port} failed ($reason) — invalidating stale endpoint")
               visibleDevices.invalidateKlardropEndpoint(deviceId, connection.address, connection.port)

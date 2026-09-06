@@ -101,6 +101,7 @@ class Server(
    * client's T10 punch-through dial reads it to bind its sockets to our listening port.
    */
   private val serverPort: MutableStateFlow<Int>? = null,
+  private val preferredPort: Int = 0,
 ) {
   data class ServerConfig(val host: String, val port: Int)
 
@@ -127,18 +128,31 @@ class Server(
    * best-effort optimisation; the server is not, so an unavailable option degrades to a
    * plain bind instead of taking the listener down with it.
    */
-  private suspend fun bindListener(selectorManager: SelectorManager): ServerSocket = try {
-    aSocket(selectorManager).tcp().bind("0.0.0.0", 0) {
-      reuseAddress = true
-      reusePort = true
+  private suspend fun bindListener(selectorManager: SelectorManager): ServerSocket {
+    val portsToTry = if (preferredPort > 0) listOf(preferredPort, 0) else listOf(0)
+    for (port in portsToTry) {
+      val socket = try {
+        aSocket(selectorManager).tcp().bind("0.0.0.0", port) {
+          reuseAddress = true
+          reusePort = true
+        }
+      } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+      } catch (e: Exception) {
+        try {
+          aSocket(selectorManager).tcp().bind("0.0.0.0", port) {
+            reuseAddress = true
+          }
+        } catch (e2: kotlinx.coroutines.CancellationException) {
+          throw e2
+        } catch (e2: Exception) {
+          log("Server", "Failed binding to port $port (${e2.message}); trying next")
+          null
+        }
+      }
+      if (socket != null) return socket
     }
-  } catch (e: kotlinx.coroutines.CancellationException) {
-    throw e
-  } catch (e: Exception) {
-    log("Server", "SO_REUSEPORT unavailable (${e.message}); binding without it — punch-through disabled")
-    aSocket(selectorManager).tcp().bind("0.0.0.0", 0) {
-      reuseAddress = true
-    }
+    error("Failed to bind server socket to any port")
   }
 
   /**
@@ -304,7 +318,6 @@ class Server(
     if (!visibleDevices.isDeviceVisible(request.deviceId)) {
       log("Server", "Inbound connection claims deviceId ${request.deviceId} which is not in visible devices (mDNS loss or id change)")
     }
-    recordInboundPeer(request, socket)
 
     // Encryption is required: refuse peers (e.g. older builds) that don't advertise it rather
     // than silently falling back to cleartext.
@@ -364,6 +377,7 @@ class Server(
     )
 
     connectionsPool.updateConnection(request.deviceId, connectionMessenger)
+    recordInboundPeer(request, socket)
 
     log("Server", "Klardrop connection accepted from: $remoteAddress")
 
@@ -382,7 +396,7 @@ class Server(
 
   private suspend fun recordInboundPeer(handshake: HandshakeMessage, socket: Socket) {
     val address = socket.remoteAddress as? InetSocketAddress ?: return
-    val host = address.hostname.trim().removePrefix("/").substringBefore('%')
+    val host = address.extractNumericHost()
     if (host.isBlank()) return
     val port = handshake.listenPort
     if (port <= 0) {
