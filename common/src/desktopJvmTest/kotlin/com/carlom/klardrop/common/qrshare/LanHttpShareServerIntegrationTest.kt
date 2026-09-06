@@ -247,6 +247,20 @@ class LanHttpShareServerIntegrationTest {
     assertTrue(landingResp.text.contains("second.jpg"))
     assertTrue(landingResp.text.contains("/s/$waitingToken/file/0"))
     assertTrue(landingResp.text.contains("/s/$waitingToken/file/1"))
+    assertTrue(landingResp.text.contains("<title>Klardrop</title>"))
+    assertTrue(landingResp.text.contains("class=\"wordmark\">Klardrop</div>"))
+    assertTrue(landingResp.text.contains("<svg"))
+    assertTrue(landingResp.text.contains(LANDING_BG))
+    assertTrue(landingResp.text.contains(LANDING_TEXT))
+    assertTrue(landingResp.text.contains(LANDING_ACCENT))
+    assertTrue(landingResp.text.contains("color-scheme: dark") || landingResp.text.contains("content=\"dark\""))
+    assertFalse(landingResp.text.contains("light dark"))
+    assertFalse(
+      landingResp.text.contains("download>"),
+      "bare download attribute sends Chrome Android through a TLS path that never GETs the file",
+    )
+    val file0Href = Regex("""href="(/s/$waitingToken/file/0)"""").find(landingResp.text)?.groupValues?.get(1)
+    assertEquals("/s/$waitingToken/file/0", file0Href)
 
     // GET file 0
     val file0Resp = executeRequest(bound.port, "GET", "/s/$waitingToken/file/0")
@@ -502,6 +516,63 @@ class LanHttpShareServerIntegrationTest {
     assertTrue(events.any { it is LanHttpShareServer.DownloadEvent.Started })
     assertTrue(events.any { it is LanHttpShareServer.DownloadEvent.Progress })
     assertTrue(ended.success)
+
+    collectJob.cancel()
+  }
+
+  @Test
+  fun testLandingLinkFollowedDownloadsJpegBytes(): Unit = runBlocking(Dispatchers.IO) {
+    val jpegBytes = ByteArray(512 * 1024) { i ->
+      when (i) {
+        0 -> 0xFF.toByte()
+        1 -> 0xD8.toByte()
+        2 -> 0xFF.toByte()
+        else -> (i % 251).toByte()
+      }
+    }
+    val platformFile = createTestPlatformFile("photo.jpg", jpegBytes)
+    val fileManager = FakeFileManager(mapOf(platformFile to jpegBytes))
+    val coroutines = CoroutinesImpl()
+    val tls = LanTlsListener()
+    val server = LanHttpShareServer(coroutines, fileManager, tls)
+    activeServer = server
+
+    val payload = QrSharePayload.Files(
+      listOf(SharedFile(platformFile, "photo.jpg", "image/jpeg", jpegBytes.size.toLong())),
+    )
+    val waitingToken = "T_JPEG"
+    val bound = server.start(payload, waitingToken, "127.0.0.1", 0)
+
+    val started = CompletableDeferred<LanHttpShareServer.DownloadEvent.Started>()
+    val ended = CompletableDeferred<LanHttpShareServer.DownloadEvent.Ended>()
+    val collectJob = launch {
+      server.events.collect {
+        if (it is LanHttpShareServer.DownloadEvent.Started) started.complete(it)
+        if (it is LanHttpShareServer.DownloadEvent.Ended) ended.complete(it)
+      }
+    }
+
+    val landing = executeRequest(bound.port, "GET", "/s/$waitingToken")
+    assertEquals(200, landing.status)
+    val href = Regex("""href="(/s/[^"]+/file/0)"""").find(landing.text)?.groupValues?.get(1)
+    assertNotNull(href)
+
+    val fileResp = executeRequest(bound.port, "GET", href)
+    assertEquals(200, fileResp.status)
+    assertEquals("image/jpeg", fileResp.headers["content-type"])
+    assertEquals(jpegBytes.size.toString(), fileResp.headers["content-length"])
+    assertTrue(fileResp.headers["content-disposition"]!!.contains("filename=\"photo.jpg\""))
+    assertEquals(jpegBytes.size, fileResp.body.size)
+    assertEquals(0xFF.toByte(), fileResp.body[0])
+    assertEquals(0xD8.toByte(), fileResp.body[1])
+    assertEquals(0xFF.toByte(), fileResp.body[2])
+    assertTrue(fileResp.body.contentEquals(jpegBytes))
+
+    val startedEvent = withTimeout(3000) { started.await() }
+    val endedEvent = withTimeout(3000) { ended.await() }
+    assertEquals("photo.jpg", startedEvent.fileName)
+    assertEquals(jpegBytes.size.toLong(), startedEvent.totalBytes)
+    assertTrue(endedEvent.success)
 
     collectJob.cancel()
   }

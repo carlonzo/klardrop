@@ -155,8 +155,10 @@ open class LanHttpShareServer(
           }
 
           if (accessResult.fileIndex == null) {
+            log("LanHttpShareServer", "Landing $method ${redactPath(path)} from ${conn.peerIpv4}")
             handleLanding(conn.output, method, path, claimedToken)
           } else {
+            log("LanHttpShareServer", "File $method ${redactPath(path)} from ${conn.peerIpv4}")
             handleFile(conn.output, method, claimedToken, accessResult.fileIndex)
           }
         }
@@ -486,70 +488,154 @@ internal fun formatFileSize(bytes: Long): String {
   return "$rounded GB"
 }
 
-internal fun renderTextLandingHtml(text: String): String = """
+internal const val LANDING_BG = "#14161b"
+internal const val LANDING_BG2 = "#1a1d24"
+internal const val LANDING_BG3 = "#21252e"
+internal const val LANDING_TEXT = "#ece9e4"
+internal const val LANDING_MUTED = "#9a9ea8"
+internal const val LANDING_ACCENT = "#f0a062"
+internal const val LANDING_ACCENT_INK = "#1a1206"
+
+internal const val KLARDROP_DROP_SVG =
+  """<svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.2c0 0 6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z" stroke="#f0a062" stroke-width="2.1" stroke-linejoin="round"/></svg>"""
+
+internal fun landingCss(): String = """
+  html { color-scheme: dark; background: $LANDING_BG; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 28px 20px 40px;
+    background:
+      radial-gradient(720px 460px at 78% -6%, rgba(240,160,98,0.16), transparent 60%),
+      $LANDING_BG;
+    color: $LANDING_TEXT;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(160deg, #2b2f38, #191c22);
+    border: 1px solid rgba(255,255,255,0.14);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+  .mark svg { display: block; }
+  .wordmark {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: $LANDING_TEXT;
+    line-height: 1.1;
+  }
+  .tag {
+    margin-top: 2px;
+    font-size: 0.8rem;
+    color: $LANDING_MUTED;
+  }
+  .card {
+    background: $LANDING_BG2;
+    color: $LANDING_TEXT;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 16px;
+    padding: 22px;
+  }
+  h1 {
+    font-size: 1.15rem;
+    font-weight: 650;
+    margin: 0 0 16px;
+    color: $LANDING_TEXT;
+  }
+  textarea {
+    width: 100%;
+    min-height: 180px;
+    padding: 12px;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 10px;
+    font-size: 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    resize: vertical;
+    background: $LANDING_BG3;
+    color: $LANDING_TEXT;
+  }
+  .actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+  button, .download-btn {
+    background: $LANDING_ACCENT;
+    color: $LANDING_ACCENT_INK;
+    border: none;
+    border-radius: 11px;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+    font-weight: 650;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+  button:active, .download-btn:active { filter: brightness(0.95); }
+  .file-list { list-style: none; margin: 0; padding: 0; }
+  .file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    gap: 12px;
+  }
+  .file-item:last-child { border-bottom: none; }
+  .file-info { flex: 1; min-width: 0; overflow: hidden; }
+  .file-name { font-weight: 600; word-break: break-word; color: $LANDING_TEXT; }
+  .file-meta { font-size: 0.85rem; color: $LANDING_MUTED; margin-top: 4px; }
+""".trimIndent()
+
+internal fun renderLandingDocument(innerBody: String): String = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shared Text - Klardrop</title>
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="$LANDING_BG">
+<title>Klardrop</title>
 <style>
-  :root { color-scheme: light dark; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    margin: 0;
-    padding: 24px;
-    background: #f7f7f8;
-    color: #1a1a1a;
-    display: flex;
-    justify-content: center;
-  }
-  @media (prefers-color-scheme: dark) {
-    body { background: #121212; color: #f0f0f0; }
-    .card { background: #1e1e1e; border-color: #333; }
-    textarea { background: #2a2a2a; color: #f0f0f0; border-color: #444; }
-  }
-  .card {
-    background: #ffffff;
-    border: 1px solid #e0e0e0;
-    border-radius: 12px;
-    padding: 24px;
-    max-width: 600px;
-    width: 100%;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  }
-  h1 { font-size: 1.25rem; margin-top: 0; margin-bottom: 16px; }
-  textarea {
-    width: 100%;
-    min-height: 180px;
-    padding: 12px;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-family: monospace;
-    resize: vertical;
-    box-sizing: border-box;
-  }
-  .actions { margin-top: 16px; display: flex; justify-content: flex-end; }
-  button {
-    background: #0066cc;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 20px;
-    font-size: 1rem;
-    cursor: pointer;
-    font-weight: 500;
-  }
-  button:active { background: #0052a3; }
+${landingCss()}
 </style>
 </head>
 <body>
+<div class="wrap">
+  <header class="brand">
+    <div class="mark">$KLARDROP_DROP_SVG</div>
+    <div>
+      <div class="wordmark">Klardrop</div>
+      <div class="tag">Shared over your Wi-Fi</div>
+    </div>
+  </header>
+  $innerBody
+</div>
+</body>
+</html>
+""".trimIndent()
+
+internal fun renderTextLandingHtml(text: String): String = renderLandingDocument(
+  """
 <div class="card">
-  <h1>Shared Text</h1>
+  <h1>Shared text</h1>
   <textarea id="shared-text" readonly>${htmlEscape(text)}</textarea>
   <div class="actions">
-    <button id="copy-btn" onclick="copyText()">Copy</button>
+    <button id="copy-btn" type="button" onclick="copyText()">Copy</button>
   </div>
 </div>
 <script>
@@ -583,101 +669,36 @@ function fallbackCopy(area, btn) {
   }
 }
 </script>
-</body>
-</html>
 """.trimIndent()
+)
 
-internal fun renderFilesLandingHtml(files: List<SharedFile>, claimedToken: String): String = buildString {
-  append("""
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shared Files - Klardrop</title>
-<style>
-  :root { color-scheme: light dark; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    margin: 0;
-    padding: 24px;
-    background: #f7f7f8;
-    color: #1a1a1a;
-    display: flex;
-    justify-content: center;
-  }
-  @media (prefers-color-scheme: dark) {
-    body { background: #121212; color: #f0f0f0; }
-    .card { background: #1e1e1e; border-color: #333; }
-    .file-item { border-color: #333; }
-    .file-meta { color: #aaa; }
-  }
-  .card {
-    background: #ffffff;
-    border: 1px solid #e0e0e0;
-    border-radius: 12px;
-    padding: 24px;
-    max-width: 600px;
-    width: 100%;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  }
-  h1 { font-size: 1.25rem; margin-top: 0; margin-bottom: 16px; }
-  .file-list { list-style: none; margin: 0; padding: 0; }
-  .file-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 0;
-    border-bottom: 1px solid #eee;
-    gap: 12px;
-  }
-  .file-item:last-child { border-bottom: none; }
-  .file-info { flex: 1; min-width: 0; overflow: hidden; }
-  .file-name {
-    font-weight: 500;
-    word-break: break-word;
-  }
-  .file-meta {
-    font-size: 0.85rem;
-    color: #666;
-    margin-top: 4px;
-  }
-  .download-btn {
-    display: inline-block;
-    background: #0066cc;
-    color: white;
-    text-decoration: none;
-    border-radius: 8px;
-    padding: 8px 16px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-  .download-btn:hover { background: #0052a3; }
-</style>
-</head>
-<body>
-<div class="card">
-  <h1>Shared Files</h1>
-  <ul class="file-list">
-""".trimIndent())
-
-  for ((index, file) in files.withIndex()) {
-    append("""
+internal fun renderFilesLandingHtml(files: List<SharedFile>, claimedToken: String): String {
+  val items = buildString {
+    for ((index, file) in files.withIndex()) {
+      // Do not put a `download` attribute on this link. Chrome Android sends those
+      // through the download manager, which does not inherit the user's "Proceed"
+      // exception for our self-signed cert, so the GET never reaches us.
+      append(
+        """
     <li class="file-item">
       <div class="file-info">
         <div class="file-name">${htmlEscape(file.fileName)}</div>
         <div class="file-meta">${formatFileSize(file.fileSize)} &bull; ${htmlEscape(file.mimeType.ifBlank { "Unknown" })}</div>
       </div>
-      <a href="/s/$claimedToken/file/$index" class="download-btn" download>Download</a>
+      <a href="/s/$claimedToken/file/$index" class="download-btn">Download</a>
     </li>
-""".trimIndent())
+        """.trimIndent(),
+      )
+    }
   }
-
-  append("""
+  return renderLandingDocument(
+    """
+<div class="card">
+  <h1>Shared files</h1>
+  <ul class="file-list">
+$items
   </ul>
 </div>
-</body>
-</html>
-""".trimIndent())
+    """.trimIndent(),
+  )
 }

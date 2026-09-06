@@ -240,6 +240,22 @@ class QrTokenTableTest {
   }
 
   @Test
+  fun testTextLandingUsesKlardropDarkBrand() {
+    val html = renderTextLandingHtml("Hello <World> & friends")
+    assertTrue(html.contains("<title>Klardrop</title>"))
+    assertTrue(html.contains("class=\"wordmark\">Klardrop</div>"))
+    assertTrue(html.contains("<svg"))
+    assertTrue(html.contains("color-scheme: dark") || html.contains("content=\"dark\""))
+    assertFalse(html.contains("light dark"))
+    assertTrue(html.contains(LANDING_BG))
+    assertTrue(html.contains(LANDING_TEXT))
+    assertTrue(html.contains(LANDING_ACCENT))
+    assertTrue(html.contains("Hello &lt;World&gt; &amp; friends"))
+    assertTrue(html.contains("id=\"copy-btn\""))
+    assertTrue(html.contains("<textarea id=\"shared-text\" readonly>"))
+  }
+
+  @Test
   fun testExtractPath() {
     assertEquals("/s/abc", extractPath("/s/abc"))
     assertEquals("/s/abc", extractPath("/s/abc?foo=bar"))
