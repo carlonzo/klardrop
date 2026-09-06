@@ -18,8 +18,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -71,6 +74,7 @@ fun Reachability.toKdStatus(): KdStatus? = when (this) {
  * @param selectedId        currently selected device id
  * @param onSelectDevice    called when user taps a device
  * @param onSend            primary CTA tap — called with the selected device
+ * @param onShareViaQr      called when user taps the "Share via QR" tile; tile rendered iff non-null
  * @param modifier          applied to root Column
  */
 @Composable
@@ -80,6 +84,7 @@ fun ShareSheet(
     selectedId: String? = null,
     onSelectDevice: (KdShareDevice) -> Unit = {},
     onSend: (KdShareDevice?) -> Unit = {},
+    onShareViaQr: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val colors = KdTheme.colors
@@ -105,9 +110,11 @@ fun ShareSheet(
 
         Spacer(Modifier.height(spacing.s4))
 
-        // "Your devices" section
-        if (trustedDevices.isNotEmpty()) {
-            SectionHead(label = "Your Devices", count = trustedDevices.size)
+        // "Your devices" section / Quick destinations
+        if (trustedDevices.isNotEmpty() || onShareViaQr != null) {
+            if (trustedDevices.isNotEmpty()) {
+                SectionHead(label = "Your Devices", count = trustedDevices.size)
+            }
 
             LazyRow(
                 contentPadding = PaddingValues(horizontal = spacing.s4),
@@ -119,6 +126,11 @@ fun ShareSheet(
                         isSelected = device.id == selectedId,
                         onClick = { onSelectDevice(device) },
                     )
+                }
+                if (onShareViaQr != null) {
+                    item(key = "qr_share") {
+                        QrDestinationTile(onClick = onShareViaQr)
+                    }
                 }
             }
 
@@ -218,6 +230,47 @@ private fun TrustedDeviceTile(
             text = device.name,
             style = typography.caption.copy(color = colors.text),
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun QrDestinationTile(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+
+    Column(
+        modifier = modifier
+            .width(92.dp)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(spacing.s2),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(colors.bg2),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Default.QrCode,
+                contentDescription = "Share via QR",
+                modifier = Modifier.size(24.dp),
+                tint = colors.text,
+            )
+        }
+
+        Text(
+            text = "Share via QR",
+            style = typography.caption.copy(color = colors.text),
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )

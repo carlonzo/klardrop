@@ -40,6 +40,7 @@ kotlin {
 
         api(project(":presentation"))
         implementation(project(":klardrop-common"))
+        implementation(deps.qrcode.kotlin)
       }
     }
 
@@ -54,6 +55,12 @@ kotlin {
         implementation(compose.preview)
         implementation(compose.uiTooling)
         implementation(deps.androidx.activity.compose)
+      }
+    }
+
+    val desktopJvmTest by getting {
+      dependencies {
+        implementation(kotlin("test"))
       }
     }
 
