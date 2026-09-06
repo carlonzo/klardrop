@@ -27,7 +27,7 @@ import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
 import com.carlom.klardrop.common.qrshare.LanHttpShareServer
 import com.carlom.klardrop.common.qrshare.LanTlsListener
-import com.carlom.klardrop.common.qrshare.PlatformLanAddressSelector
+
 import com.carlom.klardrop.common.qrshare.QrShareSession
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
@@ -205,7 +205,7 @@ class CommonComponent(
       coroutines = coroutines,
       fileManager = fileManager,
       transferAnchor = transferAnchor,
-      lanAddressSelector = PlatformLanAddressSelector(),
+      lanAddressSelector = internalPlatformDependency.lanAddressSelector(),
       clock = kotlin.time.Clock.System,
       server = server,
     )

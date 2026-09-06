@@ -399,16 +399,13 @@ class QrShareSessionTest {
   }
 
   @Test
-  fun ipChangeToNull_failsWifiDisconnected() = runSessionTest {
+  fun ipChangeToNull_doesNotTearDownLiveListener() = runSessionTest {
     session.start(textPayload)
 
     selector.emitIp(null)
 
-    val currentState = session.state.value
-    assertIs<QrShareState.Failed>(currentState)
-    assertEquals("Wi-Fi disconnected", currentState.message)
-    assertTrue(anchor.activeTransfers.isEmpty())
-    assertEquals(1, server.stopCallCount)
+    assertIs<QrShareState.QrVisible>(session.state.value)
+    assertEquals(0, server.stopCallCount)
   }
 
   @Test

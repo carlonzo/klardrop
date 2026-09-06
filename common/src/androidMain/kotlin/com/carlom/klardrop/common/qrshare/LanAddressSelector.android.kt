@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +30,10 @@ actual class PlatformLanAddressSelector actual constructor() : LanAddressSelecto
   }
 
   actual override suspend fun selectIpv4(): String? = withContext(Dispatchers.IO) {
-    selectLanAddress(enumerateInterfaces())
+    val candidates = enumerateInterfaces()
+    val picked = selectLanAddress(candidates)
+    log("LanAddressSelector", "candidates=$candidates picked=$picked")
+    picked
   }
 
   actual override fun observeChanges(): Flow<String?> = callbackFlow {
@@ -81,12 +85,12 @@ actual class PlatformLanAddressSelector actual constructor() : LanAddressSelecto
   }.distinctUntilChanged().flowOn(Dispatchers.IO)
 
   private fun enumerateInterfaces(): List<Pair<String, String>> {
-    return runCatching {
-      val ifaces = NetworkInterface.getNetworkInterfaces() ?: return emptyList()
+    val nicAddrs = runCatching {
+      val ifaces = NetworkInterface.getNetworkInterfaces() ?: return@runCatching emptyList()
       buildList {
         for (iface in ifaces) {
           if (iface.isLoopback) continue
-          val isUp = runCatching { iface.isUp }.getOrElse { true }
+          val isUp = runCatching { iface.isUp }.getOrElse { false }
           if (!isUp) continue
           for (addr in iface.inetAddresses) {
             if (addr is Inet4Address && !addr.isLoopbackAddress) {
@@ -99,6 +103,33 @@ actual class PlatformLanAddressSelector actual constructor() : LanAddressSelecto
     }.getOrElse {
       log("LanAddressSelector", "interface enumeration failed: ${it.message}")
       emptyList()
+    }
+    return wifiOrEthernetFromConnectivityManager() + nicAddrs
+  }
+
+  /**
+   * Active Wi-Fi / Ethernet IPv4 from ConnectivityManager, tagged as wlan0/eth0 so
+   * ranking treats them as STA LAN (ahead of leftover hotspot 192.168.43.1).
+   */
+  private fun wifiOrEthernetFromConnectivityManager(): List<Pair<String, String>> {
+    val cm = context?.let {
+      runCatching {
+        it.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+      }.getOrNull()
+    } ?: return emptyList()
+    val network = cm.activeNetwork ?: return emptyList()
+    val caps = cm.getNetworkCapabilities(network) ?: return emptyList()
+    val ifaceName = when {
+      caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wlan0"
+      caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "eth0"
+      else -> return emptyList()
+    }
+    val lp = cm.getLinkProperties(network) ?: return emptyList()
+    return lp.linkAddresses.mapNotNull { la ->
+      val addr = la.address as? Inet4Address ?: return@mapNotNull null
+      if (addr.isLoopbackAddress) return@mapNotNull null
+      val host = addr.hostAddress ?: return@mapNotNull null
+      ifaceName to host
     }
   }
 

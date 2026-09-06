@@ -79,6 +79,9 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
 
   actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
+  actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
+    com.carlom.klardrop.common.qrshare.PlatformLanAddressSelector()
+
   private val permissionsMonitor by lazy { PermissionsMonitor() }
 
   actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor

@@ -116,6 +116,7 @@ class QrShareSession(
     currentPort = bound.port
     val url = "https://$ipv4:${bound.port}/s/$waitingToken"
     currentUrl = url
+    log("QrShareSession", "QR URL https://$ipv4:${bound.port}/s/<redacted>")
     val visibleState = QrShareState.QrVisible(
       url = url,
       ipv4 = ipv4,
@@ -385,23 +386,10 @@ class QrShareSession(
     }
 
     if (newIpv4 == null) {
-      log("QrShareSession", "Wi-Fi disconnected, failing session")
-      if (waitAnchorActive) {
-        transferAnchor.end("qr:$sessionId:wait")
-        waitAnchorActive = false
-      }
-      if (graceAnchorActive) {
-        transferAnchor.end("qr:$sessionId:grace")
-        graceAnchorActive = false
-      }
-      for (dl in inFlightDownloads.values) {
-        transferAnchor.end("qr:$sessionId:file:${dl.index}:conn:${dl.connectionId}")
-      }
-      inFlightDownloads.clear()
-      server.stop()
-      sessionScope?.cancel()
-      sessionScope = null
-      _state.value = QrShareState.Failed("Wi-Fi disconnected")
+      // One empty NetworkInterface snapshot is common on Android (and our
+      // observer emits null when enumeration throws). Tearing down the listen
+      // socket here is what made scanned QR URLs immediately unreachable.
+      log("QrShareSession", "Ignoring transient empty LAN address snapshot")
       return
     }
 

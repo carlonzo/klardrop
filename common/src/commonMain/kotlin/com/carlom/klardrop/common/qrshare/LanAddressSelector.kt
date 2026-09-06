@@ -24,8 +24,9 @@ fun LanAddressSelector(): LanAddressSelector = PlatformLanAddressSelector()
  * 3. Else null (no generic RFC1918 fallback)
  */
 fun selectLanAddress(candidates: Iterable<Pair<String, String>>): String? {
-  var firstWifiOrHotspot: String? = null
-  var firstEthernet: String? = null
+  var staWifi: String? = null
+  var hotspot: String? = null
+  var ethernet: String? = null
 
   for ((ifaceName, rawAddress) in candidates) {
     val clean = rawAddress.trim().trim('[', ']').substringBefore('%')
@@ -35,18 +36,18 @@ fun selectLanAddress(candidates: Iterable<Pair<String, String>>): String? {
     if (!clean.isRfc1918Ipv4()) {
       continue
     }
-    if (isWifiOrApInterface(ifaceName) || clean.isHotspotSubnetIpv4()) {
-      if (firstWifiOrHotspot == null) {
-        firstWifiOrHotspot = clean
-      }
-    } else if (isEthernetInterface(ifaceName)) {
-      if (firstEthernet == null) {
-        firstEthernet = clean
-      }
+    val hotspotSubnet = clean.isHotspotSubnetIpv4()
+    val wifi = isWifiOrApInterface(ifaceName)
+    when {
+      wifi && !hotspotSubnet -> if (staWifi == null) staWifi = clean
+      hotspotSubnet -> if (hotspot == null) hotspot = clean
+      isEthernetInterface(ifaceName) -> if (ethernet == null) ethernet = clean
     }
   }
 
-  return firstWifiOrHotspot ?: firstEthernet
+  // STA Wi-Fi first: a leftover/soft-AP 192.168.43.1 must not beat the LAN
+  // address the receiver is actually on (that QR is unreachable).
+  return staWifi ?: hotspot ?: ethernet
 }
 
 fun selectLanIpv4(candidates: Iterable<Pair<String, String>>): String? = selectLanAddress(candidates)

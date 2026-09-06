@@ -19,6 +19,7 @@ expect class InternalPlatformDependencies {
   fun getDownloadStoragePath(): Path
   fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
   fun networkLifecycleMonitor(): NetworkLifecycleMonitor
+  fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector
   fun permissionsMonitor(): PermissionsMonitor
   fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor
   fun notifier(): Notifier

@@ -14,6 +14,17 @@ class LanAddressSelectorTest {
   }
 
   @Test
+  fun staWifiBeatsLeftoverHotspotAddress() {
+    val result = selectLanAddress(
+      listOf(
+        "ap0" to "192.168.43.1",
+        "wlan0" to "10.79.71.196",
+      )
+    )
+    assertEquals("10.79.71.196", result)
+  }
+
+  @Test
   fun cellularPlusHotspotPicksHotspot() {
     // rmnet0 10.1.2.3 + ap0 192.168.43.1 → 192.168.43.1
     val result = selectLanAddress(

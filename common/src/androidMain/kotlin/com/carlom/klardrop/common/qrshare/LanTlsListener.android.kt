@@ -65,7 +65,9 @@ actual class LanTlsListener actual constructor() {
         val sslContext = SSLContext.getInstance("TLS")
         sslContext.init(kmf.keyManagers, null, null)
 
-        val ss = sslContext.serverSocketFactory.createServerSocket(port, 50, InetAddress.getByName("0.0.0.0")) as SSLServerSocket
+        val ss = sslContext.serverSocketFactory.createServerSocket() as SSLServerSocket
+        ss.reuseAddress = true
+        ss.bind(InetSocketAddress(InetAddress.getByName("0.0.0.0"), port), 50)
         val supported = ss.supportedProtocols.toSet()
         val enabled = listOf("TLSv1.3", "TLSv1.2").filter { it in supported }.toTypedArray()
         if (enabled.isNotEmpty()) {
