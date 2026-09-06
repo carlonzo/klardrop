@@ -29,6 +29,7 @@ struct ShareSheetView: View {
     @Binding var selectedId: String?
     var onSelect: (KdShareDevice) -> Void = { _ in }
     let onSend: (KdShareDevice?) -> Void
+    var onShareViaQr: (() -> Void)? = nil
 
     @Environment(\.kdColors) private var kd
 
@@ -49,9 +50,11 @@ struct ShareSheetView: View {
             Spacer().frame(height: KdSpacing.s4)
 
             // "Your Devices" horizontal scroll
-            if !trustedDevices.isEmpty {
-                SectionHeadView(label: "Your Devices", count: trustedDevices.count) { EmptyView() }
-                    .padding(.horizontal, KdSpacing.s4)
+            if !trustedDevices.isEmpty || onShareViaQr != nil {
+                if !trustedDevices.isEmpty {
+                    SectionHeadView(label: "Your Devices", count: trustedDevices.count) { EmptyView() }
+                        .padding(.horizontal, KdSpacing.s4)
+                }
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: KdSpacing.s3) {
@@ -61,6 +64,9 @@ struct ShareSheetView: View {
                                 isSelected: device.id == selectedId,
                                 onTap: { onSelect(device); selectedId = device.id }
                             )
+                        }
+                        if let onShareViaQr {
+                            QrDestinationTileView(onTap: onShareViaQr)
                         }
                     }
                     .padding(.horizontal, KdSpacing.s4)
@@ -162,3 +168,36 @@ private struct TrustedDeviceTileView: View {
         .buttonStyle(.plain)
     }
 }
+
+// MARK: - QR destination tile (horizontal scroll item)
+
+private struct QrDestinationTileView: View {
+
+    let onTap: () -> Void
+
+    @Environment(\.kdColors) private var kd
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: KdSpacing.s2) {
+                ZStack {
+                    Circle()
+                        .fill(kd.bg2)
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "qrcode")
+                        .font(.system(size: 24))
+                        .foregroundColor(kd.text)
+                }
+
+                Text("Share via QR")
+                    .kdStyle(.caption, color: kd.text)
+                    .lineLimit(2)
+                    .frame(width: 80)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(width: 92)
+        }
+        .buttonStyle(.plain)
+    }
+}
+

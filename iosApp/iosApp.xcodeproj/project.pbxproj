@@ -64,6 +64,7 @@
 		7E63E4FBBBD5ED6787805307 /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3914D14CFE8DE717E480A0C1 /* ShareInbox.swift */; };
 		7F042BC099FC9C73683E237C /* DeviceUiMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60A548AA3ECC229B28CA439 /* DeviceUiMapping.swift */; };
 		809A55F2A7A42EF8E5B29587 /* ShareSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B893524BEA113EBDCBBE3C6 /* ShareSheetView.swift */; };
+		A7E10002B0024D2A9E67F002 /* QrShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E10003B0034D2A9E67F003 /* QrShareView.swift */; };
 		838E3968CF374A72DF942BAB /* NavRoutes.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA74CDA387605E6B2A63703 /* NavRoutes.swift */; };
 		859698F08FA202224C3746AE /* DeviceChatScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7619154102E69A08B9FA4A20 /* DeviceChatScreen.swift */; };
 		868F35965A77ADD07624C37C /* PermissionsChecklistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8F32CDC8B365315F430B2F /* PermissionsChecklistView.swift */; };
@@ -77,6 +78,8 @@
 		96972AF43A557DDE6D1D1B3D /* KdColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88E5A453CA492BB4D6E32AB /* KdColors.swift */; };
 		9A848A1EEF4106C24B6BB123 /* KdMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62ABA6F429B4D01F34B3E772 /* KdMotion.swift */; };
 		9ED9E50A8BC4311ECF440521 /* ShareSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B893524BEA113EBDCBBE3C6 /* ShareSheetView.swift */; };
+		A7E10001B0014D2A9E67F001 /* QrShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E10003B0034D2A9E67F003 /* QrShareView.swift */; };
+
 		A05EA39FF290FDECDF588E46 /* PairingDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC56B4EA9CDB5D8456404160 /* PairingDialogView.swift */; };
 		A170E396EEAB80EE824723D6 /* ChatTimeFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F0B700418BBDFDC584CBF6 /* ChatTimeFormat.swift */; };
 		A3693F3DB4128766295595D0 /* ChatModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2175ED977EC2D04318EAD200 /* ChatModel.swift */; };
@@ -207,6 +210,7 @@
 		94F0B700418BBDFDC584CBF6 /* ChatTimeFormat.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChatTimeFormat.swift; sourceTree = "<group>"; };
 		967BB6CB99DA93EC43589E22 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		9B893524BEA113EBDCBBE3C6 /* ShareSheetView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShareSheetView.swift; sourceTree = "<group>"; };
+		A7E10003B0034D2A9E67F003 /* QrShareView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QrShareView.swift; sourceTree = "<group>"; };
 		9F0D09AD1C96FCD6D5940A15 /* RenameSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RenameSheet.swift; sourceTree = "<group>"; };
 		A1313E8598603FA619FB910F /* UpdateBannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UpdateBannerView.swift; sourceTree = "<group>"; };
 		A3329AA02CA5C53FD205CD6F /* DateChipView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DateChipView.swift; sourceTree = "<group>"; };
@@ -341,6 +345,7 @@
 				9F0D09AD1C96FCD6D5940A15 /* RenameSheet.swift */,
 				3C26119D3D7CE22CF06A5F2E /* SettingsSheet.swift */,
 				9B893524BEA113EBDCBBE3C6 /* ShareSheetView.swift */,
+				A7E10003B0034D2A9E67F003 /* QrShareView.swift */,
 				C0C82CF44F0D12B62B630D44 /* TrustDialogs.swift */,
 			);
 			path = Dialogs;
@@ -776,6 +781,7 @@
 				93FDC5A0AAD0440BC4E5AB62 /* RenameSheet.swift in Sources */,
 				A95B328A12318AC0903110C3 /* SettingsSheet.swift in Sources */,
 				9ED9E50A8BC4311ECF440521 /* ShareSheetView.swift in Sources */,
+				A7E10001B0014D2A9E67F001 /* QrShareView.swift in Sources */,
 				35FDFE34399CE4F261DCD881 /* TrustDialogs.swift in Sources */,
 				5B58F437AFA1716CA1C6259B /* DeviceRowView.swift in Sources */,
 				7F042BC099FC9C73683E237C /* DeviceUiMapping.swift in Sources */,
@@ -829,6 +835,7 @@
 				94FDCBC57C7A4C4BD352DDC4 /* RenameSheet.swift in Sources */,
 				707C06B6CD6F242699FEB877 /* SettingsSheet.swift in Sources */,
 				809A55F2A7A42EF8E5B29587 /* ShareSheetView.swift in Sources */,
+				A7E10002B0024D2A9E67F002 /* QrShareView.swift in Sources */,
 				F0E363D8CE70ED86F4CB15B2 /* TrustDialogs.swift in Sources */,
 				28186C32A7557C837AF09C0E /* DeviceRowView.swift in Sources */,
 				B3F78FAA389DE36A44C481A6 /* DeviceUiMapping.swift in Sources */,

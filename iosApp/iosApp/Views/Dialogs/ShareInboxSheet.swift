@@ -17,6 +17,23 @@ struct ShareInboxSheet: View {
     let onComplete: () -> Void
 
     @State private var selectedId: String?
+    @State private var sessionState: QrShareState? = nil
+    @Environment(\.dismiss) private var dismiss
+
+    private var session: QrShareSession {
+        model.bootstrap.qrShareSession()
+    }
+
+    private var currentQrState: QrShareState {
+        sessionState ?? session.state.value
+    }
+
+    private var isQrActive: Bool {
+        if case .idle = onEnum(of: currentQrState) {
+            return false
+        }
+        return true
+    }
 
     private var devices: [DeviceUi] { model.state.devices }
 
@@ -29,20 +46,46 @@ struct ShareInboxSheet: View {
     }
 
     var body: some View {
-        ShareSheetView(
-            trustedDevices: trusted,
-            nearbyDevices: nearby,
-            selectedId: $selectedId,
-            onSend: { share in
-                guard let share,
-                      let device = devices.first(where: { $0.deviceId == share.id })
-                else { return }
-                // SKIE flattens the Kotlin nested class OnDataToSend.FilesList to
-                // the top-level Swift type OnDataToSendFilesList.
-                model.onSendData(device, OnDataToSendFilesList(files: files))
-                onComplete()
+        Group {
+            if isQrActive {
+                QrShareView(
+                    session: session,
+                    onDismiss: {
+                        if case .serving = onEnum(of: currentQrState) {
+                            dismiss()
+                        }
+                    }
+                )
+            } else {
+                ShareSheetView(
+                    trustedDevices: trusted,
+                    nearbyDevices: nearby,
+                    selectedId: $selectedId,
+                    onSend: { share in
+                        guard let share,
+                              let device = devices.first(where: { $0.deviceId == share.id })
+                        else { return }
+                        // SKIE flattens the Kotlin nested class OnDataToSend.FilesList to
+                        // the top-level Swift type OnDataToSendFilesList.
+                        model.onSendData(device, OnDataToSendFilesList(files: files))
+                        onComplete()
+                    },
+                    onShareViaQr: {
+                        let sharedFiles = files.map { SharedFile(file: $0) }
+                        let payload = QrSharePayloadFiles(files: sharedFiles)
+                        Task {
+                            await session.start(payload: payload)
+                        }
+                    }
+                )
             }
-        )
+        }
+        .task {
+            sessionState = session.state.value
+            for await next in session.state {
+                sessionState = next
+            }
+        }
     }
 }
 

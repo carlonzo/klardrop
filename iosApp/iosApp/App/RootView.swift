@@ -77,7 +77,9 @@ struct RootView: View {
             .onOpenURL { url in
                 handleShareURL(url)
             }
-            .sheet(isPresented: $showShareInbox) {
+            .sheet(isPresented: $showShareInbox, onDismiss: {
+                bootstrap.qrShareSession().dismissQrSheet()
+            }) {
                 ShareInboxSheet(model: model, files: shareFiles) {
                     showShareInbox = false
                     shareFiles = []

@@ -53,4 +53,6 @@ class KlardropBootstrap {
 
     fun deviceChatViewModel(deviceId: String): DeviceChatViewModel =
         uiDependencies.deviceChatViewModelFactory(deviceId)
+
+    fun qrShareSession() = klardrop.commonComponent.qrShareSession()
 }
