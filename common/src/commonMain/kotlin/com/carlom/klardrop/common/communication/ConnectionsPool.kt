@@ -315,6 +315,10 @@ internal class ConnectionsPoolImpl(
   }
 
   override fun markUnreachable(deviceId: String) {
+    if (reachabilityFlow.value[deviceId] == Reachability.Reachable) {
+      log("ConnectionPool", "Ignoring markUnreachable for $deviceId: connection is already Reachable")
+      return
+    }
     setReachability(deviceId, Reachability.Unreachable)
   }
 

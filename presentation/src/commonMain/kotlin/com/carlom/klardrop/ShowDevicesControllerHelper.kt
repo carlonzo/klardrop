@@ -43,7 +43,7 @@ class ShowDevicesControllerHelper(
           .filter { device ->
             val isTrusted = trusted.containsKey(device.deviceInfo.deviceId)
             if (isTrusted) return@filter true
-            if (!device.hasKlardropConnection()) return@filter false
+            if (!device.hasKlardropConnection() && !device.hasNearbyConnection()) return@filter false
             val info = device.deviceInfo
             val isRawPlaceholder = info.name.isBlank() ||
               (info.name == info.deviceId && info.deviceType == DeviceType.UNKNOWN)

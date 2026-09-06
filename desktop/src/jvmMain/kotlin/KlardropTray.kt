@@ -1,5 +1,6 @@
 import com.carlom.klardrop.common.KlardropVersion
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Tray as AwtTray
@@ -99,8 +100,9 @@ private fun LinuxNativeTray(
   // Keep a single StatusNotifierItem. Remounting it (e.g. via key()) keeps
   // the same SNI id, so Omarchy's QsMenuOpener stays bound to the first empty
   // DBusMenu. NativeTray hashes this builder and calls update() in place.
+  val icon = painterResource("icons/menubar.png")
   NativeTray(
-    icon = painterResource("icons/menubar.svg"),
+    icon = icon,
     tooltip = trayTooltip(peers),
     primaryAction = onShowWindow,
   ) {

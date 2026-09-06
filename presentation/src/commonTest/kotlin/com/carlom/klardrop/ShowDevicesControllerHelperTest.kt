@@ -141,6 +141,17 @@ class ShowDevicesControllerHelperTest {
   }
 
   @Test
+  fun untrustedDeviceWithNearbyConnectionIsDisplayed() = runTest(dispatcher) {
+    val nearbyPhone = phone.copy(deviceId = "nearby-phone")
+    visibleDevices.value = visible(nearbyPhone, DeviceConnection.NearbyConnection("10.0.0.5", 4444))
+
+    val rows = devices()
+    assertNotNull(rows[nearbyPhone.deviceId], "Untrusted peer with Nearby connection should be displayed")
+    assertEquals(TrustStatus.Untrusted, rows.getValue(nearbyPhone.deviceId).trustStatus)
+    assertEquals(listOf(DeviceConnection.DeviceConnectionType.NEARBY), rows.getValue(nearbyPhone.deviceId).connectionTypes)
+  }
+
+  @Test
   fun untrustedDeviceWithPlaceholderIdentityIsNotDisplayed() = runTest(dispatcher) {
     val placeholderDevice = DeviceInfo(
       deviceId = "abc12345",

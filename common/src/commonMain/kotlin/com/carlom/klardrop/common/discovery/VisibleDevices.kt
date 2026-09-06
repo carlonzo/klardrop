@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.discovery
 
+import com.carlom.klardrop.common.communication.extractNumericHost
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -296,8 +297,11 @@ class VisibleDevicesImpl(
 
   override fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice? {
     val hostname = address.hostname
+    val numericHost = address.extractNumericHost()
 
-    return visibleDevicesFlow.value.values.firstOrNull { device -> device.deviceConnections.any { it.address == hostname } }
+    return visibleDevicesFlow.value.values.firstOrNull { device ->
+      device.deviceConnections.any { it.address == hostname || it.address == numericHost }
+    }
   }
 
   override fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int) {
