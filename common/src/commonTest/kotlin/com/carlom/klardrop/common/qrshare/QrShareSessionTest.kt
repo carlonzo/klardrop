@@ -409,15 +409,14 @@ class QrShareSessionTest {
   }
 
   @Test
-  fun qrWaitTimeout_3minWithoutClaim_stopsServerLikeDismissBeforeClaim() = runSessionTest {
+  fun qrStaysUpWhileSheetVisible_evenAfter3Min() = runSessionTest {
     session.start(textPayload)
 
     clock.advance(3.minutes)
     session.checkTimeouts()
 
-    assertEquals(QrShareState.Idle, session.state.value)
-    assertTrue(anchor.activeTransfers.isEmpty())
-    assertEquals(1, server.stopCallCount)
+    assertIs<QrShareState.QrVisible>(session.state.value)
+    assertEquals(0, server.stopCallCount)
   }
 
   @Test

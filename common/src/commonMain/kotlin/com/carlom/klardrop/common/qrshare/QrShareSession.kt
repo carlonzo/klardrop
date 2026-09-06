@@ -239,14 +239,9 @@ class QrShareSession(
 
     val now = clock.now()
 
-    if (qrSheetVisible && !hasClaimed) {
-      val start = sessionStartTime
-      if (start != null && (now - start) >= QR_WAIT_TIMEOUT) {
-        log("QrShareSession", "QR wait timeout expired (3 min without claim)")
-        stopInternal()
-        return
-      }
-    }
+    // Keep serving for as long as the QR is on screen. A 3-minute cap while the
+    // user is still holding the code up (lining up a camera, cert warning) is
+    // what made the QR vanish mid-scan. Timeout only after they hide it.
 
     val downloadsInFlight = inFlightDownloads.size
     val withinGrace = hasClaimed && lastHttpActivity?.let { (now - it) < POST_ARRIVAL_GRACE } == true
