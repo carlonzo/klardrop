@@ -74,7 +74,9 @@ struct ShareInboxSheet: View {
                         let sharedFiles = files.map { SharedFile(file: $0) }
                         let payload = QrSharePayloadFiles(files: sharedFiles)
                         Task {
-                            await session.start(payload: payload)
+                            // SKIE maps Kotlin suspend + CancellationException to throws.
+                            // Failures other than cancel are already stored as QrShareState.Failed.
+                            _ = try? await session.start(payload: payload)
                         }
                     }
                 )
