@@ -66,6 +66,10 @@ internal class QrTokenTable(
     }
   }
 
+  fun dropWaiting() {
+    waitingToken = null
+  }
+
   suspend fun setWaiting(token: String?) {
     mutex.withLock {
       waitingToken = token

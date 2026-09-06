@@ -27,7 +27,7 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Clock
 
-class LanHttpShareServer(
+open class LanHttpShareServer(
   private val coroutines: Coroutines,
   private val fileManager: FileManager,
   private val tls: LanTlsListener,
@@ -42,7 +42,7 @@ class LanHttpShareServer(
   }
 
   private val _events = MutableSharedFlow<DownloadEvent>(extraBufferCapacity = 64)
-  val events: SharedFlow<DownloadEvent> = _events.asSharedFlow()
+  open val events: SharedFlow<DownloadEvent> = _events.asSharedFlow()
 
   internal val tokenTable = QrTokenTable(clock = clock)
 
@@ -51,7 +51,7 @@ class LanHttpShareServer(
   private var advertisedIpv4: String = ""
   private var boundPort: Int = 0
 
-  suspend fun start(payload: QrSharePayload, waitingToken: String, ipv4: String, port: Int = 0): Bound {
+  open suspend fun start(payload: QrSharePayload, waitingToken: String, ipv4: String, port: Int = 0): Bound {
     stop()
     currentPayload = payload
     advertisedIpv4 = ipv4
@@ -90,12 +90,16 @@ class LanHttpShareServer(
     return bound
   }
 
-  fun stop() {
+  open fun stop() {
     serverScope?.cancel()
     serverScope = null
     tokenTable.reset()
     tls.close()
     log("LanHttpShareServer", "Stopped share server")
+  }
+
+  open fun dropWaitingToken() {
+    tokenTable.dropWaiting()
   }
 
   private suspend fun handleConnection(conn: TlsConnection) {
