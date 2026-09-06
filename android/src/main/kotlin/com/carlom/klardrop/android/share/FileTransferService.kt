@@ -25,6 +25,7 @@ import com.carlom.klardrop.common.communication.TransferAnchor.Direction
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.toSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
+import com.carlom.klardrop.common.qrshare.QrShareState
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import io.github.vinceglb.filekit.PlatformFile
@@ -99,12 +100,18 @@ class FileTransferService : Service() {
   private var foregroundStarted = false
   private var locksHeld = false
   private var renderJob: Job? = null
+  private var qrCollectorJob: Job? = null
 
   /** Volatile + [refreshIdleTimer]'s lock: armed from the main thread and from batch coroutines. */
   @Volatile
   private var idleJob: Job? = null
 
   private fun commonComponent() = appKlardrop().commonComponent
+
+  override fun onCreate() {
+    super.onCreate()
+    runningInstance = this
+  }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -118,15 +125,28 @@ class FileTransferService : Service() {
       return START_NOT_STICKY
     }
 
+    if (intent?.action == ACTION_STOP_QR) {
+      log("FileTransferService", "Stop QR share requested; cancelling QR share session")
+      commonComponent().qrShareSession().cancel()
+      return START_NOT_STICKY
+    }
+
     ensureChannel()
     // Android requires startForeground() promptly after startForegroundService(); do it first.
     promoteToForeground()
     acquireLocks()
     startRendering()
+    startQrCollector()
 
     if (intent?.action == ACTION_ANCHOR) {
       // Nothing to run: the transfer lives in the app process. This start exists purely to give
       // that process a foreground component for the duration.
+      refreshIdleTimer()
+      return START_NOT_STICKY
+    }
+
+    if (intent?.action == ACTION_QR_SESSION) {
+      // Grants are forwarded and held on this service component.
       refreshIdleTimer()
       return START_NOT_STICKY
     }
@@ -227,7 +247,55 @@ class FileTransferService : Service() {
     }
   }
 
-  private fun isIdle(): Boolean = ActiveTransfers.isEmpty() && activeBatches.get() <= 0
+  private fun startQrCollector() {
+    if (qrCollectorJob != null) return
+    qrCollectorJob = serviceScope.launch(coroutines.mainDispatcher) {
+      commonComponent().qrShareSession().state.collect { state ->
+        handleQrSessionState(state)
+      }
+    }
+  }
+
+  internal fun handleQrSessionState(state: QrShareState) {
+    when (state) {
+      is QrShareState.Starting,
+      is QrShareState.QrVisible,
+      is QrShareState.Serving -> {
+        synchronized(Companion) {
+          qrSessionHeld = true
+        }
+      }
+      is QrShareState.Failed -> {
+        synchronized(Companion) {
+          qrSessionHeld = false
+          pendingGeneration = null
+        }
+        refreshIdleTimer()
+        if (foregroundStarted) {
+          notificationManager.notify(NOTIFICATION_ID, buildNotification(ActiveTransfers.state.value))
+        }
+      }
+      is QrShareState.Idle -> {
+        val released: Boolean
+        synchronized(Companion) {
+          if (pendingGeneration == null) {
+            qrSessionHeld = false
+            released = true
+          } else {
+            released = false
+          }
+        }
+        if (released) {
+          refreshIdleTimer()
+          if (foregroundStarted) {
+            notificationManager.notify(NOTIFICATION_ID, buildNotification(ActiveTransfers.state.value))
+          }
+        }
+      }
+    }
+  }
+
+  private fun isIdle(): Boolean = isIdle(ActiveTransfers.isEmpty(), activeBatches.get(), qrSessionHeld)
 
   /**
    * Arm the shutdown timer when nothing is transferring, disarm it when something is. Stopping is
@@ -237,7 +305,7 @@ class FileTransferService : Service() {
    * backgrounded).
    */
   @Synchronized
-  private fun refreshIdleTimer() {
+  internal fun refreshIdleTimer() {
     idleJob?.cancel()
     if (!isIdle()) return
     idleJob = serviceScope.launch(coroutines.mainDispatcher) {
@@ -274,22 +342,11 @@ class FileTransferService : Service() {
   }
 
   private fun buildNotification(entries: Map<String, ActiveTransfers.Entry>): Notification {
-    val incoming = entries.values.count { it.direction == Direction.INCOMING }
-    val outgoing = entries.size - incoming
-    val inboundOnly = entries.isNotEmpty() && outgoing == 0
-    val title = when {
-      entries.isEmpty() -> "Preparing transfer…"
-      entries.size == 1 -> {
-        val entry = entries.values.first()
-        val verb = if (entry.direction == Direction.INCOMING) "Receiving" else "Sending"
-        "$verb ${entry.label}"
-      }
-      // Both directions at once (sending one file while receiving another) has no natural verb,
-      // so use a neutral one rather than picking a side and being wrong about half of them.
-      incoming > 0 && outgoing > 0 -> "Transferring ${entries.size} files"
-      inboundOnly -> "Receiving ${entries.size} files"
-      else -> "Sending ${entries.size} files"
-    }
+    val (qrEntries, klardropEntries) = entries.entries.partition { it.key.startsWith("qr:") }
+    val incoming = klardropEntries.count { it.value.direction == Direction.INCOMING }
+    val outgoing = klardropEntries.size - incoming
+    val inboundOnly = klardropEntries.isNotEmpty() && outgoing == 0 && qrEntries.isEmpty()
+    val title = deriveNotificationTitle(entries, qrSessionHeld)
     val progress: Int? = when (entries.size) {
       0 -> null
       1 -> entries.values.first().percentage
@@ -306,6 +363,13 @@ class FileTransferService : Service() {
       this, 1, Intent(this, FileTransferService::class.java).setAction(ACTION_CANCEL),
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
+    val stopQrIntent = PendingIntent.getService(
+      this, 2, Intent(this, FileTransferService::class.java).setAction(ACTION_STOP_QR),
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    val hasQr = qrEntries.isNotEmpty() || qrSessionHeld
+
     return NotificationCompat.Builder(this, CHANNEL_TRANSFERS)
       // Download arrow only when everything in flight is inbound; anything else is at least
       // partly an upload.
@@ -321,6 +385,7 @@ class FileTransferService : Service() {
       .setPriority(NotificationCompat.PRIORITY_LOW)
       .apply {
         if (progress == null) setProgress(0, 0, true) else setProgress(100, progress, false)
+        if (hasQr) addAction(0, "Stop QR share", stopQrIntent)
         // Only offered for batches this service runs. A transfer living in the app process isn't
         // ours to stop, and an action that silently did nothing would be worse than none at all.
         if (activeBatches.get() > 0) addAction(0, "Terminate transfer", cancelIntent)
@@ -344,6 +409,7 @@ class FileTransferService : Service() {
   }
 
   override fun onDestroy() {
+    runningInstance = null
     if (locksHeld) {
       wifiLock.release()
       cpuLock.release()
@@ -356,18 +422,83 @@ class FileTransferService : Service() {
   companion object {
     private const val CHANNEL_TRANSFERS = "klardrop_transfers"
     private const val NOTIFICATION_ID = 2001
-    private const val ACTION_CANCEL = "com.carlom.klardrop.action.CANCEL_FILE_SEND"
-    private const val ACTION_ANCHOR = "com.carlom.klardrop.action.ANCHOR_FILE_TRANSFER"
+    const val ACTION_CANCEL = "com.carlom.klardrop.action.CANCEL_FILE_SEND"
+    const val ACTION_STOP_QR = "com.carlom.klardrop.action.STOP_QR_SHARE"
+    const val ACTION_ANCHOR = "com.carlom.klardrop.action.ANCHOR_FILE_TRANSFER"
+    const val ACTION_QR_SESSION = "com.carlom.klardrop.action.QR_SHARE_SESSION"
 
-    private const val EXTRA_DEVICE_ID = "klardrop.device_id"
-    private const val EXTRA_TRANSFER_ID = "klardrop.transfer_id"
-    private const val EXTRA_URIS = "klardrop.uris"
-    private const val EXTRA_NAMES = "klardrop.names"
-    private const val EXTRA_SIZES = "klardrop.sizes"
-    private const val EXTRA_MIMES = "klardrop.mimes"
+    const val EXTRA_DEVICE_ID = "klardrop.device_id"
+    const val EXTRA_TRANSFER_ID = "klardrop.transfer_id"
+    const val EXTRA_GENERATION = "klardrop.generation"
+    const val EXTRA_URIS = "klardrop.uris"
+    const val EXTRA_NAMES = "klardrop.names"
+    const val EXTRA_SIZES = "klardrop.sizes"
+    const val EXTRA_MIMES = "klardrop.mimes"
+
+    @Volatile
+    var qrHoldGeneration: Int = 0
+      internal set
+
+    @Volatile
+    var pendingGeneration: Int? = null
+      internal set
+
+    @Volatile
+    var qrSessionHeld: Boolean = false
+      internal set
+
+    @Volatile
+    internal var runningInstance: FileTransferService? = null
 
     /** How long the service lingers after the last transfer drains. See [refreshIdleTimer]. */
     private val IDLE_GRACE = 5.seconds
+
+    internal fun isIdle(
+      activeTransfersEmpty: Boolean,
+      activeBatches: Int,
+      qrSessionHeld: Boolean,
+    ): Boolean = activeTransfersEmpty && activeBatches <= 0 && !qrSessionHeld
+
+    internal fun deriveNotificationTitle(
+      entries: Map<String, ActiveTransfers.Entry>,
+      qrHeld: Boolean = qrSessionHeld,
+    ): String {
+      val (qrEntries, klardropEntries) = entries.entries.partition { it.key.startsWith("qr:") }
+      val hasQr = qrEntries.isNotEmpty() || qrHeld
+      val hasKlardrop = klardropEntries.isNotEmpty()
+
+      if (hasQr && hasKlardrop) {
+        val count = if (qrEntries.isEmpty() && qrHeld) entries.size + 1 else entries.size
+        return "Transferring $count files"
+      }
+
+      if (hasQr) {
+        val qrFiles = qrEntries.filter { (id, _) -> !id.endsWith(":wait") && !id.endsWith(":grace") }
+        return when {
+          qrFiles.isNotEmpty() -> {
+            if (qrFiles.size == 1) "Sending ${qrFiles.first().value.label}"
+            else "Sending ${qrFiles.size} files"
+          }
+          qrEntries.any { it.key.endsWith(":grace") } -> "Waiting for download"
+          else -> "Waiting for someone to scan"
+        }
+      }
+
+      val incoming = klardropEntries.count { it.value.direction == Direction.INCOMING }
+      val outgoing = klardropEntries.size - incoming
+      val inboundOnly = klardropEntries.isNotEmpty() && outgoing == 0
+      return when {
+        klardropEntries.isEmpty() -> "Preparing transfer…"
+        klardropEntries.size == 1 -> {
+          val entry = klardropEntries.first().value
+          val verb = if (entry.direction == Direction.INCOMING) "Receiving" else "Sending"
+          "$verb ${entry.label}"
+        }
+        incoming > 0 && outgoing > 0 -> "Transferring ${klardropEntries.size} files"
+        inboundOnly -> "Receiving ${klardropEntries.size} files"
+        else -> "Sending ${klardropEntries.size} files"
+      }
+    }
 
     /**
      * Bring the service up as a pure foreground anchor for transfers running elsewhere in the
@@ -405,6 +536,106 @@ class FileTransferService : Service() {
         }
       }
       ContextCompat.startForegroundService(context, intent)
+    }
+
+    /**
+     * Build Intent for [ACTION_QR_SESSION] with grant extras and [generation].
+     */
+    internal fun buildQrSessionIntent(
+      context: Context,
+      files: List<SendFile>,
+      generation: Int,
+    ): Intent = Intent(context, FileTransferService::class.java).apply {
+      action = ACTION_QR_SESSION
+      putExtra(EXTRA_GENERATION, generation)
+      if (files.isNotEmpty()) {
+        putParcelableArrayListExtra(EXTRA_URIS, ArrayList(files.map { it.uri }))
+        putStringArrayListExtra(EXTRA_NAMES, ArrayList(files.map { it.name }))
+        putExtra(EXTRA_SIZES, files.map { it.size }.toLongArray())
+        putStringArrayListExtra(EXTRA_MIMES, ArrayList(files.map { it.mimeType }))
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        clipData = files.fold(null as ClipData?) { acc, f ->
+          if (acc == null) ClipData.newRawUri(null, f.uri) else acc.also { it.addItem(ClipData.Item(f.uri)) }
+        }
+      }
+    }
+
+    /**
+     * Claim hold for a QR share session on the caller thread and start foreground service.
+     * Empty [files] is valid for text sharing.
+     */
+    fun startQrSession(
+      context: Context,
+      files: List<SendFile>,
+      intentFactory: (Context, List<SendFile>, Int) -> Intent = ::buildQrSessionIntent,
+      startService: (Context, Intent) -> Unit = { ctx, intent -> ContextCompat.startForegroundService(ctx, intent) },
+    ) {
+      val gen: Int
+      synchronized(this) {
+        qrHoldGeneration++
+        gen = qrHoldGeneration
+        pendingGeneration = gen
+        qrSessionHeld = true
+      }
+      val intent = intentFactory(context, files, gen)
+      startService(context, intent)
+    }
+
+    fun onQrSessionStartCompleted() {
+      val shouldNotify: Boolean
+      synchronized(this) {
+        pendingGeneration = null
+        val state = runningInstance?.commonComponent()?.qrShareSession()?.state?.value
+        if (state is QrShareState.Failed || state is QrShareState.Idle) {
+          shouldNotify = qrSessionHeld
+          qrSessionHeld = false
+        } else {
+          shouldNotify = false
+        }
+      }
+      if (shouldNotify) {
+        runningInstance?.let { service ->
+          service.serviceScope.launch(service.coroutines.mainDispatcher) {
+            service.refreshIdleTimer()
+            if (service.foregroundStarted) {
+              service.notificationManager.notify(
+                NOTIFICATION_ID,
+                service.buildNotification(ActiveTransfers.state.value),
+              )
+            }
+          }
+        }
+      }
+    }
+
+    fun clearQrSessionHeld() {
+      val shouldNotify: Boolean
+      synchronized(this) {
+        pendingGeneration = null
+        shouldNotify = qrSessionHeld
+        qrSessionHeld = false
+      }
+      if (shouldNotify) {
+        runningInstance?.let { service ->
+          service.serviceScope.launch(service.coroutines.mainDispatcher) {
+            service.refreshIdleTimer()
+            if (service.foregroundStarted) {
+              service.notificationManager.notify(
+                NOTIFICATION_ID,
+                service.buildNotification(ActiveTransfers.state.value),
+              )
+            }
+          }
+        }
+      }
+    }
+
+    fun refreshIdleTimer() {
+      runningInstance?.let { service ->
+        service.serviceScope.launch(service.coroutines.mainDispatcher) {
+          service.refreshIdleTimer()
+        }
+      }
     }
   }
 }

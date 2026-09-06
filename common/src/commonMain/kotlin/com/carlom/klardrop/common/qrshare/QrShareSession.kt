@@ -45,7 +45,9 @@ class QrShareSession(
   private var currentUrl: String = ""
 
   private var qrSheetVisible: Boolean = false
-  private var hasClaimed: Boolean = false
+  var hasClaimed: Boolean = false
+    private set
+
   private var sessionStartTime: Instant? = null
   private var lastHttpActivity: Instant? = null
 
