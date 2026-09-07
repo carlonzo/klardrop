@@ -260,12 +260,18 @@ object KlardropEncryptedTransport {
     }
 
     val signature = peerBinding.signature
-    val verified = peerBinding.senderId == peerDeviceId &&
-      signature != null &&
-      trustManager.verifyUkey2Binding(peerDeviceId, verificationString, signature)
-    if (!verified) {
+    val senderMatches = peerBinding.senderId == peerDeviceId
+    val hasSignature = signature != null
+    val signatureValid = hasSignature && trustManager.verifyUkey2Binding(peerDeviceId, verificationString, signature)
+    if (!senderMatches || !hasSignature || !signatureValid) {
+      val reason = when {
+        !senderMatches -> "senderId mismatch (expected $peerDeviceId, got ${peerBinding.senderId})"
+        !hasSignature -> "missing signature"
+        else -> "signature verification failed (device key mismatch or MITM)"
+      }
+      log(TAG, "UKEY2 identity binding failed for trusted peer $peerDeviceId: $reason")
       throw IllegalStateException(
-        "UKEY2 identity binding failed for trusted peer $peerDeviceId (possible MITM); aborting connection"
+        "UKEY2 identity binding failed for trusted peer $peerDeviceId (possible MITM: $reason); aborting connection"
       )
     }
     return true

@@ -520,6 +520,49 @@ class TrustManagerTest {
     )
   }
 
+  @Test
+  fun initializeInvalidatesPairingsAndRotatesDeviceIdWhenDeviceKeyLost() = runTest {
+    val repo = FakeLocalPropertiesRepository(aliceId)
+    val provider = CurrentDeviceProvider(repo)
+    val storage = InMemoryTrustStorage()
+    var manager = TrustManager(
+      crypto = TrustCrypto(),
+      storage = storage,
+      clock = clock,
+      currentDeviceProvider = provider,
+    )
+    manager.initialize()
+
+    val (bob, _) = newManager(bobId)
+    val response = bob.createPairingAcceptance(manager.createPairingRequest(bobId).getOrThrow()).getOrThrow()
+    manager.finalizePairing(response)
+    assertTrue(manager.isTrusted(bobId))
+    val initialDeviceId = provider.get().deviceId
+
+    // Simulate keychain reset: private key is deleted, but public key and pairings remain in storage
+    storage.clearPrivateKeyOnly()
+
+    // Create a new TrustManager instance to simulate app restart after keychain reset
+    manager = TrustManager(
+      crypto = TrustCrypto(),
+      storage = storage,
+      clock = clock,
+      currentDeviceProvider = provider,
+    )
+    manager.initialize()
+
+    // Pairings should be invalidated
+    assertFalse(manager.isTrusted(bobId), "Stale pairings must be invalidated after identity key loss")
+    assertNull(storage.getTrustedDeviceKey(bobId), "Stored peer keys must be cleared")
+
+    // DeviceId must have been rotated
+    val rotatedDeviceId = provider.get().deviceId
+    assertFalse(
+      initialDeviceId == rotatedDeviceId,
+      "CurrentDeviceProvider must rotate deviceId when identity is regenerated",
+    )
+  }
+
   private fun syntheticRequest(timestamp: Long) = TrustPairingRequest(
     deviceId = "attacker",
     deviceName = "Attacker",

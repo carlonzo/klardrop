@@ -193,6 +193,9 @@ interface TrustStorage {
                 return TrustCrypto.ECDSAPublicKey(storedPublic)
             }
         }
+        if (storedPublic != null) {
+            clearAllTrustedDevices()
+        }
         val fresh = crypto.generateECDSAKeyPair()
         storeDevicePrivateKey(fresh.privateKey.data)
         storeDevicePublicKey(fresh.publicKey.data)
