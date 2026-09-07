@@ -117,7 +117,21 @@ class TrustManager(
    */
   suspend fun initialize() {
     if (deviceECDSAPublicKey != null) return
-    deviceECDSAPublicKey = storage.ensureDeviceKey(crypto)
+    val storedPublic = storage.getDevicePublicKey()
+    val hadPrivateKey = storage.hasDeviceKey()
+
+    val currentKey = storage.ensureDeviceKey(crypto)
+    deviceECDSAPublicKey = currentKey
+
+    val identityLost = storedPublic != null &&
+        (!hadPrivateKey || !currentKey.data.contentEquals(storedPublic))
+
+    if (identityLost) {
+      log("🔐 TrustManager", "Device identity was lost or regenerated; invalidating stale pairings and rotating deviceId")
+      storage.clearAllTrustedDevices()
+      currentDeviceProvider.rotateDeviceId()
+      _trustChanges.tryEmit(Unit)
+    }
     log("🔐 TrustManager", "Device identity ready")
   }
 
@@ -148,11 +162,11 @@ class TrustManager(
   suspend fun createPairingRequest(targetDeviceId: String): Result<TrustPairingRequest> = withContext(Dispatchers.Default) {
     log("🔐 TrustManager", " createPairingRequest() called for deviceId: $targetDeviceId")
     return@withContext try {
+      // Ensure we have ECDSA keys
+      initialize()
       val currentDevice = currentDeviceProvider.get()
       log("🔐 TrustManager", " Current device: ${currentDevice.shortDeviceId} (${currentDevice.deviceName})")
 
-      // Ensure we have ECDSA keys
-      initialize()
       val ecdsaPublicKey = deviceECDSAPublicKey ?: return@withContext Result.failure(Exception("ECDSA keys not initialized"))
       log("🔐 TrustManager", " ECDSA keys initialized")
 
@@ -328,10 +342,10 @@ class TrustManager(
     request: TrustPairingRequest
   ): Result<TrustPairingResponse> = withContext(Dispatchers.Default) {
     try {
-      val currentDevice = currentDeviceProvider.get()
-
       // Ensure we have ECDSA keys
       initialize()
+      val currentDevice = currentDeviceProvider.get()
+
       val ecdsaPublicKey = deviceECDSAPublicKey ?: return@withContext Result.failure(Exception("ECDSA keys not initialized"))
 
       // Generate our ECDH keypair
@@ -708,8 +722,16 @@ class TrustManager(
     verificationString: ByteArray,
     signature: ByteArray,
   ): Boolean = withContext(Dispatchers.Default) {
-    val peerKey = storage.getECDSAKey(peerDeviceId) ?: return@withContext false
-    crypto.verifyECDSA(peerKey, UKEY2_BIND_CONTEXT + verificationString, signature)
+    val peerKey = storage.getECDSAKey(peerDeviceId)
+    if (peerKey == null) {
+      log("🔐 TrustManager", "verifyUkey2Binding: No stored ECDSA key for peer $peerDeviceId")
+      return@withContext false
+    }
+    val valid = crypto.verifyECDSA(peerKey, UKEY2_BIND_CONTEXT + verificationString, signature)
+    if (!valid) {
+      log("🔐 TrustManager", "verifyUkey2Binding: Signature verification failed for peer $peerDeviceId")
+    }
+    valid
   }
 
   /**

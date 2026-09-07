@@ -97,6 +97,16 @@ class InMemoryTrustStorage : TrustStorage {
         }
     }
 
+    /**
+     * Simulates keychain/keystore reset where the private key was deleted
+     * while preferences or storage retained the previous public key or pairings.
+     */
+    suspend fun clearPrivateKeyOnly() {
+        mutex.withLock {
+            devicePrivateKey = null
+        }
+    }
+
     override suspend fun storeSharedSecret(deviceId: String, sharedSecret: ByteArray) {
         mutex.withLock {
             sharedSecrets[deviceId] = sharedSecret.copyOf()

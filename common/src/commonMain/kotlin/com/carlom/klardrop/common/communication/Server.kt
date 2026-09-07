@@ -182,7 +182,11 @@ class Server(
             try {
               handleConnection(socket, remoteAddress)
             } catch (e: Exception) {
-              log("Server", "Error handling connection from $remoteAddress", e)
+              if (e.isExpectedNetworkNoise()) {
+                logLocal("Server", "Connection from $remoteAddress ended", e)
+              } else {
+                log("Server", "Error handling connection from $remoteAddress", e)
+              }
               socket.close()
             }
           }

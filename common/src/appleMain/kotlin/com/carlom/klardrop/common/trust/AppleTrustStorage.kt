@@ -124,17 +124,21 @@ class AppleTrustStorage : TrustStorage {
 
     override suspend fun clearAllTrustedDevices() {
         mutex.withLock {
-            userDefaults.dictionaryRepresentation().keys.forEach { keyObj ->
-                val key = keyObj.toString()
-                if (key.startsWith(TRUST_KEY_PREFIX) ||
-                    key.startsWith(ECDSA_KEY_PREFIX) ||
-                    key.startsWith(SHARED_SECRET_PREFIX)
-                ) {
-                    userDefaults.removeObjectForKey(key)
-                }
-            }
-            userDefaults.synchronize()
+            clearAllTrustedDevicesLocked()
         }
+    }
+
+    private fun clearAllTrustedDevicesLocked() {
+        userDefaults.dictionaryRepresentation().keys.forEach { keyObj ->
+            val key = keyObj.toString()
+            if (key.startsWith(TRUST_KEY_PREFIX) ||
+                key.startsWith(ECDSA_KEY_PREFIX) ||
+                key.startsWith(SHARED_SECRET_PREFIX)
+            ) {
+                userDefaults.removeObjectForKey(key)
+            }
+        }
+        userDefaults.synchronize()
     }
 
     override suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray) {
@@ -253,17 +257,23 @@ class AppleTrustStorage : TrustStorage {
     }
 
     override suspend fun ensureDeviceKey(crypto: TrustCrypto): TrustCrypto.ECDSAPublicKey = mutex.withLock {
+        val storedPublic = userDefaults.stringForKey(DEVICE_PUBLIC_KEY)?.fromBase64OrNull()
         val privateRef = findDeviceKey()
+        val isNewKey = privateRef == null
+        val activeRef = privateRef
             ?: generateDeviceKey()
             ?: error("Failed to generate device identity in Apple Keychain")
         try {
-            val raw = exportPublicKey(privateRef)
+            val raw = exportPublicKey(activeRef)
                 ?: error("Failed to export public key from Apple Keychain")
+            if (isNewKey && storedPublic != null) {
+                clearAllTrustedDevicesLocked()
+            }
             userDefaults.setObject(raw.toBase64String(), DEVICE_PUBLIC_KEY)
             userDefaults.synchronize()
             TrustCrypto.ECDSAPublicKey(raw)
         } finally {
-            CFRelease(privateRef)
+            CFRelease(activeRef)
         }
     }
 

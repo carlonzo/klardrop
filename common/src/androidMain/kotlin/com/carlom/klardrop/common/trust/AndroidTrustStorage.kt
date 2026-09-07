@@ -196,7 +196,13 @@ class AndroidTrustStorage(
     }
 
     override suspend fun ensureDeviceKey(crypto: TrustCrypto): TrustCrypto.ECDSAPublicKey {
-        if (!keyStore.containsAlias(DEVICE_KEY_ALIAS)) {
+        val hadAlias = keyStore.containsAlias(DEVICE_KEY_ALIAS)
+        val hadPreviousPublic = getDevicePublicKey() != null
+        if (!hadAlias) {
+            if (hadPreviousPublic) {
+                Log.w(TAG, "Android Keystore device key was lost/reset; invalidating stale pairings")
+                clearAllTrustedDevices()
+            }
             generateDeviceKey()
         }
         val publicBytes = getDevicePublicKey()
