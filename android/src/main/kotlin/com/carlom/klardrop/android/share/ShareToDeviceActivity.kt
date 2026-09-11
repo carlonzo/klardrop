@@ -274,15 +274,20 @@ class ShareToDeviceActivity : ComponentActivity() {
   }
 
   /**
-   * Hand the shared payload off while we still hold the read grant. Text is fire-and-forget
-   * (returns null). Files of any size stream through [FileTransferService] under the forwarded grant —
-   * even a tiny file gates on the receiver accepting, so it needs the same foreground anchor as a
-   * big one. Returns the [ActiveSends] transfer id to observe, or null for text/empty.
+   * Hand the shared payload off while we still hold the read grant. Text is published onto
+   * [ActiveSends] so the sheet can stay open on Connecting/Sending instead of dismissing
+   * into a silent wait. Files of any size stream through [FileTransferService] under the
+   * forwarded grant — even a tiny file gates on the receiver accepting, so it needs the same
+   * foreground anchor as a big one. Returns the [ActiveSends] transfer id to observe, or null
+   * for empty.
    */
   private suspend fun dispatch(deviceId: String): String? {
-    pendingText?.let {
-      shareToDeviceController.sendText(deviceId, it)
-      return null
+    pendingText?.let { text ->
+      val transferId = ActiveSends.create()
+      shareToDeviceController.sendText(deviceId, text) { progress ->
+        ActiveSends.publish(transferId, progress)
+      }
+      return transferId
     }
     if (pendingUris.isEmpty()) return null
 
