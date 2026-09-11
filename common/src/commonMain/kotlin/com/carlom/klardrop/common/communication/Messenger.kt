@@ -83,6 +83,32 @@ class MessengerImpl(
     val flow = MutableSharedFlow<MessengerSendProgress>(replay = 1, extraBufferCapacity = 1)
 
     messengerScope.launch {
+      // Persist outgoing TEXT as SENDING before anything that can wait: Pending emission
+      // (MutableSharedFlow.emit suspends when subscribers are slow), the transfer anchor,
+      // the visibility check, or connectTo. The chat bubble is observed from this row —
+      // if insert sits behind a previous send's dial, the composer looks dead.
+      val originalTextMessage = messageRequest.message as? TextMessage
+      val pendingRowId: Long? = if (originalTextMessage != null) {
+        try {
+          messageRepository.insertMessage(
+            remoteDeviceId = deviceId,
+            content = originalTextMessage.text,
+            isSender = true,
+            messageType = PersistenceMessageType.TEXT,
+            isRead = true,
+            mimeType = "text/plain",
+            messageId = originalTextMessage.id.toLong(),
+            sendStatus = SendStatus.SENDING,
+          )
+        } catch (e: Exception) {
+          log("Messenger", "Failed to persist outgoing text for $deviceId", e)
+          flow.emit(Error("Couldn't save the message", reason = "persist-failed"))
+          return@launch
+        }
+      } else {
+        null
+      }
+
       // Anchor payload-bearing sends only. A file send waits on the receiver accepting and then
       // streams — minutes, all of it a window in which the platform may freeze or kill us out from
       // under the socket (see TransferAnchor). Text/control messages are a single frame
@@ -110,7 +136,7 @@ class MessengerImpl(
       }
 
       try {
-        runSend(deviceId, messageRequest, flow)
+        runSend(deviceId, messageRequest, flow, pendingRowId)
       } finally {
         if (anchored) {
           anchorProgressJob?.cancel()
@@ -132,40 +158,16 @@ class MessengerImpl(
     deviceId: String,
     messageRequest: SendMessageRequest,
     flow: MutableSharedFlow<MessengerSendProgress>,
+    pendingRowId: Long?,
   ) {
       flow.emit(Pending)
       log("Messenger", "Emitted Pending status for $deviceId")
 
-      // Persist the outgoing TEXT exactly ONCE, up front, as SENDING — before any socket write,
-      // any ACK, and before the device-visibility check below. This is the single row for the
-      // whole logical send: handleKlardropTransfer below may retry the wire write several times,
-      // but the insert happens once here, and the row is flipped to its terminal SENT/FAILED
-      // state exactly once, further down, however many attempts it took (or immediately, if the
-      // device isn't even visible). TextMessageHandler.handleOutgoing no longer persists anything
-      // itself (see docs/connection-review.md F12/F13 — the old design inserted a fresh SENT row
-      // on every retry attempt, before the write even happened). Doing this before the visibility
-      // check matters: a device that drops out of the visible set between the user hitting send
-      // and this coroutine running must still leave a durable, retryable row instead of silently
-      // dropping the typed message (F12/F13 follow-up — a flaky-LAN dropout must not lose text).
-      val originalTextMessage = messageRequest.message as? TextMessage
-      // The wire id is Random.nextInt() (TextMessage.kt) with no uniqueness enforcement — stored
-      // on the row for reference, but NEVER used to correlate the later SENT/FAILED flip (two
-      // outgoing rows across the whole table could collide on it). The flip below is instead
-      // correlated by insertMessage's returned DB row id, which is collision-free by construction.
-      val pendingRowId: Long? = if (originalTextMessage != null) {
-        messageRepository.insertMessage(
-          remoteDeviceId = deviceId,
-          content = originalTextMessage.text,
-          isSender = true,
-          messageType = PersistenceMessageType.TEXT,
-          isRead = true,
-          mimeType = "text/plain",
-          messageId = originalTextMessage.id.toLong(),
-          sendStatus = SendStatus.SENDING,
-        )
-      } else {
-        null
-      }
+      // [pendingRowId] is the single outgoing TEXT row inserted in [send] before this body
+      // runs — before Pending emission, the visibility check, or any socket write. The row
+      // is flipped to SENT/FAILED exactly once further down, however many transport attempts
+      // it took (or immediately, if the device isn't even visible). TextMessageHandler.handleOutgoing
+      // no longer persists anything itself (docs/connection-review.md F12/F13).
 
       val device = visibleDevices.getDevice(deviceId)
 

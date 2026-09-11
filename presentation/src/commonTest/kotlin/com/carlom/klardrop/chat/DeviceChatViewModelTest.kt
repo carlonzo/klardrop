@@ -28,6 +28,7 @@ import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.name
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -119,6 +120,8 @@ class DeviceChatViewModelTest {
   }
 
   private class FakeMessageRepository : MessageRepository {
+    val insertCalls = mutableListOf<SendStatus>()
+
     override suspend fun insertMessage(
       remoteDeviceId: String,
       content: String,
@@ -129,7 +132,10 @@ class DeviceChatViewModelTest {
       mimeType: String,
       messageId: Long?,
       sendStatus: SendStatus,
-    ): Long = 0L
+    ): Long {
+      insertCalls += sendStatus
+      return 0L
+    }
 
     override suspend fun insertFileTransfer(
       fileName: String,
@@ -191,9 +197,10 @@ class DeviceChatViewModelTest {
     deviceId: String = "dev00001",
     client: Client = FakeClient(),
     connectionsPool: ConnectionsPool = FakeConnectionsPool(available = true),
+    messageRepository: FakeMessageRepository = FakeMessageRepository(),
   ) = DeviceChatViewModel(
     deviceId = deviceId,
-    messageRepository = FakeMessageRepository(),
+    messageRepository = messageRepository,
     messenger = messenger,
     messageReceiver = messageReceiver,
     client = client,
@@ -400,5 +407,118 @@ class DeviceChatViewModelTest {
 
     assertEquals(emptyList(), client.connectToCalls)
     vm.onDispose()
+  }
+
+  /**
+   * Text send used to wait on `.lastOrNull()` and paint nothing until the peer came online.
+   * The composer-clear + empty chat read as a dead app. Connecting chrome must appear on
+   * the send tap, before any terminal Messenger emission, and without a second DB row.
+   */
+  @Test
+  fun sendTextMessage_showsConnectingImmediately_andDoesNotPersistADuplicateRow() = runTest(dispatcher) {
+    val messenger = FakeMessenger()
+    val repository = FakeMessageRepository()
+    val vm = buildViewModel(messenger, FakeMessageReceiver(), messageRepository = repository)
+
+    vm.sendTextMessage("hello from chat")
+    advanceUntilIdle()
+
+    assertTrue(vm.uiState.value.fileTransferActive, "send tap must mark the chat as working immediately")
+    assertNull(vm.uiState.value.fileTransferProgress, "text must not pin a file progress bar")
+    assertEquals("Connecting…", vm.uiState.value.fileTransferStatusText)
+    assertTrue(
+      repository.insertCalls.isEmpty(),
+      "ViewModel must not insert a TEXT row — Messenger.send owns the single SENDING bubble (F12/F13); got ${repository.insertCalls}",
+    )
+
+    messenger.progress.emit(MessengerSendProgress.Pending)
+    advanceUntilIdle()
+    assertEquals("Connecting…", vm.uiState.value.fileTransferStatusText)
+    assertTrue(vm.uiState.value.fileTransferActive)
+
+    messenger.progress.emit(MessengerSendProgress.Completed)
+    advanceUntilIdle()
+    assertFalse(vm.uiState.value.fileTransferActive)
+    assertNull(vm.uiState.value.fileTransferStatusText)
+    assertTrue(repository.insertCalls.isEmpty(), "Completed must not cause the VM to persist either")
+  }
+
+  @Test
+  fun sendTextMessage_clearsConnecting_onError() = runTest(dispatcher) {
+    val messenger = FakeMessenger()
+    val vm = buildViewModel(messenger, FakeMessageReceiver())
+
+    vm.sendTextMessage("never arrives")
+    advanceUntilIdle()
+    assertTrue(vm.uiState.value.fileTransferActive)
+
+    messenger.progress.emit(MessengerSendProgress.Error("peer gone"))
+    advanceUntilIdle()
+    assertFalse(vm.uiState.value.fileTransferActive)
+    assertNull(vm.uiState.value.fileTransferStatusText)
+    assertEquals("Failed to send message: peer gone", vm.uiState.value.error)
+  }
+
+  /**
+   * Incoming Started used to be ignored so a trusted text receive (and the first inbound
+   * connection) looked like an idle chat until Completed wrote the bubble. Surface it as a
+   * short Receiving line, not a file fraction, and clear it on the terminal status.
+   */
+  @Test
+  fun incomingStarted_showsReceivingStrip_withoutFileFraction() = runTest(dispatcher) {
+    val messageReceiver = FakeMessageReceiver()
+    val deviceId = "dev00001"
+    val vm = buildViewModel(FakeMessenger(), messageReceiver, deviceId)
+    advanceUntilIdle()
+
+    messageReceiver.push(deviceId, ReceiveMessageUpdate(status = ReceiveMessageStatus.Started))
+    advanceUntilIdle()
+
+    assertTrue(vm.uiState.value.fileTransferActive)
+    assertEquals("Receiving…", vm.uiState.value.fileTransferStatusText)
+    assertNull(vm.uiState.value.fileTransferProgress, "Started must not flash a file progress bar")
+
+    messageReceiver.push(deviceId, ReceiveMessageUpdate(status = ReceiveMessageStatus.Completed))
+    advanceUntilIdle()
+    assertFalse(vm.uiState.value.fileTransferActive)
+    assertNull(vm.uiState.value.fileTransferStatusText)
+  }
+
+  @Test
+  fun incomingStarted_clearsReceivingStrip_onFailed() = runTest(dispatcher) {
+    val messageReceiver = FakeMessageReceiver()
+    val deviceId = "dev00001"
+    val vm = buildViewModel(FakeMessenger(), messageReceiver, deviceId)
+    advanceUntilIdle()
+
+    messageReceiver.push(deviceId, ReceiveMessageUpdate(status = ReceiveMessageStatus.Started))
+    advanceUntilIdle()
+    assertEquals("Receiving…", vm.uiState.value.fileTransferStatusText)
+
+    messageReceiver.push(deviceId, ReceiveMessageUpdate(status = ReceiveMessageStatus.Failed("sink exploded")))
+    advanceUntilIdle()
+    assertFalse(vm.uiState.value.fileTransferActive, "a failed receive must not pin Receiving… forever")
+    assertNull(vm.uiState.value.fileTransferStatusText)
+  }
+
+  @Test
+  fun pendingAuthorization_isExposedOnChat_notOnlyDiscovery() = runTest(dispatcher) {
+    val messageReceiver = FakeMessageReceiver()
+    val deviceId = "dev00001"
+    val vm = buildViewModel(FakeMessenger(), messageReceiver, deviceId)
+    // WhileSubscribed only starts the mapped flow once collected — same as the chat screen.
+    backgroundScope.launch { vm.pendingAuth.collect { } }
+    advanceUntilIdle()
+
+    messageReceiver.push(
+      deviceId,
+      ReceiveMessageUpdate(status = ReceiveMessageStatus.PendingAuthorization { }),
+    )
+    advanceUntilIdle()
+
+    assertTrue(
+      vm.pendingAuth.value?.status is ReceiveMessageStatus.PendingAuthorization,
+      "untrusted incoming must surface on the chat screen via latestUpdates, not only discovery",
+    )
   }
 }

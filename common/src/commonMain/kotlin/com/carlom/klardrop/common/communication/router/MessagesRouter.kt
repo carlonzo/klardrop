@@ -24,6 +24,7 @@ import com.carlom.klardrop.common.communication.readMessage
 import com.carlom.klardrop.common.communication.sendBulkChunk
 import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.receiver.MessageReceiver
+import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -31,6 +32,7 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -430,6 +432,9 @@ internal class MessagesRouterImpl(
           }
         }.onFailure { error ->
           log("MessagesRouter", "Error processing inbound TEXT from $fromDeviceId (id=$ackId): ${error.message}", error)
+          receiveFlow.update {
+            it.copy(status = ReceiveMessageStatus.Failed(error.message ?: "Failed to receive message"))
+          }
           runCatching {
             writeLock.withLock {
               sendMessageToDevice(fromDeviceId, MessageAcknowledgment(AckType.REJECTED, ackId), writeChannel, cipher)
@@ -588,6 +593,9 @@ internal class MessagesRouterImpl(
       )
     }.getOrElse { error ->
       log("MessagesRouter", "beginReceive failed for ${header.fileName}: ${error.message}", error)
+      receiveFlow.update {
+        it.copy(status = ReceiveMessageStatus.Failed(error.message ?: "Failed to receive file"))
+      }
       return
     }
     // From here on the pipeline releases the anchor — including on the ACK_READY failure path
