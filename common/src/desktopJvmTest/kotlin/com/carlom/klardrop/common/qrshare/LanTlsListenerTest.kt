@@ -3,9 +3,11 @@ package com.carlom.klardrop.common.qrshare
 import io.ktor.utils.io.readUTF8Line
 import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Test
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -162,13 +164,16 @@ class LanTlsListenerTest {
         val bound = listener.bind("10.0.0.1", 0)
         assertTrue(bound.port > 0)
 
-        // Close the listener
         listener.close()
 
-        // Connecting to the closed port must fail
-        assertFails {
-            val socket = Socket("127.0.0.1", bound.port)
-            socket.close()
+        // SSLServerSocket.close() is not always visible to a client on the next
+        // syscall (CI flake: connect succeeded, assertFails threw AssertionError).
+        val refused = withTimeoutOrNull(2_000) {
+            while (runCatching { Socket("127.0.0.1", bound.port).close() }.isSuccess) {
+                delay(20)
+            }
+            true
         }
+        assertTrue(refused == true, "connect to closed listener should fail")
     }
 }
