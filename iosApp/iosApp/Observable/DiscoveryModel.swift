@@ -150,6 +150,20 @@ final class DiscoveryAppModel {
         controller.onSendData(deviceUi: device, onDataToSend: data)
     }
 
+    /// Share-inbox send with live progress. Same path as [DiscoveryController.sendFiles];
+    /// the callback is hopped to the main actor for SwiftUI.
+    func sendShareFiles(
+        _ device: DeviceUi,
+        files: [Filekit_corePlatformFile],
+        onProgress: @escaping (MessengerSendProgress) -> Void
+    ) {
+        controller.sendFiles(deviceId: device.deviceId, files: files) { progress in
+            Task { @MainActor in
+                onProgress(progress)
+            }
+        }
+    }
+
     func saveCustomDeviceName(_ name: String?) {
         controller.saveCustomDeviceName(customName: name)
     }

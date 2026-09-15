@@ -80,6 +80,8 @@ struct RootView: View {
             .sheet(isPresented: $showShareInbox, onDismiss: {
                 bootstrap.qrShareSession().dismissQrSheet()
             }) {
+                // ShareInboxSheet calls onComplete on Completed (short delay) or Hide after
+                // send has started — not on Send tap. Swipe-down mid-send is disabled there.
                 ShareInboxSheet(model: model, files: shareFiles) {
                     showShareInbox = false
                     shareFiles = []
