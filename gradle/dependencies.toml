@@ -6,7 +6,7 @@ agp = "9.4.0"
 # so the cap lifts once :presentation moves from the Obj-C export to swift-export.
 # That migration needs direct integration (swift-export does not support CocoaPods),
 # which is what the Sentry swap below unblocks.
-kotlin = "2.4.10"
+kotlin = "2.4.20"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 jetbrains-compose = "1.12.0"
