@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.message.ClipboardSyncMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
 import com.carlom.klardrop.common.communication.untilCompleted
+import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardAccess
 import com.carlom.klardrop.common.utils.Clock
@@ -55,6 +56,20 @@ class ClipboardSyncManager(
   @Volatile
   private var isEnabled = true
 
+  // Temporary mute of the *outgoing* filter after we write a received clipboard, so the
+  // poller does not bounce that value back to the sender. Distinct from [isEnabled]:
+  // flipping isEnabled would cancel the collector on the next visibility snapshot.
+  @Volatile
+  private var echoSuppressed = false
+
+  /**
+   * Watches [VisibleDevices] and trust so we only subscribe to [ClipboardAccess.flow]
+   * while a trusted peer is actually nearby. Collecting that flow is what starts
+   * [com.carlom.klardrop.common.features.ClipboardManager]'s `WhileSubscribed` poller;
+   * on iOS each uncached `UIPasteboard.string` read shows Allow Paste.
+   */
+  private var visibilityWatcherJob: Job? = null
+
   /**
    * The single collector of [ClipboardAccess.flow]. Held so [setClipboardSyncEnabled] can
    * re-enable without stacking a second collector on top of the first — every duplicate
@@ -63,10 +78,45 @@ class ClipboardSyncManager(
   private var monitoringJob: Job? = null
 
   /**
-   * Start monitoring clipboard changes and sync to trusted devices.
+   * Start watching visibility/trust. The clipboard poller starts only once a trusted
+   * device is currently visible; paired-but-offline or untrusted nearby is not enough.
    */
-  @OptIn(FlowPreview::class)
   fun startClipboardMonitoring() {
+    if (visibilityWatcherJob?.isActive == true) {
+      log("ClipboardSyncManager", "Clipboard visibility watcher already running")
+      // Re-evaluate: [setClipboardSyncEnabled] (true) calls here after flipping
+      // isEnabled, and the watcher only emits on visibility changes.
+      syncScope.launch { updateClipboardCollector() }
+      return
+    }
+
+    log("ClipboardSyncManager", "Starting clipboard visibility watcher")
+    visibilityWatcherJob = visibleDevices.visibleDevices
+      .onEach { updateClipboardCollector(it) }
+      .launchIn(syncScope)
+  }
+
+  private suspend fun updateClipboardCollector(
+    devices: Map<String, DiscoveryDevice> = visibleDevices.visibleDevices.value,
+  ) {
+    if (isEnabled && hasTrustedVisibleDevice(devices)) {
+      startClipboardCollector()
+    } else {
+      stopClipboardCollector()
+    }
+  }
+
+  private suspend fun hasTrustedVisibleDevice(
+    devices: Map<String, DiscoveryDevice>,
+  ): Boolean {
+    for (id in devices.keys) {
+      if (isTrusted(id)) return true
+    }
+    return false
+  }
+
+  @OptIn(FlowPreview::class)
+  private fun startClipboardCollector() {
     if (!isEnabled) return
     if (monitoringJob?.isActive == true) {
       log("ClipboardSyncManager", "Clipboard monitoring already running")
@@ -79,15 +129,24 @@ class ClipboardSyncManager(
       .filter { content ->
         // Filter out empty content and content we just set.
         //
-        // The isEnabled check is what makes the echo-suppression window in
+        // echoSuppressed is what makes the echo-suppression window in
         // [handleIncomingClipboardSync] work: without it, clipboard content we just
         // *received* is picked up by the poller and immediately broadcast back out.
-        isEnabled && content.isNotBlank() && content.length <= MAX_CONTENT_LENGTH
+        isEnabled && !echoSuppressed && content.isNotBlank() && content.length <= MAX_CONTENT_LENGTH
       }
       .distinctUntilChanged()
       .debounce(SYNC_DEBOUNCE) // Prevent rapid changes
       .onEach { handleLocalClipboardChange(it) }
       .launchIn(syncScope)
+  }
+
+  private fun stopClipboardCollector() {
+    val job = monitoringJob ?: return
+    monitoringJob = null
+    if (job.isActive) {
+      log("ClipboardSyncManager", "Stopping clipboard collector")
+      job.cancel()
+    }
   }
 
   /**
@@ -96,7 +155,7 @@ class ClipboardSyncManager(
   @OptIn(ExperimentalTime::class)
   private suspend fun handleLocalClipboardChange(content: String) {
 
-    if (!isEnabled) return
+    if (!isEnabled || echoSuppressed) return
 
     val trustedVisibleDevices = visibleDevices.visibleDevices.value.values
       .filter { isTrusted(it.deviceInfo.deviceId) }
@@ -183,9 +242,9 @@ class ClipboardSyncManager(
       return
     }
 
-    // Prevent sync loops by temporarily disabling local monitoring
-    val wasEnabled = isEnabled
-    isEnabled = false
+    // Prevent sync loops by muting the outgoing filter, not by flipping isEnabled —
+    // that would tear down the collector if visibility emitted during the window.
+    echoSuppressed = true
 
     try {
       log("ClipboardSyncManager", "Updating clipboard from trusted device $senderId: ${message.content.take(50)}...")
@@ -198,10 +257,10 @@ class ClipboardSyncManager(
     } catch (e: Exception) {
       log("ClipboardSyncManager", "Failed to update clipboard from $senderId: ${e.message}")
     } finally {
-      // Re-enable local monitoring after a short delay to prevent immediate re-sync
+      // Unmute local monitoring after a short delay to prevent immediate re-sync
       coroutines.appScope.launch {
         kotlinx.coroutines.delay(ECHO_SUPPRESSION_WINDOW)
-        isEnabled = wasEnabled
+        echoSuppressed = false
       }
     }
   }
@@ -226,6 +285,10 @@ class ClipboardSyncManager(
 
     if (enabled) {
       startClipboardMonitoring()
+    } else {
+      // Do not leave the poller subscribed: the filter would drop sends, but iOS
+      // would keep hitting UIPasteboard.string twice a second.
+      stopClipboardCollector()
     }
   }
 
@@ -240,8 +303,9 @@ class ClipboardSyncManager(
   fun stop() {
     log("ClipboardSyncManager", "Stopping clipboard sync manager")
     isEnabled = false
-    monitoringJob?.cancel()
-    monitoringJob = null
+    visibilityWatcherJob?.cancel()
+    visibilityWatcherJob = null
+    stopClipboardCollector()
     // Scope will be cancelled when parent scope is cancelled
   }
 

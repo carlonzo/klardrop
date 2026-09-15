@@ -16,17 +16,19 @@ import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.DeviceType
 import io.ktor.network.sockets.InetSocketAddress
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -47,8 +49,19 @@ class ClipboardSyncManagerTest {
       private set
     var writes: Int = 0
       private set
+    var collections: Int = 0
+      private set
 
-    override val flow: Flow<String> = changes
+    // Count active collectors so tests can see whether ClipboardSyncManager is
+    // actually subscribed (and therefore whether the 500ms poller would run).
+    override val flow: Flow<String> = callbackFlow {
+      collections++
+      val job = launch { changes.collect { send(it) } }
+      awaitClose {
+        job.cancel()
+        collections--
+      }
+    }
     override fun read(): String = content
     override fun write(text: String) {
       content = text
@@ -56,16 +69,20 @@ class ClipboardSyncManagerTest {
     }
   }
 
-  private class FakeVisibleDevices(devices: List<DeviceInfo>) : VisibleDevices {
-    private val state = MutableStateFlow(
-      devices.associate { info ->
-        info.deviceId to DiscoveryDevice(
-          deviceInfo = info,
-          deviceConnections = listOf(DeviceConnection.KlardropConnection("127.0.0.1", 1234)),
-          lastSeenTimestamp = 0L,
-        )
-      }
-    )
+  private class FakeVisibleDevices(devices: List<DeviceInfo> = emptyList()) : VisibleDevices {
+    private val state = MutableStateFlow(toMap(devices))
+
+    fun setDevices(devices: List<DeviceInfo>) {
+      state.value = toMap(devices)
+    }
+
+    private fun toMap(devices: List<DeviceInfo>) = devices.associate { info ->
+      info.deviceId to DiscoveryDevice(
+        deviceInfo = info,
+        deviceConnections = listOf(DeviceConnection.KlardropConnection("127.0.0.1", 1234)),
+        lastSeenTimestamp = 0L,
+      )
+    }
 
     override val visibleDevices: StateFlow<Map<String, DiscoveryDevice>> = state
     override suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection) = Unit
@@ -124,9 +141,10 @@ class ClipboardSyncManagerTest {
     coroutines: TestCoroutines,
     trustedIds: Set<String>,
     visible: List<DeviceInfo> = listOf(deviceInfo(trustedId), deviceInfo(untrustedId)),
+    visibleDevices: FakeVisibleDevices = FakeVisibleDevices(visible),
   ) = ClipboardSyncManager(
     clipboardManager = clipboard,
-    visibleDevices = FakeVisibleDevices(visible),
+    visibleDevices = visibleDevices,
     trustManager = trustManagerWith(trustedIds),
     clock = Clock(),
     coroutines = coroutines,
@@ -164,9 +182,9 @@ class ClipboardSyncManagerTest {
 
     assertEquals("from my laptop", clipboard.content)
     assertEquals(1, clipboard.writes)
-    // Monitoring is muted right after the write so the poller doesn't pick up what we just
-    // received and bounce it straight back to the sender.
-    assertFalse(syncManager.isClipboardSyncEnabled())
+    // Sync stays enabled; outgoing echo is muted separately so a visibility snapshot
+    // during the window does not cancel the clipboard collector.
+    assertTrue(syncManager.isClipboardSyncEnabled())
   }
 
   @Test
@@ -210,8 +228,9 @@ class ClipboardSyncManagerTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
     val coroutines = TestCoroutines(dispatcher = dispatcher, ioDispatcher = dispatcher)
     val messenger = RecordingMessenger()
+    val clipboard = FakeClipboard(changes = flowOf("copied text"))
     val syncManager = manager(
-      clipboard = FakeClipboard(changes = flowOf("copied text")),
+      clipboard = clipboard,
       messenger = messenger,
       coroutines = coroutines,
       trustedIds = setOf(trustedId),
@@ -222,6 +241,92 @@ class ClipboardSyncManagerTest {
     advanceUntilIdle()
 
     assertTrue(messenger.sentTo.isEmpty(), "A disabled sync must not push the clipboard anywhere")
+    assertEquals(0, clipboard.collections, "Disabled sync must not keep collecting the clipboard flow")
+  }
+
+  @Test
+  fun clipboardFlowIsNotCollectedWithoutAnyTrustedDevice() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val coroutines = TestCoroutines(dispatcher = dispatcher, ioDispatcher = dispatcher)
+    val clipboard = FakeClipboard(changes = flowOf("copied text"))
+    val syncManager = manager(
+      clipboard = clipboard,
+      messenger = RecordingMessenger(),
+      coroutines = coroutines,
+      trustedIds = emptySet(),
+    )
+
+    syncManager.startClipboardMonitoring()
+    advanceUntilIdle()
+
+    assertEquals(0, clipboard.collections, "Do not poll the clipboard when nobody is paired")
+  }
+
+  @Test
+  fun clipboardFlowIsNotCollectedWhenTrustedDeviceIsNotVisible() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val coroutines = TestCoroutines(dispatcher = dispatcher, ioDispatcher = dispatcher)
+    val clipboard = FakeClipboard(changes = flowOf("copied text"))
+    val syncManager = manager(
+      clipboard = clipboard,
+      messenger = RecordingMessenger(),
+      coroutines = coroutines,
+      trustedIds = setOf(trustedId),
+      visible = emptyList(),
+    )
+
+    syncManager.startClipboardMonitoring()
+    advanceUntilIdle()
+
+    assertEquals(0, clipboard.collections, "Paired-but-offline is not enough to start clipboard polling")
+  }
+
+  @Test
+  fun clipboardFlowStartsWhenTrustedDeviceBecomesVisibleThenStopsWhenItLeaves() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val coroutines = TestCoroutines(dispatcher = dispatcher, ioDispatcher = dispatcher)
+    val messenger = RecordingMessenger()
+    val clipboard = FakeClipboard(changes = flowOf("copied text"))
+    val visibleDevices = FakeVisibleDevices(emptyList())
+    val syncManager = manager(
+      clipboard = clipboard,
+      messenger = messenger,
+      coroutines = coroutines,
+      trustedIds = setOf(trustedId),
+      visibleDevices = visibleDevices,
+    )
+
+    syncManager.startClipboardMonitoring()
+    advanceUntilIdle()
+    assertEquals(0, clipboard.collections, "No trusted peer visible yet; do not collect")
+
+    visibleDevices.setDevices(listOf(deviceInfo(trustedId)))
+    advanceUntilIdle()
+    assertEquals(1, clipboard.collections, "Trusted peer became visible; start collecting")
+    assertEquals(listOf(trustedId), messenger.sentTo, "Outgoing sync reaches the trusted visible peer")
+
+    visibleDevices.setDevices(emptyList())
+    advanceUntilIdle()
+    assertEquals(0, clipboard.collections, "Last trusted visible peer left; stop collecting")
+  }
+
+  @Test
+  fun clipboardFlowIsNotCollectedWhenOnlyUntrustedDeviceIsVisible() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val coroutines = TestCoroutines(dispatcher = dispatcher, ioDispatcher = dispatcher)
+    val clipboard = FakeClipboard(changes = flowOf("copied text"))
+    val syncManager = manager(
+      clipboard = clipboard,
+      messenger = RecordingMessenger(),
+      coroutines = coroutines,
+      trustedIds = emptySet(),
+      visible = listOf(deviceInfo(untrustedId)),
+    )
+
+    syncManager.startClipboardMonitoring()
+    advanceUntilIdle()
+
+    assertEquals(0, clipboard.collections, "An untrusted nearby device must not start clipboard polling")
   }
 
   private fun clipboardMessage(content: String) = ClipboardSyncMessage(
