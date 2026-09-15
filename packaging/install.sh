@@ -4,8 +4,9 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash
 #
-# Downloads the latest universal tarball (bundled JRE — no Java needed), verifies
-# its checksum, and installs the app-image plus a launcher, menu entry and icons.
+# Downloads the latest universal tarball (jars + a launcher that execs the system
+# JRE — Java 21+ required), verifies its checksum, and installs the app-image plus
+# a launcher, menu entry and icons.
 #
 # Scope is auto-detected: run as your user it installs under ~/.local (no sudo);
 # run as root (sudo) it installs system-wide under /opt. Re-running upgrades in
@@ -87,6 +88,32 @@ uninstall() {
 # --- preflight ---------------------------------------------------------------
 arch="$(uname -m)"
 [ "$arch" = "x86_64" ] || die "unsupported architecture '$arch' (only x86_64 is published)."
+
+require_java() {
+  local java_bin="" ver major
+  if [ -n "${JAVA_HOME:-}" ] && [ -x "${JAVA_HOME}/bin/java" ]; then
+    java_bin="${JAVA_HOME}/bin/java"
+  elif command -v java >/dev/null 2>&1; then
+    java_bin="$(command -v java)"
+  fi
+  if [ -n "$java_bin" ]; then
+    ver="$("$java_bin" -version 2>&1 | awk -F '"' '/version/ { print $2; exit }')" || true
+    major="${ver%%.*}"
+    if [ "${major:-}" = "1" ]; then
+      major="${ver#1.}"; major="${major%%.*}"
+    fi
+    case "${major:-}" in
+      ''|*[!0-9]*) ;;
+      *) [ "$major" -ge 21 ] && return 0 ;;
+    esac
+  fi
+  die "Klardrop needs Java 21 or newer on PATH (or JAVA_HOME).
+  Arch/Omarchy:   pacman -S jre-openjdk
+  Debian/Ubuntu:  apt install openjdk-21-jre
+  Fedora:         dnf install java-21-openjdk"
+}
+require_java
+
 command -v tar >/dev/null 2>&1 || die "'tar' is required."
 if command -v curl >/dev/null 2>&1; then dl() { curl -fsSL "$1" -o "$2"; }
 elif command -v wget >/dev/null 2>&1; then dl() { wget -qO "$2" "$1"; }
@@ -116,6 +143,7 @@ say "Extracting…"
 tar -xzf "$tmp/$TARBALL" -C "$tmp"
 src="$tmp/klardrop-linux-x64"
 [ -d "$src/klardrop/bin" ] || die "unexpected tarball layout."
+[ -f "$src/klardrop/bin/klardrop" ] || die "unexpected tarball layout."
 
 # --- install -----------------------------------------------------------------
 say "Installing to $APP_DIR ($SCOPE)…"

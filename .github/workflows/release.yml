@@ -231,18 +231,10 @@ jobs:
             echo "KLARDROP_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
           } >> "$GITHUB_ENV"
 
-      # jpackage shells out to rpmbuild for TargetFormat.Rpm and fails the task if it
-      # is missing; the GitHub ubuntu image ships dpkg-deb but not rpm.
-      - name: Install RPM tooling
-        if: matrix.target == 'linux-android'
-        run: sudo apt-get update && sudo apt-get install -y rpm
-
-      - name: Build Linux DEB + RPM + app-image + Android APK & AAB
+      - name: Build Linux app-image + Android APK & AAB
         if: matrix.target == 'linux-android'
         run: >-
           ./gradlew
-          :desktop:packageReleaseDeb
-          :desktop:packageReleaseRpm
           :desktop:createReleaseDistributable
           :android:assembleRelease
           :android:bundleRelease
@@ -280,44 +272,41 @@ jobs:
       - name: Stage Linux universal tarball
         if: matrix.target == 'linux-android'
         shell: bash
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
+        run: bash packaging/linux/stage-tarball.sh
+
+      # The shipped launcher is the system-JRE wrapper, not jpackage's native
+      # binary. Boot it against the runner JDK (21+) and the ProGuard'd jars.
+      - name: Smoke-test system-JRE wrapper
+        if: matrix.target == 'linux-android'
+        shell: bash
         run: |
           set -euo pipefail
-          APPDIR=desktop/build/compose/binaries/main-release/app
-          STAGE=stage/klardrop-linux-x64
-          rm -rf stage && mkdir -p "$STAGE/icons"
-
-          # Self-contained bundle: app-image (with bundled JRE) + launcher integration.
-          # Consumed by the install.sh script (initial install + in-app self-update).
-          cp -r "$APPDIR/klardrop" "$STAGE/klardrop"
-          cp packaging/linux/klardrop.desktop "$STAGE/"
-          cp packaging/linux/com.carlom.Klardrop.metainfo.xml "$STAGE/"
-          for s in 32 64 128 256 512; do
-            mkdir -p "$STAGE/icons/${s}x${s}"
-            cp "brand/klardrop-icon-${s}.png" "$STAGE/icons/${s}x${s}/klardrop.png"
-          done
-          # Scalable SVG (the source the PNGs are rendered from): the icon theme
-          # prefers it at any size, with the sized PNGs as fallback.
-          mkdir -p "$STAGE/icons/scalable"
-          cp brand/klardrop-icon.svg "$STAGE/icons/scalable/klardrop.svg"
-
-          mkdir -p dist
-          tar -czf dist/klardrop-linux-x64.tar.gz -C stage klardrop-linux-x64
-          rm -rf stage
-          ls -la dist/
+          tmp="$(mktemp -d)"
+          tar -xzf dist/klardrop-linux-x64.tar.gz -C "$tmp"
+          APP="$tmp/klardrop-linux-x64/klardrop"
+          test ! -e "$APP/lib/runtime" \
+            || { echo "::error::tarball still contains lib/runtime (bundled JRE)"; exit 1; }
+          test -f "$APP/bin/klardrop"
+          LOG="$(mktemp)"
+          set +e
+          timeout --preserve-status 35 xvfb-run -a "$APP/bin/klardrop" >"$LOG" 2>&1
+          set -e
+          echo "----- system-JRE wrapper log -----"; cat "$LOG"; echo "----------------------------"
+          if grep -Eiq "VerifyError|Exception in thread|ServiceConfigurationError|ClassNotFoundException|NoClassDefFoundError|SerializationException|Serializer for class .* is not found|MissingFieldException|kotlinx\.serialization\.[A-Za-z]*Exception|ExceptionInInitializerError" "$LOG"; then
+            echo "::error::System-JRE wrapper hit a reflection/serialization/verifier failure."
+            exit 1
+          fi
+          grep -q "Starting Klardrop" "$LOG" || { echo "::error::Wrapper did not reach startup"; exit 1; }
+          echo "System-JRE wrapper booted cleanly."
 
       - name: Stage artifacts
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          # Compose Desktop drops bundlers under build/compose/binaries/main-release/<format>/
-          # (or main/<format>/ for non-release). Match both so the workflow keeps working if
-          # the desktop module ever stops calling proguard.
-          find desktop/build/compose/binaries -type f \
-            \( -name '*.dmg' -o -name '*.msi' -o -name '*.deb' -o -name '*.rpm' \) \
-            -exec cp -v {} dist/ \;
+          # Windows MSI still ships a bundled JRE. Linux jpackage .deb/.rpm also
+          # embed a JRE — do not attach them; Linux ships the system-JRE tarball.
+          find desktop/build/compose/binaries -type f -name '*.msi' -exec cp -v {} dist/ \;
           if [ -d android/build/outputs/apk/release ]; then
             find android/build/outputs/apk/release -name '*.apk' -exec cp -v {} dist/ \;
           fi
@@ -709,15 +698,13 @@ jobs:
           pick() { ls $1 2>/dev/null | head -n1 || true; }
           DMG=$(pick "*.dmg")
           MSI=$(pick "*.msi")
-          DEB=$(pick "*.deb")
-          RPM=$(pick "*.rpm")
           APK=$(pick "*.apk")
           TGZ=$(pick "*.tar.gz")
 
           export BASE="https://github.com/${REPO}/releases/download/${TAG}"
-          python3 - "$DMG" "$MSI" "$DEB" "$RPM" "$APK" "$TGZ" <<'PY' > latest.json
+          python3 - "$DMG" "$MSI" "$APK" "$TGZ" <<'PY' > latest.json
           import json, os, sys, datetime, pathlib
-          dmg, msi, deb, rpm, apk, tgz = sys.argv[1:7]
+          dmg, msi, apk, tgz = sys.argv[1:5]
           base = os.environ["BASE"]
           def entry(name):
               if not name: return None
@@ -731,8 +718,6 @@ jobs:
           # verified download channel (unsigned build — not suitable for public distribution).
           if dmg and os.path.exists("macos-verified.txt"): platforms["macos"] = entry(dmg)
           if msi: platforms["windows"]       = entry(msi)
-          if deb: platforms["linux-deb"]     = entry(deb)
-          if rpm: platforms["linux-rpm"]     = entry(rpm)
           if tgz: platforms["linux-tarball"] = entry(tgz)
           if apk: platforms["android"]       = entry(apk)
           out = {

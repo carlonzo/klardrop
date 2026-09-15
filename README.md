@@ -154,7 +154,7 @@ on every tagged version.
 |---|---|---|
 | macOS    | `.dmg`     | Unsigned during beta — run `xattr -dr com.apple.quarantine /Applications/Klardrop.app` after first launch if Gatekeeper blocks it |
 | Windows  | `.msi`     | Unsigned during beta — SmartScreen will warn on first run |
-| Linux    | `.deb`     | Debian / Ubuntu / Mint; AppImage planned |
+| Linux    | tarball / AUR | System JRE 21+ (`install.sh` or `yay -S klardrop-bin`); Windows MSI still bundles a JRE |
 | Android  | `.apk`     | Sideload; Play Store internal-testing track planned |
 | iOS      | TestFlight | Public invite link forthcoming |
 

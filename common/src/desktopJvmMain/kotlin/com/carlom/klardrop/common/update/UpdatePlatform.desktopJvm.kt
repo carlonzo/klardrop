@@ -112,8 +112,10 @@ private fun detectLinuxChannel(launcher: String): InstallChannel {
     !underHome && runExitCode("rpm", "-qf", launcher) == 0 -> InstallChannel.RPM
     !underHome && runExitCode("pacman", "-Qo", launcher) == 0 -> InstallChannel.PACMAN
 
-    // Unowned, and under a root the install.sh script manages: both the native
-    // launcher and the bundled runtime's java live inside that app-image.
+    // Unowned, and under a root the install.sh script manages. The Linux
+    // launcher is a shell wrapper inside that tree; -Dklardrop.launcher (see
+    // [currentLauncherPath]) points at the script so this check — and the
+    // package-DB probes above — see the install path rather than /usr/bin/java.
     linuxInstallRoot(launcher) != null -> InstallChannel.TARBALL
 
     else -> InstallChannel.MANUAL
@@ -131,8 +133,10 @@ private fun detectLinuxChannel(launcher: String): InstallChannel {
  * would take the device identity and message history with it. Returning null there
  * falls the UI back to re-running install.sh, which relocates and keeps the data.
  */
-private fun linuxInstallRoot(launcher: String): Path? {
-  val home = System.getProperty("user.home").orEmpty()
+internal fun linuxInstallRoot(
+  launcher: String,
+  home: String = System.getProperty("user.home").orEmpty(),
+): Path? {
   return when {
     launcher.startsWith("/opt/klardrop/") -> Path.of("/opt/klardrop")
     home.isNotEmpty() && launcher.startsWith("$home/.local/lib/klardrop/") ->
@@ -160,17 +164,46 @@ actual fun createUpdateInstaller(channel: InstallChannel): UpdateInstaller? {
   }.getOrNull()
 }
 
+internal const val LAUNCHER_PROPERTY = "klardrop.launcher"
+internal const val LAUNCHER_ENV = "KLARDROP_LAUNCHER"
+
 /**
- * The on-disk path of the running launcher, symlinks resolved. For a jpackage
- * app-image this is the native launcher (e.g. /opt/klardrop/bin/klardrop or the
- * bundled runtime's java) — both live inside the package-owned tree, so the
- * pacman/dpkg ownership probes resolve correctly.
+ * Resolve the on-disk launcher path. [property] (`-Dklardrop.launcher`) wins,
+ * then [env] (`KLARDROP_LAUNCHER`), then [processCommand] (ProcessHandle).
+ *
+ * Linux's system-JRE wrapper must pass the script path via the property/env:
+ * without it [processCommand] is `/usr/bin/java`, [linuxInstallRoot] returns
+ * null (tarball self-update dies) and `pacman -Qo /usr/bin/java` reports
+ * `jre-openjdk` instead of `klardrop-bin`. Windows MSI still uses the
+ * process command (jpackage's native launcher).
  */
-private fun currentLauncherPath(): String? = runCatching {
-  val cmd = ProcessHandle.current().info().command().orElse(null) ?: return null
-  val path = Path.of(cmd)
+internal fun resolveLauncherPath(
+  property: String?,
+  env: String?,
+  processCommand: String?,
+): String? {
+  val raw = property?.takeIf { it.isNotBlank() }
+    ?: env?.takeIf { it.isNotBlank() }
+    ?: processCommand?.takeIf { it.isNotBlank() }
+    ?: return null
+  val path = Path.of(raw)
   val real = runCatching { path.toRealPath() }.getOrDefault(path)
-  real.toString()
+  return real.toString()
+}
+
+/**
+ * The on-disk path of the running launcher, symlinks resolved.
+ *
+ * Prefer `-Dklardrop.launcher` (set by packaging/linux/klardrop) over
+ * [ProcessHandle] — after the system-JRE switch the process command is the
+ * JVM binary, which lives outside the install tree.
+ */
+internal fun currentLauncherPath(): String? = runCatching {
+  resolveLauncherPath(
+    property = System.getProperty(LAUNCHER_PROPERTY),
+    env = System.getenv(LAUNCHER_ENV),
+    processCommand = ProcessHandle.current().info().command().orElse(null),
+  )
 }.getOrNull()
 
 private fun runExitCode(vararg command: String): Int = runCatching {
@@ -193,7 +226,7 @@ private fun runExitCode(vararg command: String): Int = runCatching {
  *
  * @param appDir the live app-image root (e.g. ~/.local/lib/klardrop).
  * @param parent appDir's parent — staging happens here so the final move is a rename.
- * @param relaunch the native launcher to exec after the swap (appDir/bin/klardrop).
+ * @param relaunch the launcher to exec after the swap (appDir/bin/klardrop).
  */
 private class DesktopTarballInstaller(
   private val appDir: Path,

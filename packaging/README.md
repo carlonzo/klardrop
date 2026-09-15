@@ -31,9 +31,11 @@ curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/in
 ```
 
 It downloads the latest universal tarball, verifies its sha256, and installs the
-app-image plus a launcher, menu entry and icons. **Scope is auto-detected:** run as
-your user it installs under `~/.local` (no sudo); run as root (`sudo … | bash`) it
-installs system-wide under `/opt`. Re-running upgrades in place. Uninstall:
+app-image plus a launcher, menu entry and icons. The tarball does **not** bundle a
+JRE — `install.sh` preflights `java` ≥ 21 and prints distro install hints on
+failure. **Scope is auto-detected:** run as your user it installs under `~/.local`
+(no sudo); run as root (`sudo … | bash`) it installs system-wide under `/opt`.
+Re-running upgrades in place. Uninstall:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash -s -- --uninstall
@@ -70,14 +72,14 @@ For users who would rather their distro's package manager owned the install:
 | Distro | Channel | Install |
 |--------|---------|---------|
 | Arch (and derivatives) | AUR `klardrop-bin` | `yay -S klardrop-bin` |
-| Debian / Ubuntu | `.deb` on the release | `sudo apt install ./klardrop_<version>_amd64.deb` |
-| Fedora / openSUSE | `.rpm` on the release | `sudo rpm -Uvh klardrop-<version>.x86_64.rpm` |
 
-The `.deb` and `.rpm` are jpackage output (bundled JRE, `/opt/klardrop` + a launcher on
-`PATH`) and are attached to every stable release; there is no apt/dnf repository, so
-upgrading means installing the newer package — which is exactly the command the in-app
-updater offers. The AUR package repackages the universal tarball into the same layout,
-and is bumped by the `aur` job on every stable release.
+`klardrop-bin` declares `java-runtime>=21` and `hicolor-icon-theme`. It
+repackages the universal tarball into `/opt/klardrop` + a `/usr/bin/klardrop`
+symlink, and is bumped by the `aur` job on every stable release.
+
+Debian / Ubuntu / Fedora users should use `install.sh` (or the tarball) after
+installing a JRE 21+: `apt install openjdk-21-jre` / `dnf install java-21-openjdk`.
+jpackage `.deb` / `.rpm` are **not** published — those images still embed a JRE.
 
 The install script stays the primary channel because it is distro-independent and is
 the only channel that can self-update from inside the app.
@@ -85,21 +87,31 @@ the only channel that can self-update from inside the app.
 ### Windows — MSI
 
 Download the `.msi` from the [latest release](https://github.com/carlonzo/klardrop/releases/latest).
+Windows still uses `jpackage` with a **bundled JRE** — users are not expected to
+have Java installed. Mac is the native app (Homebrew cask / DMG); it is unchanged.
 
 ## The universal Linux tarball
 
-The release workflow builds a self-contained tarball, `klardrop-linux-x64.tar.gz`,
-consumed by both the install script and the in-app self-updater. It bundles its own
-JRE (jpackage app-image), so it has no Java dependency. Internal layout:
+The release workflow builds a tarball, `klardrop-linux-x64.tar.gz`, consumed by
+both the install script and the in-app self-updater. It does **not** ship a JRE:
+`bin/klardrop` is a shell wrapper that execs system `java` (≥ 21). Bytecode is
+compiled with `jvmTarget = JVM_21`. Internal layout:
 
 ```
 klardrop-linux-x64/
-  klardrop/                             # app-image: bin/klardrop launcher + lib/ (jars + runtime/)
+  klardrop/
+    bin/klardrop                        # shell wrapper (not a jpackage native launcher)
+    lib/app/                            # ProGuard'd jars + libskiko-linux-x64.so
+                                        # NO lib/runtime/
   klardrop.desktop
   com.carlom.Klardrop.metainfo.xml
   icons/<size>/klardrop.png             # 32, 64, 128, 256, 512
   icons/scalable/klardrop.svg           # scalable source (theme prefers it)
 ```
+
+The wrapper sets `-Dklardrop.launcher=<absolute path to itself>` so the in-app
+updater still sees the script inside `/opt/klardrop` or `~/.local/lib/klardrop`
+rather than `/usr/bin/java`.
 
 The `.desktop` uses `Icon=klardrop` — a theme *name*, not a path — so it resolves
 to whichever `klardrop.*` the installer dropped into `hicolor` (the SVG at any size,
@@ -158,7 +170,7 @@ minified release build; the release workflow boots the minified app-image as a g
 | Homebrew | Create the `carlonzo/homebrew-klardrop` tap repo, and a token that can push to it. | `HOMEBREW_TAP_TOKEN` |
 | AUR | Register the `klardrop-bin` package on aur.archlinux.org and add the matching SSH private key. Optionally pin the host key with `AUR_KNOWN_HOSTS` (`ssh-keyscan aur.archlinux.org`, verified against the AUR's published fingerprint); without it the job trusts the key on first use. | `AUR_SSH_PRIVATE_KEY`, `AUR_KNOWN_HOSTS` (optional) |
 | install.sh | None — served from `raw.githubusercontent.com` once on `main`. | — |
-| .deb / .rpm | None — built by jpackage and attached to the release. | — |
+| .deb / .rpm | Not published (they would embed a JRE). Use install.sh or AUR. | — |
 
 Both the Homebrew and AUR bump jobs are gated on their secret and on the version being
 a stable `X.Y.Z`, so an unconfigured channel is skipped, not failed.

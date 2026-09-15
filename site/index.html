@@ -708,7 +708,7 @@
       <div class="linux-hero-header">
         <span class="linux-pill">Universal Installer · Recommended</span>
         <h3>One-line self-updating install</h3>
-        <p class="linux-hero-desc">Installs Klardrop with a private, bundled Java runtime, registers desktop shortcuts and icons, and manages in-place updates automatically.</p>
+        <p class="linux-hero-desc">Installs Klardrop (jars + launcher; uses your system Java 21+), registers desktop shortcuts and icons, and manages in-place updates automatically.</p>
       </div>
       <div class="code linux-code">
         <code>curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash</code>
@@ -730,7 +730,7 @@
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5L2.2 21.5h4.6l2.1-4.2c1.2.7 2.2 1.1 3.3 1.1 1.1 0 2.1-.4 3.3-1.1l2.1 4.2h4.6L12 2.5zm0 5.8l2.9 5.8c-.9-.4-1.9-.7-2.9-.7s-2 .3-2.9.7L12 8.3z"/></svg>
           </div>
         </div>
-        <p class="linux-pkg-desc">Maintained in the Arch User Repository as <code>klardrop-bin</code>. Includes desktop integration and automatic updates via your AUR helper.</p>
+        <p class="linux-pkg-desc">Maintained in the Arch User Repository as <code>klardrop-bin</code> (<code>java-runtime&gt;=21</code>). Includes desktop integration and updates via your AUR helper.</p>
         <div class="linux-pkg-action">
           <div class="linux-cmd-wrap">
             <div class="linux-cmd-label">Install command</div>
@@ -748,26 +748,22 @@
         <div class="linux-pkg-head">
           <div class="linux-pkg-title">
             <h3>Debian · Ubuntu · Mint</h3>
-            <span class="linux-pkg-tag">Native <b>.deb</b> · x86_64</span>
+            <span class="linux-pkg-tag">System JRE <b>21+</b> · x86_64</span>
           </div>
           <div class="linux-pkg-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="15.5" cy="6" r="1.5" fill="currentColor"/><circle cx="15.5" cy="18" r="1.5" fill="currentColor"/><path d="M6.8 12a5.5 5.5 0 0 0 6.7 5.3M13.5 6.7a5.5 5.5 0 0 1 0 10.6M13.5 6.7A5.5 5.5 0 0 0 6.8 12"/></svg>
           </div>
         </div>
-        <p class="linux-pkg-desc">Standard Debian package with desktop menu entry, icons, and dependencies for Debian, Ubuntu, Linux Mint, and Pop!_OS.</p>
+        <p class="linux-pkg-desc">Uses the universal installer. Install a JRE 21 or newer first; the launcher execs system <code>java</code>.</p>
         <div class="linux-pkg-action">
-          <a class="btn btn-primary linux-dl-btn" id="linux-deb-btn" href="https://github.com/carlonzo/klardrop/releases" rel="noopener">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <span>Download .deb</span><span class="linux-size" id="linux-deb-size"> (releases)</span>
-          </a>
           <div class="linux-cmd-wrap">
-            <div class="linux-cmd-label">Install command</div>
+            <div class="linux-cmd-label">JRE, then install</div>
             <div class="code">
-              <code id="linux-deb-cmd">sudo apt install ./klardrop_amd64.deb</code>
-              <button class="copy" id="linux-deb-copy" type="button" data-copy="sudo apt install ./klardrop_amd64.deb" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+              <code>sudo apt install openjdk-21-jre</code>
+              <button class="copy" type="button" data-copy="sudo apt install openjdk-21-jre" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
             </div>
           </div>
-          <p class="linux-card-hint">Available on releases · Or install via one-line script below</p>
+          <p class="linux-card-hint">Then run the one-line installer above</p>
         </div>
       </div>
 
@@ -776,26 +772,22 @@
         <div class="linux-pkg-head">
           <div class="linux-pkg-title">
             <h3>Fedora · RHEL · openSUSE</h3>
-            <span class="linux-pkg-tag">Native <b>.rpm</b> · x86_64</span>
+            <span class="linux-pkg-tag">System JRE <b>21+</b> · x86_64</span>
           </div>
           <div class="linux-pkg-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16.5 9.4-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12.5 20.71 7"/><line x1="12" y1="22.5" x2="12" y2="12.5"/></svg>
           </div>
         </div>
-        <p class="linux-pkg-desc">Native RPM package with bundled runtime and desktop launcher for Fedora, RHEL, CentOS Stream, openSUSE, and AlmaLinux.</p>
+        <p class="linux-pkg-desc">Uses the universal installer. Install a JRE 21 or newer first; the launcher execs system <code>java</code>.</p>
         <div class="linux-pkg-action">
-          <a class="btn btn-primary linux-dl-btn" id="linux-rpm-btn" href="https://github.com/carlonzo/klardrop/releases" rel="noopener">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <span>Download .rpm</span><span class="linux-size" id="linux-rpm-size"> (releases)</span>
-          </a>
           <div class="linux-cmd-wrap">
-            <div class="linux-cmd-label">Install command</div>
+            <div class="linux-cmd-label">JRE, then install</div>
             <div class="code">
-              <code id="linux-rpm-cmd">sudo rpm -Uvh ./klardrop.x86_64.rpm</code>
-              <button class="copy" id="linux-rpm-copy" type="button" data-copy="sudo rpm -Uvh ./klardrop.x86_64.rpm" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+              <code>sudo dnf install java-21-openjdk</code>
+              <button class="copy" type="button" data-copy="sudo dnf install java-21-openjdk" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
             </div>
           </div>
-          <p class="linux-card-hint">Available on releases · Or install via one-line script below</p>
+          <p class="linux-card-hint">Then run the one-line installer above</p>
         </div>
       </div>
 
@@ -810,7 +802,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
           </div>
         </div>
-        <p class="linux-pkg-desc">Portable archive with an embedded JRE runtime. Extract to any directory and launch immediately with zero dependencies or root access.</p>
+        <p class="linux-pkg-desc">Portable archive of jars plus a launcher that execs system Java 21+. Extract and run; no bundled JRE, no root required.</p>
         <div class="linux-pkg-action">
           <a class="btn btn-primary linux-dl-btn" id="linux-tarball-btn" href="https://github.com/carlonzo/klardrop/releases/latest/download/klardrop-linux-x64.tar.gz" rel="noopener">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -819,8 +811,8 @@
           <div class="linux-cmd-wrap">
             <div class="linux-cmd-label">Extract &amp; run</div>
             <div class="code">
-              <code>tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop/bin/klardrop</code>
-              <button class="copy" type="button" data-copy="tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop/bin/klardrop" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+              <code>tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop-linux-x64/klardrop/bin/klardrop</code>
+              <button class="copy" type="button" data-copy="tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop-linux-x64/klardrop/bin/klardrop" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
             </div>
           </div>
         </div>
@@ -976,24 +968,12 @@
       return `<div class="mtabs">${heads}</div>${panes}`;
     }
     // a Linux download channel: install command + tarball link. `packages` adds the
-    // native-package row (AUR command + .deb/.rpm).
+    // AUR command (Linux ships a system-JRE tarball; no jpackage .deb/.rpm).
     function linuxChannel(cmd, tarballUrl, size, note, packages, isNightly){
-      const dataSrc = isNightly ? NDATA : DATA;
-      const debUrl = dataSrc && dataSrc.platforms && dataSrc.platforms["linux-deb"];
-      const rpmUrl = dataSrc && dataSrc.platforms && dataSrc.platforms["linux-rpm"];
       let extra = "";
       if (packages) {
-        const debHref = debUrl ? esc(debUrl.url) : `https://github.com/${REPO}/releases`;
-        const rpmHref = rpmUrl ? esc(rpmUrl.url) : `https://github.com/${REPO}/releases`;
-        const debSz = debUrl ? (isNightly ? nsizeFor("linux-deb") : sizeFor("linux-deb")) : "";
-        const rpmSz = rpmUrl ? (isNightly ? nsizeFor("linux-rpm") : sizeFor("linux-rpm")) : "";
-        const pkgLinks = [
-          `<a href="${debHref}" rel="noopener"><small>Debian · Ubuntu</small>.deb${debSz}</a>`,
-          `<a href="${rpmHref}" rel="noopener"><small>Fedora · openSUSE</small>.rpm${rpmSz}</a>`,
-        ].join("");
         extra = `<div class="modal-or">or use your package manager</div>`
           + `<div><div class="opt-label">Arch Linux (AUR)</div>${codeBlock(AUR_CMD)}</div>`
-          + `<div class="sub-links">${pkgLinks}</div>`
           + `<div style="text-align:center;margin-top:6px;"><a href="#linux" class="dl-note" style="color:var(--accent-text);text-decoration:underline;" onclick="document.getElementById('dlModal').classList.remove('open');document.body.style.overflow=''">View all Linux packages &amp; commands →</a></div>`;
       }
       return `<div><div class="opt-label">Install with one command</div>${codeBlock(cmd)}`
@@ -1128,38 +1108,10 @@
       setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = COPY_ICON; }, 1600);
     });
 
-    // dynamically update Linux package links, size badges, and install commands from latest.json
+    // dynamically update Linux tarball link and size from latest.json
     function updateLinuxDownloads(d){
       if(!d || !d.platforms) return;
-      const deb = d.platforms['linux-deb'];
-      const rpm = d.platforms['linux-rpm'];
       const tgz = d.platforms['linux-tarball'];
-
-      if(deb && deb.url){
-        const btn = document.getElementById('linux-deb-btn');
-        if(btn) btn.href = deb.url;
-        const sz = document.getElementById('linux-deb-size');
-        if(sz && deb.size) sz.textContent = fmtSize(deb.size);
-        const debFile = deb.url.split('/').pop();
-        const cmd = `sudo apt install ./${debFile}`;
-        const cmdEl = document.getElementById('linux-deb-cmd');
-        if(cmdEl) cmdEl.textContent = cmd;
-        const cpEl = document.getElementById('linux-deb-copy');
-        if(cpEl) cpEl.dataset.copy = cmd;
-      }
-
-      if(rpm && rpm.url){
-        const btn = document.getElementById('linux-rpm-btn');
-        if(btn) btn.href = rpm.url;
-        const sz = document.getElementById('linux-rpm-size');
-        if(sz && rpm.size) sz.textContent = fmtSize(rpm.size);
-        const rpmFile = rpm.url.split('/').pop();
-        const cmd = `sudo rpm -Uvh ./${rpmFile}`;
-        const cmdEl = document.getElementById('linux-rpm-cmd');
-        if(cmdEl) cmdEl.textContent = cmd;
-        const cpEl = document.getElementById('linux-rpm-copy');
-        if(cpEl) cpEl.dataset.copy = cmd;
-      }
 
       if(tgz && tgz.url){
         const btn = document.getElementById('linux-tarball-btn');
