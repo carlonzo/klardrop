@@ -517,8 +517,10 @@ class FileTransferService : Service() {
     /**
      * Start a foreground transfer for [files], forwarding this caller's temporary read grant for
      * each URI to the service. Must be called from a foreground context (e.g. the share Activity)
-     * that currently holds the grant. [transferId] keys the live-progress entry in [ActiveSends]
-     * that the share sheet observes.
+     * that currently holds the grant — start this while the share sheet is still visible.
+     * [transferId] keys the live-progress entry in [ActiveSends] that the share sheet observes.
+     * The sheet stays open until the transfer completes; Hide after this returns may finish the
+     * Activity without dropping the send.
      */
     fun start(context: Context, deviceId: String, files: List<SendFile>, transferId: String) {
       if (files.isEmpty()) return

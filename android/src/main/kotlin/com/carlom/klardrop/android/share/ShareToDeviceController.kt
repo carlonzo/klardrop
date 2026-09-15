@@ -53,21 +53,22 @@ class ShareToDeviceController(
   }
 
   /**
-   * Fire-and-forget text send. [onProgress] is invoked for every [MessengerSendProgress]
-   * including the initial Pending, so the share sheet can show Connecting immediately
-   * instead of dismissing into a silent wait.
+   * Send shared text and mirror live progress into [ActiveSends] under [transferId] so the
+   * share sheet can stay on Connecting / Sending the same way as a file send.
+   *
+   * [Messenger.send] already writes the outgoing SENDING row — do not also go through a
+   * ViewModel.
    */
-  fun sendText(
-    deviceId: String,
-    text: String,
-    onProgress: ((MessengerSendProgress) -> Unit)? = null,
-  ) {
+  fun sendText(deviceId: String, text: String, transferId: String) {
     coroutines.appScope.launch {
       runCatching {
         messenger.send(deviceId, TextMessage(text = text).toSimpleSendRequest())
           .untilCompleted()
-          .collect { progress -> onProgress?.invoke(progress) }
-      }.onFailure { log("ShareToDeviceController", "Text send failed", it) }
+          .collect { ActiveSends.publish(transferId, it) }
+      }.onFailure { e ->
+        log("ShareToDeviceController", "Text send failed", e)
+        ActiveSends.publish(transferId, MessengerSendProgress.Error(e.message ?: "Transfer failed"))
+      }
     }
   }
 }

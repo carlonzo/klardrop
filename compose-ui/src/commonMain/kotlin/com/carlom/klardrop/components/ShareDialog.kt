@@ -25,6 +25,8 @@ import androidx.compose.ui.window.Dialog
 import com.carlom.klardrop.DiscoveryController
 import com.carlom.klardrop.TrustStatus
 import com.carlom.klardrop.common.communication.MessengerSendProgress
+import com.carlom.klardrop.common.share.ShareSheetDismissPolicy
+import com.carlom.klardrop.common.share.ShareSheetDismissTrigger
 import com.carlom.klardrop.platformFileFromPath
 import com.carlom.klardrop.theme.KdTheme
 import kotlinx.coroutines.delay
@@ -53,8 +55,26 @@ fun ShareDialog(
   var transferProgress by remember { mutableStateOf<MessengerSendProgress?>(null) }
 
   LaunchedEffect(transferProgress) {
-    if (transferProgress is MessengerSendProgress.Completed) {
+    if (
+      ShareSheetDismissPolicy.shouldDismiss(
+        ShareSheetDismissTrigger.Completed,
+        progress = transferProgress,
+        handoffComplete = transferProgress != null,
+      )
+    ) {
       delay(1200)
+      onDismiss()
+    }
+  }
+
+  val onHide = {
+    if (
+      ShareSheetDismissPolicy.shouldDismiss(
+        ShareSheetDismissTrigger.UserHide,
+        progress = transferProgress,
+        handoffComplete = transferProgress != null,
+      )
+    ) {
       onDismiss()
     }
   }
@@ -88,7 +108,14 @@ fun ShareDialog(
           onSelectDevice = { selectedId = it.id },
           onSend = { share ->
             val target = share?.id?.let { id -> devices.firstOrNull { it.deviceId == id } } ?: return@ShareSheet
+            if (files.isEmpty()) {
+              if (ShareSheetDismissPolicy.shouldDismiss(ShareSheetDismissTrigger.EmptyPayload)) {
+                onDismiss()
+              }
+              return@ShareSheet
+            }
             val platformFiles = files.map { platformFileFromPath(it) }
+            // Connecting first so a dismiss cannot land before sendFiles is launched.
             transferProgress = MessengerSendProgress.Pending
             discoveryController.sendFiles(
               deviceId = target.deviceId,
@@ -102,7 +129,7 @@ fun ShareDialog(
       } else {
         SendStatus(
           progress = transferProgress,
-          onHide = onDismiss,
+          onHide = onHide,
         )
       }
     }
@@ -111,8 +138,19 @@ fun ShareDialog(
   val colors = KdTheme.colors
   val radii = KdTheme.radii
 
+  // Same sheet-lifetime rule as share-from-outside: do not close on send or while
+  // Connecting/Sending. Hide after sendFiles has been launched is allowed.
+  val allowSwipeDismiss = ShareSheetDismissPolicy.shouldDismiss(
+    ShareSheetDismissTrigger.SwipeAway,
+    progress = transferProgress,
+    handoffComplete = transferProgress != null,
+  )
+  val onRequestDismiss = {
+    if (allowSwipeDismiss) onDismiss()
+  }
+
   if (isLargeScreen) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = onRequestDismiss) {
       Surface(
         modifier = Modifier.widthIn(min = 380.dp, max = 460.dp),
         shape = radii.shapeXl,
@@ -123,7 +161,7 @@ fun ShareDialog(
     }
   } else {
     ModalBottomSheet(
-      onDismissRequest = onDismiss,
+      onDismissRequest = onRequestDismiss,
       sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
       shape = radii.shapeSheet,
       containerColor = colors.bg1,
