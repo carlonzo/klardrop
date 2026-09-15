@@ -6,8 +6,8 @@
 # with `yay -S klardrop-bin` (or any other AUR helper / a manual makepkg -si).
 #
 # `-bin` because this packages the prebuilt release tarball rather than compiling
-# from source: the payload is a jpackage app-image that bundles its own JRE, so
-# there is nothing for makepkg to build and no java runtime dependency to declare.
+# from source. The payload is ProGuard'd jars plus a launcher that execs the
+# system JRE; `java-runtime>=21` is a real dependency (bytecode targets JVM 21).
 #
 # The layout mirrors what packaging/install.sh produces for a root install
 # (/opt/klardrop + a launcher on PATH), so the app's own install-channel detection
@@ -21,11 +21,11 @@ pkgdesc="Share files and clipboard with nearby devices over the local network (A
 arch=('x86_64')
 url="https://github.com/carlonzo/klardrop"
 license=('Apache-2.0')
-depends=('hicolor-icon-theme')
+depends=('java-runtime>=21' 'hicolor-icon-theme')
 provides=('klardrop')
 conflicts=('klardrop')
-# The bundled runtime is already stripped, and running strip over a jlink image
-# corrupts its embedded modules file.
+# Don't strip native libs (Skiko .so). Harmless leftover from the jlink image
+# era; still correct for the remaining JNI binaries.
 options=('!strip')
 source=("klardrop-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkgver}/klardrop-linux-x64.tar.gz")
 sha256sums=('@SHA256@')
@@ -33,7 +33,7 @@ sha256sums=('@SHA256@')
 package() {
   cd "${srcdir}/klardrop-linux-x64"
 
-  # The app-image (launcher + lib/ + bundled runtime), kept whole.
+  # The app-image (wrapper + lib/app jars and Skiko), kept whole.
   install -d "${pkgdir}/opt/klardrop"
   cp -a klardrop/. "${pkgdir}/opt/klardrop/"
 

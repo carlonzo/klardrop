@@ -51,6 +51,8 @@ kotlin {
 compose.desktop {
   application {
     mainClass = "MainKt"
+    // Keep packaging/linux/klardrop in sync — the Linux tarball execs system
+    // java with these flags rather than going through jpackage's launcher.
     jvmArgs(
       "-Xms24m",
       "-Xmx192m",
