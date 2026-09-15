@@ -43,10 +43,16 @@ fun SendStatus(progress: MessengerSendProgress?, onHide: () -> Unit) {
       is MessengerSendProgress.Error ->
         Text("Couldn't send: ${progress.message}", style = KdTheme.typography.body)
 
-      else -> { // null / Pending / AwaitingRecipient
+      MessengerSendProgress.AwaitingRecipient -> {
         CircularProgressIndicator()
         Spacer(Modifier.height(spacing.s3))
-        Text("Waiting for receiver to accept…", style = KdTheme.typography.body)
+        Text("Waiting for the recipient to accept…", style = KdTheme.typography.body)
+      }
+
+      else -> { // null / Pending
+        CircularProgressIndicator()
+        Spacer(Modifier.height(spacing.s3))
+        Text("Connecting…", style = KdTheme.typography.body)
       }
     }
 

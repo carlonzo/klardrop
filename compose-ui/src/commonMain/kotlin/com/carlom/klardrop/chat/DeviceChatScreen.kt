@@ -259,7 +259,7 @@ fun DeviceChatScreen(
                 )
             }
 
-            if (sortedMessages.isEmpty()) {
+            if (sortedMessages.isEmpty() && uiState.fileTransferStatusText == null) {
                 ChatEmptyState(
                     deviceName = deviceName,
                     isOwned = isOwned,
@@ -267,6 +267,10 @@ fun DeviceChatScreen(
                     onPickPhotos = { imagePickerLauncher.launch() },
                     modifier = Modifier.weight(1f),
                 )
+            } else if (sortedMessages.isEmpty()) {
+                // Connecting/Receiving strip is up but the bubble hasn't landed yet —
+                // keep the composer at the bottom instead of the "get started" empty state.
+                Spacer(Modifier.weight(1f))
             } else {
                 MessagesList(
                     messages = sortedMessages,

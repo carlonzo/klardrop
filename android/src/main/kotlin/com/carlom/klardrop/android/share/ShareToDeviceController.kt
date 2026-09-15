@@ -3,6 +3,7 @@ package com.carlom.klardrop.android.share
 import com.carlom.klardrop.DeviceUi
 import com.carlom.klardrop.ShowDevicesControllerHelper
 import com.carlom.klardrop.common.communication.Messenger
+import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.Reachability
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.toSimpleSendRequest
@@ -51,11 +52,21 @@ class ShareToDeviceController(
     controllerScope.cancel()
   }
 
-  /** Fire-and-forget text send. Text carries no content grant, so nothing needs to be cached. */
-  fun sendText(deviceId: String, text: String) {
+  /**
+   * Fire-and-forget text send. [onProgress] is invoked for every [MessengerSendProgress]
+   * including the initial Pending, so the share sheet can show Connecting immediately
+   * instead of dismissing into a silent wait.
+   */
+  fun sendText(
+    deviceId: String,
+    text: String,
+    onProgress: ((MessengerSendProgress) -> Unit)? = null,
+  ) {
     coroutines.appScope.launch {
       runCatching {
-        messenger.send(deviceId, TextMessage(text = text).toSimpleSendRequest()).untilCompleted().collect { }
+        messenger.send(deviceId, TextMessage(text = text).toSimpleSendRequest())
+          .untilCompleted()
+          .collect { progress -> onProgress?.invoke(progress) }
       }.onFailure { log("ShareToDeviceController", "Text send failed", it) }
     }
   }

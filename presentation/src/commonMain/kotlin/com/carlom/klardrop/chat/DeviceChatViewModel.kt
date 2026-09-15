@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -121,11 +120,13 @@ class DeviceChatViewModel(
     viewModelScope.launch {
       messageReceiver.latestUpdates.collect { updates ->
         when (val status = updates[deviceId]?.status) {
-          // Deliberately no [ReceiveMessageStatus.Started] branch: that status is minted for
-          // every inbound message including plain text, and it has no terminal counterpart if
-          // opening the sink fails — treating it as "transfer in flight" would flash the status
-          // strip on text receives and could pin it on permanently. [beginReceive] follows it
-          // with Progress(0) immediately anyway.
+          // Started is minted as soon as an inbound frame is attributed to this device —
+          // including trusted text, which otherwise has no chrome until handleIncoming
+          // writes the bubble. A short "Receiving…" strip (no file fraction) covers that
+          // window. Terminal Failed/Completed below clear it so a sink that never opens
+          // cannot pin the line forever.
+          is ReceiveMessageStatus.Started ->
+            _uiState.update { it.transferring(fraction = null, statusText = "Receiving…") }
           is ReceiveMessageStatus.Progress -> {
             val percentage = status.messages.lastOrNull()?.second
             if (percentage != null) {
@@ -146,7 +147,10 @@ class DeviceChatViewModel(
 
     viewModelScope.launch {
       try {
-        _uiState.value = _uiState.value.copy(error = null)
+        // Immediate chrome: files already set "Preparing to send…" here, but text used to
+        // wait on `.lastOrNull()` and paint nothing until the peer came online. Connecting
+        // is the grandma-friendly name for "we have the intent, no live link yet".
+        _uiState.update { it.copy(error = null).transferring(fraction = null, statusText = "Connecting…") }
 
         val textMessage = TextMessage(text = text)
 
@@ -155,16 +159,31 @@ class DeviceChatViewModel(
         // how many times the retry loop re-attempts the transport. The VM must not persist
         // anything itself here — doing so would render a second, duplicate bubble alongside
         // the row Messenger.send already owns (see docs/connection-review.md F12/F13).
-        val finalStatus = messenger.send(deviceId, textMessage.toSimpleSendRequest())
+        var finalStatus: MessengerSendProgress? = null
+        messenger.send(deviceId, textMessage.toSimpleSendRequest())
           .untilCompleted()
-          .lastOrNull()
+          .collect { progress ->
+            finalStatus = progress
+            when (progress) {
+              MessengerSendProgress.Pending ->
+                _uiState.update { it.transferring(fraction = null, statusText = "Connecting…") }
+              is MessengerSendProgress.InProgress ->
+                _uiState.update { it.transferring(fraction = null, statusText = "Sending…") }
+              MessengerSendProgress.AwaitingRecipient ->
+                _uiState.update { it.transferring(fraction = null, statusText = "Waiting for the recipient to accept…") }
+              is MessengerSendProgress.Completed, is MessengerSendProgress.Error ->
+                transferIdle()
+            }
+          }
 
-        if (finalStatus is MessengerSendProgress.Error) {
+        val error = finalStatus as? MessengerSendProgress.Error
+        if (error != null) {
           _uiState.update {
-            it.copy(error = "Failed to send message: ${finalStatus.message}")
+            it.copy(error = "Failed to send message: ${error.message}")
           }
         }
       } catch (e: Exception) {
+        transferIdle()
         _uiState.value = _uiState.value.copy(
           error = "Failed to send message: ${e.message}"
         )
@@ -396,10 +415,10 @@ data class ChatUiState(
    */
   val fileTransferActive: Boolean = false,
   /**
-   * Short human label for the current non-streaming phase ("Connecting…", "Waiting for the
-   * recipient to accept…"), or null once bytes are actually flowing. Surfaced as a banner so
-   * there is visible feedback even before the message bubble exists — the bubble is only
-   * created once the transfer's DB rows are inserted, which is after the connection is up.
+   * Short human label for the current non-streaming phase ("Connecting…", "Sending…",
+   * "Receiving…", "Waiting for the recipient to accept…"), or null once bytes are actually
+   * flowing (files) or the send/receive has finished (text). Surfaced as a strip so there is
+   * visible feedback even before the message bubble exists.
    */
   val fileTransferStatusText: String? = null,
   /**
