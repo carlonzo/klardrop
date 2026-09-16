@@ -11,6 +11,8 @@ actual class ClipboardReaderWriter(private val context: Context) {
     return clipManager.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
   }
 
+  actual fun readForSync(): String = read()
+
   actual fun write(text: String) {
     clipManager.setPrimaryClip(android.content.ClipData.newPlainText("Text", text))
   }

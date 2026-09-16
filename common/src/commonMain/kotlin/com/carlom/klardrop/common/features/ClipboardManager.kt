@@ -13,7 +13,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 expect class ClipboardReaderWriter {
+  /** User-initiated (chat Paste). iOS always reads `string`. */
   fun read(): String
+  /** Background poller only. iOS applies the session Allow Paste gate. */
+  fun readForSync(): String
   fun write(text: String)
 }
 
@@ -42,9 +45,10 @@ class ClipboardManager(
     val collectionJob = coroutines.appScope.launch {
 
       while (isActive) {
-        read().takeIf { it.isNotEmpty() }?.let {
-          send(it)
-        }
+        runCatching { readerWriter.readForSync() }
+          .getOrDefault("")
+          .takeIf { it.isNotEmpty() }
+          ?.let { send(it) }
 
         delay(500)
       }

@@ -6,6 +6,8 @@ class ClipboardReaderWriter() {
 
   fun read(): String = clipboard
 
+  fun readForSync(): String = read()
+
   fun write(text: String) {
     clipboard = text
   }

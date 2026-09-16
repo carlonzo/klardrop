@@ -23,6 +23,8 @@ actual class ClipboardReaderWriter {
     return cached
   }
 
+  actual fun readForSync(): String = read()
+
   actual fun write(text: String) {
     pasteboard.clearContents()
     pasteboard.setString(text, forType = NSPasteboardTypeString)
