@@ -12,6 +12,8 @@ actual class ClipboardReaderWriter {
     return clip.getData(DataFlavor.stringFlavor).toString()
   }
 
+  actual fun readForSync(): String = read()
+
   actual fun write(text: String) {
     clip.setContents(StringSelection(text), null)
   }
