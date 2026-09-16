@@ -82,8 +82,8 @@ internal class DiscoveryIngestFilter(
 
   /** mDNS state was rebuilt (network change) — prior verdicts may be stale. */
   fun onMdnsRebuilt() {
-    invalidLoggedKeys.clear()
-    lastDuplicateTouchMs.clear()
+    invalidLoggedKeys = emptySet()
+    lastDuplicateTouchMs = emptyMap()
   }
 
   companion object {
