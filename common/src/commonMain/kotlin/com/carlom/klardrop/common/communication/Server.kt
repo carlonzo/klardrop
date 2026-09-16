@@ -229,7 +229,16 @@ class Server(
       return
     }
 
+    // Undecodable first messages are inbound noise (foreign/old peers, half-open sockets,
+    // port scans): log locally and drop the connection instead of throwing to Sentry.
     val protocol = detectProtocol(firstMessage)
+    if (protocol == null) {
+      val firstByteHex = if (firstMessage.isEmpty()) "empty"
+        else (firstMessage[0].toInt() and 0xFF).toString(16).padStart(2, '0').uppercase()
+      log("Server", "Unrecognized protocol (first byte 0x$firstByteHex) from $remoteAddress — closing")
+      socket.close()
+      return
+    }
     log("Server", "Detected protocol: $protocol for connection from $remoteAddress")
 
     when (protocol) {
@@ -251,12 +260,12 @@ class Server(
    * 3. A Nearby Share OfflineFrame is accepted only when it carries a CONNECTION_REQUEST.
    *
    * @param payload The complete first message including the 4-byte length prefix
-   * @return The detected protocol
-   * @throws IllegalArgumentException if the protocol cannot be determined
+   * @return The detected protocol, or null when the payload matches neither protocol
+   *   (inbound noise — the caller logs locally and closes the connection)
    */
-  internal fun detectProtocol(payload: ByteArray): Protocol {
+  internal fun detectProtocol(payload: ByteArray): Protocol? {
     if (payload.isEmpty()) {
-      throw IllegalArgumentException("Message too short: ${payload.size} bytes")
+      return null
     }
 
     val firstByte = payload[0]
@@ -289,8 +298,9 @@ class Server(
       return Protocol.NEARBY_SHARE
     }
 
-    val firstByteHex = (firstByte.toInt() and 0xFF).toString(16).padStart(2, '0').uppercase()
-    throw IllegalArgumentException("Unrecognized protocol: first byte 0x$firstByteHex")
+    // Neither parser accepted the payload: inbound noise, not a product bug.
+    // Returning null (instead of throwing) keeps this off the Sentry dashboard.
+    return null
   }
 
   private fun isValidNearbyConnectionRequest(payload: ByteArray): Boolean {

@@ -26,7 +26,7 @@ import kotlinx.serialization.protobuf.ProtoBuf
 import okio.ByteString.Companion.toByteString
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertNotEquals
 
 /**
@@ -110,10 +110,7 @@ class ServerTest {
 
   @Test
   fun testDetectProtocolWithTooShortMessage() {
-    assertFailsWith<IllegalArgumentException> {
-      val server = createTestServer()
-      server.detectProtocol(byteArrayOf()) // Empty payload
-    }
+    assertNull(createTestServer().detectProtocol(byteArrayOf())) // Empty payload
   }
 
   @Test
@@ -124,11 +121,14 @@ class ServerTest {
     val messageType = MessageType.HANDSHAKE.id
     val payload = byteArrayOf(messageType) + invalidPayload
 
-    // Should fail to detect any protocol
-    assertFailsWith<IllegalArgumentException> {
-      val server = createTestServer()
-      server.detectProtocol(payload)
-    }
+    // Should detect no protocol (inbound noise -> null, caller closes without Sentry)
+    assertNull(createTestServer().detectProtocol(payload))
+  }
+
+  @Test
+  fun testDetectProtocolWithZeroFirstByteReturnsNull() {
+    // KLARDROP-JN: first byte 0x00 from a foreign/half-open peer must not throw.
+    assertNull(createTestServer().detectProtocol(byteArrayOf(0x00, 0x01, 0x02, 0x03)))
   }
 
   @Test
@@ -137,11 +137,8 @@ class ServerTest {
     // but also isn't valid Nearby Share
     val invalidPayload = byteArrayOf(42, 1, 2, 3, 4) // Invalid protobuf starting with non-Klardrop type
 
-    // Should fail to detect any protocol
-    assertFailsWith<IllegalArgumentException> {
-      val server = createTestServer()
-      server.detectProtocol(invalidPayload)
-    }
+    // Should detect no protocol (inbound noise -> null, caller closes without Sentry)
+    assertNull(createTestServer().detectProtocol(invalidPayload))
   }
 
   @Test
@@ -157,11 +154,8 @@ class ServerTest {
 
     val serializedFrame = offlineFrame.encode()
 
-    // Should fail to detect as Nearby Share since it's not a CONNECTION_REQUEST
-    assertFailsWith<IllegalArgumentException> {
-      val server = createTestServer()
-      server.detectProtocol(serializedFrame)
-    }
+    // Should not detect as Nearby Share since it's not a CONNECTION_REQUEST (null, no Sentry)
+    assertNull(createTestServer().detectProtocol(serializedFrame))
   }
 
   @Test
@@ -222,22 +216,16 @@ class ServerTest {
   }
 
   @Test
-  fun testDetectProtocolWithGarbageInKlardropRangeThrowsNewMessage() {
+  fun testDetectProtocolWithGarbageInKlardropRangeReturnsNull() {
     // Garbage whose first byte sits in the Klardrop MessageType range must be rejected by BOTH
-    // parsers and surface the new "Unrecognized protocol" message naming the first byte.
+    // parsers and yield null (caller logs locally and closes) instead of throwing to Sentry.
     val server = createTestServer()
 
     val collisionByteGarbage = byteArrayOf(0x0A, 0x01, 0x02, 0x03) // 0x0A = TRUST_PAIRING_REQUEST id
-    val exception = assertFailsWith<IllegalArgumentException> {
-      server.detectProtocol(collisionByteGarbage)
-    }
-    assertEquals("Unrecognized protocol: first byte 0x0A", exception.message)
+    assertNull(server.detectProtocol(collisionByteGarbage))
 
     val otherRangeByteGarbage = byteArrayOf(0x0E, 0x01, 0x02, 0x03) // 0x0E = TRUST_REVOCATION id
-    val otherException = assertFailsWith<IllegalArgumentException> {
-      server.detectProtocol(otherRangeByteGarbage)
-    }
-    assertEquals("Unrecognized protocol: first byte 0x0E", otherException.message)
+    assertNull(server.detectProtocol(otherRangeByteGarbage))
   }
 
   /**
