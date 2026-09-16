@@ -542,7 +542,6 @@ class ConnectionMessenger internal constructor(
   fun isClosed(): Boolean {
     // Check if the transport is explicitly closed (socket / BLE session).
     if (connection.isClosed) {
-      log("ConnectionMessenger: [DEBUG] isClosed() = true - transport is explicitly closed for ${connection.deviceId}")
       return true
     }
 
@@ -550,16 +549,12 @@ class ConnectionMessenger internal constructor(
     val readClosed = readChannel.isClosedForRead
     val writeClosed = writeChannel.isClosedForWrite
 
-    log("ConnectionMessenger: [DEBUG] isClosed() check for ${connection.deviceId}: readClosed=$readClosed, writeClosed=$writeClosed")
-
     if (readClosed || writeClosed) {
-      log("ConnectionMessenger: [DEBUG] Detected channel closure for ${connection.deviceId}, closing transport (readClosed=$readClosed, writeClosed=$writeClosed)")
       runCatching { connection.close() }
         .onFailure { log("Failed closing the connection", it) }
       return true
     }
 
-    log("ConnectionMessenger: [DEBUG] isClosed() = false for ${connection.deviceId}")
     return false
   }
 
