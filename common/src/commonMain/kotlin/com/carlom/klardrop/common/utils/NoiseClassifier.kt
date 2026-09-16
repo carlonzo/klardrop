@@ -31,13 +31,30 @@ fun Throwable.isExpectedNetworkNoise(): Boolean {
 
 private fun Throwable.matchesKnownNoise(): Boolean {
   val name = this::class.simpleName ?: return false
-  val msg = message.orEmpty()
+  return isKnownNoiseName(name, message.orEmpty())
+}
+
+/**
+ * Name+message half of the classifier, for Sentry event payloads where no [Throwable]
+ * instance exists: native-SDK auto-capture (uncaught coroutine cancellations reaching the
+ * thread's uncaught-exception handler) never passes through [Throwable.isExpectedNetworkNoise],
+ * so the `beforeSend` hook in `CrashReporter` re-applies the same table to the event's
+ * exception type/value. Native SDKs report the fully qualified class name — strip it first.
+ */
+internal fun isKnownNoiseName(exceptionType: String, message: String): Boolean {
+  val name = exceptionType.substringAfterLast('.')
+  val msg = message
   return when (name) {
     // Coroutine cancelled because the parent scope/connection closed — expected lifecycle,
     // not a product bug. The dashboard was flooded with "StandaloneCoroutine was cancelled"
     // (ConnectionMessenger read loop after heartbeat close / explicit close).
     "CancellationException",
-    "JobCancellationException" -> true
+    "JobCancellationException",
+    // withTimeout (UKEY2 handshake, protocol-detection read) surfacing as an uncaught
+    // error — e.g. the peer backgrounded mid-handshake. Same lifecycle class as above,
+    // but a subclass with its own simpleName, so it needs its own entry.
+    // ponytail: name-match; a real hung-handshake bug would need a distinct message.
+    "TimeoutCancellationException" -> true
 
     // Peer closed the channel / OS aborted the connection.
     "ClosedByteChannelException",

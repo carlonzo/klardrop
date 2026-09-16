@@ -1,9 +1,13 @@
 package com.klardrop.common
 
 import com.carlom.klardrop.common.KlardropVersion
+import com.carlom.klardrop.common.utils.LogBuffer
 import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
+import com.carlom.klardrop.common.utils.isKnownNoiseName
 import io.sentry.kotlin.multiplatform.Sentry
+import io.sentry.kotlin.multiplatform.SentryEvent
 import io.sentry.kotlin.multiplatform.SentryLevel
+import io.sentry.kotlin.multiplatform.SentryOptions
 import io.sentry.kotlin.multiplatform.protocol.Breadcrumb
 import io.sentry.kotlin.multiplatform.protocol.SentryId
 import io.sentry.kotlin.multiplatform.protocol.User
@@ -27,9 +31,9 @@ object CrashReporter {
 
   /**
    * Reports [throwable] unless it is expected protocol noise (peer reset, connect
-   * refused, BLE handshake disconnect). Filtering here rather than in a `beforeSend`
-   * hook keeps the behaviour identical across platforms and matches what the Bugsnag
-   * wrappers did.
+   * refused, BLE handshake disconnect). Call-site filtering keeps behaviour identical
+   * across platforms; the `beforeSend` hook in [applyCrashReporterOptions] is the
+   * backstop for native-SDK auto-capture, which never passes through here.
    */
   fun notify(throwable: Throwable) {
     if (throwable.isExpectedNetworkNoise()) return
@@ -43,8 +47,9 @@ object CrashReporter {
    * submission, so this captures a message event first and attaches [comments] to it. That
    * indirection is the whole reason this is worth having: the event carries the current scope,
    * which means the last 100 breadcrumbs — every [com.carlom.klardrop.common.utils.log] call, see
-   * `logger.kt` — ride along with the report. A user hitting a connection problem then produces
-   * something debuggable, instead of the "it wouldn't connect" that a plain feedback form gives.
+   * `logger.kt` — ride along with the report. Breadcrumbs churn fast during reconnect storms, so
+   * the report additionally carries the [LogBuffer] tail (up to [LOG_TAIL_LINES] recent lines) as
+   * the `log_tail` extra — a wider window that survives the storm the user is reporting about.
    *
    * Every report groups under one Sentry issue (same message title) and carries `report:user`, so
    * they can be found without trawling crashes. [ReportOutcome.Disabled] is returned rather than
@@ -56,6 +61,8 @@ object CrashReporter {
     val eventId = Sentry.captureMessage(USER_REPORT_TITLE) { scope ->
       scope.level = SentryLevel.INFO
       scope.setTag("report", "user")
+      // ponytail: joined string, not structured lines — Sentry KMP setExtra only takes String.
+      scope.setExtra(LOG_TAIL_EXTRA, LogBuffer.snapshot(LOG_TAIL_LINES).joinToString("\n"))
     }
     // A dropped event (sampling, an inbound filter, rate limit) yields the nil id, and feedback
     // attached to it would be unreachable — say it failed rather than pretend otherwise.
@@ -100,6 +107,8 @@ object CrashReporter {
   }
 
   private const val USER_REPORT_TITLE = "User report"
+  private const val LOG_TAIL_EXTRA = "log_tail"
+  private const val LOG_TAIL_LINES = 200
 }
 
 /** Result of [CrashReporter.reportUserFeedback], so the UI can tell the user the truth. */
@@ -180,8 +189,31 @@ internal expect val crashReporterPlatform: String
 fun initCrashReporter(appVersion: String, isProduction: Boolean) {
   if (!isProduction || CrashReporterConfig.DSN.isEmpty()) return
   Sentry.init { options ->
-    options.dsn = CrashReporterConfig.DSN
-    options.release = appVersion
-    options.environment = CrashReporterConfig.environmentFor(appVersion)
+    applyCrashReporterOptions(options, appVersion)
   }
+}
+
+/**
+ * Shared SDK options for every platform entry point (common + Android).
+ *
+ * The `beforeSend` drop-filter re-applies the noise table to events the native SDKs
+ * capture by themselves — uncaught coroutine cancellations landing on the thread's
+ * uncaught-exception handler (Sentry KLARDROP-JW/JY: bare `JobCancellationException`
+ * with no stacktrace) bypass `CrashReporter.notify` entirely, so call-site filtering
+ * alone cannot stop them. Returning null drops the event. Message-only events (user
+ * reports) carry no exceptions and always pass through.
+ */
+internal fun applyCrashReporterOptions(options: SentryOptions, appVersion: String) {
+  options.dsn = CrashReporterConfig.DSN
+  options.release = appVersion
+  options.environment = CrashReporterConfig.environmentFor(appVersion)
+  options.beforeSend = { event ->
+    if (shouldDropEvent(event)) null else event
+  }
+}
+
+/** Pure decision half of the `beforeSend` hook, so it stays unit-testable. */
+internal fun shouldDropEvent(event: SentryEvent): Boolean {
+  val exception = event.exceptions?.firstOrNull() ?: return false
+  return isKnownNoiseName(exception.type.orEmpty(), exception.value.orEmpty())
 }
