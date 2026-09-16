@@ -37,7 +37,12 @@ private fun Throwable.matchesKnownNoise(): Boolean {
     // not a product bug. The dashboard was flooded with "StandaloneCoroutine was cancelled"
     // (ConnectionMessenger read loop after heartbeat close / explicit close).
     "CancellationException",
-    "JobCancellationException" -> true
+    "JobCancellationException",
+    // withTimeout (UKEY2 handshake, protocol-detection read) surfacing as an uncaught
+    // error — e.g. the peer backgrounded mid-handshake. Same lifecycle class as above,
+    // but a subclass with its own simpleName, so it needs its own entry.
+    // ponytail: name-match; a real hung-handshake bug would need a distinct message.
+    "TimeoutCancellationException" -> true
 
     // Peer closed the channel / OS aborted the connection.
     "ClosedByteChannelException",
