@@ -47,6 +47,31 @@ class NoiseClassifierTest {
   }
 
   @Test
+  fun handshakeTimeout_isNoise() {
+    // KLARDROP-JP: withTimeout(UKEY2_HANDSHAKE_TIMEOUT_MS) when the peer goes away
+    // mid-handshake (e.g. iOS backgrounded). The real type's single-arg constructor
+    // is internal, so mirror the ClosedWriteChannel test below: local subclass with
+    // the production simpleName, which is what the classifier matches on.
+    class TimeoutCancellationException(msg: String) : CancellationException(msg)
+    assertTrue(
+      TimeoutCancellationException("Timed out waiting for 10000 ms").isExpectedNetworkNoise(),
+    )
+  }
+
+  @Test
+  fun handshakeTimeoutAsCause_isNoise() {
+    // Handshake wrappers: the timeout sits deeper in the cause chain under a
+    // non-matching outer name, so the walk must find it.
+    class TimeoutCancellationException(msg: String) : CancellationException(msg)
+    assertTrue(
+      RuntimeException(
+        "UKEY2 responder handshake failed",
+        TimeoutCancellationException("Timed out waiting for 10000 ms"),
+      ).isExpectedNetworkNoise(),
+    )
+  }
+
+  @Test
   fun ackTimeout_isStillReported() {
     assertFalse(
       IllegalStateException(
