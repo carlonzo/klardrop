@@ -551,7 +551,7 @@ class ConnectionMessenger internal constructor(
 
     if (readClosed || writeClosed) {
       runCatching { connection.close() }
-        .onFailure { log("Failed closing the connection", it) }
+        .onFailure { logLocal("ConnectionMessenger", "Failed closing the connection", it) }
       return true
     }
 
