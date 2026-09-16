@@ -1,11 +1,16 @@
 package com.carlom.klardrop.common.network
 
 import com.carlom.klardrop.common.utils.log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.SharingStarted
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import kotlin.time.Duration.Companion.seconds
@@ -28,8 +33,18 @@ actual class NetworkLifecycleMonitor(
   private val events: Flow<NetworkChangeEvent>? = null,
 ) {
 
-  actual fun observe(): Flow<NetworkChangeEvent> =
-    events ?: flow {
+  // One shared poll loop no matter how many consumers call observe() (ConnectionsPool,
+  // EagerReachabilityConnector, DiscoveryNetwork each collect). Previously every observe()
+  // built a fresh cold flow, so a single boot ran three identical 5s NIC poll loops.
+  // ponytail: scope is never cancelled — the desktop instance is a process-lifetime singleton.
+  private val pollScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+  private val sharedPoll: SharedFlow<NetworkChangeEvent> by lazy {
+    pollUpstream().shareIn(pollScope, SharingStarted.Lazily)
+  }
+
+  actual fun observe(): Flow<NetworkChangeEvent> = events ?: sharedPoll
+
+  private fun pollUpstream(): Flow<NetworkChangeEvent> = flow {
     var previous = snapshot()
     log("NetworkLifecycleMonitor", "starting NIC polling; initial snapshot=${previous.size}")
     while (true) {
