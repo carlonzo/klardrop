@@ -1,5 +1,7 @@
 package com.carlom.klardrop.common.discovery
 
+import kotlin.concurrent.Volatile
+
 /**
  * Dedupe + log-throttle decisions for the mDNS ingestion seam in [DiscoveryNetwork].
  *
@@ -27,8 +29,15 @@ internal class DiscoveryIngestFilter(
   private val duplicateTouchIntervalMs: Long = DUPLICATE_TOUCH_INTERVAL_MS,
 ) {
 
-  private val lastDuplicateTouchMs = mutableMapOf<String, Long>()
-  private val invalidLoggedKeys = mutableSetOf<String>()
+  // Copy-on-write + @Volatile: the Klardrop and Nearby discover collectors both touch
+  // these from discoveryScope coroutines, and commonMain has no ConcurrentHashMap.
+  // A lost update just means one extra/skipped liveness touch — the 5-minute TTL
+  // headroom absorbs it. Both maps are capped (see MAX_KEYS) so a long-lived
+  // process can't accumulate an entry per transient peer ever seen.
+  @Volatile
+  private var lastDuplicateTouchMs: Map<String, Long> = emptyMap()
+  @Volatile
+  private var invalidLoggedKeys: Set<String> = emptySet()
 
   fun classify(
     deviceInfo: DeviceInfo,
@@ -50,9 +59,12 @@ internal class DiscoveryIngestFilter(
    */
   fun touchDueForDuplicate(deviceId: String): Boolean {
     val now = nowMs()
-    val last = lastDuplicateTouchMs[deviceId]
+    val current = lastDuplicateTouchMs
+    val last = current[deviceId]
     return if (last == null || now - last >= duplicateTouchIntervalMs) {
-      lastDuplicateTouchMs[deviceId] = now
+      var pruned = current
+      if (pruned.size >= MAX_KEYS) pruned = emptyMap()
+      lastDuplicateTouchMs = pruned + (deviceId to now)
       true
     } else {
       false
@@ -61,8 +73,11 @@ internal class DiscoveryIngestFilter(
 
   /** One-shot per service key; callers reset via [onMdnsRebuilt]. */
   fun shouldLogInvalid(serviceKey: String): Boolean {
-    if (invalidLoggedKeys.size > MAX_INVALID_KEYS) invalidLoggedKeys.clear()
-    return invalidLoggedKeys.add(serviceKey)
+    var current = invalidLoggedKeys
+    if (current.size >= MAX_KEYS) current = emptySet()
+    if (serviceKey in current) return false
+    invalidLoggedKeys = current + serviceKey
+    return true
   }
 
   /** mDNS state was rebuilt (network change) — prior verdicts may be stale. */
@@ -79,7 +94,7 @@ internal class DiscoveryIngestFilter(
      */
     const val DUPLICATE_TOUCH_INTERVAL_MS = 30_000L
 
-    private const val MAX_INVALID_KEYS = 512
+    private const val MAX_KEYS = 512
   }
 }
 

@@ -107,4 +107,16 @@ class DiscoveryIngestFilterTest {
     assertFalse(filter.touchDueForDuplicate("dae596bf"))
     assertFalse(filter.shouldLogInvalid("k"))
   }
+
+  @Test
+  fun mapsStayBoundedOverManyTransientPeers() {
+    val filter = DiscoveryIngestFilter(nowMs = { 0L })
+    repeat(600) { i ->
+      filter.touchDueForDuplicate("peer-$i")
+      filter.shouldLogInvalid("key-$i")
+    }
+    // Cap tripped and reset: everything is due/loggable again, nothing throws.
+    assertTrue(filter.touchDueForDuplicate("peer-0"))
+    assertTrue(filter.shouldLogInvalid("key-0"))
+  }
 }
