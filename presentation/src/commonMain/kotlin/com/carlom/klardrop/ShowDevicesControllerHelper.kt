@@ -32,8 +32,15 @@ class ShowDevicesControllerHelper(
 
   init {
     coroutineScope.launch {
+      // Last snapshot already described in the log, so timestamp-only bumps stay silent.
+      var previouslyLogged = emptyMap<String, DiscoveryDevice>()
       combine(
-        visibleDevices.onEach { log("VisibleDevices", "emitting: $it") },
+        visibleDevices.onEach {
+          visibleDevicesChangeSummary(previouslyLogged, it)?.let { summary ->
+            log("VisibleDevices", summary)
+          }
+          previouslyLogged = it
+        },
         messageRepository.getAllDevicesWithUnreadCounts(),
         reachabilitySource,
         trustedDevices,
@@ -139,4 +146,30 @@ class ShowDevicesControllerHelper(
     }
   }
 
+}
+
+/**
+ * One-line summary of what changed between two visible-device snapshots, ignoring
+ * lastSeenTimestamp-only bumps (every mDNS re-resolution touches it and would otherwise
+ * re-dump the whole map several times a second). Returns null when nothing
+ * debug-relevant changed, so the call site stays silent in steady state.
+ */
+internal fun visibleDevicesChangeSummary(
+  previous: Map<String, DiscoveryDevice>,
+  current: Map<String, DiscoveryDevice>,
+): String? {
+  val added = (current.keys - previous.keys).sorted()
+  val removed = (previous.keys - current.keys).sorted()
+  val changed = current.keys.intersect(previous.keys).filter { id ->
+    val old = previous.getValue(id)
+    val new = current.getValue(id)
+    old.deviceInfo != new.deviceInfo || old.deviceConnections.toSet() != new.deviceConnections.toSet()
+  }.sorted()
+  if (added.isEmpty() && removed.isEmpty() && changed.isEmpty()) return null
+  return buildString {
+    append("VisibleDevices changed (${current.size} total)")
+    if (added.isNotEmpty()) append("; +$added")
+    if (removed.isNotEmpty()) append("; -$removed")
+    if (changed.isNotEmpty()) append("; ~$changed")
+  }
 }
