@@ -14,7 +14,6 @@ import kotlinx.coroutines.withContext
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
@@ -122,24 +121,59 @@ class KlardropEncryptedTransportTest {
 
     assertTrue(aliceCipher.authenticated, "Alice should authenticate Bob's binding signature")
     assertTrue(bobCipher.authenticated, "Bob should authenticate Alice's binding signature")
+    // A healthy handshake must not disturb valid trust entries.
+    assertTrue(alice.isTrusted(bobId), "Alice should still trust Bob after a valid handshake")
+    assertTrue(bob.isTrusted(aliceId), "Bob should still trust Alice after a valid handshake")
   }
 
   @Test
-  fun mismatchedBindingKeyAbortsForTrustedPeer() = runTest {
+  fun mismatchedBindingKeyHealsToUnauthenticatedInsteadOfAborting() = runTest {
     val (alice, aliceStorage) = newManager(aliceId)
     val (bob, bobStorage) = newManager(bobId)
 
-    // Alice trusts "bob" but holds the WRONG ECDSA key for him (e.g. an active MITM relaying the
-    // handshake, or a key-rotation glitch). Bob's real binding signature won't verify → Alice
-    // must abort the connection. Use a fresh, unrelated device key as the mismatched key.
+    // Alice trusts "bob" but holds the WRONG ECDSA key for him (peer reset/reinstalled and
+    // rotated its identity key while Alice still holds the old one). The handshake must heal
+    // — drop the stale entry and continue unauthenticated — instead of aborting the
+    // connection on every redial (the Sentry JR/JX reconnect storm). Use a fresh, unrelated
+    // device key as the stale key.
     val (_, strangerStorage) = newManager("stranger")
     trust(aliceStorage, bobId, strangerStorage.getDevicePublicKey()!!)
-    // Bob trusts alice correctly so only Alice's side fails.
+    // Bob trusts alice correctly so only Alice's side heals.
     trust(bobStorage, aliceId, aliceStorage.getDevicePublicKey()!!)
 
-    assertFailsWith<IllegalStateException> {
-      handshake(alice, bob)
-    }
+    val (aliceCipher, bobCipher) = handshake(alice, bob)
+
+    assertFalse(aliceCipher.authenticated, "Alice should fall back to unauthenticated after dropping stale trust")
+    assertTrue(bobCipher.authenticated, "Bob verified Alice's real signature and stays authenticated")
+    assertFalse(alice.isTrusted(bobId), "Alice should have dropped the stale trust entry for Bob")
+    assertTrue(bob.isTrusted(aliceId), "Bob's valid trust entry for Alice must be untouched")
+
+    // The healed channel is still encrypted: frames round-trip.
+    val probe = "healed-channel probe".encodeToByteArray()
+    assertContentEquals(probe, bobCipher.decode(aliceCipher.encode(probe)))
+  }
+
+  @Test
+  fun peerCanRePairAfterStaleTrustHeal() = runTest {
+    val (alice, aliceStorage) = newManager(aliceId)
+    val (bob, bobStorage) = newManager(bobId)
+
+    // Start from the healed state: Alice holds a stale key for Bob.
+    val (_, strangerStorage) = newManager("stranger")
+    trust(aliceStorage, bobId, strangerStorage.getDevicePublicKey()!!)
+    trust(bobStorage, aliceId, aliceStorage.getDevicePublicKey()!!)
+
+    val (healedCipher, _) = handshake(alice, bob)
+    assertFalse(healedCipher.authenticated)
+    assertFalse(alice.isTrusted(bobId))
+
+    // The user re-pairs out-of-band, storing Bob's CURRENT key — as pairing would.
+    trust(aliceStorage, bobId, bobStorage.getDevicePublicKey()!!)
+
+    // Next dial re-runs the binding against the fresh key and authenticates again.
+    val (aliceCipher, bobCipher) = handshake(alice, bob)
+    assertTrue(aliceCipher.authenticated, "Alice should authenticate Bob after re-pairing")
+    assertTrue(bobCipher.authenticated, "Bob should still authenticate Alice")
   }
 
   // ---- MITM gap documentation + SAS hardening tests ----------------------------------------

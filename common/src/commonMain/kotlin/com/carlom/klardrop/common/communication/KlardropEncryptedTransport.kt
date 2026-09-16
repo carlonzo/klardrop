@@ -2,6 +2,7 @@ package com.carlom.klardrop.common.communication
 
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.utils.log
+import com.carlom.klardrop.common.utils.logLocal
 import com.carlonzo.ukey2.Ukey2Handshake
 import com.carlonzo.ukey2.d2d.D2DConnectionContext
 import io.ktor.utils.io.ByteReadChannel
@@ -225,9 +226,13 @@ object KlardropEncryptedTransport {
    * @return true if the peer's signature verified against its stored ECDSA key (authenticated
    *   channel for a trusted peer). For a not-yet-trusted peer there is no stored key to verify
    *   against, so we accept trust-on-first-use and return false (encrypted but unauthenticated).
-   * @throws IllegalStateException if the peer IS trusted but the binding signature does not verify
-   *   — an active MITM relaying both UKEY2 handshakes cannot produce a valid signature over its
-   *   own verification string with the peer's device key, so a mismatch means we abort.
+   *   A binding failure for a *trusted* peer heals the same way: the peer most likely reset or
+   *   reinstalled and rotated its identity key while we still hold the old one, so the stale
+   *   entry is dropped and the connection continues unauthenticated until the user re-pairs
+   *   (the human accept/reject prompt remains the trust gate for the new key, and Messenger
+   *   recycles the link once pairing lands). Aborting here instead produced an endless
+   *   reconnect storm — every redial fails identically — and the post-handshake stale-trust
+   *   revocation never runs because the failure happens inside the handshake.
    */
   private suspend fun exchangeBinding(
     context: D2DConnectionContext,
@@ -269,10 +274,19 @@ object KlardropEncryptedTransport {
         !hasSignature -> "missing signature"
         else -> "signature verification failed (device key mismatch or MITM)"
       }
-      log(TAG, "UKEY2 identity binding failed for trusted peer $peerDeviceId: $reason")
-      throw IllegalStateException(
-        "UKEY2 identity binding failed for trusted peer $peerDeviceId (possible MITM: $reason); aborting connection"
+      // State drift, not necessarily an attack — and indistinguishable from one at this layer.
+      // A genuine MITM is still contained: the channel stays encrypted and no new trust is
+      // stored, so the attacker gains nothing beyond what first-contact TOFU already concedes.
+      // Local-only logging: this is expected drift, and per-event Sentry uploads multiplied one
+      // incident into 86 events. The synthetic exception keeps the stack in logcat.
+      runCatching { trustManager.removeTrust(peerDeviceId) }
+        .onFailure { logLocal(TAG, "Failed dropping stale trust for $peerDeviceId", it) }
+      logLocal(
+        TAG,
+        "Dropping stale trust for $peerDeviceId after binding failure ($reason); continuing unauthenticated",
+        IllegalStateException("UKEY2 identity binding failed for trusted peer $peerDeviceId ($reason)"),
       )
+      return false
     }
     return true
   }
