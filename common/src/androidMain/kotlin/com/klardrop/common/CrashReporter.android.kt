@@ -12,8 +12,6 @@ internal actual val crashReporterPlatform: String = "android"
 fun initCrashReporter(context: Context, appVersion: String, isProduction: Boolean) {
   if (!isProduction || CrashReporterConfig.DSN.isEmpty()) return
   Sentry.init(context) { options ->
-    options.dsn = CrashReporterConfig.DSN
-    options.release = appVersion
-    options.environment = CrashReporterConfig.environmentFor(appVersion)
+    applyCrashReporterOptions(options, appVersion)
   }
 }

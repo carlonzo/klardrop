@@ -31,7 +31,19 @@ fun Throwable.isExpectedNetworkNoise(): Boolean {
 
 private fun Throwable.matchesKnownNoise(): Boolean {
   val name = this::class.simpleName ?: return false
-  val msg = message.orEmpty()
+  return isKnownNoiseName(name, message.orEmpty())
+}
+
+/**
+ * Name+message half of the classifier, for Sentry event payloads where no [Throwable]
+ * instance exists: native-SDK auto-capture (uncaught coroutine cancellations reaching the
+ * thread's uncaught-exception handler) never passes through [Throwable.isExpectedNetworkNoise],
+ * so the `beforeSend` hook in `CrashReporter` re-applies the same table to the event's
+ * exception type/value. Native SDKs report the fully qualified class name — strip it first.
+ */
+internal fun isKnownNoiseName(exceptionType: String, message: String): Boolean {
+  val name = exceptionType.substringAfterLast('.')
+  val msg = message
   return when (name) {
     // Coroutine cancelled because the parent scope/connection closed — expected lifecycle,
     // not a product bug. The dashboard was flooded with "StandaloneCoroutine was cancelled"
