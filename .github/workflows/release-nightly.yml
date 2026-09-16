@@ -611,9 +611,10 @@ jobs:
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER"
 
-  # Linux universal tarball (bundled JRE), uploaded as an artifact the `publish` job
-  # attaches to the nightly prerelease. (No ProGuard smoke gate here — that runs on
-  # the production release; nightly stays lean.)
+  # Linux universal tarball (system JRE — jars + wrapper, no jlink runtime),
+  # uploaded as an artifact the `publish` job attaches to the nightly prerelease.
+  # (No ProGuard smoke gate here — that runs on the production release; nightly
+  # stays lean.)
   linux:
     needs: gate
     if: needs.gate.outputs.proceed == 'true'
@@ -649,24 +650,7 @@ jobs:
 
       - name: Stage Linux universal tarball
         shell: bash
-        run: |
-          set -euo pipefail
-          APPDIR=desktop/build/compose/binaries/main-release/app
-          STAGE=stage/klardrop-linux-x64
-          rm -rf stage && mkdir -p "$STAGE/icons"
-          cp -r "$APPDIR/klardrop" "$STAGE/klardrop"
-          cp packaging/linux/klardrop.desktop "$STAGE/"
-          cp packaging/linux/com.carlom.Klardrop.metainfo.xml "$STAGE/"
-          for s in 32 64 128 256 512; do
-            mkdir -p "$STAGE/icons/${s}x${s}"
-            cp "brand/klardrop-icon-${s}.png" "$STAGE/icons/${s}x${s}/klardrop.png"
-          done
-          mkdir -p "$STAGE/icons/scalable"
-          cp brand/klardrop-icon.svg "$STAGE/icons/scalable/klardrop.svg"
-          mkdir -p dist
-          tar -czf dist/klardrop-linux-x64.tar.gz -C stage klardrop-linux-x64
-          rm -rf stage
-          ls -la dist/
+        run: bash packaging/linux/stage-tarball.sh
 
       - uses: actions/upload-artifact@v7
         with:

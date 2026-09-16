@@ -1,0 +1,105 @@
+#!/bin/bash
+#
+# Linux launcher for a system-JRE install. Replaces jpackage's native launcher:
+# there is no bundled runtime. Keep jvmArgs in sync with desktop/build.gradle.kts.
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+java_hint() {
+  cat >&2 <<'EOF'
+Klardrop needs Java 21 or newer on PATH (or JAVA_HOME).
+  Arch/Omarchy:   pacman -S jre-openjdk
+  Debian/Ubuntu:  apt install openjdk-21-jre
+  Fedora:         dnf install java-21-openjdk
+EOF
+}
+
+# Absolute, symlink-resolved path of this script — the updater and channel
+# detection key off this, not off /usr/bin/java.
+resolve_self() {
+  local source="${BASH_SOURCE[0]:-$0}"
+  if command -v readlink >/dev/null 2>&1 && readlink -f "$source" >/dev/null 2>&1; then
+    readlink -f "$source"
+    return
+  fi
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    case "$source" in
+      /*) ;;
+      *) source="$dir/$source" ;;
+    esac
+  done
+  local dir
+  dir="$(cd "$(dirname "$source")" && pwd)"
+  printf '%s/%s\n' "$dir" "$(basename "$source")"
+}
+
+java_major() {
+  local bin="$1" ver major
+  ver="$("$bin" -version 2>&1 | awk -F '"' '/version/ { print $2; exit }')" || true
+  [ -n "${ver:-}" ] || { printf '0\n'; return; }
+  major="${ver%%.*}"
+  if [ "$major" = "1" ]; then
+    major="${ver#1.}"
+    major="${major%%.*}"
+  fi
+  case "$major" in
+    ''|*[!0-9]*) printf '0\n' ;;
+    *) printf '%s\n' "$major" ;;
+  esac
+}
+
+SCRIPT="$(resolve_self)"
+BIN_DIR="$(dirname "$SCRIPT")"
+APP_ROOT="$(cd "$BIN_DIR/.." && pwd)"
+cd "$APP_ROOT"
+
+if [ -n "${JAVA_HOME:-}" ] && [ -x "${JAVA_HOME}/bin/java" ]; then
+  JAVA="${JAVA_HOME}/bin/java"
+elif command -v java >/dev/null 2>&1; then
+  JAVA="$(command -v java)"
+else
+  java_hint
+  die "java not found"
+fi
+
+major="$(java_major "$JAVA")"
+if [ "$major" -lt 21 ]; then
+  java_hint
+  die "java $major is too old (need 21+); tried $JAVA"
+fi
+
+APP_LIB="$APP_ROOT/lib/app"
+shopt -s nullglob
+jars=( "$APP_LIB"/*.jar )
+if [ ${#jars[@]} -eq 0 ]; then
+  die "no jars in $APP_LIB"
+fi
+IFS=:
+CP="${jars[*]}"
+unset IFS
+
+export KLARDROP_LAUNCHER="$SCRIPT"
+
+# jvmArgs must match desktop/build.gradle.kts. skiko.library.path is what the
+# Compose jpackage launcher sets ($APPDIR = lib/app) so libskiko-linux-*.so loads.
+exec "$JAVA" \
+  -Xms24m \
+  -Xmx192m \
+  -XX:+UseG1GC \
+  -XX:G1PeriodicGCInterval=10000 \
+  -XX:+ShrinkHeapInSteps \
+  -XX:MinHeapFreeRatio=20 \
+  -XX:MaxHeapFreeRatio=40 \
+  -XX:MaxMetaspaceSize=128m \
+  -XX:ReservedCodeCacheSize=64m \
+  -XX:+UseStringDeduplication \
+  -Dklardrop.launcher="$SCRIPT" \
+  -Dskiko.library.path="$APP_LIB" \
+  -Djava.library.path="$APP_LIB" \
+  -cp "$CP" \
+  MainKt \
+  "$@"
