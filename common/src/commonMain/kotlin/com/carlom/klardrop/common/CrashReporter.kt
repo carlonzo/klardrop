@@ -1,6 +1,7 @@
 package com.klardrop.common
 
 import com.carlom.klardrop.common.KlardropVersion
+import com.carlom.klardrop.common.utils.LogBuffer
 import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import com.carlom.klardrop.common.utils.isKnownNoiseName
 import io.sentry.kotlin.multiplatform.Sentry
@@ -46,8 +47,9 @@ object CrashReporter {
    * submission, so this captures a message event first and attaches [comments] to it. That
    * indirection is the whole reason this is worth having: the event carries the current scope,
    * which means the last 100 breadcrumbs — every [com.carlom.klardrop.common.utils.log] call, see
-   * `logger.kt` — ride along with the report. A user hitting a connection problem then produces
-   * something debuggable, instead of the "it wouldn't connect" that a plain feedback form gives.
+   * `logger.kt` — ride along with the report. Breadcrumbs churn fast during reconnect storms, so
+   * the report additionally carries the [LogBuffer] tail (up to [LOG_TAIL_LINES] recent lines) as
+   * the `log_tail` extra — a wider window that survives the storm the user is reporting about.
    *
    * Every report groups under one Sentry issue (same message title) and carries `report:user`, so
    * they can be found without trawling crashes. [ReportOutcome.Disabled] is returned rather than
@@ -59,6 +61,8 @@ object CrashReporter {
     val eventId = Sentry.captureMessage(USER_REPORT_TITLE) { scope ->
       scope.level = SentryLevel.INFO
       scope.setTag("report", "user")
+      // ponytail: joined string, not structured lines — Sentry KMP setExtra only takes String.
+      scope.setExtra(LOG_TAIL_EXTRA, LogBuffer.snapshot(LOG_TAIL_LINES).joinToString("\n"))
     }
     // A dropped event (sampling, an inbound filter, rate limit) yields the nil id, and feedback
     // attached to it would be unreachable — say it failed rather than pretend otherwise.
@@ -103,6 +107,8 @@ object CrashReporter {
   }
 
   private const val USER_REPORT_TITLE = "User report"
+  private const val LOG_TAIL_EXTRA = "log_tail"
+  private const val LOG_TAIL_LINES = 200
 }
 
 /** Result of [CrashReporter.reportUserFeedback], so the UI can tell the user the truth. */
