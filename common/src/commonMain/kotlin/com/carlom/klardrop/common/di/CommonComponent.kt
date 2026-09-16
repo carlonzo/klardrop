@@ -109,6 +109,7 @@ class CommonComponent(
       currentDeviceProvider,
       internalPlatformDependency.bleTransport(),
       internalPlatformDependency.networkLifecycleMonitor(),
+      clock = clock,
     )
   }
 

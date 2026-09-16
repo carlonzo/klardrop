@@ -11,6 +11,7 @@ import com.carlom.klardrop.common.mdns.ServiceDiscoveryEvent
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
 import com.carlom.klardrop.common.mdns.ServiceInfo
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
+import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
@@ -41,7 +42,14 @@ class DiscoveryNetwork(
   private val currentDeviceProvider: CurrentDeviceProvider,
   private val bleTransport: BleTransport,
   private val networkLifecycleMonitor: NetworkLifecycleMonitor,
+  clock: Clock = Clock(),
 ) {
+  /**
+   * Collapses jmDNS re-deliveries of the same service to throttled liveness
+   * touches instead of a full merge + log line per resolution. Endpoint moves
+   * and identity changes always take the full path — see [DiscoveryIngestFilter].
+   */
+  private val ingestFilter = DiscoveryIngestFilter(nowMs = { clock.currentTimeMillis() })
 
   private val discoveryScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
 
@@ -116,6 +124,8 @@ class DiscoveryNetwork(
   private suspend fun rebuildMdnsState() {
     runCatching { serviceDiscoveryMdns.restart() }
       .onFailure { log("DiscoveryNetwork", "mDNS restart failed: ${it.message}") }
+    // Prior dedupe verdicts / one-shot logs may be stale after a rebuild.
+    ingestFilter.onMdnsRebuilt()
 
     // Re-launch any active discovery flows so they bind to the freshly
     // rebuilt mDNS instances.
@@ -225,11 +235,11 @@ class DiscoveryNetwork(
       .onCompletion { log("DiscoveryNetwork", "Discovery completed for Nearby discovery") }
       .onEach { event ->
         runCatching {
-//        log("DiscoveryNetwork", "New discovery event for NearbyShare: $event")
 
           val deviceId = nearbyShareDiscoveryUtils.getDeviceId(event.serviceInfo)
 
           if (deviceId == currentDeviceProvider.get().shortDeviceId) {
+            // Own advertisement echo (multi-NIC bindings); silent by design.
             return@onEach
           }
 
@@ -238,7 +248,7 @@ class DiscoveryNetwork(
             is ServiceDiscoveryEvent.ServiceFound -> if (nearbyShareDiscoveryUtils.isValidService(event.serviceInfo)) {
               onDiscoveredService(event.serviceInfo, DeviceConnectionType.NEARBY)
             } else {
-              log("DiscoveryNetwork", "Invalid service found for Nearby: ${event.serviceInfo}")
+              logInvalidServiceOnce(event.serviceInfo, "Nearby")
             }
 
             is ServiceDiscoveryEvent.ServiceLost -> onLostService(deviceId, event.serviceInfo, DeviceConnectionType.NEARBY)
@@ -263,11 +273,10 @@ class DiscoveryNetwork(
       .onEach { event ->
         // One bad peer TXT/name must not cancel the whole browse job (that hit CEH → SIGABRT).
         runCatching {
-          log("DiscoveryNetwork", "New discovery event for Klardrop: $event")
-
           val deviceId = klardropDiscoveryUtils.getDeviceId(event.serviceInfo)
 
           if (deviceId == currentDeviceProvider.get().shortDeviceId) {
+            // Own advertisement echo (multi-NIC bindings); silent by design.
             return@onEach
           }
 
@@ -276,7 +285,7 @@ class DiscoveryNetwork(
             is ServiceDiscoveryEvent.ServiceFound -> if (klardropDiscoveryUtils.isValidService(event.serviceInfo)) {
               onDiscoveredService(event.serviceInfo, DeviceConnectionType.KLARDROP)
             } else {
-              log("DiscoveryNetwork", "Invalid service found for Klardrop: ${event.serviceInfo}")
+              logInvalidServiceOnce(event.serviceInfo, "Klardrop")
             }
 
             is ServiceDiscoveryEvent.ServiceLost -> {
@@ -491,7 +500,28 @@ class DiscoveryNetwork(
     }
   }
 
+  /**
+   * Transient resolutions (empty TXT, not-yet-valid) are expected mid-resolution,
+   * not faults — and jmDNS re-delivers them. Log the verdict once per service
+   * instead of once per delivery.
+   */
+  private fun logInvalidServiceOnce(serviceInfo: ServiceInfo, protocol: String) {
+    if (ingestFilter.shouldLogInvalid("$protocol|${serviceInfo.serviceType}|${serviceInfo.serviceName}")) {
+      log("DiscoveryNetwork", "Invalid service found for $protocol: $serviceInfo")
+    }
+  }
+
   private suspend fun onDiscoveredService(serviceInfo: ServiceInfo, connectionType: DeviceConnectionType) {
+    val toDeviceInfo: (ServiceInfo) -> DeviceInfo = when (connectionType) {
+      DeviceConnectionType.NEARBY -> nearbyShareDiscoveryUtils::toDeviceInfo
+      DeviceConnectionType.KLARDROP -> klardropDiscoveryUtils::toDeviceInfo
+      DeviceConnectionType.BLE -> error("BLE connections are not discovered via mDNS")
+    }
+    // Identity is service-wide (same TXT for every address); compute once so the
+    // per-address loop only varies the endpoint.
+    val deviceInfo = toDeviceInfo(serviceInfo)
+    var sawDuplicate = false
+    var processedAny = false
     serviceInfo.addresses.filter { it.isReachableAddress() }.forEach { address ->
 
       val deviceConnection = when (connectionType) {
@@ -500,13 +530,19 @@ class DiscoveryNetwork(
         DeviceConnectionType.BLE -> error("BLE connections are not discovered via mDNS")
       }
 
-      val deviceInfo = when (connectionType) {
-        DeviceConnectionType.NEARBY -> nearbyShareDiscoveryUtils.toDeviceInfo(serviceInfo)
-        DeviceConnectionType.KLARDROP -> klardropDiscoveryUtils.toDeviceInfo(serviceInfo)
-        DeviceConnectionType.BLE -> error("BLE connections are not discovered via mDNS")
+      when (ingestFilter.classify(deviceInfo, deviceConnection, visibleDevices.getDevice(deviceInfo.deviceId))) {
+        IngestOutcome.Process -> {
+          log("DiscoveryNetwork", "New discovery event for $connectionType: $deviceInfo @ $address:${serviceInfo.port}")
+          visibleDevices.onNewDeviceVisible(deviceInfo, deviceConnection)
+          processedAny = true
+        }
+        IngestOutcome.Duplicate -> sawDuplicate = true
       }
-
-      visibleDevices.onNewDeviceVisible(deviceInfo, deviceConnection)
+    }
+    // Duplicates still prove liveness for the TTL sweep, throttled to one touch
+    // per interval per device instead of one per resolution.
+    if (!processedAny && sawDuplicate && ingestFilter.touchDueForDuplicate(deviceInfo.deviceId)) {
+      visibleDevices.touchLastSeen(deviceInfo.deviceId)
     }
   }
 
