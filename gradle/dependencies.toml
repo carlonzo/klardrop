@@ -21,7 +21,7 @@ sentry-kmp = "0.27.0"
 sentry-android = "6.22.0"
 filekit = "0.16.0"
 composenativetray = "2.1.6"
-sqldelight = "2.3.2"
+sqldelight = "2.4.0"
 cryptography = "0.6.0"
 coil3 = "3.6.2"
 # Linux BLE transport talks to BlueZ over D-Bus. 6.x (JDK 21 line) is announced but
