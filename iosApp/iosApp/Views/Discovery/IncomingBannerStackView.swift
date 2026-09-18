@@ -37,7 +37,7 @@ struct IncomingBannerStackView: View {
             let hasConnectionInfo = update.messages.contains { $0 is ConnectionInfoMessage }
 
             let isPendingWithHeader: Bool
-            switch onEnum(of: update.status) {
+            switch update.status.sealedType() {
             case .pendingAuthorization:
                 isPendingWithHeader = hasRealHeader
             default:
@@ -52,7 +52,7 @@ struct IncomingBannerStackView: View {
 
     private var filteredNotifications: [UiNotification] {
         state.notifications.compactMap { n -> UiNotification? in
-            switch onEnum(of: n) {
+            switch n.sealedType() {
             case .peerRevokedTrust:
                 return n
             }
@@ -87,7 +87,7 @@ struct IncomingBannerStackView: View {
 
     @ViewBuilder
     private func systemNotificationView(_ notification: UiNotification) -> some View {
-        switch onEnum(of: notification) {
+        switch notification.sealedType() {
         case .peerRevokedTrust(let p):
             SystemNotificationCardView(
                 title: p.deviceName,
@@ -126,7 +126,7 @@ private struct ReceiveCardView: View {
 
     @ViewBuilder
     private var cardContent: some View {
-        switch onEnum(of: update.status) {
+        switch update.status.sealedType() {
         case .pendingAuthorization(let pending):
             let firstFile = update.messages.compactMap { $0 as? FileMessage }.first
             let isText = firstFile == nil && update.messages.contains { $0 is TextMessage }
@@ -188,7 +188,7 @@ private struct ReceiveCardView: View {
     private let statusChangeTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     private func checkAutoHide() {
-        switch onEnum(of: update.status) {
+        switch update.status.sealedType() {
         case .completed, .failed:
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 withAnimation(.easeOut(duration: 0.2)) { visible = false }

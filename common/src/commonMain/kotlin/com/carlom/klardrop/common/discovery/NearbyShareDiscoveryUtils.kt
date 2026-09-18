@@ -147,7 +147,7 @@ class NearbyShareDiscoveryUtils {
 
 // internal: keep the ukey2 `securegcm.DeviceType` out of the exported Obj-C/Swift API.
 // A public extension on it would drag the receiver type into the framework, colliding with
-// the project's own `DeviceType` and making SKIE namespace (hide) the whole module's enums.
+// the project's own `DeviceType` and forcing the exporter to namespace (hide) the module's enums.
 internal fun com.google.security.cryptauth.lib.securegcm.DeviceType?.toDeviceType(): DeviceType {
   return when (this) {
     ANDROID, IOS -> DeviceType.MOBILE

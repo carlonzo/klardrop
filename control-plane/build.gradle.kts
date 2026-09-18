@@ -4,13 +4,9 @@ plugins {
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
-  // SKIE must run on the module that *links* the framework, not the one that owns the
-  // types. The macosArm64 framework below is the `presentation` module KlardropMac
-  // imports, and the Swift it shares with iOS is written against SKIE's output
-  // (`onEnum(of:)`, StateFlow as AsyncSequence, real Swift enums). Without this the
-  // framework links fine and the app fails with "cannot find 'onEnum' in scope".
-  // Keep the version in step with :presentation's.
-  id("co.touchlab.skie") version "0.10.15"
+  // Same as :presentation — the macOS framework below embeds :klardrop-common's Sentry cinterop,
+  // so this module needs the plugin's sentry-cocoa link configuration too.
+  alias(deps.plugins.sentry.kmp)
 }
 
 kotlin {
@@ -72,28 +68,29 @@ kotlin {
   }
   applyDefaultHierarchyTemplate()
 
-  // macOS link settings, mirroring :presentation's macosArm64 block. :presentation's klib
-  // inherits `-framework Sentry` from :klardrop-common's cinterop klib, so this framework
-  // needs the same synthetic sentry-cocoa search path at link time (the framework is produced
-  // by `podBuildSentryMacos`, which the macOS jobs run first), plus sqlite3 for sqldelight.
-  // Kept as plain linkerOpts rather than the sentry-kmp plugin: this module ships no CocoaPod
-  // of its own, it is consumed straight from `build/bin/macosArm64/<config>Framework` by the
-  // KlardropMac target's FRAMEWORK_SEARCH_PATHS (same mechanism the Sentry framework uses).
-  val macosSentrySyntheticBuild =
-    rootProject.file("common/build/cocoapods/synthetic/macos/build")
-  val macosSentryPaths = listOf("Debug", "Release")
-    .map { File(macosSentrySyntheticBuild, "$it/Sentry").absolutePath }
-  macosArm64().binaries.all {
-    macosSentryPaths.forEach { linkerOpts("-F", it) }
-    linkerOpts("-lsqlite3")
-    // sentry-cocoa is a *dynamic* framework, so anything linked against it records
-    // `@rpath/Sentry.framework/Sentry` and dyld needs a matching LC_RPATH to resolve it at
-    // run time — `-F` above only helps while linking. The shipped app embeds Sentry through
-    // CocoaPods; the Gradle-run macOS test .kexe has no such embedding and would abort with
-    // "Library not loaded" before a single test in `ControlPlaneMacosTest` ran. Same fix, and
-    // the same reason, as :presentation's macosArm64 block.
-    if (this is org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable) {
-      macosSentryPaths.forEach { linkerOpts("-rpath", it) }
+  // Tells the sentry-kmp plugin where the Xcode project lives so it finds Sentry.xcframework
+  // in DerivedData (SwiftPM, see iosApp/Package.swift). Same as :presentation.
+  sentryKmp {
+    linker {
+      xcodeprojPath.set(rootProject.file("iosApp/iosApp.xcodeproj").absolutePath)
+    }
+  }
+
+  // Swift export for the macOS app, mirroring :presentation's swiftExport. KlardropMac
+  // links this module's output (Run Script: `:control-plane:embedSwiftExportForXcode`), so
+  // it must produce the same `presentation` Swift module the shared iOS/macOS Swift imports.
+  @OptIn(org.jetbrains.kotlin.gradle.swiftexport.ExperimentalSwiftExportDsl::class)
+  swiftExport {
+    moduleName = "presentation"
+    flattenPackage = "com.carlom.klardrop"
+    export(project(":presentation"))
+    export(project(":klardrop-common")) {
+      moduleName = "KlardropCommon"
+      flattenPackage = "com.carlom.klardrop.common"
+    }
+    export(deps.filekit.core) {
+      moduleName = "FilekitCore"
+      flattenPackage = "io.github.vinceglb.filekit.core"
     }
   }
 
