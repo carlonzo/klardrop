@@ -21,7 +21,7 @@ struct PermissionsPanelView: View {
     private var pendingCapabilities: [Capability] {
         state.capabilities
             .filter { (_, status) in
-                // CapabilityStatus is a SKIE-generated Swift enum — switch directly.
+                // CapabilityStatus is a swift-export Swift enum — switch directly.
                 switch status {
                 case .denied, .unknown: return true
                 default: return false

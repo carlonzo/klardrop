@@ -238,9 +238,10 @@ jobs:
       # Sentry DSN, baked in at compile time. Kept out of the tree because this repo is
       # public and a DSN is a write-only ingest endpoint — a committed one is free quota
       # for anyone scraping GitHub. Passed as ORG_GRADLE_PROJECT_* rather than a `-P` flag
-      # because the Apple frameworks are built by xcodebuild running `syncFramework` from
-      # the podspec script phase, which inherits the environment but not this job's Gradle
-      # arguments. Absent from build_pr.yml on purpose: PR builds must not report.
+      # because the Apple frameworks are built by xcodebuild running
+      # `embedSwiftExportForXcode` from the Run Script phase, which inherits
+      # the environment but not this job's Gradle arguments. Absent from build_pr.yml
+      # on purpose: PR builds must not report.
       ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
     steps:
       - uses: actions/checkout@v7
@@ -322,7 +323,7 @@ jobs:
 
       # Same version, exported the ORG_GRADLE_PROJECT_ way, for the same reason as the DSN
       # below: the Kotlin framework this job ships is built by xcodebuild running
-      # `syncFramework` from the podspec script phase, which never sees $GRADLE_VERSION_ARGS.
+      # `embedSwiftExportForXcode` from the Run Script phase, which never sees $GRADLE_VERSION_ARGS.
       # Without it the framework embeds KlardropVersion.VERSION = "0.0.0-dev" and every Apple
       # crash reports a release no pipeline ever creates. Only set on the jobs that drive an
       # Xcode build; elsewhere the `-P` flag above reaches the compiler directly, and the
@@ -332,8 +333,7 @@ jobs:
       # Sentry DSN, baked in at compile time. Kept out of the tree because this repo is
       # public and a DSN is a write-only ingest endpoint — a committed one is free quota
       # for anyone scraping GitHub. Passed as ORG_GRADLE_PROJECT_* rather than a `-P` flag
-      # because the Apple frameworks are built by xcodebuild running `syncFramework` from
-      # the podspec script phase, which inherits the environment but not this job's Gradle
+      # because the Apple frameworks are built by xcodebuild running `embedSwiftExportForXcode` from the Run Script phase, which inherits the environment but not this job's Gradle
       # arguments. Absent from build_pr.yml on purpose: PR builds must not report.
       ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
     steps:
@@ -357,8 +357,8 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      # JDK 21 is REQUIRED — the Kotlin pod syncFramework script phase (run by
-      # xcodebuild during archive) is pinned to JDK 21.
+      # JDK 21 is REQUIRED — the "Embed Kotlin presentation.framework" Run Script phase (run by
+      # xcodebuild during archive) runs Gradle, which is pinned to JDK 21.
       - uses: actions/setup-java@v6
         if: steps.signing.outputs.enabled == 'true'
         with:
@@ -378,16 +378,6 @@ jobs:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
           restore-keys: konan-${{ runner.os }}-
-
-      # iOS pulls sentry-cocoa through CocoaPods directly (unlike macOS, which needs the
-      # synthetic Release framework prebuilt), so only the dummy framework + pod
-      # install are needed before xcodebuild — mirrors build_pr.yml's iOS build.
-      - name: Prebuild Kotlin framework + pod install
-        if: steps.signing.outputs.enabled == 'true'
-        run: |
-          set -euo pipefail
-          ./gradlew :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
-          pod install --project-directory=iosApp
 
       - name: Import Apple Distribution cert
         if: steps.signing.outputs.enabled == 'true'
@@ -633,8 +623,7 @@ jobs:
       # Sentry DSN, baked in at compile time. Kept out of the tree because this repo is
       # public and a DSN is a write-only ingest endpoint — a committed one is free quota
       # for anyone scraping GitHub. Passed as ORG_GRADLE_PROJECT_* rather than a `-P` flag
-      # because the Apple frameworks are built by xcodebuild running `syncFramework` from
-      # the podspec script phase, which inherits the environment but not this job's Gradle
+      # because the Apple frameworks are built by xcodebuild running `embedSwiftExportForXcode` from the Run Script phase, which inherits the environment but not this job's Gradle
       # arguments. Absent from build_pr.yml on purpose: PR builds must not report.
       ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
     steps:
@@ -680,7 +669,7 @@ jobs:
 
       # Same version, exported the ORG_GRADLE_PROJECT_ way, for the same reason as the DSN
       # below: the Kotlin framework this job ships is built by xcodebuild running
-      # `syncFramework` from the podspec script phase, which never sees $GRADLE_VERSION_ARGS.
+      # `embedSwiftExportForXcode` from the Run Script phase, which never sees $GRADLE_VERSION_ARGS.
       # Without it the framework embeds KlardropVersion.VERSION = "0.0.0-dev" and every Apple
       # crash reports a release no pipeline ever creates. Only set on the jobs that drive an
       # Xcode build; elsewhere the `-P` flag above reaches the compiler directly, and the
@@ -690,8 +679,7 @@ jobs:
       # Sentry DSN, baked in at compile time. Kept out of the tree because this repo is
       # public and a DSN is a write-only ingest endpoint — a committed one is free quota
       # for anyone scraping GitHub. Passed as ORG_GRADLE_PROJECT_* rather than a `-P` flag
-      # because the Apple frameworks are built by xcodebuild running `syncFramework` from
-      # the podspec script phase, which inherits the environment but not this job's Gradle
+      # because the Apple frameworks are built by xcodebuild running `embedSwiftExportForXcode` from the Run Script phase, which inherits the environment but not this job's Gradle
       # arguments. Absent from build_pr.yml on purpose: PR builds must not report.
       ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
     steps:
@@ -713,11 +701,9 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
           restore-keys: konan-${{ runner.os }}-
 
-      - name: Build Kotlin macOS frameworks (Sentry synthetic + dummy)
-        run: ./gradlew :klardrop-common:podBuildSentryMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
-
-      - name: pod install
-        run: pod install --project-directory=iosApp
+      # Direct Xcode integration: the Kotlin framework is built by the Run Script phase
+      # during the archive itself, and Sentry comes from SwiftPM (Package.swift) — so
+      # there is no pod install and no synthetic-framework prebuild anymore.
 
       - name: Detect Apple signing secrets
         id: signing

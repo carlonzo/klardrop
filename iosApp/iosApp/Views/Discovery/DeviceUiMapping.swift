@@ -4,7 +4,7 @@ import presentation
 // DeviceUiMapping — Extends DeviceUi with presentation-layer mappers.
 // Owned by the device-list cluster; placed in Views/Discovery/ per convention.
 //
-// Uses onEnum(of:) for sealed Kotlin types; DeviceType is a real Swift enum.
+// Uses .sealedType() for sealed Kotlin types (swift-export); DeviceType is a real Swift enum.
 // ---------------------------------------------------------------------------
 
 extension DeviceUi {
@@ -23,15 +23,15 @@ extension DeviceUi {
     // MARK: - KdRowState
 
     var rowState: KdRowState {
-        switch onEnum(of: trustStatus) {
+        switch trustStatus.sealedType() {
         case .pairing:
             return .pairing
         case .trusted:
-            switch onEnum(of: reachability) {
+            switch reachability.sealedType() {
             case .unreachable:
                 return .unreachable
             default:
-                switch onEnum(of: activityState) {
+                switch activityState.sealedType() {
                 case .sending:
                     return .active
                 default:
@@ -48,15 +48,15 @@ extension DeviceUi {
     /// Caption shown under the device name. Returns nil when no text is needed
     /// (the status dot conveys reachability visually; writing "Online" is noise).
     var subText: String? {
-        switch onEnum(of: trustStatus) {
+        switch trustStatus.sealedType() {
         case .trusted:
-            switch onEnum(of: activityState) {
+            switch activityState.sealedType() {
             case .sending:
                 return "Sending\u{2026}"
             case .sentCompleted(let c):
                 return c.error ? "Failed" : nil
             case .idle:
-                switch onEnum(of: reachability) {
+                switch reachability.sealedType() {
                 case .unreachable:
                     return "Offline"
                 case .probing:
@@ -75,7 +75,7 @@ extension DeviceUi {
     // MARK: - Reachability status dot
 
     var reachabilityStatus: KdStatus? {
-        switch onEnum(of: reachability) {
+        switch reachability.sealedType() {
         case .reachable:
             return .ok
         case .unreachable:

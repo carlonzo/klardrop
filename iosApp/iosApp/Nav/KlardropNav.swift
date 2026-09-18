@@ -350,7 +350,7 @@ struct KlardropNav: View {
     // MARK: - Helpers
 
     private func isTrusted(_ device: DeviceUi) -> Bool {
-        switch onEnum(of: device.trustStatus) {
+        switch device.trustStatus.sealedType() {
         case .trusted: return true
         default: return false
         }
