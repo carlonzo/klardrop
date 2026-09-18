@@ -119,6 +119,7 @@
 		F7D6D9100E3769ACDED1F084 /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3914D14CFE8DE717E480A0C1 /* ShareInbox.swift */; };
 		F847C8B30D70FD9535EFC2C2 /* IncomingBannerStackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A985EB45486147EFEEC0083A /* IncomingBannerStackView.swift */; };
 		FF1768002FCE0F7B45CE10E7 /* KdMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62ABA6F429B4D01F34B3E772 /* KdMotion.swift */; };
+		S401CB3D2C17E0020F78D70 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = S401CB3E2C17E0020F78D70 /* Sentry */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -255,6 +256,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				27A7AB2CD0896FAC834242EC /* Cocoa.framework in Frameworks */,
+				S401CB3D2C17E0020F78D70 /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -262,6 +264,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				S401CB3D2C17E0020F78D70 /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -521,6 +524,9 @@
 				B08C835B0A5EBBEEC76E214A /* PBXTargetDependency */,
 			);
 			name = iosApp;
+			packageProductDependencies = (
+				S401CB3E2C17E0020F78D70 /* Sentry */,
+			);
 			productName = iosApp;
 			productReference = 7555FF7B242A565900829871 /* Klardrop.app */;
 			productType = "com.apple.product-type.application";
@@ -541,6 +547,9 @@
 				DDC3B2AA943F01F037479D3F /* PBXTargetDependency */,
 			);
 			name = KlardropMac;
+			packageProductDependencies = (
+				S401CB3E2C17E0020F78D70 /* Sentry */,
+			);
 			productName = KlardropMac;
 			productReference = 2405ADA8D7EA482D702EEB81 /* Klardrop.app */;
 			productType = "com.apple.product-type.application";
@@ -587,6 +596,9 @@
 				Base,
 			);
 			mainGroup = 7555FF72242A565900829871;
+			packageReferences = (
+				S401CB3C2C17E0020F78D70 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+			);
 			productRefGroup = 7555FF7C242A565900829871 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -1251,6 +1263,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		S401CB3C2C17E0020F78D70 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
+			requirement = {
+				kind = exactVersion;
+				version = 8.58.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		S401CB3E2C17E0020F78D70 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = S401CB3C2C17E0020F78D70 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 7555FF73242A565900829871 /* Project object */;
 }

@@ -77,15 +77,17 @@ kotlin {
   // CocoaPods, no podspec, no `syncFramework`.
   //
   // Sentry: with no `kotlin("native.cocoapods")` plugin applied, the sentry-kmp
-  // plugin links sentry-cocoa from Xcode's SwiftPM integration instead (Sentry
-  // 8.58.2, pinned in Package.swift to match the kmp 0.27.0 cinterop). It finds
+  // plugin links sentry-cocoa from Xcode's SwiftPM integration instead (exact
+  // 8.58.2 in the iosApp.xcodeproj package reference, to match the kmp 0.27.0
+  // cinterop). It finds
   // Sentry.xcframework in DerivedData via `sentryKmp.linker.xcodeprojPath`
   // below, and adds `-F`/`-rpath` itself for both framework and
   // test-executable links — so no manual `-F`/`-rpath` forwarding is needed.
 
   // Tells the sentry-kmp plugin where the Xcode project lives so its
-  // DerivedData strategy can find Sentry.xcframework (installed via SwiftPM in
-  // Xcode, pinned to the version the kmp cinterop was built against). Gradle-run
+  // DerivedData strategy can find Sentry.xcframework (the sentry-cocoa package
+  // reference lives in iosApp.xcodeproj, pinned to the version the kmp cinterop
+  // was built against). Gradle-run
   // Apple test executables link against that same framework copy.
   sentryKmp {
     linker {

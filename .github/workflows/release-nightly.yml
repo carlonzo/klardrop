@@ -702,7 +702,8 @@ jobs:
           restore-keys: konan-${{ runner.os }}-
 
       # Direct Xcode integration: the Kotlin framework is built by the Run Script phase
-      # during the archive itself, and Sentry comes from SwiftPM (Package.swift) — so
+      # during the archive itself, and Sentry comes from the sentry-cocoa package
+      # reference in iosApp.xcodeproj — so
       # there is no pod install and no synthetic-framework prebuild anymore.
 
       - name: Detect Apple signing secrets

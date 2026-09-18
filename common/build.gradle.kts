@@ -23,14 +23,15 @@ kotlin {
   applyDefaultHierarchyTemplate()
 
   // The sentry-kmp plugin links sentry-cocoa from Xcode's SwiftPM integration:
-  // install the Sentry package (pinned to SENTRY_COCOA_FOR_KMP in Package.swift)
-  // in Xcode targeting the app, and the plugin finds Sentry.xcframework in
-  // DerivedData at link time (`sentryKmp.linker.xcodeprojPath` points it at
-  // iosApp.xcodeproj). No Kotlin source change — nothing imports `cocoapods.*`.
+  // the sentry-cocoa package reference lives in iosApp.xcodeproj (exact 8.58.2,
+  // matching the kmp 0.27.0 cinterop), and the plugin finds Sentry.xcframework in
+  // the default DerivedData at link time (`sentryKmp.linker.xcodeprojPath` points
+  // it at iosApp.xcodeproj). No Kotlin source change — nothing imports `cocoapods.*`.
 
   // Tells the sentry-kmp plugin where the Xcode project lives so its
-  // DerivedData strategy can find Sentry.xcframework (installed via SwiftPM in
-  // Xcode, pinned to the version the kmp cinterop was built against). Gradle-run
+  // DerivedData strategy can find Sentry.xcframework (the sentry-cocoa package
+  // reference lives in iosApp.xcodeproj, pinned to the version the kmp cinterop
+  // was built against). Gradle-run
   // Apple test executables link against that same framework copy.
   sentryKmp {
     linker {
