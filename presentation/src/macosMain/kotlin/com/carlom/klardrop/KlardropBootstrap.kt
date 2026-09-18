@@ -30,7 +30,7 @@ class KlardropBootstrap {
         // Started here rather than from MacApp.swift, which is where Bugsnag used to be
         // started. Keeping SDK startup on the Kotlin side means the Swift entry point
         // has no crash-reporter import at all — one less thing tied to how the Apple
-        // targets get their frameworks when CocoaPods goes away.
+        // targets get their frameworks (direct Xcode integration + SwiftPM for Sentry).
         // NOT `applicationInfo.isDebug`: that flag comes from the desktop/CLI `--debug`
         // argument and is always false on Apple, so it would let a debug build report.
         // `Platform.isDebugBinary` reflects how this framework was actually compiled,
