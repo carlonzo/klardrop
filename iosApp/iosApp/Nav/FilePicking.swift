@@ -17,7 +17,7 @@ import presentation
 //      a. Security-scope-accessed (fileImporter URLs).
 //      b. COPIED into the app's temporary sandbox (Kotlin reads off-thread,
 //         so the security-scoped bookmark won't survive the callback).
-//      c. Bridged via the SKIE global free function platformFileFromPath(path:)
+//      c. Bridged via the :presentation top-level function platformFileFromPath(path:)
 //         -> Filekit_corePlatformFile.
 //
 // 3. The resulting [Filekit_corePlatformFile] is handed to the caller's onPicked closure

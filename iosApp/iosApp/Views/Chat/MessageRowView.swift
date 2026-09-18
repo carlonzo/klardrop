@@ -49,7 +49,8 @@ struct MessageRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if message.messageType == "FILE", let ftId = message.fileTransferId?.int64Value {
+            // swift-export maps Kotlin Long? directly to Swift Int64? — no boxing.
+            if message.messageType == "FILE", let ftId = message.fileTransferId {
                 FileMessageBubble(
                     message: message,
                     fileTransferId: ftId,
@@ -181,8 +182,8 @@ private struct FileMessageBubble: View {
 
     @Environment(\.kdColors) private var kd
 
-    /// Per-row file-transfer state, bridged from the Kotlin Flow via .task.
-    /// SKIE wraps Flow<File_transfers?> as SkieSwiftOptionalFlow which is AsyncSequence.
+    /// Per-row file-transfer state, bridged from the Kotlin Flow via .task
+    /// (swift-export exposes it as AsyncSequence through .asAsyncSequence()).
     @State private var fileTransfer: File_transfers? = nil
 
     #if os(iOS)
@@ -197,9 +198,8 @@ private struct FileMessageBubble: View {
     /// the sender's `MessengerSendProgress.InProgress` and the receiver's
     /// `ReceiveMessageStatus.Progress` events. Nil when no fraction is available yet.
     private var liveProgress: Double? {
-        // Kotlin's Float? arrives as KotlinFloat? — same NSNumber bridging as
-        // `message.fileTransferId?.int64Value` above.
-        model.uiState.fileTransferProgress.map { Double($0.floatValue) }
+        // swift-export maps Kotlin Float? directly to Swift Float? — no boxing.
+        model.uiState.fileTransferProgress.map { Double($0) }
     }
 
     /// True while a transfer for this chat is in flight in either direction, including the
@@ -340,16 +340,12 @@ private struct FileMessageBubble: View {
         // One Task per row — .task auto-cancels when the row disappears,
         // tearing down the Kotlin flow collector so no leaks accumulate.
         .task(id: fileTransferId) {
-            let rawFlow = model.viewModel.messageRepository.getFileTransferById(id: fileTransferId)
-            // SKIE bridges Flow<File_transfers?> -> SkieSwiftOptionalFlow<File_transfers>
-            // which is AsyncSequence. Cast is safe; SKIE guarantees this bridge.
-            if let asyncFlow = rawFlow as? SkieSwiftOptionalFlow<File_transfers> {
-                do {
-                    for try await ft in asyncFlow {
-                        self.fileTransfer = ft
-                    }
-                } catch {}
-            }
+            // swift-export maps Flow<T> to Swift AsyncSequence via .asAsyncSequence().
+            do {
+                for try await ft in model.viewModel.messageRepository.getFileTransferById(id: fileTransferId).asAsyncSequence() {
+                    self.fileTransfer = ft
+                }
+            } catch {}
         }
         #if os(iOS)
         .sheet(isPresented: Binding(

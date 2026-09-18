@@ -4,7 +4,6 @@ plugins {
   alias(deps.plugins.kotlin.serialization)
   alias(deps.plugins.sqldelight)
   alias(deps.plugins.sentry.kmp)
-  kotlin("native.cocoapods")
 }
 
 kotlin {
@@ -23,14 +22,21 @@ kotlin {
 
   applyDefaultHierarchyTemplate()
 
-  // The sentry-kmp plugin adds the `Sentry` pod to this block for as long as we are
-  // still on the CocoaPods integration. Once :presentation moves to swift-export the
-  // whole block goes away and the plugin links sentry-cocoa from SwiftPM instead —
-  // no Kotlin source change either way, since nothing imports `cocoapods.*` anymore.
-  cocoapods {
-    version = rootProject.version.toString()
-    ios.deploymentTarget = "17.0"
-    osx.deploymentTarget = "14.0"
+  // The sentry-kmp plugin links sentry-cocoa from Xcode's SwiftPM integration:
+  // the sentry-cocoa package reference lives in iosApp.xcodeproj (exact 8.58.2,
+  // matching the kmp 0.27.0 cinterop), and the plugin finds Sentry.xcframework in
+  // the default DerivedData at link time (`sentryKmp.linker.xcodeprojPath` points
+  // it at iosApp.xcodeproj). No Kotlin source change — nothing imports `cocoapods.*`.
+
+  // Tells the sentry-kmp plugin where the Xcode project lives so its
+  // DerivedData strategy can find Sentry.xcframework (the sentry-cocoa package
+  // reference lives in iosApp.xcodeproj, pinned to the version the kmp cinterop
+  // was built against). Gradle-run
+  // Apple test executables link against that same framework copy.
+  sentryKmp {
+    linker {
+      xcodeprojPath.set(rootProject.file("iosApp/iosApp.xcodeproj").absolutePath)
+    }
   }
 
   sourceSets {
@@ -144,8 +150,9 @@ sqldelight {
 //
 // `klardropVersion` is an alias for the same value, NOT a second knob: the Apple frameworks
 // are not produced by the workflow's own `./gradlew` invocation — xcodebuild runs
-// `syncFramework` from common/klardrop_common.podspec's script phase, which inherits the
-// process environment but none of the workflow's `-P` flags. So the Apple jobs also export
+// `embedAndSignAppleFrameworkForXcode` from the "Embed Kotlin presentation.framework"
+// Run Script phase, which inherits the process environment but none of the workflow's
+// `-P` flags. So the Apple jobs also export
 // ORG_GRADLE_PROJECT_klardropVersion, and dots are not usable in an env var name. The dotted
 // property is checked first and therefore still wins wherever `-Pklardrop.version=` is passed.
 // Without the alias every Apple build embeds the "0.0.0-dev" fallback and its crashes reach
@@ -167,8 +174,8 @@ val klardropUpdateChannel: String = providers.gradleProperty("klardrop.updateCha
 // Deliberately property-based rather than dot-separated: CI passes it as the environment
 // variable ORG_GRADLE_PROJECT_klardropSentryDsn, and dots are not portable in env names.
 // That matters because the Apple frameworks are not built by the workflow's own `./gradlew`
-// invocation — xcodebuild runs `syncFramework` from the podspec script phase, which inherits
-// the environment but none of the workflow's `-P` flags.
+// invocation — xcodebuild runs `embedAndSignAppleFrameworkForXcode` from the Run Script
+// phase, which inherits the environment but none of the workflow's `-P` flags.
 //
 // Empty by default, which is what every local and pull-request build gets. `initCrashReporter`
 // treats an empty DSN as "crash reporting disabled", so a dev build cannot report at all.
