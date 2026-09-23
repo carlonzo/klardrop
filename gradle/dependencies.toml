@@ -38,7 +38,7 @@ clikt = { module = "com.github.ajalt.clikt:clikt", version = "5.1.0" }
 kotlinx-serialization-protobuf = { module = "org.jetbrains.kotlinx:kotlinx-serialization-protobuf", version.ref = "serialization" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
-androidx-core = { module = "androidx.core:core-ktx", version = "1.19.0" }
+androidx-core = { module = "androidx.core:core-ktx", version = "1.19.1" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 
 androidx-datastore-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
