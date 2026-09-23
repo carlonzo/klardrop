@@ -102,6 +102,27 @@ jobs:
       # another module is still linking — on a runner that reports as few as 3
       # processors, that contention alone times the sockets out ("Could not connect
       # to server..."). Building first means the test step starts on an idle box.
+      #
+      # Sentry first: the sentry-kmp Gradle plugin resolves Sentry.xcframework via
+      # its DerivedData strategy at Gradle *configuration* time — i.e. inside the
+      # link invocation below. On a fresh runner nothing has resolved the
+      # sentry-cocoa SPM package yet, so without this step the link fails
+      # with "Failed to find Sentry Cocoa framework". Resolving into the DEFAULT
+      # DerivedData seeds it exactly where the plugin looks: it runs
+      # `xcodebuild -project iosApp.xcodeproj -showBuildSettings` (no custom
+      # -derivedDataPath), takes BUILD_DIR, strips /Build/Products, and expects
+      # <DerivedData>/SourcePackages/artifacts/sentry-cocoa/{Sentry,Sentry-Dynamic}/*.xcframework.
+      # Keep -derivedDataPath OFF this step — a custom path only the resolve step
+      # knows about leaves the plugin searching the default location and failing.
+      # The bare project.pbxproj now carries the sentry-cocoa package reference
+      # (XCRemoteSwiftPackageReference, exact 8.58.2), so resolve downloads and
+      # extracts the xcframework without any framework/code change in the app.
+      - name: Resolve Sentry SPM (DerivedData for sentry-kmp)
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project iosApp/iosApp.xcodeproj
+          find ~/Library/Developer/Xcode/DerivedData -name "Sentry*.xcframework" -maxdepth 6 2>/dev/null | head -5
+
       - name: Compile & link native tests
         # Generous: on a Kotlin bump this is a from-scratch Kotlin/Native build of
         # the compiler caches and Apple platform klibs, not an incremental one.
@@ -164,7 +185,7 @@ jobs:
           reporter: java-junit
 
       # Build the actual iOS + macOS apps (unsigned). The unit tests above do not
-      # exercise the Xcode app build, so a SwiftUI / pbxproj / SKIE / framework
+      # exercise the Xcode app build, so a SwiftUI / pbxproj / swift-export / framework
       # regression would otherwise slip through. Mirrors release.yml's macOS prep.
       - name: Set up JDK 21 (Apple app build uses the project's pinned JDK)
         uses: actions/setup-java@v6
@@ -174,14 +195,15 @@ jobs:
 
       - name: Build iOS + macOS apps (unsigned)
         run: |
-          # Prebuild the Sentry macOS synthetic + dummy frameworks that the
-          # cocoapods integration and macOS FRAMEWORK_SEARCH_PATHS depend on.
-          ./gradlew :klardrop-common:podBuildSentryMacos :presentation:generateDummyFramework
-          pod install --project-directory=iosApp
+          # Direct Xcode integration: the "Embed Kotlin presentation.framework" Run
+          # Script phase in the pbxproj builds the framework via Gradle during the
+          # Xcode build itself — no pod install, no dummy framework prebuild.
           # ARCHS=arm64: the KMP framework only builds the iosSimulatorArm64 target, so the
           # presentation.framework has no x86_64 slice. 'generic/platform=iOS Simulator'
           # otherwise also builds x86_64 and fails with "could not find module 'presentation'
           # for target 'x86_64-apple-ios-simulator'". Restrict to arm64 (CI runner is arm64).
+          # NOTE: these still use the .xcworkspace while the Sentry SwiftPM package
+          # resolves — the workspace now references only iosApp.xcodeproj.
           xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme iosApp \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             -configuration Debug build CODE_SIGNING_ALLOWED=NO ARCHS=arm64

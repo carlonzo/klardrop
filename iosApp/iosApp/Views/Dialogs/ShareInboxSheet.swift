@@ -35,7 +35,7 @@ struct ShareInboxSheet: View {
     }
 
     private var isQrActive: Bool {
-        if case .idle = onEnum(of: currentQrState) {
+        if case .idle = currentQrState.sealedType() {
             return false
         }
         return true
@@ -54,7 +54,7 @@ struct ShareInboxSheet: View {
     /// Cheap identity for .task(id:) — MessengerSendProgress is not Hashable from Swift.
     private var progressTerminalKey: String {
         guard let sendProgress else { return "none" }
-        switch onEnum(of: sendProgress) {
+        switch sendProgress.sealedType() {
         case .completed: return "completed"
         case .error: return "error"
         default: return "inflight"
@@ -75,7 +75,7 @@ struct ShareInboxSheet: View {
                 QrShareView(
                     session: session,
                     onDismiss: {
-                        if case .serving = onEnum(of: currentQrState) {
+                        if case .serving = currentQrState.sealedType() {
                             dismiss()
                         }
                     }
@@ -123,7 +123,7 @@ struct ShareInboxSheet: View {
                         let sharedFiles = files.map { SharedFile(file: $0) }
                         let payload = QrSharePayloadFiles(files: sharedFiles)
                         Task {
-                            // SKIE maps Kotlin suspend + CancellationException to throws.
+                            // swift-export maps Kotlin suspend + CancellationException to throws.
                             // Failures other than cancel are already stored as QrShareState.Failed.
                             _ = try? await session.start(payload: payload)
                         }
@@ -140,7 +140,7 @@ struct ShareInboxSheet: View {
         #endif
         .task {
             sessionState = session.state.value
-            for await next in session.state {
+            for await next in session.state.asAsyncSequence() {
                 sessionState = next
             }
         }
@@ -164,7 +164,7 @@ struct ShareInboxSheet: View {
 extension DeviceUi {
 
     var isTrustedForShare: Bool {
-        if case .trusted = onEnum(of: trustStatus) { return true }
+        if case .trusted = trustStatus.sealedType() { return true }
         return false
     }
 
@@ -208,7 +208,7 @@ private struct SendStatusView: View {
 
     @ViewBuilder
     private var statusBody: some View {
-        switch progress.map({ onEnum(of: $0) }) {
+        switch progress.map({ $0.sealedType() }) {
         case .inProgress(let p):
             ProgressView(value: Double(p.percentage) / 100.0)
             Spacer().frame(height: KdSpacing.s3)
@@ -235,7 +235,7 @@ private struct SendStatusView: View {
 
     private var isTerminal: Bool {
         guard let progress else { return false }
-        switch onEnum(of: progress) {
+        switch progress.sealedType() {
         case .completed, .error: return true
         default: return false
         }

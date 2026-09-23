@@ -1,12 +1,10 @@
 [versions]
 agp = "9.4.1"
-# Capped at 2.4.10 by SKIE: 0.10.14 — the latest — supports Kotlin 2.0.0 through
-# 2.4.10 and rejects anything newer at Gradle configuration time. Swift export gained
-# sealed-class support in 2.4.20-RC, which covers the last SKIE feature we depend on,
-# so the cap lifts once :presentation moves from the Obj-C export to swift-export.
-# That migration needs direct integration (swift-export does not support CocoaPods),
-# which is what the Sentry swap below unblocks.
-kotlin = "2.4.10"
+# swift-export (which replaces SKIE — see :presentation) supports sealed classes
+# since 2.4.20, covering the last SKIE feature we depended on (`onEnum(of:)` is now
+# `.sealedType()`). swift-export needs direct integration (it does not support
+# CocoaPods), which is what the Sentry swap below unblocked.
+kotlin = "2.4.20"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 jetbrains-compose = "1.12.1"

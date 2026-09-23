@@ -183,8 +183,8 @@ struct ReportProblemSheet: View {
     }
 
     private func send() {
-        // `name` is passed explicitly rather than leaning on the Kotlin default argument, so this
-        // call does not depend on SKIE's default-argument bridging staying enabled.
+        // `name` is passed explicitly rather than leaning on Kotlin default-argument
+        // bridging (which does not survive the Swift export).
         outcome = CrashReporter.shared.reportUserFeedback(
             comments: description,
             name: nil,
