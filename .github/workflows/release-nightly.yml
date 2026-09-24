@@ -611,6 +611,31 @@ jobs:
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER"
 
+      # xcodebuild only uploads the build into App Store Connect — it does not attach it
+      # to any tester group, so it sits "Processing"/"Ready to Submit" and nobody outside
+      # App Store Connect ever sees it (this is why nightlies were "uploaded but not
+      # published"). Same App Store Connect API key as the upload above, same
+      # JWT/urllib approach as scripts/embed_devid_profiles.py (used by the macOS job) —
+      # no new toolchain. Waits for Apple to finish processing the upload before it can
+      # assign the group, so this step can take a while.
+      - name: Add build to TestFlight "Klardrop External Testers" group
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          VERSION:    ${{ needs.gate.outputs.base }}
+          BUILD:      ${{ needs.gate.outputs.versionCode }}
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography
+          "$RUNNER_TEMP/venv/bin/python" scripts/publish_testflight_build.py \
+            --p8 "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8" \
+            --key-id "$API_KEY_ID" --issuer "$API_ISSUER" \
+            --bundle-id "com.carlom.Klardrop" \
+            --build-number "$BUILD" --marketing-version "$VERSION" \
+            --group-name "Klardrop External Testers"
+
   # Linux universal tarball (system JRE — jars + wrapper, no jlink runtime),
   # uploaded as an artifact the `publish` job attaches to the nightly prerelease.
   # (No ProGuard smoke gate here — that runs on the production release; nightly
