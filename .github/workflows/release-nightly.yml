@@ -611,6 +611,48 @@ jobs:
             -authenticationKeyID "$API_KEY_ID" \
             -authenticationKeyIssuerID "$API_ISSUER"
 
+      # xcodebuild only uploads the build into App Store Connect — it does not attach it
+      # to any tester group, so it sits "Processing"/"Ready to Submit" and nobody outside
+      # App Store Connect ever sees it (this is why nightlies were "uploaded but not
+      # published"). `pilot distribute` targets a build already in App Store Connect (no
+      # re-upload) and assigns it to the named external group, creating the group on first
+      # use if it doesn't exist yet. It also submits for Apple's mandatory Beta App Review
+      # when a build is first added to an external group — required before external
+      # testers can install it — and waits for Apple to finish processing the upload
+      # before the assignment can happen, so this step can take a while.
+      - name: Ensure fastlane is available
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          command -v fastlane >/dev/null 2>&1 || gem install fastlane --no-document
+          fastlane --version
+
+      - name: Add build to TestFlight "Klardrop External Testers" group
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          VERSION:    ${{ needs.gate.outputs.base }}
+          BUILD:      ${{ needs.gate.outputs.versionCode }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/keys/asc_api_key.json" <<JSON
+          {
+            "key_id": "${API_KEY_ID}",
+            "issuer_id": "${API_ISSUER}",
+            "key_filepath": "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8",
+            "duration": 1200,
+            "in_house": false
+          }
+          JSON
+          fastlane pilot distribute \
+            --api_key_path "$RUNNER_TEMP/keys/asc_api_key.json" \
+            --app_identifier "com.carlom.Klardrop" \
+            --app_version "$VERSION" \
+            --build_number "$BUILD" \
+            --groups "Klardrop External Testers" \
+            --distribute_external true
+
   # Linux universal tarball (system JRE — jars + wrapper, no jlink runtime),
   # uploaded as an artifact the `publish` job attaches to the nightly prerelease.
   # (No ProGuard smoke gate here — that runs on the production release; nightly
