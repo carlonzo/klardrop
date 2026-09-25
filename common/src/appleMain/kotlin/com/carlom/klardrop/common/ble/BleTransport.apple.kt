@@ -105,7 +105,7 @@ actual class BleTransport {
     return ok
   }
 
-  actual suspend fun startAdvertising(currentDevice: CurrentDevice) {
+  actual suspend fun startAdvertising(currentDevice: CurrentDevice, lowPower: Boolean) {
     if (peripheralManager.state != CBManagerStatePoweredOn) {
       log(TAG, "Cannot start advertising: peripheral manager not powered on")
       return
@@ -125,7 +125,7 @@ actual class BleTransport {
     if (peripheralManager.isAdvertising) peripheralManager.stopAdvertising()
   }
 
-  actual fun scanForPeers(): Flow<BlePeerEvent> = callbackFlow {
+  actual fun scanForPeers(lowPower: Boolean): Flow<BlePeerEvent> = callbackFlow {
     val serviceUUID = CBUUID.UUIDWithString(BleConstants.SERVICE_UUID)
     if (centralManager.state == CBManagerStatePoweredOn) {
       centralManager.scanForPeripheralsWithServices(listOf(serviceUUID), options = null)
