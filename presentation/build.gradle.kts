@@ -11,7 +11,7 @@ plugins {
   // configuration too. Without it the link fails with "framework 'Sentry' not found"
   // even though podBuildSentryIosSimulator has run.
   alias(deps.plugins.sentry.kmp)
-  id("co.touchlab.skie") version "0.10.14"
+  id("co.touchlab.skie") version "0.10.15"
 }
 
 kotlin {
