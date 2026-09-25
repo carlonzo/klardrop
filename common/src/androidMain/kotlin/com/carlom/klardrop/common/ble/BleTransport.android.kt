@@ -70,7 +70,7 @@ actual class BleTransport(private val context: Context) {
   }
 
   @SuppressLint("MissingPermission")
-  actual suspend fun startAdvertising(currentDevice: CurrentDevice) {
+  actual suspend fun startAdvertising(currentDevice: CurrentDevice, lowPower: Boolean) {
     val adapter = this.adapter ?: run {
       log(TAG, "Bluetooth adapter unavailable; cannot advertise")
       return
@@ -91,9 +91,15 @@ actual class BleTransport(private val context: Context) {
       // LOW_LATENCY = ~100ms advertise interval (vs BALANCED's ~250ms),
       // HIGH tx power maximises range. Matches the LOW_LATENCY scan mode so
       // Android-Android peers see each other reliably without needing to be
-      // within a few centimeters of one another.
-      .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
-      .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+      // within a few centimeters of one another. In the background (the opt-in
+      // "stay discoverable" service) BALANCED/MEDIUM: slower to be found, far
+      // cheaper to keep up for hours.
+      .setAdvertiseMode(
+        if (lowPower) AdvertiseSettings.ADVERTISE_MODE_BALANCED else AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY
+      )
+      .setTxPowerLevel(
+        if (lowPower) AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM else AdvertiseSettings.ADVERTISE_TX_POWER_HIGH
+      )
       .setConnectable(true)
       .build()
 
@@ -130,7 +136,7 @@ actual class BleTransport(private val context: Context) {
   }
 
   @SuppressLint("MissingPermission")
-  actual fun scanForPeers(): Flow<BlePeerEvent> = callbackFlow {
+  actual fun scanForPeers(lowPower: Boolean): Flow<BlePeerEvent> = callbackFlow {
     val adapter = this@BleTransport.adapter
     val scanner = adapter?.bluetoothLeScanner
     if (adapter == null || scanner == null || !hasRuntimePermissions()) {
@@ -153,7 +159,9 @@ actual class BleTransport(private val context: Context) {
       // peers are simultaneously advertising + scanning (half-duplex radio
       // schedules don't align). Trades battery for reliable peer-to-peer Android
       // BLE discovery, which is the primary fallback transport for Klardrop.
-      .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+      // In the background LOW_POWER (~10% duty cycle): peers take longer to show
+      // up, but a scan that runs for hours stops dominating the battery.
+      .setScanMode(if (lowPower) ScanSettings.SCAN_MODE_LOW_POWER else ScanSettings.SCAN_MODE_LOW_LATENCY)
       .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
       .build()
 

@@ -172,6 +172,38 @@ class DiscoveryNetworkRepublishTest {
     assertEquals(34283, klardropAfter.last().port, "re-issue must keep the advertised port")
     assertEquals(34283, nearbyAfter.last().port, "re-issue must keep the advertised port")
   }
+
+  /**
+   * Android stops discovery while backgrounded. Once stopped, neither a network change nor the
+   * port watchdog may bring the browse or the advertisement back — only an explicit start does.
+   */
+  @Test
+  fun stoppedDiscoveryStaysStoppedAcrossNetworkChange() = runTest {
+    val events = MutableSharedFlow<NetworkChangeEvent>(extraBufferCapacity = 8)
+    val backend = CountingMdnsBackend()
+    val network = newDiscoveryNetwork(this, backend, networkEvents = events)
+    runCurrent()
+
+    network.startPublishKlardrop(34283)
+    network.discoveryKlardropDevices()
+    advanceUntilIdle()
+
+    network.stopPublishMdns()
+    network.stopBrowsing()
+    val registrationsBefore = backend.registrations.size
+    val browsesBefore = backend.browses
+
+    events.tryEmit(NetworkChangeEvent.Changed)
+    network.republishIfPortChanged(46651)
+    advanceUntilIdle()
+
+    assertEquals(registrationsBefore, backend.registrations.size, "stopped publish must not re-register")
+    assertEquals(browsesBefore, backend.browses, "stopped browse must not restart")
+
+    network.startPublishKlardrop(46651)
+    advanceUntilIdle()
+    assertEquals(46651, backend.registrations.last().port, "an explicit start publishes again")
+  }
 }
 
 /**
@@ -208,11 +240,15 @@ class AdvertisedPortProbeTest {
 private class CountingMdnsBackend : ServiceDiscoveryMdnsBackend {
   val registrations = mutableListOf<RegisterServiceInfo>()
   var restarts = 0
+  var browses = 0
 
   fun registrationsFor(serviceType: String) =
     registrations.filter { it.serviceType == serviceType }
 
-  override fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> = emptyFlow()
+  override fun discoverServices(serviceType: String): Flow<ServiceDiscoveryEvent> {
+    browses++
+    return emptyFlow()
+  }
 
   override suspend fun registerService(registerServiceInfo: RegisterServiceInfo) {
     registrations += registerServiceInfo

@@ -4,15 +4,22 @@ import android.app.Application
 import android.content.Context
 import android.util.Log
 import com.carlom.klardrop.android.service.DiscoveryForegroundService
+import com.carlom.klardrop.android.share.ActiveTransfers
 import com.carlom.klardrop.android.share.AndroidTransferAnchor
 import com.carlom.klardrop.common.ApplicationInfo
 import com.carlom.klardrop.common.InternalPlatformDependencies
 import com.carlom.klardrop.common.Klardrop
+import com.carlom.klardrop.common.Klardrop.DiscoveryMode
 import com.klardrop.common.initCrashReporter
 import java.io.File
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 
 class KlarDropApplication : Application() {
 
@@ -54,6 +61,9 @@ class KlarDropApplication : Application() {
       internalPlatformDependency = InternalPlatformDependencies(this, applicationInfo),
       transferAnchor = AndroidTransferAnchor(this),
     )
+    // Start with the radios off: this process is often spawned with no UI (a notification action,
+    // the transfer service). The collector below turns discovery on once an Activity is visible.
+    klardrop.setDiscoveryMode(DiscoveryMode.OFF)
     klardrop.init()
 
     val commonComponent = klardrop.commonComponent
@@ -69,8 +79,37 @@ class KlarDropApplication : Application() {
           }
         }
     }
+
+    // Full-speed discovery while the user can see the app; low-power while they've opted into
+    // staying discoverable (that foreground service is what keeps us running in the background);
+    // otherwise everything off, including the idle peer connections and their heartbeats.
+    commonComponent.coroutines().appScope.launch {
+      combine(
+        commonComponent.foregroundState().isForeground,
+        commonComponent.localPropertiesRepository().properties.map { it.backgroundDiscoveryEnabled },
+      ) { foreground, background ->
+        when {
+          foreground -> DiscoveryMode.FOREGROUND
+          background -> DiscoveryMode.BACKGROUND
+          else -> DiscoveryMode.OFF
+        }
+      }
+        .distinctUntilChanged()
+        .collectLatest { mode ->
+          // Leaving the foreground: wait out rotations and quick app switches (the started-Activity
+          // count briefly hits 0) before tearing down. collectLatest cancels this if we come back.
+          if (mode != DiscoveryMode.FOREGROUND) delay(BACKGROUND_GRACE)
+          klardrop.setDiscoveryMode(mode)
+          if (mode == DiscoveryMode.OFF) {
+            ActiveTransfers.state.first { it.isEmpty() }
+            klardrop.closeIdleConnections()
+          }
+        }
+    }
   }
 }
+
+private val BACKGROUND_GRACE = 5.seconds
 
 fun Context.appKlardrop(): Klardrop =
   (applicationContext as KlarDropApplication).klardrop
