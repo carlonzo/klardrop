@@ -58,11 +58,7 @@ local.properties
 
 ### XCode ###
 iosApp/iosApp.xcworkspace/xcuserdata/carlo.xcuserdatad/UserInterfaceState.xcuserstate
-iosApp/Pods/Pods.xcodeproj/xcuserdata/carlo.xcuserdatad/xcschemes/xcschememanagement.plist
 
-### Pods ###
-iosApp/Podfile.lock
-iosApp/Pods/
 # Android signing keystores — never commit (except the shared debug key)
 *.jks
 *.jks.b64
