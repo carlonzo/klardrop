@@ -917,13 +917,20 @@ fn lock_host(fixture: &Fixture) -> std::sync::MutexGuard<'_, Host> {
 
 /// How long `state_long_poll` holds a `/state` request open.
 ///
-/// Two seconds, which is two different requirements at once. A client's
-/// poller has to be *waiting* rather than spinning, so the hold has to be long
-/// compared with a round trip; and a client that is connecting has to stay in
-/// that state long enough for a person — or a test — to watch a spinner turn,
-/// so it has to be long compared with a glance. Two seconds serves both, and a
-/// test that pays for it does so once.
-const LONG_POLL_HOLD: Duration = Duration::from_secs(2);
+/// A client's poller has to be *waiting* rather than spinning, so the hold has
+/// to be long compared with a round trip; and a client that is connecting has
+/// to stay in that state long enough for a person — or a test — to watch a
+/// spinner turn, so it has to be long compared with a glance.
+///
+/// Both of those are satisfied comfortably by ONE second, and one second is
+/// also the whole point: the client caps every socket operation at
+/// `MAX_SINGLE_IO` (2s), so a hold of exactly two seconds is a coin toss
+/// between the daemon answering and the client's read deadline firing. Under
+/// load it lost that toss — the three tests that use this behaviour reported
+/// "daemon did not answer before the command deadline" instead of a screen.
+/// The gap above is what the tests observe (they sleep 700ms and assert the
+/// client is still connecting); the gap below is the client's cap. Both matter.
+const LONG_POLL_HOLD: Duration = Duration::from_secs(1);
 
 /// `GET /state`: the live state, including everything the interactive views
 /// read. Under `advancing_state` every answer carries a new version, so a
