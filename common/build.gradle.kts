@@ -52,35 +52,38 @@ kotlin {
       )
     }
   }
-  linuxArm64 {
-    compilations.getByName("main") {
-      cinterops {
-        val avahi by creating {
-          defFile(project.file("src/nativeInterop/cinterop/avahi.def"))
-        }
-        val spawn by creating {
-          defFile(project.file("src/nativeInterop/cinterop/spawn.def"))
-        }
-        val openssl by creating {
-          defFile(project.file("src/nativeInterop/cinterop/openssl.def"))
-        }
-        val sdbus by creating {
-          defFile(project.file("src/nativeInterop/cinterop/sdbus.def"))
+  // arm64 Linux builds only on an aarch64 host — see `hostCanBuildLinuxArm64`.
+  if (rootProject.extra["hostCanBuildLinuxArm64"] as Boolean) {
+    linuxArm64 {
+      compilations.getByName("main") {
+        cinterops {
+          val avahi by creating {
+            defFile(project.file("src/nativeInterop/cinterop/avahi.def"))
+          }
+          val spawn by creating {
+            defFile(project.file("src/nativeInterop/cinterop/spawn.def"))
+          }
+          val openssl by creating {
+            defFile(project.file("src/nativeInterop/cinterop/openssl.def"))
+          }
+          val sdbus by creating {
+            defFile(project.file("src/nativeInterop/cinterop/sdbus.def"))
+          }
         }
       }
-    }
-    binaries.all {
-      linkerOpts(
-        "-Wl,--as-needed",
-        // Same bundled-sysroot arrangement as linuxX64 above. The .def files only point at
-        // /usr/include and -L/usr/lib(64), which resolve to the aarch64 headers/libs
-        // natively on an arm64 runner — no cross-linking, same as x64.
-        "--allow-shlib-undefined",
-        "-lsqlite3",
-        "-lssl",
-        "-lcrypto",
-        "-lsystemd",
-      )
+      binaries.all {
+        linkerOpts(
+          "-Wl,--as-needed",
+          // Same bundled-sysroot arrangement as linuxX64 above. The .def files only point at
+          // /usr/include and -L/usr/lib(64), which resolve to the aarch64 headers/libs
+          // natively on an arm64 runner — no cross-linking, same as x64.
+          "--allow-shlib-undefined",
+          "-lsqlite3",
+          "-lssl",
+          "-lcrypto",
+          "-lsystemd",
+        )
+      }
     }
   }
 

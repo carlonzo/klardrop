@@ -252,7 +252,7 @@ if [ "$FLAVOR" = "native" ] || [ "$FLAVOR" = "omarchy" ] || [ "$FLAVOR" = "qt" ]
 
   is_package_owned() {
     local target="$1"
-    ([ -e "$target" ] || [ -L "$target" ]) || return 1
+    { [ -e "$target" ] || [ -L "$target" ]; } || return 1
     if command -v pacman >/dev/null 2>&1 && pacman -Qo "$target" >/dev/null 2>&1; then
       return 0
     fi
@@ -400,8 +400,8 @@ if [ "$FLAVOR" = "native" ] || [ "$FLAVOR" = "omarchy" ] || [ "$FLAVOR" = "qt" ]
     fi
 
     local has_app_image=0
-    if ([ -d "$jvm_app_dir" ] && [ -f "$jvm_bin" ]) || \
-       (([ -d "$legacy_app_dir/bin" ] || [ -d "$legacy_app_dir/lib" ]) && [ -f "$legacy_bin" ]); then
+    if { [ -d "$jvm_app_dir" ] && [ -f "$jvm_bin" ]; } || \
+       { { [ -d "$legacy_app_dir/bin" ] || [ -d "$legacy_app_dir/lib" ]; } && [ -f "$legacy_bin" ]; }; then
       has_app_image=1
     fi
 
@@ -660,7 +660,9 @@ EOF
     cp -a "$plugin_src" "$PLUGIN_DEST"
     # Hand-installed (not `omarchy plugin add`), so the shell needs telling
     # before it knows the id exists — see "Installing by hand" in the shell docs.
-    command -v omarchy-shell >/dev/null 2>&1 && omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+    if command -v omarchy-shell >/dev/null 2>&1; then
+      omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+    fi
     if command -v omarchy >/dev/null 2>&1; then
       # `enable` also drops a bar-widget plugin into the bar (defaultSection, or
       # center) — nothing further is needed to "add it to the bar".
@@ -696,7 +698,9 @@ EOF
         cp "$src_img" "$target"
       fi
     done
-    command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -qtf "$ICON_DIR" 2>/dev/null || true
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+      gtk-update-icon-cache -qtf "$ICON_DIR" 2>/dev/null || true
+    fi
   }
 
   remove_icon_file() {
@@ -748,7 +752,9 @@ Categories=Network;FileTransfer;
 MimeType=application/octet-stream;image/jpeg;image/png;image/gif;image/webp;video/mp4;video/quicktime;video/x-matroska;audio/mpeg;audio/ogg;audio/flac;text/plain;application/pdf;application/zip;application/gzip;application/x-tar;
 EOF
     chmod 644 "$DESKTOP_FILE"
-    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    fi
   }
 
   # Visible launcher entry (separate from the NoDisplay "Open with..." share
@@ -760,7 +766,9 @@ EOF
     escaped_exec="$(escape_desktop_exec_path "$OPEN_HELPER")"
     printf '[Desktop Entry]\nType=Application\nName=Klardrop\nGenericName=Nearby file sharing\nComment=Send files to a nearby device with Klardrop\nExec="%s"\nIcon=klardrop\nTerminal=false\nCategories=Network;FileTransfer;\n' "$escaped_exec" > "$APP_DESKTOP_FILE"
     chmod 644 "$APP_DESKTOP_FILE"
-    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    fi
   }
 
   install_nautilus_extension() {
@@ -887,7 +895,7 @@ BLOCK
     fi
 
     rm -rf "$jvm_app_dir"
-    rm -rf "$legacy_app_dir/bin" "$legacy_app_dir/lib"
+    rm -rf "${legacy_app_dir:?}/bin" "${legacy_app_dir:?}/lib"
     # The JVM install's ~/.local/bin/klardrop is a symlink into $jvm_app_dir,
     # now removed above; drop it explicitly so it can't be left dangling.
     rm -f "$KLARDROP_BIN"
@@ -987,7 +995,9 @@ BLOCK
 
     rm -f "$DESKTOP_FILE" "$APP_DESKTOP_FILE" "$NAUTILUS_EXT_FILE" "$KLARDROP_BIN" "$KLARDROP_ENGINE_BIN" "$MENU_HELPER" "$OPEN_HELPER" "$SHARE_PICK_HELPER" "$MARKER_FILE"
     remove_icons
-    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    fi
 
     say "Done. Kept (device identity + history): ~/.local/share/klardrop, ~/.config/klardrop, ~/.cache/klardrop, ~/.klardrop"
     exit 0
@@ -1104,7 +1114,9 @@ BLOCK
 
     rm -f "$KLARDROP_BIN" "$KLARDROP_ENGINE_BIN" "$KLARDROP_QT_BIN" "$KLARDROP_QT_LAUNCHER" "$DESKTOP_FILE" "$MARKER_FILE"
     remove_icons
-    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    fi
 
     say "Done. Kept (device identity + history): ~/.local/share/klardrop, ~/.config/klardrop, ~/.cache/klardrop, ~/.klardrop"
     exit 0
@@ -1340,7 +1352,9 @@ $missing_hints"
   check_native_binary_dependencies "$src/bin/klardrop" "client"
 
   if [ "$FLAVOR" = "qt" ]; then
-    [ -f "$src/bin/klardrop-qt" ] && [ -x "$src/bin/klardrop-qt" ] || die "extracted klardrop-qt is missing or not executable."
+    if ! { [ -f "$src/bin/klardrop-qt" ] && [ -x "$src/bin/klardrop-qt" ]; }; then
+      die "extracted klardrop-qt is missing or not executable."
+    fi
     ldd_qt_output="$(ldd "$src/bin/klardrop-qt" 2>&1)" || die "failed to inspect Qt binary dependencies with ldd: $ldd_qt_output"
     if echo "$ldd_qt_output" | grep -q "not found"; then
       missing_qt_raw="$(echo "$ldd_qt_output" | grep "not found" || true)"
@@ -1543,7 +1557,9 @@ Please install the required Qt6 QML packages:
       esac
     done < "$desktop_src" > "$DESKTOP_FILE"
     chmod 644 "$DESKTOP_FILE"
-    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    fi
     [ -d "$src/share/klardrop/icons" ] && install_icons "$src/share/klardrop/icons"
     say "Klardrop (native, standalone Qt) installed: $(cat "$src/VERSION" 2>/dev/null || echo unknown version)"
   else
@@ -1612,7 +1628,7 @@ uninstall() {
   rm -rf "$APP_DIR"
   # Pre-relocation installs put the app-image inside the data dir; drop only the
   # app-image parts so databases/ and preferences survive an uninstall.
-  if [ -n "${LEGACY_APP_DIR:-}" ]; then rm -rf "$LEGACY_APP_DIR/bin" "$LEGACY_APP_DIR/lib"; fi
+  if [ -n "${LEGACY_APP_DIR:-}" ]; then rm -rf "${LEGACY_APP_DIR:?}/bin" "${LEGACY_APP_DIR:?}/lib"; fi
   rm -f "$BIN_DIR/klardrop"
   rm -f "$DESKTOP_DIR/klardrop.desktop"
   rm -f "$METAINFO_DIR/com.carlom.Klardrop.metainfo.xml"
@@ -1620,7 +1636,9 @@ uninstall() {
     rm -f "$ICON_DIR/${s}x${s}/apps/klardrop.png"
   done
   rm -f "$ICON_DIR/scalable/apps/klardrop.svg"
-  command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+  if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+  fi
   say "Done."
   exit 0
 }
@@ -1733,7 +1751,7 @@ mkdir -p "$BIN_DIR" "$DESKTOP_DIR" "$METAINFO_DIR" "$(dirname "$APP_DIR")"
 rm -rf "$APP_DIR"
 cp -r "$src/klardrop" "$APP_DIR"
 # Sweep the old in-data-dir app-image, leaving the data itself alone.
-if [ -n "${LEGACY_APP_DIR:-}" ]; then rm -rf "$LEGACY_APP_DIR/bin" "$LEGACY_APP_DIR/lib"; fi
+if [ -n "${LEGACY_APP_DIR:-}" ]; then rm -rf "${LEGACY_APP_DIR:?}/bin" "${LEGACY_APP_DIR:?}/lib"; fi
 ln -sf "$APP_DIR/bin/klardrop" "$BIN_DIR/klardrop"
 
 # Desktop entry, with Exec pointed at the absolute launcher.
@@ -1763,8 +1781,12 @@ if [ -f "$src/icons/scalable/klardrop.svg" ]; then
 fi
 
 # Refresh caches (best effort).
-command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
-command -v gtk-update-icon-cache  >/dev/null 2>&1 && gtk-update-icon-cache -qtf "$ICON_DIR" 2>/dev/null || true
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -qtf "$ICON_DIR" 2>/dev/null || true
+fi
 
 say "Klardrop installed. Launch it from your app menu or run: klardrop"
 case ":$PATH:" in

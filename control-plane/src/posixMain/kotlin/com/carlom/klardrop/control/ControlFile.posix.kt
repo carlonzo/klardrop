@@ -48,6 +48,22 @@ internal fun unixResolveControlFilePath(): String? {
 @OptIn(ExperimentalForeignApi::class)
 private fun readEnv(name: String): String? = getenv(name)?.toKString()
 
+/**
+ * `mkdir`/`chmod`/`fchmod` take a `mode_t`, which is `unsigned int` on Linux and `unsigned
+ * short` on Darwin — a width that changes between the two platforms this source set covers.
+ * A shared source set is not allowed to name such a type (the compiler rejects the call as
+ * an inconsistent multipplatform signature), so the three calls that need one are wrapped
+ * in fixed-width helpers here and implemented per platform. Only the marshalling differs;
+ * the policy around it — which bits, and what a failure means — stays in one place.
+ */
+internal expect fun mkdirOwnerOnly(dir: String): Int
+
+/** @see mkdirOwnerOnly */
+internal expect fun chmodOwnerOnly(path: String): Int
+
+/** @see mkdirOwnerOnly */
+internal expect fun fchmodOwnerOnly(fd: Int): Int
+
 @OptIn(ExperimentalForeignApi::class)
 internal fun unixWriteControlFile(pathStr: String?, port: Int, token: String, capabilities: List<String>) {
   if (pathStr == null) return
@@ -65,8 +81,8 @@ internal fun unixWriteControlFile(pathStr: String?, port: Int, token: String, ca
     //     disaster. The token is protected by the file's own 0600 below either way, which is
     //     what actually matters; the directory mode only stops someone listing the file's
     //     existence and name.
-    if (mkdir(dir, (S_IRWXU).toUInt()) == 0) {
-      if (chmod(dir, (S_IRWXU).toUInt()) != 0) {
+    if (mkdirOwnerOnly(dir) == 0) {
+      if (chmodOwnerOnly(dir) != 0) {
         throw IllegalStateException("cannot restrict permissions on $dir (errno $errno)")
       }
     } else if (errno != EEXIST) {
@@ -74,14 +90,16 @@ internal fun unixWriteControlFile(pathStr: String?, port: Int, token: String, ca
     }
   }
 
-  val fd = open(pathStr, O_WRONLY or O_CREAT or O_TRUNC, (S_IRUSR or S_IWUSR).toUInt())
+  // open() is variadic, so its mode goes through the default argument promotion to `int`
+  // — a bare `mode_t` would push 16 bits on Darwin where the callee reads 32.
+  val fd = open(pathStr, O_WRONLY or O_CREAT or O_TRUNC, (S_IRUSR or S_IWUSR).toInt())
   if (fd < 0) {
     throw IllegalStateException("cannot create control file $pathStr (errno $errno)")
   }
   try {
     // open()'s mode only applies when it creates the file; an existing file keeps its old
     // permissions, so set them explicitly — the token must never be readable by another user.
-    if (fchmod(fd, (S_IRUSR or S_IWUSR).toUInt()) != 0) {
+    if (fchmodOwnerOnly(fd) != 0) {
       throw IllegalStateException("cannot restrict permissions on $pathStr (errno $errno)")
     }
     val bytes = content.encodeToByteArray()

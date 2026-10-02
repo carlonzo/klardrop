@@ -2,6 +2,7 @@ package com.carlom.klardrop.cli.commands
 
 import com.carlom.klardrop.cli.CliController
 import com.carlom.klardrop.cli.CliLogging
+import com.carlom.klardrop.cli.cliExitProcess
 import com.carlom.klardrop.cli.cliOnShutdown
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
-import kotlin.system.exitProcess
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -55,7 +55,7 @@ class ListenCommand : CliktCommand(
       )
     ) {
       CliLogging.error("Failed to initialize Klardrop")
-      exitProcess(EXIT_INIT_FAILURE)
+      cliExitProcess(EXIT_INIT_FAILURE)
     }
 
     // Shutdown hook: flush on Ctrl-C
@@ -101,7 +101,7 @@ class ListenCommand : CliktCommand(
       }
     }
 
-    exitProcess(EXIT_OK)
+    cliExitProcess(EXIT_OK)
   }
 
   private fun handleUpdate(deviceId: String, update: ReceiveMessageUpdate) {

@@ -2,6 +2,7 @@ package com.carlom.klardrop.desktop
 
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
@@ -11,9 +12,25 @@ import kotlin.test.assertTrue
 
 class SingleInstanceTest {
 
+  /**
+   * A data dir whose `instance.sock` actually fits in a Unix domain socket address.
+   *
+   * macOS caps `sun_path` at 104 bytes and its per-user temp dir (`java.io.tmpdir` there)
+   * is already `/var/folders/<2>/<30>/T` — 48 bytes before the directory name — so a
+   * `createTempDirectory` under it pushes the socket past the limit. The bind then fails,
+   * which SingleInstance.startFocusServer deliberately swallows as best-effort, and every
+   * test that needs the primary to hear the second instance times out on a latch that no
+   * code path can ever reach. `/tmp` is short on every POSIX host.
+   */
+  private fun shortDataDir(tag: String): File {
+    val dir = Files.createTempDirectory(Path.of("/tmp"), "kdsi-$tag-").toFile()
+    dir.deleteOnExit()
+    return dir
+  }
+
   @Test
   fun `second instance fails to acquire, sends focus, and primary receives it`() {
-    val dataDir = Files.createTempDirectory("klardrop-single-instance").toFile()
+    val dataDir = shortDataDir("lock")
     val focusReceived = CountDownLatch(1)
 
     val primary = SingleInstance.acquire(dataDir)
@@ -32,7 +49,7 @@ class SingleInstanceTest {
 
   @Test
   fun `stale socket file from a crashed run is deleted and rebind succeeds`() {
-    val dataDir = Files.createTempDirectory("klardrop-single-instance-stale").toFile()
+    val dataDir = shortDataDir("stale")
     // Simulate a SIGKILLed previous run: the file lock died with the process but the
     // socket file was left behind.
     File(dataDir, "instance.sock").writeText("garbage")
@@ -44,7 +61,7 @@ class SingleInstanceTest {
 
   @Test
   fun `missing data dir is created`() {
-    val dataDir = File(Files.createTempDirectory("klardrop-single-instance-mkdir").toFile(), "nested/data")
+    val dataDir = File(shortDataDir("mkdir"), "nested/data")
 
     val primary = SingleInstance.acquire(dataDir)
     assertNotNull(primary)
@@ -54,7 +71,7 @@ class SingleInstanceTest {
 
   @Test
   fun `second instance sends files to share and primary receives them`() {
-    val dataDir = Files.createTempDirectory("klardrop-single-instance-send").toFile()
+    val dataDir = shortDataDir("send")
     val sendReceived = CountDownLatch(1)
     var receivedFiles: List<String>? = null
 

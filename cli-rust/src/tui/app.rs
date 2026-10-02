@@ -1497,13 +1497,15 @@ mod tests {
         press(&mut app, KeyCode::Enter);
         press_char(&mut app, 'f');
         assert_eq!(app.input_mode(), InputMode::Compose);
-        app.paste("/tmp/one.pdf /tmp/two.pdf");
+        // Built from temp_dir rather than spelled "/tmp/one.pdf": a rooted Unix path is
+        // not absolute on Windows, where it resolves against the current drive, so the
+        // prompt would (correctly) refuse it and this would only test the refusal.
+        let one = std::env::temp_dir().join("one.pdf");
+        let two = std::env::temp_dir().join("two.pdf");
+        app.paste(&format!("{} {}", one.display(), two.display()));
         assert_eq!(
             press(&mut app, KeyCode::Enter),
-            vec![Action::SendFiles(vec![
-                PathBuf::from("/tmp/one.pdf"),
-                PathBuf::from("/tmp/two.pdf")
-            ])]
+            vec![Action::SendFiles(vec![one, two])]
         );
 
         // A relative path would mean something else in the daemon's working

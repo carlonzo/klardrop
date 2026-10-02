@@ -1,5 +1,10 @@
 package = com.carlom.klardrop.common.posix.spawn
-compilerOpts = -D_GNU_SOURCE -I/usr/include
+# Debian/Ubuntu keep the arch-specific half of glibc (bits/*) under /usr/include/<triplet>,
+# which the interop clang never searches on its own: without these the index dies with
+# "bits/timesize.h file not found". This .def is shared by the x64 and arm64 targets, so
+# both triplets are listed: the host's own directory is always present and is searched
+# first, and the other is absent or a copy of the same file set with other arch constants.
+compilerOpts = -D_GNU_SOURCE -I/usr/include -I/usr/include/x86_64-linux-gnu -I/usr/include/aarch64-linux-gnu
 
 ---
 #include <spawn.h>

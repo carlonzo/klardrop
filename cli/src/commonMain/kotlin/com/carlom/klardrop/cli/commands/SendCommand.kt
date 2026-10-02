@@ -2,6 +2,7 @@ package com.carlom.klardrop.cli.commands
 
 import com.carlom.klardrop.cli.CliController
 import com.carlom.klardrop.cli.CliLogging
+import com.carlom.klardrop.cli.cliExitProcess
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
@@ -23,7 +24,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.random.Random
-import kotlin.system.exitProcess
 
 // Exit codes:
 //   0 = delivery confirmed (ACK_RECEIVED)
@@ -70,7 +70,7 @@ class SendCommand : CliktCommand(
     ) {
       CliLogging.error("Failed to initialize Klardrop")
       controller.shutdown()
-      exitProcess(EXIT_INIT_FAILURE)
+      cliExitProcess(EXIT_INIT_FAILURE)
     }
 
     // Await target device with a bounded settle window so a freshly-started `send`
@@ -85,7 +85,7 @@ class SendCommand : CliktCommand(
         CliLogging.error("  ${it.deviceInfo.deviceId} - ${it.deviceInfo.name}")
       }
       controller.shutdown()
-      exitProcess(EXIT_USAGE_ERROR)
+      cliExitProcess(EXIT_USAGE_ERROR)
     }
 
     echo("Found device: ${device.deviceInfo.name}")
@@ -122,7 +122,7 @@ class SendCommand : CliktCommand(
       else -> {
         CliLogging.error("No content specified. Use --file, --text, or provide content as argument")
         controller.shutdown()
-        exitProcess(EXIT_USAGE_ERROR)
+        cliExitProcess(EXIT_USAGE_ERROR)
       }
     }
 
@@ -149,9 +149,9 @@ class SendCommand : CliktCommand(
     controller.shutdown()
 
     when (terminal) {
-      is MessengerSendProgress.Completed -> exitProcess(EXIT_OK)
-      is MessengerSendProgress.Error -> exitProcess(EXIT_SEND_FAILURE)
-      else -> exitProcess(EXIT_SEND_FAILURE) // flow drained with no terminal (shouldn't happen)
+      is MessengerSendProgress.Completed -> cliExitProcess(EXIT_OK)
+      is MessengerSendProgress.Error -> cliExitProcess(EXIT_SEND_FAILURE)
+      else -> cliExitProcess(EXIT_SEND_FAILURE) // flow drained with no terminal (shouldn't happen)
     }
   }
 
@@ -189,7 +189,7 @@ class SendCommand : CliktCommand(
     if (meta == null || !meta.isRegularFile) {
       CliLogging.error("File not found or not a regular file: $filePath")
       controller.shutdown()
-      exitProcess(EXIT_USAGE_ERROR)
+      cliExitProcess(EXIT_USAGE_ERROR)
     }
     val fileSize = meta.size
     val fileName = path.name

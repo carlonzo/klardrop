@@ -2,6 +2,8 @@ package com.carlom.klardrop.cli.commands
 
 import com.carlom.klardrop.DiscoveryController
 import com.carlom.klardrop.cli.CliLogging
+import com.carlom.klardrop.cli.cliCreateInternalPlatformDependencies
+import com.carlom.klardrop.cli.cliExitProcess
 import com.carlom.klardrop.cli.cliGetEnv
 import com.carlom.klardrop.cli.cliInitFileKit
 import com.carlom.klardrop.cli.awaitTerminationRequest
@@ -21,7 +23,6 @@ import com.github.ajalt.clikt.parameters.types.int
 import com.klardrop.common.initCrashReporter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
-import kotlin.system.exitProcess
 
 // Exit codes
 private const val EXIT_FAILURE = 1
@@ -47,10 +48,10 @@ class DaemonCommand : CliktCommand(
 
   override fun run() = runBlocking {
     // On JVM, installTerminationSignalHandler() arms a shutdown hook that blocks on the
-    // cleanup latch, so ANY exit path from here on — a caught error or exitProcess() below —
-    // must release it or the JVM hangs forever. exitProcess()/System.exit() does not unwind
+    // cleanup latch, so ANY exit path from here on — a caught error or cliExitProcess() below —
+    // must release it or the JVM hangs forever. cliExitProcess()/System.exit() does not unwind
     // the stack, so a `finally` placed around it would never run; exitCode is computed here and
-    // exitProcess() is only called once the try/finally below has fully completed instead.
+    // cliExitProcess() is only called once the try/finally below has fully completed instead.
     // installTerminationSignalHandler() itself is inside the try so a failure there (e.g. the
     // native self-pipe couldn't be created) gets the same "daemon failed: ..." + exit 1 handling
     // as everything else, rather than escaping run() uncaught.
@@ -82,7 +83,7 @@ class DaemonCommand : CliktCommand(
 
       val klardrop = Klardrop(
         applicationInfo = applicationInfo,
-        internalPlatformDependency = InternalPlatformDependencies(applicationInfo),
+        internalPlatformDependency = cliCreateInternalPlatformDependencies(applicationInfo),
       )
       klardrop.init()
 
@@ -115,7 +116,7 @@ class DaemonCommand : CliktCommand(
     }
 
     if (exitCode != 0) {
-      exitProcess(exitCode)
+      cliExitProcess(exitCode)
     }
   }
 }

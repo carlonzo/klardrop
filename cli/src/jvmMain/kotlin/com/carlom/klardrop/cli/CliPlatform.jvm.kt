@@ -1,11 +1,14 @@
 package com.carlom.klardrop.cli
 
+import com.carlom.klardrop.common.ApplicationInfo
+import com.carlom.klardrop.common.InternalPlatformDependencies
 import io.github.vinceglb.filekit.FileKit
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.system.exitProcess
 
 internal actual fun cliGetEnv(name: String): String? = System.getenv(name)?.takeIf { it.isNotEmpty() }
 
@@ -71,3 +74,11 @@ internal actual suspend fun awaitTerminationRequest() {
 internal actual fun onCleanupComplete() {
   cleanupLatch.countDown()
 }
+
+internal actual fun cliExitProcess(status: Int): Nothing = exitProcess(status)
+
+// Neither of the CLI's targets is Android, so both take the one-argument actual; see the
+// expect in CliController.kt for why this cannot be constructed from commonMain.
+internal actual fun cliCreateInternalPlatformDependencies(
+  applicationInfo: ApplicationInfo,
+): InternalPlatformDependencies = InternalPlatformDependencies(applicationInfo)

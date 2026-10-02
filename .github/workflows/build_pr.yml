@@ -29,6 +29,18 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # The Kotlin/Native Linux target cinterops against the host's avahi/openssl/systemd
+      # headers and links its sqlite3, so `./gradlew build` cannot even index the linuxX64
+      # cinterops without these. Same four packages the native-fixture job below and the
+      # release workflow's native job install. linuxArm64 needs none of this: it is only
+      # declared on an aarch64 host (see `hostCanBuildLinuxArm64`), and the release jobs
+      # run that leg on a native ubuntu-24.04-arm.
+      - name: Install native build deps
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y
+          libavahi-client-dev libsqlite3-dev libssl-dev libsystemd-dev
+
       - name: Build
         # Exclude :presentation's Apple shared-metadata compiles. On Linux there is no Apple
         # toolchain, so :klardrop-common's native targets are disabled (its Sentry cinterop

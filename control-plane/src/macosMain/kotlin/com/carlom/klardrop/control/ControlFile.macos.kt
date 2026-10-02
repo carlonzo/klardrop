@@ -2,6 +2,12 @@ package com.carlom.klardrop.control
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSFileManager
+import platform.posix.S_IRUSR
+import platform.posix.S_IRWXU
+import platform.posix.S_IWUSR
+import platform.posix.chmod
+import platform.posix.fchmod
+import platform.posix.mkdir
 
 /**
  * The macOS App Group that the app and its share extensions already share.
@@ -32,6 +38,18 @@ internal actual fun deleteControlFile(expectedToken: String?) =
   unixDeleteControlFile(resolveControlFilePath(), expectedToken)
 
 actual fun resolveControlFilePath(): String? = unixResolveControlFilePath()
+
+// `mode_t` is `unsigned short` on Darwin, so the bits narrow to it rather than widening as
+// they do on Linux — see the declarations in ControlFile.posix.kt for why these three are
+// wrapped instead of being called directly from the shared source set.
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun mkdirOwnerOnly(dir: String): Int = mkdir(dir, S_IRWXU.toUShort())
+
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun chmodOwnerOnly(path: String): Int = chmod(path, S_IRWXU.toUShort())
+
+@OptIn(ExperimentalForeignApi::class)
+internal actual fun fchmodOwnerOnly(fd: Int): Int = fchmod(fd, (S_IRUSR or S_IWUSR).toUShort())
 
 /**
  * `qr-share` is the one production route this host cannot serve. The full reasoning lives in

@@ -160,10 +160,13 @@ class ControlPlaneMacosTest {
     val failure = assertFailsWith<UnsupportedOperationException> {
       renderQrMatrix("https://klardrop.test/share/abc")
     }
-    assertNotNull(failure.message)
+    // Bound to a local rather than smart-cast: `Throwable.message` is an open property, and
+    // Kotlin 2.4 no longer smart-casts those, so reading it twice off `failure` fails to
+    // compile even though `assertNotNull` proved it non-null on the previous line.
+    val message = assertNotNull(failure.message)
     assertTrue(
-      failure.message.contains("sandbox"),
-      "the failure must name the reason so it is not debugged as transient: ${failure.message}",
+      message.contains("sandbox"),
+      "the failure must name the reason so it is not debugged as transient: $message",
     )
   }
 

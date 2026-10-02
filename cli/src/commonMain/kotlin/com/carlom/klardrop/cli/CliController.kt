@@ -67,7 +67,7 @@ object CliController {
 
       klardrop = Klardrop(
         applicationInfo = applicationInfo,
-        internalPlatformDependency = InternalPlatformDependencies(applicationInfo)
+        internalPlatformDependency = cliCreateInternalPlatformDependencies(applicationInfo)
       )
       klardrop!!.init()
       true
@@ -103,3 +103,17 @@ internal expect fun cliSetDataDir(dir: String)
 
 /** Initialise FileKit (and create dirs) for the given data dir. Null → platform default. */
 internal expect fun cliInitFileKit(dataDir: String?)
+
+/**
+ * Builds the engine's platform dependencies.
+ *
+ * A shared source set cannot call `InternalPlatformDependencies(applicationInfo)` directly:
+ * the common `expect class` declares no constructor, because Android's actual needs a
+ * `Context` and no single signature serves both (see the note on `presentation`'s
+ * per-platform `KlardropBootstrap`). The one-argument constructor exists on the per-target
+ * actuals, so constructing it has to happen per platform as well. Both of the CLI's targets
+ * — the JVM host and the native engine — take that one-argument form.
+ */
+internal expect fun cliCreateInternalPlatformDependencies(
+  applicationInfo: ApplicationInfo,
+): InternalPlatformDependencies

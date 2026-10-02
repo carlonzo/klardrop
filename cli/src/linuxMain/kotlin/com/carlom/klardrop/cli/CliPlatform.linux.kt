@@ -1,6 +1,8 @@
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 
 package com.carlom.klardrop.cli
+import com.carlom.klardrop.common.ApplicationInfo
+import com.carlom.klardrop.common.InternalPlatformDependencies
 
 import com.carlom.klardrop.common.posix.spawn.klardrop_install_termination_handler
 import com.carlom.klardrop.common.posix.spawn.klardrop_pipe2
@@ -29,6 +31,7 @@ import platform.posix.getenv
 import platform.posix.read
 import platform.posix.setenv
 import platform.posix.stderr
+import kotlin.system.exitProcess
 
 internal actual fun cliGetEnv(name: String): String? = getenv(name)?.toKString()?.takeIf { it.isNotEmpty() }
 
@@ -123,3 +126,11 @@ internal actual suspend fun awaitTerminationRequest() {
 internal actual fun onCleanupComplete() {
   // No blocking needed: the native process simply returns from main() once cleanup finishes.
 }
+
+internal actual fun cliExitProcess(status: Int): Nothing = exitProcess(status)
+
+// The native engine takes the one-argument actual; see the expect in CliController.kt for
+// why this cannot be constructed from commonMain.
+internal actual fun cliCreateInternalPlatformDependencies(
+  applicationInfo: ApplicationInfo,
+): InternalPlatformDependencies = InternalPlatformDependencies(applicationInfo)

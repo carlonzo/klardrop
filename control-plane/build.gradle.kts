@@ -18,7 +18,8 @@ kotlin {
     }
   }
   linuxX64()
-  linuxArm64()
+  // arm64 Linux builds only on an aarch64 host — see `hostCanBuildLinuxArm64`.
+  if (rootProject.extra["hostCanBuildLinuxArm64"] as Boolean) linuxArm64()
   // The native macOS app (iosApp/KlardropMac, SwiftUI + presentation.framework) is a
   // *separate framework*, not a JVM app: :presentation's KlardropBootstrap cannot reference
   // ControlPlane because :control-plane already depends on :presentation, so wiring the host

@@ -1417,15 +1417,20 @@ fn unicode_and_spaced_paths_are_shared_verbatim() {
         fixture.dir(),
     );
     assert_eq!(result.code, 0, "stderr: {}", result.stderr);
-    assert_eq!(
-        result.json()["items"][0]["path"],
-        file.to_str().expect("utf-8"),
-        "the daemon must receive the path the caller gave"
+    let item = &result.json()["items"][0];
+    // Paths are resolved before they reach the daemon, so macOS's own
+    // /var -> /private/var temp dir arrives resolved; what has to survive untouched
+    // is the name the caller gave, unicode and spaces included.
+    let resolved = fs::canonicalize(&file).expect("canonical payload path");
+    assert_eq!(item["path"], resolved.to_str().expect("utf-8"));
+    assert!(
+        item["path"]
+            .as_str()
+            .expect("path")
+            .ends_with("παράδειγμα — notes.txt"),
+        "the spaced unicode name must reach the daemon verbatim: {item}"
     );
-    assert_eq!(
-        result.json()["items"][0]["fileName"],
-        "παράδειγμα — notes.txt"
-    );
+    assert_eq!(item["fileName"], "παράδειγμα — notes.txt");
 }
 
 #[test]
