@@ -1,5 +1,5 @@
 headers = openssl/ssl.h openssl/err.h openssl/x509.h openssl/evp.h openssl/bio.h
-headerFilter = openssl/*
+headerFilter = openssl/ssl.h openssl/evp.h openssl/x509.h openssl/err.h openssl/bio.h
 package = com.carlom.klardrop.common.qrshare.openssl
 # Debian/Ubuntu keep the arch-specific half of glibc (bits/*) and OpenSSL's opensslconf.h
 # under /usr/include/<triplet>, which the interop clang never searches on its own: without
