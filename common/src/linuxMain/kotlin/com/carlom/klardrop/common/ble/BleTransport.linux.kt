@@ -28,7 +28,7 @@ actual class BleTransport {
     return SdBusConnection.probeCapability().supported
   }
 
-  actual suspend fun startAdvertising(currentDevice: CurrentDevice) {
+  actual suspend fun startAdvertising(currentDevice: CurrentDevice, lowPower: Boolean) {
     if (!bleEnabled()) return
     advertiser.startAdvertising(currentDevice)
   }
@@ -37,7 +37,7 @@ actual class BleTransport {
     advertiser.stopAdvertising()
   }
 
-  actual fun scanForPeers(): Flow<BlePeerEvent> = emptyFlow()
+  actual fun scanForPeers(lowPower: Boolean): Flow<BlePeerEvent> = emptyFlow()
 
   actual suspend fun connectCentral(address: String, remoteShortDeviceId: String): BleSession {
     throw UnsupportedOperationException("BLE central not supported on Linux native yet")

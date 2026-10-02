@@ -15,6 +15,7 @@ import platform.posix.setenv
 import platform.posix.stat
 import platform.posix.unsetenv
 import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -47,6 +48,18 @@ class ControlPlaneMacosTest {
   private val tempDir = "${SystemTemporaryDirectory}klardrop-control-plane-macos-test"
   private val tempControlFile = "$tempDir/klardrop/control.json"
   private var pinned = false
+
+  /**
+   * `unixWriteControlFile` creates the ONE directory it needs, not a whole path, because
+   * in production that directory is always under a root the platform already made
+   * (`$XDG_RUNTIME_DIR`, `$HOME`). A pinned path with a root of its own therefore has to
+   * bring that root with it — otherwise the mkdir is ENOENT, not EEXIST, and the write
+   * fails closed with "cannot create control directory".
+   */
+  @BeforeTest
+  fun createTempRoot() {
+    SystemFileSystem.createDirectories(Path(tempDir))
+  }
 
   @AfterTest
   fun tearDown() {

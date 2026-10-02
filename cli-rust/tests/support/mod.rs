@@ -208,8 +208,10 @@ pub struct LaunchOptions {
     /// arguments, so `share --pick --no-motion` would fail before the picker
     /// ever opened and the test would be asserting the wrong thing.
     pub display_flags: bool,
-    /// Append `--timeout 10`, so a fixture that never binds fails the test
-    /// instead of stalling it.
+    /// Append `--timeout 30`, so a fixture that never binds fails the test
+    /// instead of stalling it. Generous on purpose: this bounds a hang, it is
+    /// not a latency budget, and these binaries run several pty-driving
+    /// clients concurrently on a shared runner.
     pub timeout: bool,
 }
 
@@ -395,10 +397,12 @@ impl Tui {
                 command.arg("--no-color");
             }
         }
-        // A short connection deadline, so a fixture that never binds fails
-        // the test instead of stalling it.
+        // A connection deadline, so a fixture that never binds fails the test
+        // instead of stalling it. Generous on purpose: this bounds a hang, it
+        // is not a latency budget, and several pty-driving clients run
+        // concurrently on a shared runner.
         if options.timeout {
-            command.args(["--timeout", "10"]);
+            command.args(["--timeout", "30"]);
         }
         command.args(&options.extra);
 
