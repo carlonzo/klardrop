@@ -39,7 +39,7 @@ actual class BleTransport internal constructor(
     return h.awaitPoweredOn()
   }
 
-  actual suspend fun startAdvertising(currentDevice: CurrentDevice) {
+  actual suspend fun startAdvertising(currentDevice: CurrentDevice, lowPower: Boolean) {
     linux?.let { return it.startAdvertising(currentDevice) }
     val h = helper ?: return
     if (!h.ensureStarted()) return
@@ -58,7 +58,7 @@ actual class BleTransport internal constructor(
     helper?.stopAdvertising()
   }
 
-  actual fun scanForPeers(): Flow<BlePeerEvent> {
+  actual fun scanForPeers(lowPower: Boolean): Flow<BlePeerEvent> {
     linux?.let { return it.scanForPeers() }
     val h = helper ?: return emptyFlow()
     return h.scanForPeers()

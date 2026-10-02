@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -72,8 +73,19 @@ class EagerReachabilityConnector(
   private val failureCooldownJobs = MutableStateFlow<Map<String, Job>>(emptyMap())
   private val cooldownDuration = 5.seconds
 
-  fun start() {
-    if (watchJob?.isActive == true) return
+  private var lowPower = false
+
+  /**
+   * Starts probing, or restarts it when [lowPower] differs from the running one. [lowPower]
+   * (backgrounded) stretches the periodic re-probe to [BACKGROUND_REPROBE_INTERVAL].
+   */
+  fun start(lowPower: Boolean = false) {
+    if (watchJob?.isActive == true) {
+      if (lowPower == this.lowPower) return
+      stop()
+    }
+    this.lowPower = lowPower
+    val reprobeInterval = if (lowPower) BACKGROUND_REPROBE_INTERVAL else REPROBE_INTERVAL
 
     watchJob = scope.launch {
       val self = currentDeviceProvider.get().shortDeviceId
@@ -96,7 +108,7 @@ class EagerReachabilityConnector(
     reprobeJob = scope.launch {
       val self = currentDeviceProvider.get().shortDeviceId
       while (isActive) {
-        delay(REPROBE_INTERVAL)
+        delay(reprobeInterval)
         for ((deviceId, device) in visibleDevices.visibleDevices.value) {
           probeIfEligible(deviceId, device, self)
         }
@@ -241,5 +253,8 @@ class EagerReachabilityConnector(
 
     /** How often the re-probe ticker re-evaluates the current visible device set. */
     val REPROBE_INTERVAL = 30.seconds
+
+    /** Re-probe cadence while backgrounded: a pending send still gets through, just not as fast. */
+    val BACKGROUND_REPROBE_INTERVAL = 5.minutes
   }
 }

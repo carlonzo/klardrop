@@ -6,7 +6,7 @@ agp = "9.4.1"
 # so the cap lifts once :presentation moves from the Obj-C export to swift-export.
 # That migration needs direct integration (swift-export does not support CocoaPods),
 # which is what the Sentry swap below unblocks.
-kotlin = "2.4.10"
+kotlin = "2.4.20"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 jetbrains-compose = "1.12.1"
@@ -20,13 +20,13 @@ sentry-kmp = "0.27.0"
 # KMP SDK above and must not be pinned to it.
 sentry-android = "6.23.0"
 filekit = "0.16.0"
-composenativetray = "2.1.6"
+composenativetray = "2.1.7"
 sqldelight = "2.4.0"
 cryptography = "0.6.0"
 coil3 = "3.6.3"
 # Linux BLE transport talks to BlueZ over D-Bus. 6.x (JDK 21 line) is announced but
 # NOT yet released — Maven Central's latest is 5.2.0, which needs JDK 17+ and runs on 21.
-dbus-java = "5.2.1"
+dbus-java = "5.2.2"
 qrcode-kotlin = "4.5.0"
 
 [libraries]
@@ -105,5 +105,5 @@ sentry-kmp = { id = "io.sentry.kotlin.multiplatform.gradle", version.ref = "sent
 # AGP 9 support for the mapping upload landed in 5.12.2, and we are on AGP 9.3.1.
 sentry-android = { id = "io.sentry.android.gradle", version.ref = "sentry-android" }
 
-squareup-wire = { id = "com.squareup.wire", version = "7.0.3" }
+squareup-wire = { id = "com.squareup.wire", version = "7.1.0" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }

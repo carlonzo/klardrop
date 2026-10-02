@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -68,9 +69,14 @@ class DiscoveryNetwork(
 
   private var bleAdvertiseJob: Job? = null
   private var bleScanJob: Job? = null
+  /** Radio mode the running BLE scan/advertisement was started with; see [BleTransport.scanForPeers]. */
+  private var bleScanLowPower = false
+  private var bleAdvertiseLowPower = false
 
   private var klardropDiscoveryJob: Job? = null
   private var nearbyDiscoveryJob: Job? = null
+  val isBrowsingKlardrop: Boolean get() = klardropDiscoveryJob != null
+  val isBrowsingNearbyShare: Boolean get() = nearbyDiscoveryJob != null
   private var lifecycleSubscription: Job? = null
 
   /**
@@ -440,13 +446,15 @@ class DiscoveryNetwork(
     }
   }
 
-  fun startPublishBle() {
-    log("DiscoveryNetwork", "startPublishBle")
+  fun startPublishBle(lowPower: Boolean = false) {
+    log("DiscoveryNetwork", "startPublishBle lowPower=$lowPower")
+    bleAdvertiseLowPower = lowPower
     startDeviceFlowSubscriptionIfNeeded()
     republishBle()
   }
 
   private fun republishBle(deviceInfo: CurrentDevice? = null) {
+    val lowPower = bleAdvertiseLowPower
     bleAdvertiseJob?.cancel()
     bleAdvertiseJob = discoveryScope.launch {
       if (!bleTransport.isSupported()) {
@@ -454,7 +462,7 @@ class DiscoveryNetwork(
         return@launch
       }
       val currentDeviceInfo = deviceInfo ?: currentDeviceProvider.get()
-      runCatching { bleTransport.startAdvertising(currentDeviceInfo) }
+      runCatching { bleTransport.startAdvertising(currentDeviceInfo, lowPower) }
         .onFailure { log("DiscoveryNetwork", "BLE advertise failed: ${it.message}") }
     }
   }
@@ -465,14 +473,17 @@ class DiscoveryNetwork(
     discoveryScope.launch { runCatching { bleTransport.stopAdvertising() } }
   }
 
-  fun discoverBleDevices() {
-    if (bleScanJob?.isActive == true) return
+  /** Starts the BLE scan, or restarts it when [lowPower] differs from the running one. */
+  fun discoverBleDevices(lowPower: Boolean = false) {
+    if (bleScanJob?.isActive == true && bleScanLowPower == lowPower) return
+    bleScanJob?.cancel()
+    bleScanLowPower = lowPower
     bleScanJob = discoveryScope.launch {
       if (!bleTransport.isSupported()) {
         log("DiscoveryNetwork", "BLE not supported; skipping scan")
         return@launch
       }
-      bleTransport.scanForPeers()
+      bleTransport.scanForPeers(lowPower)
         .onCompletion { log("DiscoveryNetwork", "BLE scan completed") }
         .onEach { event ->
           val selfId = currentDeviceProvider.get().shortDeviceId
@@ -496,8 +507,40 @@ class DiscoveryNetwork(
             }
           }
         }
-        .launchIn(discoveryScope)
+        // collect, not launchIn: the scan must live inside bleScanJob so cancelling it stops the radio.
+        .collect()
     }
+  }
+
+  /**
+   * Withdraws the mDNS advertisements and forgets their ports, so neither the network-change
+   * rebuild nor the port watchdog re-publishes them. [startPublishKlardrop] /
+   * [startPublishNearbyShare] publish again.
+   */
+  fun stopPublishMdns() {
+    publishedKlardropPort = null
+    nearbySharePort = null
+    klardropPublishJob?.cancel()
+    klardropPublishJob = null
+    nearbySharePublishJob?.cancel()
+    nearbySharePublishJob = null
+  }
+
+  /**
+   * Stops every browse (mDNS + BLE scan) and the browse-restart guards. Nulling the jobs is what
+   * keeps [rebuildMdnsState] and [requestKlardropDiscoveryRefresh] from restarting them.
+   */
+  fun stopBrowsing() {
+    listOf(
+      klardropDiscoveryJob, nearbyDiscoveryJob, bleScanJob,
+      browseRestartDebounceJob, peerLossWatchJob, periodicBackstopJob,
+    ).forEach { it?.cancel() }
+    klardropDiscoveryJob = null
+    nearbyDiscoveryJob = null
+    bleScanJob = null
+    browseRestartDebounceJob = null
+    peerLossWatchJob = null
+    periodicBackstopJob = null
   }
 
   /**

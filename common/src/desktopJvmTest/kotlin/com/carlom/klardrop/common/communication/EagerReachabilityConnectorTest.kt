@@ -33,6 +33,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -619,6 +620,39 @@ class EagerReachabilityConnectorTest {
       client.connectCalls.size,
       "one tick must add exactly one probe per device (5 devices → ≤5 probes per tick)",
     )
+
+    connector.stop()
+  }
+
+  /**
+   * Backgrounded (the Android "stay discoverable" service): the ticker slows to 5 minutes, and
+   * switching modes on a running connector takes effect without a stop().
+   */
+  @OptIn(ExperimentalCoroutinesApi::class)
+  @Test
+  fun lowPowerStretchesTheTicker() = runTest(timeout = 10.seconds) {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val coroutines = testCoroutines(this, dispatcher)
+    val pool = FakeConnectionPool()
+    val peerId = "peerLPLP"
+    val client = SwitchableClient()
+    val connector = buildVirtualConnector(
+      FakeVisibleDevices(mapOf(peerId to testDevice(peerId))), client, pool, coroutines,
+    )
+
+    connector.start()
+    runCurrent()
+    connector.start(lowPower = true)
+    runCurrent()
+    val afterSwitch = client.connectCalls.size
+
+    advanceTimeBy(4.minutes)
+    runCurrent()
+    assertEquals(afterSwitch, client.connectCalls.size, "low power must not tick every 30s")
+
+    advanceTimeBy(1.minutes)
+    runCurrent()
+    assertEquals(afterSwitch + 1, client.connectCalls.size, "low power ticks every 5 minutes")
 
     connector.stop()
   }

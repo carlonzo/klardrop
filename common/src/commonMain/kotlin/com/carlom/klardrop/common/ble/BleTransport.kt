@@ -27,17 +27,19 @@ expect class BleTransport {
   /**
    * Start advertising [currentDevice] as a Klardrop BLE peer. Safe to call repeatedly —
    * implementations should replace any previous advertisement with the new device info.
+   * [lowPower] trades discovery latency for battery (used while the app is backgrounded);
+   * platforms without a tunable radio ignore it.
    */
-  suspend fun startAdvertising(currentDevice: CurrentDevice)
+  suspend fun startAdvertising(currentDevice: CurrentDevice, lowPower: Boolean = false)
 
   /** Stop advertising. No-op if not currently advertising. */
   suspend fun stopAdvertising()
 
   /**
    * Start scanning for Klardrop peers. The returned flow emits peer found/lost events.
-   * Cancelling the flow stops the scan.
+   * Cancelling the flow stops the scan. [lowPower] as for [startAdvertising].
    */
-  fun scanForPeers(): Flow<BlePeerEvent>
+  fun scanForPeers(lowPower: Boolean = false): Flow<BlePeerEvent>
 
   /**
    * Open a GATT central connection to the peer at [address], negotiate MTU, discover the

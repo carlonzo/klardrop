@@ -27,6 +27,9 @@ import kotlinx.coroutines.launch
  * `Klardrop.init()`); on modern Android they get frozen when the app has no foreground component.
  * This service supplies that foreground component (a persistent notification) so the process stays
  * alive, and holds a [WifiManager.MulticastLock] so mDNS multicast keeps flowing in the background.
+ * While it's on and no Activity is visible, [com.carlom.klardrop.android.KlarDropApplication] runs
+ * discovery in `DiscoveryMode.BACKGROUND` (low-power BLE, slow re-probe); with it off, discovery is
+ * OFF.
  *
  * Lifecycle is driven entirely by the persisted `backgroundDiscoveryEnabled` preference: an
  * observer in [com.carlom.klardrop.android.KlarDropApplication] starts/stops this service when the
