@@ -37,10 +37,6 @@ kotlin {
       // fails to compile; :presentation exports :klardrop-common for the same
       // reason.
       export(project(":presentation"))
-      // And Klardrop itself is in :klardrop-common, which `ControlPlane.start(app:)` names
-      // just as directly. MacApp.swift imports this framework alone, so anything its
-      // header has to name has to be exported through it.
-      export(project(":klardrop-common"))
     }
   }
   applyDefaultHierarchyTemplate()
@@ -78,16 +74,6 @@ kotlin {
         implementation(deps.kotlinx.coroutines.core)
         implementation(deps.kotlinx.serialization.json)
         implementation(deps.ktor.network)
-      }
-    }
-    val macosArm64Main by getting {
-      dependencies {
-        // The macosArm64 framework `export`s :presentation because its public API names
-        // Klardrop and DiscoveryController, and the linker requires an exported project to
-        // be an API dependency of the source set the framework is produced from. Declared
-        // here rather than in commonMain so only the target that exports it pays for it.
-        api(project(":presentation"))
-        api(project(":klardrop-common"))
       }
     }
     val desktopJvmMain by getting {

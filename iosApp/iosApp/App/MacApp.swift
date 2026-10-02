@@ -1,10 +1,7 @@
 #if os(macOS)
 import SwiftUI
 import AppKit
-// control_plane only. It `export`s :presentation — its public API names Klardrop and
-// DiscoveryController, so the generated header re-exports the module — and importing
-// both would put KlardropBootstrap, DiscoveryController and DeviceUi in two modules at
-// once, which Swift reports as "ambiguous for type lookup".
+import presentation
 import control_plane
 
 // ---------------------------------------------------------------------------
