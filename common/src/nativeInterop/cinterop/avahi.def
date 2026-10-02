@@ -1,0 +1,5 @@
+headers = avahi-client/client.h avahi-client/lookup.h avahi-client/publish.h avahi-common/thread-watch.h avahi-common/strlst.h avahi-common/error.h avahi-common/address.h
+headerFilter = avahi-client/* avahi-common/*
+package = com.carlom.klardrop.common.mdns.avahi
+compilerOpts = -I/usr/include
+linkerOpts = -L/usr/lib -L/usr/lib64 -lavahi-client -lavahi-common

@@ -21,7 +21,6 @@ allprojects {
   repositories {
     google()
     mavenCentral()
-    mavenLocal()
   }
 }
 
@@ -47,5 +46,6 @@ subprojects {
     sourceCompatibility = javaVersion.toString()
     targetCompatibility = javaVersion.toString()
   }
-
 }
+
+

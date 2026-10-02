@@ -116,7 +116,7 @@ scripts/klardrop-ctl android collect-logs /tmp/klardrop-e2e-logs
 adb logcat -d -v time | tee android-logcat.txt
 ```
 
-Useful tags: `Klardrop`, `DiscoveryController`, `PairingProtocolCoordinator`, `MessagesRouter`, `TrustManager`, `DebugControl`, `DiscoveryNetwork`, `Messenger`, `Client`, `Server`.
+Useful tags: `Klardrop`, `DiscoveryController`, `PairingProtocolCoordinator`, `MessagesRouter`, `TrustManager`, `ControlPlane`, `DiscoveryNetwork`, `Messenger`, `Client`, `Server`.
 
 ## Do not
 

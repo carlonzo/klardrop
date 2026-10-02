@@ -30,6 +30,8 @@ package com.carlom.klardrop.common.communication
  *   duration (iOS offers a backgrounded app no way to keep a socket streaming), plus a background
  *   task so a brief app switch doesn't suspend the process instantly.
  * - **macOS** — [MacTransferAnchor]: an `NSProcessInfo` activity that blocks idle system sleep.
+ * - **Linux (native)** — [LinuxTransferAnchor]: a `systemd-inhibit` sleep lock held while transfers
+ *   are in flight.
  * - **Desktop JVM** — [None]; desktop processes aren't killed for being idle.
  */
 interface TransferAnchor {

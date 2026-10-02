@@ -14,7 +14,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.carlom.klardrop.KlardropApp
-import com.carlom.klardrop.desktop.debug.DesktopDebugLoader
+import com.carlom.klardrop.control.ControlPlane
 import kotlinx.coroutines.launch
 import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.ApplicationInfo
@@ -78,8 +78,10 @@ fun main(args: Array<String>) {
   val inMemory = args.contains("--no-persistence")
   val dataDir = args.firstOrNull { it.startsWith("--data-dir=") }?.substringAfter("=")
     ?: System.getenv("KLARDROP_HOME")
+  // --control-port=N wins; otherwise 8765 for debug runs, and an ephemeral port for release
+  // builds so packaged apps still publish a working control file without a fixed port clash.
   val controlPort = args.firstOrNull { it.startsWith("--control-port=") }?.substringAfter("=")?.toIntOrNull()
-    ?: if (debug) 8765 else null
+    ?: if (debug) 8765 else 0
 
   var enableKlardrop = !args.contains("--no-klardrop")
   var enableNearby = !args.contains("--no-nearby")
@@ -173,11 +175,7 @@ fun main(args: Array<String>) {
   )
   k.init()
 
-  if (applicationInfo.isDebug && applicationInfo.controlPort != null) {
-    k.commonComponent.coroutines().appScope.launch {
-      DesktopDebugLoader.instance?.start(k)
-    }
-  }
+  startProductionControlPlane(k, applicationInfo)
 
   application {
 
@@ -201,15 +199,14 @@ fun main(args: Array<String>) {
       trayUpdateLabel(updateStatus, updateInstall)
     }
 
-    // Connect DebugControl programmatic window visibility endpoints
+    // Programmatic window visibility endpoints. Only wired for debug builds — the /window
+    // routes answer 403 in release builds regardless.
     LaunchedEffect(Unit) {
       if (applicationInfo.isDebug) {
-        DesktopDebugLoader.instance?.let { debugControl ->
-          debugControl.windowVisibilityProvider = { isWindowVisible }
-          debugControl.windowVisibilitySetter = { visible ->
-            EventQueue.invokeLater {
-              isWindowVisible = visible
-            }
+        ControlPlane.windowVisibilityProvider = { isWindowVisible }
+        ControlPlane.windowVisibilitySetter = { visible ->
+          EventQueue.invokeLater {
+            isWindowVisible = visible
           }
         }
       }
@@ -315,9 +312,9 @@ fun main(args: Array<String>) {
             pendingFiles = pendingShareFiles,
             onClearPendingFiles = { pendingShareFiles = null },
             onDiscoveryControllerAvailable = { controller ->
-              if (applicationInfo.isDebug) {
+              if (applicationInfo.controlPort != null) {
                 k.commonComponent.coroutines().appScope.launch {
-                  DesktopDebugLoader.instance?.bind(controller, k)
+                  ControlPlane.bind(controller, k)
                 }
               }
             },
@@ -328,6 +325,23 @@ fun main(args: Array<String>) {
     }
   }
 
+}
+
+/**
+ * Starts the loopback control plane in every build, not just debug ones: `klardrop`, the native
+ * CLI/TUI and the Qt / Omarchy frontends drive the running app through it instead of tapping
+ * the UI. Referenced statically so ProGuard cannot strip it from release packages.
+ *
+ * [ControlPlane.start] publishes `control.json` and fails closed if it cannot. The
+ * DiscoveryController only exists once the Compose UI composes, so [ControlPlane.bind] (which
+ * starts the server too) runs from KlardropApp's `onDiscoveryControllerAvailable` callback.
+ */
+private fun startProductionControlPlane(klardrop: Klardrop, applicationInfo: ApplicationInfo) {
+  if (applicationInfo.controlPort == null) return
+  klardrop.commonComponent.coroutines().appScope.launch {
+    runCatching { ControlPlane.start(klardrop) }
+      .onFailure { println("Control plane failed to start: ${it.message}") }
+  }
 }
 
 private fun parseSendFiles(args: Array<String>): List<String> {

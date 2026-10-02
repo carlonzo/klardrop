@@ -43,6 +43,8 @@ class UpdateChecker(
   private val releaseChannel: String = "stable",
   private val manifestUrl: String = DEFAULT_MANIFEST_URL,
   private val recheckInterval: Duration = DEFAULT_RECHECK_INTERVAL,
+  private val assetKey: String = platformUpdateAssetKey,
+  private val detectFlavorFlag: () -> String? = ::detectPlatformFlavorFlag,
 ) {
 
   private val scope = coroutines.newScope(coroutines.ioDispatcher)
@@ -159,7 +161,7 @@ class UpdateChecker(
     // background loop.
     if (_install.value != InstallProgress.Idle) return
     val inst = runCatching { installerFactory(channel) }.getOrNull() ?: return
-    val asset = manifest.platforms[ASSET_LINUX_TARBALL] ?: return
+    val asset = manifest.platforms[assetKey] ?: return
     installer = inst
     _install.value = InstallProgress.Downloading(null)
     runCatching {
@@ -178,8 +180,15 @@ class UpdateChecker(
 
   /** Swap in the staged update and relaunch. No-op unless [install] is [InstallProgress.Ready]. */
   fun applyUpdate() {
-    if (_install.value != InstallProgress.Ready) return
-    installer?.applyAndRestart()
+    if (!_install.compareAndSet(InstallProgress.Ready, InstallProgress.Applying)) return
+    runCatching {
+      val inst = installer ?: error("No installer available to apply update")
+      inst.applyAndRestart()
+    }.onFailure { e ->
+      log("UpdateChecker", "apply update failed", e)
+      installer = null
+      _install.value = InstallProgress.Failed(e.message ?: "update apply failed")
+    }
   }
 
   /**
@@ -197,10 +206,18 @@ class UpdateChecker(
 
     // Re-running the installer upgrades in place. Nightly installs must stay on the
     // nightly channel, so pass the flag through.
-    InstallChannel.TARBALL -> UpdateAction.RunCommand(
-      if (releaseChannel == "nightly") "curl -fsSL $INSTALL_SCRIPT_URL | bash -s -- --nightly"
-      else "curl -fsSL $INSTALL_SCRIPT_URL | bash"
-    )
+    InstallChannel.TARBALL -> {
+      val flags = buildList {
+        if (releaseChannel == "nightly") add("--nightly")
+        if (assetKey == ASSET_LINUX_NATIVE_X64 || assetKey == ASSET_LINUX_NATIVE_ARM64) {
+          add(detectFlavorFlag() ?: "--native")
+        }
+      }
+      UpdateAction.RunCommand(
+        if (flags.isEmpty()) "curl -fsSL $INSTALL_SCRIPT_URL | bash"
+        else "curl -fsSL $INSTALL_SCRIPT_URL | bash -s -- ${flags.joinToString(" ")}"
+      )
+    }
 
     // `apt install ./file.deb` (not `dpkg -i`) so apt resolves any dependency the
     // bundled-runtime package still declares, and records the upgrade properly.
@@ -214,7 +231,14 @@ class UpdateChecker(
     }
 
     // The AUR package is source-of-truth for pacman installs; an AUR helper rebuilds it.
-    InstallChannel.PACMAN -> UpdateAction.RunCommand("yay -S $AUR_PACKAGE")
+    InstallChannel.PACMAN -> {
+      val aurPackage = if (assetKey == ASSET_LINUX_NATIVE_X64 || assetKey == ASSET_LINUX_NATIVE_ARM64) {
+        "klardrop-native-bin"
+      } else {
+        AUR_PACKAGE
+      }
+      UpdateAction.RunCommand("yay -S $aurPackage")
+    }
 
     InstallChannel.FLATPAK -> UpdateAction.RunCommand("flatpak update $FLATPAK_APP_ID")
 
@@ -248,9 +272,16 @@ class UpdateChecker(
   private fun downloadUrl(manifest: LatestManifest): String {
     val p = manifest.platforms
     val asset = when (osType) {
-      OsType.APPLE -> p[ASSET_MACOS]
-      OsType.WINDOWS -> p[ASSET_WINDOWS]
-      OsType.LINUX -> p[ASSET_LINUX_TARBALL] ?: p[ASSET_LINUX_DEB] ?: p[ASSET_LINUX_RPM]
+      // Falls back to the CLI when a build published no verified .app/.dmg (an
+      // unsigned CI build): that is still a macOS download, and the CLI is the only
+      // one of the two that needs no installer.
+      OsType.APPLE -> p[ASSET_MACOS] ?: p[ASSET_MACOS_CLI]
+      OsType.LINUX -> p[assetKey] ?: p[ASSET_LINUX_TARBALL] ?: p[ASSET_LINUX_DEB] ?: p[ASSET_LINUX_RPM]
+      // Same shape as Apple: a build that published no MSI still published the
+      // native CLI, and without this fallback a Windows user whose update found
+      // no installer was sent to the release notes with no route to a binary.
+      OsType.WINDOWS -> p[ASSET_WINDOWS] ?: p[ASSET_WINDOWS_CLI]
+      // ANDROID and UNKNOWN have no desktop installer on any channel.
       else -> null
     }
     return asset?.url ?: manifest.notes ?: RELEASES_PAGE
@@ -271,8 +302,17 @@ class UpdateChecker(
 
     /** `latest.json` platform keys, written by the release workflow. */
     const val ASSET_MACOS = "macos"
+    /** Standalone native Rust CLI for macOS. The Linux CLI needs no key of its own:
+     * it ships inside the `linux-native-*` tarballs, next to the engine it drives. */
+    const val ASSET_MACOS_CLI = "macos-cli"
     const val ASSET_WINDOWS = "windows"
+    /** Standalone native Rust CLI for Windows, published beside the MSI rather
+     * than inside it: jpackage signs what it builds, so a file dropped in
+     * afterwards would invalidate the installer's signature. */
+    const val ASSET_WINDOWS_CLI = "windows-cli"
     const val ASSET_LINUX_TARBALL = "linux-tarball"
+    const val ASSET_LINUX_NATIVE_X64 = "linux-native-x64"
+    const val ASSET_LINUX_NATIVE_ARM64 = "linux-native-arm64"
     const val ASSET_LINUX_DEB = "linux-deb"
     const val ASSET_LINUX_RPM = "linux-rpm"
 

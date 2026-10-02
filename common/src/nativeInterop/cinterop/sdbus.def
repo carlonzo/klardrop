@@ -1,0 +1,5 @@
+headers = systemd/sd-bus.h systemd/sd-bus-protocol.h
+headerFilter = systemd/sd-bus*.h
+package = com.carlom.klardrop.common.ble.sdbus
+compilerOpts = -I/usr/include
+linkerOpts = -L/usr/lib -L/usr/lib64 -lsystemd

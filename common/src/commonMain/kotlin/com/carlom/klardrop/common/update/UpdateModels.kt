@@ -103,6 +103,9 @@ sealed interface InstallProgress {
   /** Downloaded, verified and staged — a restart applies it. */
   data object Ready : InstallProgress
 
+  /** In the process of applying and restarting. */
+  data object Applying : InstallProgress
+
   /** The self-update failed; the banner falls back to the [UpdateAction]. */
   data class Failed(val message: String) : InstallProgress
 }

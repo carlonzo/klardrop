@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import kotlin.system.exitProcess
+import kotlin.time.Clock
 
 private const val EXIT_OK = 0
 private const val EXIT_INIT_FAILURE = 3
@@ -49,7 +50,7 @@ class DiscoverCommand : CliktCommand(
     }
 
     val timeoutMs = (timeout?.toLongOrNull() ?: 5L) * 1000
-    val startTime = System.currentTimeMillis()
+    val startTime = Clock.System.now().toEpochMilliseconds()
     val seenDevices = mutableSetOf<String>()
 
     coroutineScope {
@@ -84,7 +85,7 @@ class DiscoverCommand : CliktCommand(
           echo(".", trailingNewline = false)
         }
         delay(1000)
-        elapsed = System.currentTimeMillis() - startTime
+        elapsed = Clock.System.now().toEpochMilliseconds() - startTime
       }
 
       discoveryJob.cancel()
@@ -106,3 +107,4 @@ class DiscoverCommand : CliktCommand(
     exitProcess(EXIT_OK)
   }
 }
+

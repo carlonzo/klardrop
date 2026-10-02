@@ -20,6 +20,8 @@ private val json = Json {
   isLenient = true
 }
 
+actual val platformUpdateAssetKey: String = UpdateChecker.ASSET_LINUX_TARBALL
+
 actual fun createUpdateManifestFetcher(): UpdateManifestFetcher? = UpdateManifestFetcher { url ->
   withContext(Dispatchers.IO) {
     runCatching {
@@ -330,3 +332,6 @@ private class DesktopTarballInstaller(
     runCatching { path.toFile().deleteRecursively() }
   }
 }
+
+actual fun detectPlatformFlavorFlag(): String? = null
+

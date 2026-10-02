@@ -1176,6 +1176,7 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../common/build/cocoapods/synthetic/macos/build/Debug/Sentry",
+					"$(SRCROOT)/../control-plane/build/bin/macosArm64/debugFramework",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iosApp/MacInfo.plist;
@@ -1186,7 +1187,18 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				ONLY_ACTIVE_ARCH = YES;
+				/* control_plane comes FIRST on purpose. Both it and presentation.framework are
+				   static Kotlin/Native frameworks, and control_plane's archive also contains
+				   its own copy of :presentation and :klardrop-common. ld64 pulls an archive
+				   member only while it resolves a pending undefined symbol, so whichever
+				   framework is scanned first supplies those classes; the second one is then
+				   never pulled in and nothing is defined twice. Put presentation first and
+				   control_plane redefines every symbol it already got. Debug used to list
+				   control_plane AFTER $(inherited), which put presentation.framework first —
+				   the opposite of what this comment claims, and a duplicate-symbol build. */
 				OTHER_LDFLAGS = (
+					"-framework",
+					"control_plane",
 					"$(inherited)",
 					"-lsqlite3",
 					"-Xlinker",
@@ -1249,6 +1261,7 @@
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../common/build/cocoapods/synthetic/macos/build/Release/Sentry",
+					"$(SRCROOT)/../control-plane/build/bin/macosArm64/releaseFramework",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iosApp/MacInfo.plist;
@@ -1258,7 +1271,16 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				/* control_plane comes FIRST on purpose. Both it and presentation.framework are
+				   static Kotlin/Native frameworks, and control_plane's archive also contains
+				   its own copy of :presentation and :klardrop-common. ld64 pulls an archive
+				   member only while it resolves a pending undefined symbol, so whichever
+				   framework is scanned first supplies those classes; the second one is then
+				   never pulled in and nothing is defined twice. Put presentation first and
+				   control_plane redefines every symbol it already got. */
 				OTHER_LDFLAGS = (
+					"-framework",
+					"control_plane",
 					"$(inherited)",
 					"-lsqlite3",
 					"-Xlinker",

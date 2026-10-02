@@ -113,7 +113,8 @@ jobs:
             :protos:linkDebugTestIosSimulatorArm64 \
             :klardrop-common:linkDebugTestMacosArm64 \
             :presentation:linkDebugTestMacosArm64 \
-            :protos:linkDebugTestMacosArm64
+            :protos:linkDebugTestMacosArm64 \
+            :control-plane:linkDebugTestMacosArm64
 
       # Save regardless of what the tests below do — see the restore step above.
       - name: Save Kotlin/Native (~/.konan)
@@ -125,10 +126,14 @@ jobs:
 
       - name: Run macOS + iOS native tests
         # iOS Simulator + macOS native cover the shared KMP modules that Linux
-        # cannot build (klardrop-common, presentation, protos). :compose-ui has
-        # only android + desktopJvm targets now, so it has no Apple test task and
-        # is fully covered by the Linux job. The old :common-ui (renamed :compose-ui)
-        # and :macos (vestigial KN stub removed in SwiftUI migration) tasks are gone.
+        # cannot build (klardrop-common, presentation, protos, control-plane).
+        # :control-plane is here for its macosArm64 target specifically: its
+        # POSIX control-file actual, its per-platform capability set and the
+        # ktor-network bind are the parts the shipped Klardrop.app runs and no
+        # other job executes. :compose-ui has only android + desktopJvm targets
+        # now, so it has no Apple test task and is fully covered by the Linux
+        # job. The old :common-ui (renamed :compose-ui) and :macos (vestigial KN
+        # stub removed in SwiftUI migration) tasks are gone.
         #
         # Step-level timeout (NOT job-level): a wedged native test — e.g. a
         # real-socket integration test whose runTest watchdog can't preempt a
@@ -149,7 +154,8 @@ jobs:
           ./gradlew --no-parallel \
             :klardrop-common:macosArm64Test \
             :presentation:macosArm64Test \
-            :protos:macosArm64Test
+            :protos:macosArm64Test \
+            :control-plane:macosArm64Test
           ./gradlew --no-parallel \
             :klardrop-common:iosSimulatorArm64Test \
             :presentation:iosSimulatorArm64Test \
@@ -175,8 +181,11 @@ jobs:
       - name: Build iOS + macOS apps (unsigned)
         run: |
           # Prebuild the Sentry macOS synthetic + dummy frameworks that the
-          # cocoapods integration and macOS FRAMEWORK_SEARCH_PATHS depend on.
+          # cocoapods integration and macOS FRAMEWORK_SEARCH_PATHS depend on, plus
+          # control_plane.framework — what MacApp.swift imports to start the local
+          # control plane, and what the KlardropMac target links.
           ./gradlew :klardrop-common:podBuildSentryMacos :presentation:generateDummyFramework
+          ./gradlew :control-plane:linkDebugFrameworkMacosArm64
           pod install --project-directory=iosApp
           # ARCHS=arm64: the KMP framework only builds the iosSimulatorArm64 target, so the
           # presentation.framework has no x86_64 slice. 'generic/platform=iOS Simulator'
@@ -188,3 +197,287 @@ jobs:
           xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
             -destination 'platform=macOS,arch=arm64' \
             -configuration Debug build CODE_SIGNING_ALLOWED=NO
+
+  # The native Rust client (cli-rust/) has no Gradle wiring at all, so the Linux
+  # and macOS jobs above never compile, lint or test it — a Rust-only regression
+  # would be invisible to this workflow. One matrix job covers all three
+  # platforms the shell is expected to run on:
+  #   ubuntu-latest    — Linux, the platform with a native engine fixture;
+  #   macos-14         — Apple Silicon (aarch64-apple-darwin), so the shell is
+  #                      compiled for the same triple the macOS app runs on,
+  #                      against the production JVM engine on the other side;
+  #   windows-latest   — Windows, where the Rust client is native and talks to
+  #                      the existing KMP JVM engine.
+  # macos-14 (not the macos-26 image above) on purpose: this job needs no Xcode,
+  # no Apple SDK and no Kotlin/Native, only a JDK-free `cargo`. The image
+  # comment above is about Kotlin/Native SDK versions, which do not apply here.
+  rust:
+    name: Rust client (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One broken platform must not hide the others' results.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    defaults:
+      run:
+        working-directory: cli-rust
+    steps:
+      - uses: actions/checkout@v7
+
+      # The hosted images ship stable rustup with clippy and rustfmt. Printing the
+      # versions makes a missing component a loud failure here instead of a
+      # confusing "no such subcommand" three steps later.
+      - name: Show Rust toolchain
+        shell: bash
+        run: |
+          rustc --version
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+
+      # --locked everywhere: Cargo.lock is committed, and a build that silently
+      # updated it would test dependency versions nobody reviewed.
+      - name: Test
+        shell: bash
+        run: cargo test --locked
+
+      # The interrupted-wait contract has a platform-specific half that no other
+      # leg can check: on Windows the event arrives through
+      # `SetConsoleCtrlHandler`, not a signal, so "the client keeps the request
+      # id instead of dying on the default disposition" has to be proved with a
+      # real console event aimed at a real owned child process. `cargo test`
+      # above already runs it; naming it separately means a failure says which
+      # gate broke, and `--nocapture` means a runner whose console could not
+      # deliver the event shows that instead of a bare assertion.
+      - name: Interrupted wait (Windows console event)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cargo test --locked --test interrupted_wait -- --nocapture
+
+      - name: Lint
+        shell: bash
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Format
+        shell: bash
+        run: cargo fmt --all --check
+
+  # "Compile the macOS host code on a supported runner" as a real gate rather
+  # than a claim. `desktop` declares a Kotlin Multiplatform `jvm { }` target
+  # (desktop/build.gradle.kts), which on an Apple Silicon runner IS the macOS
+  # host build: :desktop:jvmJar compiles main against the desktopJvm actuals of
+  # :klardrop-common, :presentation, :compose-ui and :control-plane, and
+  # :desktop:jvmTest runs the host unit tests. The Linux job compiles the same
+  # JVM target, so what this adds is the macOS host itself.
+  # macos-26 matches the macOS job above (same image, same JDK, same setup-gradle
+  # cache) rather than introducing a second macOS image to keep warm.
+  desktop-jvm-host-macos:
+    name: Compile macOS JVM host (desktop)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'zulu'
+          java-package: jdk
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the macOS JVM host
+        timeout-minutes: 45
+        run: ./gradlew :desktop:jvmJar :desktop:jvmTest
+
+  # The production JVM-host fixture: the Rust client against a real Kotlin/JVM
+  # daemon started WITHOUT --debug, i.e. ControlPlane.forBuild(false) with the
+  # production capability list. That is the host the macOS and Windows desktop
+  # apps run, and the only headless JVM host in this repo (the Compose Desktop
+  # app needs a display, and the runner has no xvfb). The script asserts the
+  # debug-only capabilities are absent, which is the evidence that the gate is
+  # exercising production control rather than a debug build.
+  jvm-host-fixture:
+    name: Production JVM-host fixture (Rust client)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'zulu'
+          java-package: jdk
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the Rust client
+        working-directory: cli-rust
+        run: cargo build --locked --release
+
+      - name: Run the production JVM-host fixture
+        # Generous: the script's first action is a cold `./gradlew :cli:jvmRun`,
+        # which builds :cli, :klardrop-common, :presentation and :control-plane
+        # for the JVM before the daemon can start. Step-level so a wedged run
+        # cannot eat the whole 6h job budget.
+        timeout-minutes: 45
+        run: ./scripts/klardrop-jvm-host-fixture-tests.sh
+
+  # packaging/install.sh is a release artifact: it is what users pipe from
+  # raw.githubusercontent, and it is the only thing that decides whether
+  # ~/.local/bin/klardrop and ~/.local/bin/klardrop-engine end up as a matched
+  # pair. Nothing in the Gradle jobs above executes it, so a broken guard,
+  # rollback or checksum check would ship green. The suite is hermetic (temp
+  # HOMEs + stubbed uname/ldd/systemctl/pacman/install/mv/curl), needs no JDK
+  # and no Gradle, so it gets its own fast job.
+  packaging-tests:
+    name: Installer tests (packaging/install.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the installer tests
+        run: bash packaging/linux/test-omarchy-install.sh
+
+  # The Rust client against the KOTLIN/NATIVE engine — the pairing the release
+  # tarball actually ships (`bin/klardrop` + `bin/klardrop-engine`), which no
+  # other job on a PR exercises: the Linux Gradle job tests the JVM host and the
+  # JVM-host fixture is JVM-only. Builds the engine with the same Gradle task
+  # packaging/linux/stage-native-tarball.sh requires, then runs the fixture.
+  native-fixture:
+    name: Native fixture (Rust client + Kotlin/Native engine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'zulu'
+          java-package: jdk
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # The engine links against these; the same four packages the release
+      # workflow's native job installs (Qt/xvfb omitted — no Qt frontend here).
+      - name: Install native build deps
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y
+          libavahi-client-dev libsqlite3-dev libssl-dev libsystemd-dev
+
+      - name: Build the Kotlin/Native engine
+        # Generous: on a cold runner this downloads the Kotlin/Native compiler
+        # and platform libs first, same as the macOS native tests above.
+        timeout-minutes: 60
+        run: ./gradlew :cli:linkReleaseExecutableLinuxX64
+
+      # --locked, like every other Rust invocation in this workflow: Cargo.lock
+      # is committed and a build that updated it would test unreviewed versions.
+      - name: Build the Rust client
+        working-directory: cli-rust
+        run: cargo build --locked --release
+
+      - name: Run the native fixture
+        timeout-minutes: 45
+        run: ./scripts/klardrop-rust-fixture-tests.sh
+
+  # The Qt frontend against the control plane. Two suites, because they prove
+  # different halves of the same contract:
+  #   - linux/qt/tests/test_integration.py drives the frontend against an
+  #     in-process fake daemon (focus gating, credential rotation, composer,
+  #     single instance, update 409);
+  #   - scripts/klardrop-qt-real-engine-tests.sh points the REAL frontend at the
+  #     REAL engine and asserts the response shapes clientbridge.cpp parses, plus
+  #     every request the binary actually makes.
+  # Shared control code moved across three hosts in this work, so "no Qt
+  # regression" has to be checked against a real engine rather than asserted by
+  # grepping route strings. This is the only PR gate that does either.
+  qt-regression:
+    name: Qt frontend vs. the real control plane
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'zulu'
+          java-package: jdk
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Install Qt and native build deps
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y
+          qt6-base-dev qt6-declarative-dev qmake6 libgl-dev
+          qml6-module-qtquick qml6-module-qtquick-controls
+          qml6-module-qtquick-layouts qml6-module-qtquick-templates
+          qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models
+          qml6-module-qtqml-workerscript
+          libavahi-client-dev libsqlite3-dev libssl-dev libsystemd-dev
+
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+
+      - name: Build the Kotlin/Native engine
+        timeout-minutes: 60
+        run: ./gradlew :cli:linkReleaseExecutableLinuxX64
+
+      - name: Qt integration suite (fake daemon)
+        timeout-minutes: 30
+        run: python3 linux/qt/tests/test_integration.py
+
+      - name: Qt frontend vs. the real engine
+        timeout-minutes: 30
+        run: ./scripts/klardrop-qt-real-engine-tests.sh
+
+  # The Windows release artifact, built and packaged the way release.yml builds
+  # it. The `rust` matrix above covers compilation and tests on windows-latest,
+  # but only in the dev profile — the release-profile build, the archive staging
+  # and the container check only ever ran in the tagged `build` job, which is how
+  # a tar file named `.zip` shipped without any PR noticing.
+  windows-release-package:
+    name: Windows release package (Rust CLI)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the Rust CLI (release profile)
+        working-directory: cli-rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked --release
+          test -f target/release/klardrop.exe
+
+      # Identical to release.yml's staging step, deliberately: this job exists
+      # to fail when that one would. pwsh, because under `shell: bash` on
+      # windows-latest `tar` is GNU tar, whose -a is --auto-compress and can never
+      # produce a zip container.
+      - name: Stage and verify the archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path dist, stage-win | Out-Null
+          Copy-Item cli-rust/target/release/klardrop.exe stage-win/klardrop.exe
+          Compress-Archive -Path stage-win/klardrop.exe -DestinationPath dist/klardrop-cli-windows-x64.zip -Force
+          $sig = [System.IO.File]::ReadAllBytes("$PWD/dist/klardrop-cli-windows-x64.zip")[0..1]
+          if ($sig[0] -ne 0x50 -or $sig[1] -ne 0x4B) {
+            throw "klardrop-cli-windows-x64.zip is not a zip container (magic: $($sig -join ','))"
+          }
+          # And it must actually extract to the CLI, not to some other layout.
+          Expand-Archive -Path dist/klardrop-cli-windows-x64.zip -DestinationPath verify -Force
+          if (-not (Test-Path verify/klardrop.exe)) {
+            throw "the archive does not contain klardrop.exe at its root"
+          }
+          Write-Host "archive verified: $((Get-Item dist/klardrop-cli-windows-x64.zip).Length) bytes"

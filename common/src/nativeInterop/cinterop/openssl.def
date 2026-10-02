@@ -1,0 +1,5 @@
+headers = openssl/ssl.h openssl/err.h openssl/x509.h openssl/evp.h openssl/bio.h
+headerFilter = openssl/*
+package = com.carlom.klardrop.common.qrshare.openssl
+compilerOpts = -I/usr/include
+linkerOpts = -L/usr/lib -L/usr/lib64 -lssl -lcrypto

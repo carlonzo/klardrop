@@ -138,6 +138,21 @@ class DesktopTrustStorageTest {
         assertNull(store.get("device-private-key"))
     }
 
+    /**
+     * Regression: the partial-edit run changed the NUL separator to a space.
+     * Every existing user's KAES blob was derived with NUL; changing the separator
+     * silently breaks their stored identity.
+     */
+    @Test
+    fun defaultPassphraseContainsNulSeparator() {
+        val p = EncryptedFileSecretStore.defaultPassphrase()
+        assertTrue(
+            '\u0000' in p,
+            "defaultPassphrase() must join user and host with a NUL byte (\\u0000), not a space. " +
+                "Got: ${p.replace("\u0000", "\\u0000")}",
+        )
+    }
+
     private class FakeSecretStore : SecretStore {
         private val backing = mutableMapOf<String, ByteArray>()
         val puts = mutableListOf<Pair<String, ByteArray>>()

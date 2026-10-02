@@ -1,0 +1,40 @@
+klardrop | Fixture Host | daemon: connected | 3 devices
+┌  Devices  * reachable  + trusted  ! pairing──┐┌> Fixture Phone───────────────────────────────────────────────────────┐
+│> *+ Fixture Phone  reachable · trusted (2)   ││> message 478 a message that is deliberately wider than any           │
+│   - Fixture Tablet  offline · untrusted      ││conversation pane, so that it has to wrap across several display rows │
+│   * Fixture Laptop  reachable · untrusted    ││< message 479                                                         │
+│                                              ││> message 480 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 481                                                         │
+│                                              ││> message 482 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 483                                                         │
+│                                              ││> message 484 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 485                                                         │
+│                                              ││> message 486 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 487                                                         │
+│                                              ││> message 488 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 489                                                         │
+│                                              ││> message 490 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 491                                                         │
+│                                              ││> message 492 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 493                                                         │
+│                                              ││> message 494 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 495                                                         │
+│                                              ││> message 496 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 497                                                         │
+│                                              ││> message 498 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+│                                              ││< message 499                                                         │
+│                                              ││> message 500 a message that is deliberately wider than any           │
+│                                              ││conversation pane, so that it has to wrap across several display rows │
+└──────────────────────────────────────────────┘└──────────────────────────────────────────────────────────────────────┘
+Tab pane Up/Down select Enter open i text f files y clipboard a actions ? help q quit
+mark read failed: the daemon at 127.0.0.1:35401 does not implement POST /history/read; it is too old — upgrade it

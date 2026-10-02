@@ -154,9 +154,23 @@ on every tagged version.
 |---|---|---|
 | macOS    | `.dmg`     | Unsigned during beta — run `xattr -dr com.apple.quarantine /Applications/Klardrop.app` after first launch if Gatekeeper blocks it |
 | Windows  | `.msi`     | Unsigned during beta — SmartScreen will warn on first run |
-| Linux    | tarball / AUR | System JRE 21+ (`install.sh` or `yay -S klardrop-bin`); Windows MSI still bundles a JRE |
+| Linux    | Script / AUR | Native GUI via `install.sh` (Qt desktop GUI by default, Omarchy shell integration on Omarchy; no JVM required); AUR `klardrop-bin` remains legacy JVM (JRE 21+) |
 | Android  | `.apk`     | Sideload; Play Store internal-testing track planned |
 | iOS      | TestFlight | Public invite link forthcoming |
+
+On Linux and macOS the native build is **two binaries with two jobs**, and they are
+never mixed:
+
+| Command | What it is |
+|---|---|
+| `klardrop` | Native CLI client — the one you type (`klardrop send`, `klardrop status`, …) |
+| `klardrop-engine` | The daemon, started by `systemctl --user start klardrop.service` (the `klardrop.service` user unit) |
+
+The Linux install script puts both in `~/.local/bin`, and the in-app self-updater
+replaces the pair together — a CLI from one release is never left beside an engine
+from another. The AUR packages follow the same split: `klardrop-native-bin` owns both
+binaries and the systemd unit, `klardrop-qt-bin` depends on it and adds only the Qt
+frontend, and `klardrop-omarchy` adds the shell integration.
 
 The desktop app checks for updates on launch via the `latest.json` manifest published
 alongside each release.
@@ -166,13 +180,14 @@ alongside each release.
 | Module | Purpose |
 |---|---|
 | `common/` | Shared business logic: discovery, transport, file management, trust, DI |
-| `common-ui/` | Shared Compose Multiplatform UI |
+| `compose-ui/` | Shared Compose Multiplatform UI (Android + desktop JVM) |
+| `control-plane/` | Shared authenticated loopback control API (`devices`, `share`, `transfers`, …) that every host serves: the Linux engine, the JVM desktop app and the native macOS app |
 | `protos/` | Protocol Buffer definitions for the wire format and Nearby Share interop |
 | `android/` | Android app + share extension |
-| `iosApp/` | iOS app + share extension |
-| `macos/` | Native macOS app |
+| `iosApp/` | iOS app + share extension, **and** the native macOS app (Xcode targets `iosApp` and `KlardropMac`; the macOS app is `presentation/src/macosMain` + `iosApp/iosApp/App/MacApp.swift`, there is no separate `macos/` module) |
 | `desktop/` | JVM desktop app (Windows / Linux / macOS) |
-| `cli/` | Command-line client (see [`cli/README.md`](cli/README.md)) |
+| `cli/` | Kotlin/Native daemon engine, shipped as `klardrop-engine` (see [`cli/README.md`](cli/README.md)) |
+| `cli-rust/` | Native Rust CLI client, shipped as `klardrop` (see [`cli-rust/README.md`](cli-rust/README.md)) |
 
 ## Building and running
 

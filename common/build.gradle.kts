@@ -20,6 +20,77 @@ kotlin {
   macosArm64()
   iosArm64()
   iosSimulatorArm64()
+  linuxX64 {
+    compilations.getByName("main") {
+      cinterops {
+        val avahi by creating {
+          defFile(project.file("src/nativeInterop/cinterop/avahi.def"))
+        }
+        val spawn by creating {
+          defFile(project.file("src/nativeInterop/cinterop/spawn.def"))
+        }
+        val openssl by creating {
+          defFile(project.file("src/nativeInterop/cinterop/openssl.def"))
+        }
+        val sdbus by creating {
+          defFile(project.file("src/nativeInterop/cinterop/sdbus.def"))
+        }
+      }
+    }
+    binaries.all {
+      linkerOpts(
+        "-Wl,--as-needed",
+        // Kotlin/Native links against its bundled older glibc sysroot, and the host libavahi/libsqlite3 reference newer glibc symbol versions that resolve at runtime.
+        "--allow-shlib-undefined",
+        "-lsqlite3",
+        // QR browser share TLS server (LanTlsListener.linux.kt) — system OpenSSL 3.x, same "link
+        // against the host's version" approach as avahi/sqlite3 above.
+        "-lssl",
+        "-lcrypto",
+        // BLE spike (ble/linux sd-bus): BlueZ over the system bus. Same host-link approach.
+        "-lsystemd",
+      )
+    }
+  }
+  linuxArm64 {
+    compilations.getByName("main") {
+      cinterops {
+        val avahi by creating {
+          defFile(project.file("src/nativeInterop/cinterop/avahi.def"))
+        }
+        val spawn by creating {
+          defFile(project.file("src/nativeInterop/cinterop/spawn.def"))
+        }
+        val openssl by creating {
+          defFile(project.file("src/nativeInterop/cinterop/openssl.def"))
+        }
+        val sdbus by creating {
+          defFile(project.file("src/nativeInterop/cinterop/sdbus.def"))
+        }
+      }
+    }
+    binaries.all {
+      linkerOpts(
+        "-Wl,--as-needed",
+        // Same bundled-sysroot arrangement as linuxX64 above. The .def files only point at
+        // /usr/include and -L/usr/lib(64), which resolve to the aarch64 headers/libs
+        // natively on an arm64 runner — no cross-linking, same as x64.
+        "--allow-shlib-undefined",
+        "-lsqlite3",
+        "-lssl",
+        "-lcrypto",
+        "-lsystemd",
+      )
+    }
+  }
+
+  tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeTest>().configureEach {
+    val testWorkDir = layout.buildDirectory.dir("tmp/native-test").get().asFile
+    workingDir = testWorkDir.absolutePath
+    doFirst {
+      testWorkDir.mkdirs()
+    }
+  }
 
   applyDefaultHierarchyTemplate()
 
@@ -93,7 +164,16 @@ kotlin {
       }
     }
 
-    matching { it.name.startsWith("ios") || it.name.startsWith("macos") }.configureEach {
+    val linuxMain by getting {
+      dependencies {
+        implementation(deps.sqldelight.native.driver)
+        // Sentry envelope JSON for the linuxX64 crash sender (SentryLinuxSender.linux.kt) —
+        // the linuxX64 Sentry SDK klib is a no-op stub, so this target builds its own envelopes.
+        implementation(deps.kotlinx.serialization.json)
+      }
+    }
+
+    matching { it.name.startsWith("ios") || it.name.startsWith("macos") || it.name.startsWith("linux") }.configureEach {
       languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
     }
 

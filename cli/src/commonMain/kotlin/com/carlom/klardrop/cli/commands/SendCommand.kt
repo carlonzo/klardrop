@@ -24,7 +24,6 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import kotlin.random.Random
 import kotlin.system.exitProcess
-import java.io.File as JvmFile
 
 // Exit codes:
 //   0 = delivery confirmed (ACK_RECEIVED)
@@ -201,6 +200,6 @@ class SendCommand : CliktCommand(
       fileSize = fileSize,
       mimeType = "application/octet-stream",
     )
-    return fileMessage.toSendRequest(PlatformFile(JvmFile(filePath)))
+    return fileMessage.toSendRequest(PlatformFile(path))
   }
 }

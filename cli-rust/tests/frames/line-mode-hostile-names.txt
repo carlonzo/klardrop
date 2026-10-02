@@ -1,0 +1,12 @@
+klardrop: line mode (this terminal reports no screen addressing (TERM is dumb or unset))
+self: evil[31m]0;pwned (DESKTOP, LINUX) [fixture00]
+daemon: connected
+protocols: klardrop=true nearby=true ble=false
+discovery: background on
+devices: 3
+  * evil[31m]0;pwned  11112222  reachable  trusted
+  - Fixture Tablet  3333aaaa  unreachable  untrusted
+  * Fixture Laptop  3333bbbb  reachable  untrusted
+transfers: 1
+  evil[31m]0;pwned receiving 1024/2048 bytes
+the interactive view needs a terminal of at least 20x8 with cursor addressing; re-run on one for the live view

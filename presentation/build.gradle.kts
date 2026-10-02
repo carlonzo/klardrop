@@ -44,6 +44,8 @@ kotlin {
       export(project(":klardrop-common"))
     }
   }
+  linuxX64()
+  linuxArm64()
   applyDefaultHierarchyTemplate()
 
   cocoapods {

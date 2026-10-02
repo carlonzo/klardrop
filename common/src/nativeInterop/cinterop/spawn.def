@@ -1,0 +1,131 @@
+package = com.carlom.klardrop.common.posix.spawn
+compilerOpts = -D_GNU_SOURCE -I/usr/include
+
+---
+#include <spawn.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <signal.h>
+#include <errno.h>
+
+typedef posix_spawn_file_actions_t klardrop_spawn_file_actions_t;
+typedef posix_spawnattr_t klardrop_spawnattr_t;
+
+static const short KLARDROP_POSIX_SPAWN_SETPGROUP = POSIX_SPAWN_SETPGROUP;
+
+/*
+ * `daemon`'s SIGINT/SIGTERM self-pipe wakeup. The handler itself lives in C rather than as a
+ * Kotlin staticCFunction: a K/N-compiled callback does a runtime thread-state switch (and can
+ * hit a GC safepoint) before it reaches user code, neither of which is async-signal-safe, and
+ * a Kotlin function body has no simple way to save/restore errno around the write(). This
+ * handler does only what's guaranteed safe inside a signal handler: save errno, write one byte,
+ * restore errno.
+ */
+static volatile sig_atomic_t klardrop_term_write_fd = -1;
+
+static void klardrop_term_signal_handler(int sig) {
+    (void)sig;
+    int saved_errno = errno;
+    if (klardrop_term_write_fd >= 0) {
+        ssize_t ignored = write(klardrop_term_write_fd, "x", 1);
+        (void)ignored;
+    }
+    errno = saved_errno;
+}
+
+/*
+ * write_fd should be O_NONBLOCK so a full pipe buffer can never block inside the handler.
+ * sigaction + SA_RESTART (rather than signal()) so a syscall interrupted by SIGINT/SIGTERM
+ * elsewhere in the process resumes instead of failing with EINTR, and so the handler's
+ * semantics don't depend on the platform's historical signal() behavior.
+ */
+static inline void klardrop_install_termination_handler(int write_fd) {
+    klardrop_term_write_fd = write_fd;
+    struct sigaction sa;
+    sa.sa_handler = klardrop_term_signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+}
+
+static inline int klardrop_spawnattr_init(posix_spawnattr_t *attr) {
+    return posix_spawnattr_init(attr);
+}
+
+static inline int klardrop_spawnattr_destroy(posix_spawnattr_t *attr) {
+    return posix_spawnattr_destroy(attr);
+}
+
+static inline int klardrop_spawnattr_setflags(posix_spawnattr_t *attr, short flags) {
+    return posix_spawnattr_setflags(attr, flags);
+}
+
+static inline int klardrop_spawnattr_setpgroup(posix_spawnattr_t *attr, pid_t pgroup) {
+    return posix_spawnattr_setpgroup(attr, pgroup);
+}
+
+static inline int klardrop_spawnp(
+    pid_t *pid,
+    const char *file,
+    const posix_spawn_file_actions_t *file_actions,
+    const posix_spawnattr_t *attrp,
+    char *const argv[],
+    char *const envp[]
+) {
+    return posix_spawnp(pid, file, file_actions, attrp, argv, envp);
+}
+
+static inline int klardrop_spawn_file_actions_init(posix_spawn_file_actions_t *actions) {
+    return posix_spawn_file_actions_init(actions);
+}
+
+static inline int klardrop_spawn_file_actions_destroy(posix_spawn_file_actions_t *actions) {
+    return posix_spawn_file_actions_destroy(actions);
+}
+
+static inline int klardrop_spawn_file_actions_adddup2(posix_spawn_file_actions_t *actions, int fd, int newfd) {
+    return posix_spawn_file_actions_adddup2(actions, fd, newfd);
+}
+
+static inline int klardrop_spawn_file_actions_addclose(posix_spawn_file_actions_t *actions, int fd) {
+    return posix_spawn_file_actions_addclose(actions, fd);
+}
+
+static inline int klardrop_spawn_file_actions_addopen(posix_spawn_file_actions_t *actions, int fd, const char *path, int oflag, mode_t mode) {
+    return posix_spawn_file_actions_addopen(actions, fd, path, oflag, mode);
+}
+
+#pragma weak posix_spawn_file_actions_addclosefrom_np
+
+static inline int klardrop_spawn_file_actions_addclosefrom_np(posix_spawn_file_actions_t *actions, int from) {
+    if (posix_spawn_file_actions_addclosefrom_np) {
+        return posix_spawn_file_actions_addclosefrom_np(actions, from);
+    }
+    return 0;
+}
+
+/* Returns 1 if posix_spawn_file_actions_addclosefrom_np is available, 0 otherwise. */
+static inline int klardrop_has_closefrom_np(void) {
+    return posix_spawn_file_actions_addclosefrom_np ? 1 : 0;
+}
+
+static inline int klardrop_pipe2(int pipefd[2], int flags) {
+    return pipe2(pipefd, flags);
+}
+
+static inline int klardrop_wifexited(int status) {
+    return WIFEXITED(status);
+}
+
+static inline int klardrop_wexitstatus(int status) {
+    return WEXITSTATUS(status);
+}
+
+static inline int klardrop_wifsignaled(int status) {
+    return WIFSIGNALED(status);
+}
+
+static inline int klardrop_wtermsig(int status) {
+    return WTERMSIG(status);
+}

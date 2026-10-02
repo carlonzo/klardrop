@@ -14,6 +14,16 @@ object CliLogging {
   }
 
   fun error(message: String) {
-    System.err.println(message)
+    printErr(message)
   }
 }
+
+/** Platform-specific stderr print (System.err on JVM, fputs to stderr on native). */
+internal expect fun printErr(message: String)
+
+/**
+ * Best-effort hook run right before process exit (Ctrl-C / shutdown), used only for a
+ * diagnostic log line. JVM registers a real shutdown hook; native is a no-op since a
+ * single-shot log line isn't worth wiring signal handling for non-daemon commands.
+ */
+internal expect fun cliOnShutdown(action: () -> Unit)

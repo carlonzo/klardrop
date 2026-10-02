@@ -207,6 +207,47 @@ jobs:
         shell: bash
         run: ./gradlew :desktop:packageReleaseMsi $GRADLE_VERSION_ARGS
 
+      # The Rust CLI is the user-facing command on every platform, and Windows
+      # ships through this job. It deliberately does NOT go inside the MSI:
+      # jpackage signs what it builds, and a file dropped in afterwards
+      # invalidates that signature. So it is published as a sibling asset with
+      # its own `windows-cli` key in latest.json, exactly as the macOS job does
+      # with `macos-cli`. --locked, because Cargo.lock is committed and a build
+      # that updated it would ship dependency versions nobody reviewed.
+      - name: Build the Rust CLI for Windows
+        if: matrix.target == 'windows'
+        shell: bash
+        working-directory: cli-rust
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo --version
+          cargo build --locked --release
+          test -f target/release/klardrop.exe
+
+      - name: Stage the Windows Rust CLI
+        if: matrix.target == 'windows'
+        # pwsh, NOT bash, and that is the whole point of this step. Under
+        # `shell: bash` on windows-latest, `tar` resolves to Git Bash's GNU tar,
+        # whose `-a` is --auto-compress: it picks a COMPRESSOR from the suffix and
+        # cannot emit a zip container. That step exited 0 and published an
+        # uncompressed POSIX tar named `.zip`, which unzip then refuses. Only
+        # System32 bsdtar understands `-a` as "pick the container"; Compress-Archive
+        # needs no such assumption, so it is what runs here.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path dist, stage-win | Out-Null
+          Copy-Item cli-rust/target/release/klardrop.exe stage-win/klardrop.exe
+          Compress-Archive -Path stage-win/klardrop.exe -DestinationPath dist/klardrop-cli-windows-x64.zip -Force
+          # Prove the container is a zip and not a tar wearing a .zip name: the
+          # published manifest points consumers at this file, and a wrong
+          # container is silently unfriendly until somebody tries to unzip it.
+          $sig = [System.IO.File]::ReadAllBytes("$PWD/dist/klardrop-cli-windows-x64.zip")[0..1]
+          if ($sig[0] -ne 0x50 -or $sig[1] -ne 0x4B) {
+            throw "klardrop-cli-windows-x64.zip is not a zip container (magic: $($sig -join ','))"
+          }
+
       # Decode the release keystore so the APK/AAB are signed with the real upload
       # key. Without the secret (e.g. a fork) the build falls back to debug signing.
       - name: Configure Android signing
@@ -329,6 +370,108 @@ jobs:
           path: android/build/outputs/bundle/release/*.aab
           if-no-files-found: error
 
+  # Native (JVM-free) Kotlin/Native Linux build, published ALONGSIDE klardrop-linux-x64.tar.gz
+  # above, not replacing it. See linux/omarchy/TODO.md Phase 2 step 3.
+  build-linux-native:
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            target: linuxX64
+            linkTarget: LinuxX64
+            runner: ubuntu-24.04
+          - arch: arm64
+            target: linuxArm64
+            linkTarget: LinuxArm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.version.outputs.version }}
+        -Pklardrop.packageVersion=${{ needs.version.outputs.packageVersion }}
+        -Pklardrop.versionCode=${{ needs.version.outputs.versionCode }}
+      # Sentry DSN, baked in at compile time — see the `linux` job in release-nightly.yml
+      # for why this is ORG_GRADLE_PROJECT_* rather than a `-P` flag.
+      ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # ~/.konan (Kotlin/Native compiler + platform libs) lives outside the
+      # Gradle home setup-gradle caches, same as the macOS native job below.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-${{ matrix.arch }}-
+
+      - name: Install native build deps
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y
+          libavahi-client-dev libsqlite3-dev libssl-dev libsystemd-dev
+          qt6-base-dev qt6-declarative-dev qmake6 libgl-dev xvfb
+          qml6-module-qtquick qml6-module-qtquick-controls
+          qml6-module-qtquick-layouts qml6-module-qtquick-templates
+          qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models
+          qml6-module-qtqml-workerscript
+
+      # The link task is `linkReleaseExecutableLinuxX64` / `...LinuxArm64`, but
+      # the test task is `linuxX64Test` / `linuxArm64Test`. Concatenating ONE
+      # matrix value onto both produced `:cli:linkReleaseExecutablelinuxX64`,
+      # which resolves to nothing and failed the whole native job with no native
+      # tarball — so `linkTarget` carries the exact task suffix instead.
+      - name: Build + test linux (${{ matrix.target }})
+        run: >-
+          ./gradlew
+          :cli:linkReleaseExecutable${{ matrix.linkTarget }}
+          :klardrop-common:${{ matrix.target }}Test
+          $GRADLE_VERSION_ARGS
+
+      - name: Build + test Qt frontend (${{ matrix.target }})
+        shell: bash
+        run: |
+          mkdir -p /tmp/build-klardrop-qt
+          cd /tmp/build-klardrop-qt
+          qmake6 "KLARDROP_VERSION=${{ needs.version.outputs.version }}" "$GITHUB_WORKSPACE/linux/qt/klardrop-qt.pro"
+          make -j$(nproc)
+          ./klardrop-qt --check-runtime
+          python3 "$GITHUB_WORKSPACE/linux/qt/tests/test_integration.py"
+
+      # The native tarball ships TWO binaries: the Kotlin/Native engine linked
+      # above and this Rust CLI. packaging/linux/stage-native-tarball.sh fails closed
+      # without it, so it is built here for both matrix arches (the runners are
+      # native x64 and arm64 — no cross-compilation). cli-rust/rust-toolchain.toml
+      # pins the toolchain, which the hosted image's rustup installs on first use;
+      # --locked keeps the committed Cargo.lock authoritative.
+      - name: Build Rust CLI client (${{ matrix.arch }})
+        working-directory: cli-rust
+        shell: bash
+        run: |
+          rustc --version
+          cargo --version
+          cargo build --locked --release
+
+      - name: Stage native Linux tarball (${{ matrix.arch }})
+        shell: bash
+        env:
+          KLARDROP_QT_BIN: /tmp/build-klardrop-qt/klardrop-qt
+        run: bash packaging/linux/stage-native-tarball.sh "${{ needs.version.outputs.version }}" "${{ matrix.arch }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: klardrop-linux-${{ matrix.arch }}-native
+          path: dist/*
+          if-no-files-found: error
+
   # Build + sign + notarize the native KlardropMac (Swift/SKIE) macOS app.
   # When Apple signing secrets are absent (forks / community PRs) the job still
   # builds an UNSIGNED .app/.dmg and uploads it as a CI artifact, but it does NOT
@@ -370,6 +513,20 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # The native Rust CLI (`cli-rust/`) ships with the macOS build: `klardrop` is the
+      # user-facing command on every platform, and the DMG is macOS's only download
+      # channel. No Kotlin/Native involvement — a plain cargo build, which is why it
+      # can run before the Xcode steps. cli-rust/rust-toolchain.toml pins the toolchain
+      # the hosted image's rustup installs on first use; --locked keeps the committed
+      # Cargo.lock authoritative.
+      - name: Build Rust CLI client
+        working-directory: cli-rust
+        shell: bash
+        run: |
+          rustc --version
+          cargo --version
+          cargo build --locked --release
+
       # Cache ~/.konan (Kotlin/Native compiler + Apple platform libs) — outside the
       # Gradle home setup-gradle caches. Keyed on the version catalog.
       - name: Cache Kotlin/Native (~/.konan)
@@ -384,8 +541,17 @@ jobs:
       # in the pbxproj points at common/build/cocoapods/synthetic/macos/build/{Debug,Release}/Sentry.
       # Only the Debug variant exists locally after local dev; CI must produce the Release variant
       # explicitly here.
-      - name: Build Kotlin macOS frameworks (Sentry synthetic + dummy)
-        run: ./gradlew :klardrop-common:podBuildSentryMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
+      - name: Build Kotlin macOS frameworks (Sentry synthetic + dummy + control plane)
+        # :control-plane:linkReleaseFrameworkMacosArm64 produces control_plane.framework, which
+        # the KlardropMac target links (FRAMEWORK_SEARCH_PATHS / -framework control_plane in
+        # project.pbxproj) and MacApp.swift imports to start the local control plane. Without it
+        # the macOS app has no local IPC at all and `klardrop devices` cannot reach it.
+        run: >-
+          ./gradlew
+          :klardrop-common:podBuildSentryMacos
+          :presentation:generateDummyFramework
+          :control-plane:linkReleaseFrameworkMacosArm64
+          $GRADLE_VERSION_ARGS
 
       - name: pod install
         run: pod install --project-directory=iosApp
@@ -573,6 +739,23 @@ jobs:
           fi
           cp -R "$APP" stage/
 
+          # The native Rust CLI travels with the macOS build: `klardrop` is the
+          # user-facing command, and the DMG is macOS's only download channel. A
+          # signed build signs the helper with the same Developer ID identity —
+          # notarization rejects an image that contains unsigned code — and the app
+          # bundle itself is NOT touched: the CLI is not nested inside Klardrop.app,
+          # so the signature verified above stays valid.
+          CLI_DIR="$RUNNER_TEMP/klardrop-cli"
+          mkdir -p "$CLI_DIR" "stage/Klardrop CLI"
+          cp cli-rust/target/release/klardrop "$CLI_DIR/klardrop"
+          if [ "$SIGNED" = "true" ]; then
+            codesign --force --options runtime --timestamp \
+              --sign "Developer ID Application" "$CLI_DIR/klardrop"
+          fi
+          cp "$CLI_DIR/klardrop" "stage/Klardrop CLI/klardrop"
+          # Standalone download, the asset behind the `macos-cli` key in latest.json.
+          tar -czf dist/klardrop-cli-macos-arm64.tar.gz -C "$CLI_DIR" klardrop
+
           if [ "$SIGNED" = "true" ]; then
             mkdir -p "$RUNNER_TEMP/keys"
             echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey.p8"
@@ -666,7 +849,7 @@ jobs:
           status: completed
 
   publish:
-    needs: [version, build, build-macos-native]
+    needs: [version, build, build-linux-native, build-macos-native]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -699,12 +882,25 @@ jobs:
           DMG=$(pick "*.dmg")
           MSI=$(pick "*.msi")
           APK=$(pick "*.apk")
-          TGZ=$(pick "*.tar.gz")
+          # Exact name, not *.tar.gz — klardrop-native-linux-x64.tar.gz also matches that
+          # glob and must never end up in the JVM self-updater's latest.json.
+          TGZ=$(pick "klardrop-linux-x64.tar.gz")
+          NATIVE_TGZ=$(pick "klardrop-native-linux-x64.tar.gz")
+          NATIVE_TGZ_ARM64=$(pick "klardrop-native-linux-arm64.tar.gz")
+
+          # The standalone native CLI, built by build-macos-native. The Linux CLI
+          # needs no key of its own: it ships inside the native tarballs above.
+          MACOS_CLI=$(pick "klardrop-cli-macos-arm64.tar.gz")
+
+          # The Windows CLI, built by this job's `windows` matrix arm. It is a
+          # sibling asset rather than a file inside the MSI — see that step for
+          # why — so it needs a key of its own, exactly like the macOS one.
+          WINDOWS_CLI=$(pick "klardrop-cli-windows-x64.zip")
 
           export BASE="https://github.com/${REPO}/releases/download/${TAG}"
-          python3 - "$DMG" "$MSI" "$APK" "$TGZ" <<'PY' > latest.json
+          python3 - "$DMG" "$MSI" "$APK" "$TGZ" "$NATIVE_TGZ" "$NATIVE_TGZ_ARM64" "$MACOS_CLI" "$WINDOWS_CLI" <<'PY' > latest.json
           import json, os, sys, datetime, pathlib
-          dmg, msi, apk, tgz = sys.argv[1:5]
+          dmg, msi, apk, tgz, native_tgz, native_tgz_arm64, macos_cli, windows_cli = sys.argv[1:9]
           base = os.environ["BASE"]
           def entry(name):
               if not name: return None
@@ -717,9 +913,13 @@ jobs:
           # the native .dmg is uploaded as a raw CI artifact but is NOT listed as a
           # verified download channel (unsigned build — not suitable for public distribution).
           if dmg and os.path.exists("macos-verified.txt"): platforms["macos"] = entry(dmg)
-          if msi: platforms["windows"]       = entry(msi)
-          if tgz: platforms["linux-tarball"] = entry(tgz)
-          if apk: platforms["android"]       = entry(apk)
+          if msi: platforms["windows"]          = entry(msi)
+          if tgz: platforms["linux-tarball"]    = entry(tgz)
+          if native_tgz: platforms["linux-native-x64"] = entry(native_tgz)
+          if native_tgz_arm64: platforms["linux-native-arm64"] = entry(native_tgz_arm64)
+          if macos_cli: platforms["macos-cli"] = entry(macos_cli)
+          if windows_cli: platforms["windows-cli"] = entry(windows_cli)
+          if apk: platforms["android"]          = entry(apk)
           out = {
             "version":     os.environ["VERSION"],
             "tag":         os.environ["TAG"],
@@ -911,6 +1111,130 @@ jobs:
           )
           echo "--- PKGBUILD ---"; cat aur/PKGBUILD
           echo "--- .SRCINFO ---"; cat aur/.SRCINFO
+
+      # The three native templates package the SAME tarball the release already
+      # publishes, so they render from the real per-arch checksums — hashed from
+      # the published assets exactly like `klardrop-bin` above, never hand-copied.
+      # `.SRCINFO` is generated per package because the native PKGBUILDs use
+      # arch-qualified `source_<arch>` arrays the flat generator cannot read.
+      - name: Render native PKGBUILDs + .SRCINFO
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG:      ${{ needs.version.outputs.tag }}
+          VERSION:  ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "${{ github.repository }}" \
+            --pattern 'klardrop-native-linux-x64.tar.gz'   --dir tgz-native
+          gh release download "$TAG" --repo "${{ github.repository }}" \
+            --pattern 'klardrop-native-linux-arm64.tar.gz' --dir tgz-native
+          SHA_X64="$(sha256sum tgz-native/klardrop-native-linux-x64.tar.gz   | awk '{print $1}')"
+          SHA_ARM64="$(sha256sum tgz-native/klardrop-native-linux-arm64.tar.gz | awk '{print $1}')"
+
+          for pkg in klardrop-native-bin klardrop-qt-bin klardrop-omarchy; do
+            out="aur-native/$pkg"
+            mkdir -p "$out"
+            sed -e "s/@VERSION@/${VERSION}/g" \
+                -e "s/@SHA256_X64@/${SHA_X64}/g" \
+                -e "s/@SHA256_ARM64@/${SHA_ARM64}/g" \
+                -e "s/@SHA256@/${SHA_X64}/g" \
+                "packaging/aur/$pkg/PKGBUILD" > "$out/PKGBUILD"
+            # A placeholder left in a published PKGBUILD would be a broken package.
+            if grep -q '@[A-Z0-9_]\+@' "$out/PKGBUILD"; then
+              echo "::error::$pkg still contains an unrendered placeholder"
+              grep -n '@[A-Z0-9_]\+@' "$out/PKGBUILD"
+              exit 1
+            fi
+
+            (
+              set -euo pipefail
+              # shellcheck disable=SC1091
+              source "$out/PKGBUILD"
+              {
+                echo "pkgbase = ${pkgname}"
+                echo -e "\tpkgdesc = ${pkgdesc}"
+                echo -e "\tpkgver = ${pkgver}"
+                echo -e "\tpkgrel = ${pkgrel}"
+                echo -e "\turl = ${url}"
+                for a in "${arch[@]}";      do echo -e "\tarch = $a";      done
+                for l in "${license[@]}";   do echo -e "\tlicense = $l";   done
+                for d in "${depends[@]}";   do echo -e "\tdepends = $d";   done
+                for pr in "${provides[@]}"; do echo -e "\tprovides = $pr"; done
+                for c in "${conflicts[@]}"; do echo -e "\tconflicts = $c"; done
+                for o in "${options[@]}";   do echo -e "\toptions = $o";   done
+                # makepkg reads `source_<arch>`; .SRCINFO must mirror it per arch
+                # instead of through a flat `source`/`sha256sums` pair.
+                if declare -p source >/dev/null 2>&1; then
+                  for sr in "${source[@]}";   do echo -e "\tsource = $sr";   done
+                  for sm in "${sha256sums[@]}"; do echo -e "\tsha256sums = $sm"; done
+                else
+                  for pkgarch in "${arch[@]}"; do
+                    declare -n srcs="source_${pkgarch}"
+                    declare -n sums="sha256sums_${pkgarch}"
+                    for sr in "${srcs[@]}";   do echo -e "\tsource_${pkgarch} = $sr";   done
+                    for sm in "${sums[@]}";   do echo -e "\tsha256sums_${pkgarch} = $sm"; done
+                  done
+                fi
+                echo
+                echo "pkgname = ${pkgname}"
+              } > "$out/.SRCINFO"
+            )
+            echo "--- $pkg PKGBUILD ---"; cat "$out/PKGBUILD"
+            echo "--- $pkg .SRCINFO ---"; cat "$out/.SRCINFO"
+          done
+
+      # Each native package has its own AUR repo. A repo that does not exist yet is
+      # skipped with a warning instead of failing the release — the same
+      # "unconfigured AUR skips, never breaks a release" contract the `klardrop-bin`
+      # push above follows. Create the three repos once and they take over here.
+      - name: Push native PKGBUILDs to the AUR
+        if: steps.guard.outputs.ok == 'true'
+        shell: bash
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_KNOWN_HOSTS:     ${{ secrets.AUR_KNOWN_HOSTS }}
+          VERSION:             ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$HOME/.ssh/aur"
+          chmod 600 "$HOME/.ssh/aur"
+          if [ -n "${AUR_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$AUR_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          else
+            echo "::warning::AUR_KNOWN_HOSTS not set — trusting the host key ssh-keyscan returns."
+            ssh-keyscan -t ed25519 aur.archlinux.org > "$HOME/.ssh/known_hosts" 2>/dev/null
+          fi
+          chmod 600 "$HOME/.ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+
+          for pkg in klardrop-native-bin klardrop-qt-bin klardrop-omarchy; do
+            if ! git ls-remote "ssh://aur@aur.archlinux.org/${pkg}.git" >/dev/null 2>&1; then
+              echo "::warning::AUR repo ${pkg} does not exist yet — skipping ${pkg}."
+              continue
+            fi
+            rm -rf "aur-repo-$pkg"
+            git clone "ssh://aur@aur.archlinux.org/${pkg}.git" "aur-repo-$pkg"
+            cp "aur-native/$pkg/PKGBUILD" "aur-native/$pkg/.SRCINFO" "aur-repo-$pkg/"
+            # klardrop-omarchy's package() installs these two scripts by name, so
+            # they must travel with the PKGBUILD or the package does not build.
+            if [ "$pkg" = "klardrop-omarchy" ]; then
+              cp packaging/aur/klardrop-omarchy/klardrop-omarchy-enable \
+                 packaging/aur/klardrop-omarchy/klardrop-omarchy-disable "aur-repo-$pkg/"
+            fi
+            cd "aur-repo-$pkg"
+            git config user.name "klardrop-ci"
+            git config user.email "carlo.marinangeli@gmail.com"
+            git add PKGBUILD .SRCINFO
+            if [ "$pkg" = "klardrop-omarchy" ]; then
+              git add klardrop-omarchy-enable klardrop-omarchy-disable
+            fi
+            git commit -m "klardrop ${VERSION}" || { echo "no ${pkg} change"; cd "$GITHUB_WORKSPACE"; continue; }
+            git push
+            cd "$GITHUB_WORKSPACE"
+          done
 
       - name: Push to the AUR
         if: steps.guard.outputs.ok == 'true'
