@@ -76,6 +76,15 @@ kotlin {
         implementation(deps.ktor.network)
       }
     }
+    val macosArm64Main by getting {
+      dependencies {
+        // The macosArm64 framework `export`s :presentation because its public API names
+        // Klardrop and DiscoveryController, and the linker requires an exported project to
+        // be an API dependency of the source set the framework is produced from. Declared
+        // here rather than in commonMain so only the target that exports it pays for it.
+        api(project(":presentation"))
+      }
+    }
     val desktopJvmMain by getting {
       dependencies {
         // QrMatrixRenderer.desktopJvm.kt — same QR encoder compose-ui already uses; there is
