@@ -638,7 +638,8 @@ impl Tui {
             .clone()
     }
 
-    /// Whether the pty types back what is written to it.
+    /// Whether the pty types back what is written to it, or `None` when the pty is
+    /// too far gone to ask.
     ///
     /// This is the check a person makes after a full-screen program exits: type
     /// something and see whether your own shell still says it back. `ECHO` is
@@ -648,11 +649,21 @@ impl Tui {
     ///
     /// Needs [`LaunchOptions::keep_slave`]: once the client's descriptors are
     /// gone the pty is gone with them, and there is nothing left to type at.
-    pub fn echoes_input(&mut self) -> bool {
+    ///
+    /// `Some(false)` — the probe ran and the pty did not echo — is the failure.
+    /// `None` means the write itself was refused (macOS), which says nothing about
+    /// the client; see the body.
+    pub fn echoes_input(&mut self) -> Option<bool> {
         let before = self.raw().len();
-        self.writer
-            .write_all(ECHO_PROBE)
-            .expect("write the echo probe");
+        // macOS revokes the tty when the session leader that owned it exits, so the
+        // slave refuses writes with EIO even though `keep_slave` still holds a live
+        // descriptor. There is nothing left to type at there — a fact about the
+        // platform, not about the client — so it is reported as "cannot probe" rather
+        // than dressed up as "did not restore". Callers assert the restore with the
+        // escape-sequence comparison, which works on every platform.
+        if self.writer.write_all(ECHO_PROBE).is_err() {
+            return None;
+        }
         self.writer.flush().expect("flush the echo probe");
         let deadline = Instant::now() + Duration::from_millis(1000);
         while Instant::now() < deadline {
@@ -662,11 +673,11 @@ impl Tui {
                     .windows(ECHO_PROBE.len())
                     .any(|window| window == ECHO_PROBE)
             {
-                return true;
+                return Some(true);
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        false
+        Some(false)
     }
 
     /// Which raw-mode furniture is still in everything the client wrote.

@@ -1,7 +1,5 @@
 import org.gradle.api.tasks.JavaExec
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.plugin.mpp.DisableCacheInKotlinVersion
-import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeCacheApi
 
 plugins {
   alias(deps.plugins.kotlin.multiplatform)
@@ -11,7 +9,6 @@ plugins {
 group = "com.carlom.klardrop"
 version = "1.0-SNAPSHOT"
 
-@OptIn(KotlinNativeCacheApi::class)
 kotlin {
   jvm {
     compilerOptions {
@@ -37,18 +34,6 @@ kotlin {
         baseName = "klardrop-engine"
         entryPoint = "com.carlom.klardrop.cli.main"
         binaryOption("pagedAllocator", "false")
-        // With the compiler cache on (debug builds only), clikt's two modules emit the
-        // same definition twice — `ld.lld: duplicate symbol:
-        // kfun:com.github.ajalt.clikt.core#selfAndAncestors__at__…Context`, once from
-        // libclikt:clikt-cache.a and once from libclikt:clikt-mordant-cache.a — and the
-        // link fails. The release link is unaffected because it does not use the cache.
-        // Opting this binary out of the cache is the documented remedy
-        // (kotl.in/disable-native-cache) and costs debug build time only; allowing
-        // multiple definitions at the linker would also silence real duplicates.
-        disableNativeCache(
-          version = DisableCacheInKotlinVersion.`2_4_10`,
-          reason = "the clikt compiler cache emits selfAndAncestors into both its clikt and clikt-mordant archives, so the debug link hits a duplicate symbol",
-        )
       }
     }
     binaries.all {
@@ -58,6 +43,16 @@ kotlin {
         // newer glibc symbol versions that resolve correctly at runtime.
         "--allow-shlib-undefined",
         "-lsqlite3",
+        // clikt 5.1.0 carries `selfAndAncestors` in both its `clikt-core` and its
+        // `clikt-mordant` klib, and Kotlin/Native's compiler cache (debug builds only)
+        // materialises both into the link — ld.lld then rejects it with "duplicate
+        // symbol: kfun:com.github.ajalt.clikt.core#selfAndAncestors", once from
+        // libclikt:clikt-cache.a and once from libclikt:clikt-mordant-cache.a. The release
+        // link never sees it because it does not use the cache. KGP's own remedy,
+        // `disableNativeCache`, takes a Kotlin-version enum that only exists in the
+        // release which introduced it, so it breaks on a toolchain bump; the flag does
+        // not. Keeping the first definition is right here: the two are the same function.
+        "-Wl,--allow-multiple-definition",
       )
     }
   }
@@ -71,11 +66,6 @@ kotlin {
           baseName = "klardrop-engine"
           entryPoint = "com.carlom.klardrop.cli.main"
           binaryOption("pagedAllocator", "false")
-          // Same compiler-cache defect as the linuxX64 binary above.
-          disableNativeCache(
-            version = DisableCacheInKotlinVersion.`2_4_10`,
-            reason = "the clikt compiler cache emits selfAndAncestors into both its clikt and clikt-mordant archives, so the debug link hits a duplicate symbol",
-          )
         }
       }
       binaries.all {
@@ -85,6 +75,8 @@ kotlin {
           // the aarch64 system libs at these paths natively (no cross-linking).
           "--allow-shlib-undefined",
           "-lsqlite3",
+          // Same clikt duplicate-symbol handling as the linuxX64 binary above.
+          "-Wl,--allow-multiple-definition",
         )
       }
     }

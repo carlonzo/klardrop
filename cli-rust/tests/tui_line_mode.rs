@@ -77,8 +77,11 @@ fn a_dumb_terminal_prints_the_state_and_never_touches_the_screen() {
     // the other captured frames rather than only asserted on.
     tui.dump("line-mode-dumb-terminal");
 
-    assert!(
+    // `None` = the pty refused the probe outright (macOS), which says nothing about
+    // the client; `Some(false)` = it echoed nothing, which does.
+    assert_ne!(
         tui.echoes_input(),
+        Some(false),
         "the pty was never switched out of cooked mode, so there is nothing to restore"
     );
 }
@@ -150,8 +153,9 @@ fn a_capable_terminal_still_gets_the_full_screen_client() {
         while_running,
         "the client took more of the terminal than it gave back"
     );
-    assert!(
+    assert_ne!(
         tui.echoes_input(),
+        Some(false),
         "cooked mode did not come back with the client"
     );
 }

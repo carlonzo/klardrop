@@ -203,8 +203,9 @@ fn quitting_after_an_animation_still_gives_the_terminal_back() {
         while_running,
         "an animation is not an excuse to leave the terminal taken"
     );
-    assert!(
+    assert_ne!(
         tui.echoes_input(),
+        Some(false),
         "cooked mode did not come back with the client"
     );
 }

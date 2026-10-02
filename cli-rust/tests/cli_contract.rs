@@ -323,15 +323,34 @@ fn malformed_control_files_are_rejected_with_exit_3() {
 #[test]
 fn stale_control_file_fails_fast_without_hanging() {
     let dir = TempDir::new("stale-control");
-    // Bind and immediately drop a listener: the port is now closed.
-    let port = {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
-        listener.local_addr().expect("addr").port()
-    };
-    let control = dir.join("control.json");
-    control_with_token(&control, port, FIXTURE_TOKEN);
+    // Bind and immediately drop a listener: the port is now closed, so the client's
+    // connect is refused and it must report that rather than sit on the deadline.
+    //
+    // Closing a listener leaves the port free, and these tests run concurrently on one
+    // machine — something else can take it in the gap, at which point the client is
+    // measuring a stranger's silence (a deadline, exit 4) instead of the refusal under
+    // test (exit 3). Re-draw a port when that happens, bounded so a genuinely wrong
+    // result still fails instead of spinning.
+    let mut outcome: Option<CliRun> = None;
+    for _ in 0..5 {
+        let port = {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+            listener.local_addr().expect("addr").port()
+        };
+        let control = dir.join("control.json");
+        control_with_token(&control, port, FIXTURE_TOKEN);
 
-    let run = run(Some(&control), &["devices", "--json"], &dir.path);
+        let attempt = run(Some(&control), &["devices", "--json"], &dir.path);
+        // A deadline means the port was not refused — somebody answered slowly or not
+        // at all. Anything else (including the refusal we want) is a real result.
+        let raced = attempt.code != 3 && attempt.error_code() == "daemon_timeout";
+        if !raced {
+            outcome = Some(attempt);
+            break;
+        }
+    }
+
+    let run = outcome.expect("a port was drawn on every attempt");
     assert_eq!(run.code, 3, "stderr: {}", run.stderr);
     assert_eq!(run.error_code(), "daemon_unreachable");
     assert!(
@@ -654,11 +673,27 @@ fn human_output_is_readable_and_not_json() {
 }
 
 #[test]
-fn control_file_search_order_uses_xdg_runtime_dir() {
+fn control_file_search_order_uses_the_ambient_directory() {
     let fixture = Fixture::start("search-order", &[]);
-    let xdg_control = fixture.dir().join("xdg/klardrop/control.json");
-    fs::create_dir_all(xdg_control.parent().expect("parent")).expect("create xdg dir");
-    fs::copy(fixture.control(), &xdg_control).expect("copy control file");
+    // The first ambient location is `$XDG_RUNTIME_DIR/klardrop` on unix and
+    // `%LOCALAPPDATA%\Klardrop` on Windows, which has no POSIX fallback at all — so the
+    // copy has to land where THIS platform looks first, or the search order is never
+    // exercised. `run` below points both variables at the fixture's own directory.
+    let ambient = if cfg!(windows) {
+        fixture
+            .dir()
+            .join("appdata")
+            .join("Klardrop")
+            .join("control.json")
+    } else {
+        fixture
+            .dir()
+            .join("xdg")
+            .join("klardrop")
+            .join("control.json")
+    };
+    fs::create_dir_all(ambient.parent().expect("parent")).expect("create ambient dir");
+    fs::copy(fixture.control(), &ambient).expect("copy control file");
 
     let run = run(None, &["status", "--json"], fixture.dir());
     assert_eq!(run.code, 0, "stderr: {}", run.stderr);

@@ -803,7 +803,10 @@ fn share(fixture: &Fixture, stream: &mut TcpStream, body: &[u8]) {
             let Some(path) = path.as_str() else {
                 return bad_request(stream, "every entry of paths must be a string");
             };
-            let file_name = path.rsplit('/').next().unwrap_or(path).to_string();
+            // Mirrors ControlPlane.kt's `substringAfterLast('/').substringAfterLast('\\')`:
+            // splitting on `/` alone handed the whole verbatim `\\?\C:\…` path back as the
+            // name on Windows, which is exactly the behaviour this double must not have.
+            let file_name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
             // Mirrors the real daemon: a path that is not a readable REGULAR file is recorded
             // as a failed item with no transfer id, never queued for bytes that cannot be sent.
             let metadata = std::fs::metadata(path).ok();
