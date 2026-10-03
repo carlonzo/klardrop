@@ -21,17 +21,22 @@ use support::*;
 /// Asserts that exactly one device row carries the selection marker, and that
 /// it is `expected`. The marker is the only difference between a selected and
 /// an unselected row, so this reads the selection straight off the screen.
+///
+/// Counted as occurrences rather than as lines, deliberately. The pty master
+/// only carries the client's own bytes on unix; on Windows it carries the
+/// terminal's rendering, so the reconstructed screen there is a handful of very
+/// long rows with every device row concatenated. The marker still sits
+/// immediately in front of the selected device exactly once either way, so
+/// counting it proves the same thing on both.
 fn assert_selected(screen: &str, expected: &str) {
-    let marked: Vec<&str> = screen
-        .lines()
-        .map(|line| line.trim_start_matches(['│', '|']))
-        .filter(|line| line.starts_with('>'))
-        .collect();
-    assert_eq!(marked.len(), 1, "expected one selected row in:\n{screen}");
+    const MARKER: &str = "\u{2502}> ";
+    let marked = screen.matches(MARKER).count();
+    assert_eq!(marked, 1, "expected one selected row in:\n{screen}");
+    let at = screen.find(MARKER).expect("exactly one marker");
+    let row: String = screen[at..].chars().take(96).collect();
     assert!(
-        marked[0].contains(expected),
-        "expected the selected row to be {expected:?}, got {:?}",
-        marked[0]
+        row.contains(expected),
+        "expected the selected row to be {expected:?}, got {row:?}"
     );
 }
 
@@ -392,37 +397,63 @@ fn a_hostile_device_name_cannot_reach_the_terminal_through_the_panes() {
     let tui = Tui::launch(&fixture);
     tui.wait_for("evil");
 
-    let raw = tui.raw();
-    assert!(
-        !raw.contains(&0x07),
-        "a bell reached the terminal: a daemon-supplied name rang it"
-    );
-    assert!(
-        !raw.contains(&0x00),
-        "a NUL reached the terminal: a daemon-supplied name carried it"
-    );
+    // What the user is actually shown, on every platform: the name's characters
+    // survive and none of its control ones do. A BEL or NUL that reaches the
+    // SCREEN is one that reached the terminal, which is the property.
+    let screen = tui.text();
+    for (what, byte) in [("a bell", 0x07u8), ("a NUL", 0x00)] {
+        assert!(
+            !screen.as_bytes().contains(&byte),
+            "{what} reached the screen: a daemon-supplied name carried it\n{screen}"
+        );
+    }
     // The OSC must not be EXECUTED, which is the property. Its residue — the
     // printable `]0;pwned` — is drawn as ordinary text, and asserting that the
     // bare substring is absent would assert the opposite of correct: the client
     // is supposed to keep the user's characters and drop the control ones. What
     // must not exist is the ESC that would make it live.
-    let text = String::from_utf8_lossy(&raw).into_owned();
     assert!(
-        !text.contains("\u{1b}]0;pwned"),
-        "the device name's OSC reached the terminal as a live sequence, which retitles the window"
+        !screen.contains("\u{1b}]0;pwned"),
+        "the device name's OSC reached the screen as a live sequence, which retitles the window"
     );
     assert!(
-        text.contains("]0;pwned"),
-        "the name's printable residue must still be drawn as inert text:\n{text}"
+        screen.contains("]0;pwned"),
+        "the name's printable residue must still be drawn as inert text:\n{screen}"
+    );
+    assert!(
+        screen.contains("evil"),
+        "the user's name must survive as inert text:\n{screen}"
     );
 
-    // And the name is still on screen as text: stripping the name entirely would
-    // pass every assertion above and lose the user's data.
-    assert!(
-        tui.text().contains("evil"),
-        "the user's name must survive as inert text:\n{}",
-        tui.text()
-    );
+    // The wire itself is only the client's own bytes on unix. On Windows the
+    // pty master carries the terminal's RENDERING: it opens by announcing its
+    // window title as an OSC 0 sequence holding the executable path, BEL
+    // terminated, and it emits CRLFs the client never writes. A BEL in that
+    // stream is the terminal introducing itself, not this name ringing
+    // anything, so the byte-level assertions are scoped to where the two are
+    // the same thing. The sanitiser is pinned everywhere regardless: `escape`'s
+    // and the renderer's own tests read the client's output before any pty is
+    // involved, and everything above is asserted against the screen on all three.
+    if !cfg!(windows) {
+        let raw = tui.raw();
+        assert!(
+            !raw.contains(&0x07),
+            "a bell reached the terminal: a daemon-supplied name rang it"
+        );
+        assert!(
+            !raw.contains(&0x00),
+            "a NUL reached the terminal: a daemon-supplied name carried it"
+        );
+        let text = String::from_utf8_lossy(&raw).into_owned();
+        assert!(
+            !text.contains("\u{1b}]0;pwned"),
+            "the device name's OSC reached the terminal as a live sequence, which retitles the window"
+        );
+        assert!(
+            text.contains("]0;pwned"),
+            "the name's printable residue must still be drawn as inert text:\n{text}"
+        );
+    }
     tui.dump("panes-hostile-names");
     assert!(
         !tui.has_exited(),
