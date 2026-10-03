@@ -1,0 +1,27 @@
+name: TEMP diagnostic (delete before merging)
+
+on:
+  push:
+    branches: [feat/omarchy-native]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    name: diag (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    defaults:
+      run:
+        working-directory: cli-rust
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the pty diagnostic
+        shell: bash
+        run: cargo test --locked --test zz_diag -- --nocapture --test-threads=1
