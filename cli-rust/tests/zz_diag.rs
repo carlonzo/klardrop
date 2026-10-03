@@ -1,73 +1,77 @@
 //! TEMPORARY diagnostic — not a real test, delete before merging.
 //!
-//! Answers, on whatever platform it runs on, what the pty master actually
-//! delivers: whether the client's colour probe ran, where the BEL bytes came
-//! from, how many newlines the client's own output carries, and how many rows
-//! the reconstructed screen ends up with.
+//! Question 2: on Windows the pty master carries ConPTY's RENDERING, not the
+//! client's bytes. Is the row structure recoverable by splitting that stream on
+//! CRLF and stripping ANSI, instead of feeding it through a second vt100 pass?
 
 mod support;
 
 use support::{Fixture, Tui};
 
-fn visible(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .map(|b| match *b {
-            0x1b => "\\e".to_string(),
-            0x07 => "\\a".to_string(),
-            0x00 => "\\0".to_string(),
-            b'\n' => "\\n\n".to_string(),
-            b'\r' => "\\r".to_string(),
-            0x20..=0x7e => (*b as char).to_string(),
-            other => format!("\\x{other:02x}"),
-        })
-        .collect()
-}
-
-fn count(raw: &[u8], needle: &[u8]) -> usize {
-    raw.windows(needle.len()).filter(|w| *w == needle).count()
+/// Drops CSI/OSC sequences the way a terminal would, leaving printable bytes.
+fn strip_ansi(bytes: &[u8]) -> String {
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != 0x1b {
+            if bytes[i] >= 0x20 || matches!(bytes[i], b'\n' | b'\r' | b'\t') {
+                out.push(bytes[i]);
+            }
+            i += 1;
+            continue;
+        }
+        i += 1; // the ESC itself
+        if i < bytes.len() && bytes[i] == b']' {
+            i += 1; // OSC introducer
+            while i < bytes.len() && bytes[i] != 0x07 {
+                if bytes[i] == 0x1b && i + 1 < bytes.len() && bytes[i + 1] == b'\\' {
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            i += 1; // BEL or ST
+            continue;
+        }
+        if i < bytes.len() && bytes[i] == b'[' {
+            i += 1; // CSI introducer
+            while i < bytes.len() && (0x20..0x30).contains(&bytes[i]) {
+                i += 1;
+            }
+            while i < bytes.len() && (0x30..0x40).contains(&bytes[i]) {
+                i += 1;
+            }
+            if i < bytes.len() {
+                i += 1; // the final byte
+            }
+            continue;
+        }
+        // Any other two-character escape: drop the next byte too.
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 #[test]
-fn diag_what_the_pty_master_delivers() {
-    let fixture = Fixture::start("diag", &[]);
+fn diag_can_windows_rows_be_recovered() {
+    let fixture = Fixture::start("diag2", &[]);
     let tui = Tui::launch(&fixture);
     tui.wait_for("Fixture Laptop");
 
     let raw = tui.raw();
-    let screen = tui.screen();
-    let text = tui.text();
+    let plain = strip_ansi(&raw);
+    let lines: Vec<&str> = plain.lines().collect();
 
-    println!("DIAG platform            = {}", std::env::consts::OS);
-    println!("DIAG raw bytes           = {}", raw.len());
-    println!("DIAG newlines in raw     = {}", count(&raw, b"\n"));
-    println!("DIAG CRs in raw          = {}", count(&raw, b"\r"));
-    println!("DIAG BEL count           = {}", raw.iter().filter(|b| **b == 0x07).count());
+    println!("DIAG2 platform        = {}", std::env::consts::OS);
+    println!("DIAG2 raw bytes       = {}", raw.len());
+    println!("DIAG2 plain bytes     = {}", plain.len());
+    println!("DIAG2 lines after ANSI-strip = {}", lines.len());
+    println!("DIAG2 line lengths    = {:?}", lines.iter().map(|l| l.len()).take(12).collect::<Vec<_>>());
+    for (n, line) in lines.iter().take(6).enumerate() {
+        println!("DIAG2 [{n}] {:?}", line);
+    }
     println!(
-        "DIAG BEL offsets         = {:?}",
-        raw.iter()
-            .enumerate()
-            .filter(|(_, b)| **b == 0x07)
-            .map(|(i, _)| i)
-            .take(10)
-            .collect::<Vec<_>>()
+        "DIAG2 selected rows   = {}",
+        lines.iter().filter(|l| l.trim_start_matches(['│', '|']).starts_with('>')).count()
     );
-    println!("DIAG ESC bytes           = {}", raw.iter().filter(|b| **b == 0x1b).count());
-    println!("DIAG CSI '[' count       = {}", count(&raw, b"\x1b["));
-    println!("DIAG CUP 'H' count       = {}", count(&raw, b"\x1b[H") + count(&raw, b"f"));
-    println!("DIAG CUU 'A' count       = {}", count(&raw, b"\x1b[A"));
-    println!("DIAG CUD 'B' count       = {}", count(&raw, b"\x1b[B"));
-    println!("DIAG CUF 'C' count       = {}", count(&raw, b"\x1b[C"));
-    println!("DIAG colour probe sent   = {}", count(&raw, b"\x1b]10;?"));
-    println!("DIAG screen().len()      = {}", screen.len());
-    println!("DIAG text().lines()      = {}", text.lines().count());
-    println!(
-        "DIAG screen line lengths = {:?}",
-        screen.iter().map(|r| r.len()).collect::<Vec<_>>()
-    );
-
-    let head = raw.len().min(1200);
-    println!("DIAG raw head:\n{}", visible(&raw[..head]));
-    let tail_start = raw.len().saturating_sub(800);
-    println!("DIAG raw tail:\n{}", visible(&raw[tail_start..]));
 }
