@@ -1,0 +1,14 @@
+klardrop | Fixture Host | daemon: connected | 3 devices
+┌> Devices  * reachable  + trusted  ! pairing──────────────┐
+│> *+ Fixture Phone  reachable · trusted (2)               │
+│   - Fixture Tablet  offline · untrusted                  │
+│   * Fixture Laptop  reachable · untrusted                │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+Tab pane Up/Down select Enter open i text f files y clipboar
+Esc quits · ? for keys · no mouse · Ctrl-Space stays off

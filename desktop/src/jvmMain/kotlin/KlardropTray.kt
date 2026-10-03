@@ -83,6 +83,7 @@ internal fun ApplicationScope.KlardropTray(
  * opens the window, where the banner and the Updates settings do the actual work.
  */
 internal fun trayUpdateLabel(status: UpdateStatus, install: InstallProgress): String? = when {
+  install is InstallProgress.Applying -> "Restarting…"
   install is InstallProgress.Ready -> "Restart to update"
   status is UpdateStatus.Available -> "Update available — ${status.version}"
   else -> null

@@ -21,15 +21,101 @@ kotlin {
     }
   }
 
+  // Two binaries, two names, deliberately:
+  //   bin/klardrop        -> the Rust client (cli-rust/), the user-facing CLI
+  //   bin/klardrop-engine -> this Kotlin/Native engine (daemon, listen, ...)
+  // The engine is a separate binary so no client can accidentally start a second
+  // engine: a stray `klardrop` invocation is either the Rust client (which talks to
+  // the running engine over the control file) or an explicit `klardrop-engine daemon`.
+  // NEVER rename this baseName back to "klardrop" — the names collide in the tarball.
+  linuxX64 {
+    binaries {
+      executable {
+        baseName = "klardrop-engine"
+        entryPoint = "com.carlom.klardrop.cli.main"
+        binaryOption("pagedAllocator", "false")
+      }
+    }
+    binaries.all {
+      linkerOpts(
+        "-Wl,--as-needed",
+        // Kotlin/Native links against its bundled older glibc sysroot; host libs reference
+        // newer glibc symbol versions that resolve correctly at runtime.
+        "--allow-shlib-undefined",
+        "-lsqlite3",
+        // clikt 5.1.0 carries `selfAndAncestors` in both its `clikt-core` and its
+        // `clikt-mordant` klib, and Kotlin/Native's compiler cache (debug builds only)
+        // materialises both into the link — ld.lld then rejects it with "duplicate
+        // symbol: kfun:com.github.ajalt.clikt.core#selfAndAncestors", once from
+        // libclikt:clikt-cache.a and once from libclikt:clikt-mordant-cache.a. The release
+        // link never sees it because it does not use the cache. KGP's own remedy,
+        // `disableNativeCache`, takes a Kotlin-version enum that only exists in the
+        // release which introduced it, so it breaks on a toolchain bump; the flag does
+        // not. Keeping the first definition is right here: the two are the same function.
+        "-Wl,--allow-multiple-definition",
+      )
+    }
+  }
+
+  // arm64 Linux builds only on an aarch64 host — see `hostCanBuildLinuxArm64`.
+  if (rootProject.extra["hostCanBuildLinuxArm64"] as Boolean) {
+    linuxArm64 {
+      binaries {
+        executable {
+          // Same name split as linuxX64 above; see the comment there.
+          baseName = "klardrop-engine"
+          entryPoint = "com.carlom.klardrop.cli.main"
+          binaryOption("pagedAllocator", "false")
+        }
+      }
+      binaries.all {
+        linkerOpts(
+          "-Wl,--as-needed",
+          // Same bundled-sysroot arrangement as linuxX64 above; arm64 runners provide
+          // the aarch64 system libs at these paths natively (no cross-linking).
+          "--allow-shlib-undefined",
+          "-lsqlite3",
+          // Same clikt duplicate-symbol handling as the linuxX64 binary above.
+          "-Wl,--allow-multiple-definition",
+        )
+      }
+    }
+  }
+
+  applyDefaultHierarchyTemplate()
+
   sourceSets {
     val commonMain by getting {
       dependencies {
         implementation(project(":klardrop-common"))
+        implementation(project(":presentation"))
+        implementation(project(":control-plane"))
         implementation(deps.kotlinx.coroutines.core)
         implementation(deps.clikt)
         implementation(deps.filekit.core)
         implementation(deps.kotlinx.serialization.json)
+        implementation(deps.ktor.network)
       }
+    }
+
+    val jvmMain by getting {
+      dependencies {
+        implementation(deps.kotlinx.coroutines.core)
+      }
+    }
+
+    val linuxMain by getting {
+      dependencies {
+        implementation(deps.kotlinx.coroutines.core)
+      }
+    }
+
+    // Same as :klardrop-common: every linux source set (intermediate + each arch) must
+    // carry the cinterop opt-in, or adding a second linux target fails configuration
+    // with "Inconsistent settings ... the dependent source set must use all opt-in
+    // annotations that its dependency uses".
+    matching { it.name.startsWith("linux") }.configureEach {
+      languageSettings.optIn("kotlinx.cinterop.ExperimentalForeignApi")
     }
 
     all {
@@ -41,11 +127,14 @@ kotlin {
 // macOS: hide Dock icon and name the process before AWT initializes (see CliPlatformRuntime.jvm.kt).
 tasks.withType<JavaExec>().configureEach {
   if (project.path == ":cli") {
-    jvmArgs(
-      "-Dapple.awt.UIElement=true",
-      "-Dapple.awt.application.name=klardrop",
-      "-Dcom.apple.mrj.application.apple.menu.about.name=klardrop",
-      "-Xdock:name=klardrop",
-    )
+    val isMac = org.gradle.internal.os.OperatingSystem.current().isMacOsX
+    if (isMac) {
+      jvmArgs(
+        "-Dapple.awt.UIElement=true",
+        "-Dapple.awt.application.name=klardrop",
+        "-Dcom.apple.mrj.application.apple.menu.about.name=klardrop",
+        "-Xdock:name=klardrop",
+      )
+    }
   }
 }

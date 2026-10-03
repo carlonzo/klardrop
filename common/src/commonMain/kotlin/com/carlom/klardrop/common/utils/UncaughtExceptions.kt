@@ -10,10 +10,12 @@ import kotlinx.coroutines.CoroutineExceptionHandler
  * Never throws: this runs on paths where an escaping exception would kill the process, so the
  * whole body is wrapped defensively.
  */
-internal fun reportUncaughtException(tag: String, throwable: Throwable) {
+internal fun reportUncaughtException(tag: String, throwable: Throwable, fatal: Boolean = false) {
   runCatching {
     if (throwable.isExpectedNetworkNoise()) {
       logLocal(tag, "coroutine ended (${throwable.message})", throwable)
+    } else if (fatal) {
+      log(tag, "uncaught exception, terminating (${throwable.message})", throwable, fatal = true)
     } else {
       log(tag, "uncaught coroutine exception (${throwable.message})", throwable)
     }

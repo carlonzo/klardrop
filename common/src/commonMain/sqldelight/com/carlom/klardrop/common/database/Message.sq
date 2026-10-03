@@ -30,8 +30,31 @@ getMessagesForDevice:
 SELECT *
 FROM messages
 WHERE remote_device_id = ?
-ORDER BY timestamp DESC
+ORDER BY timestamp DESC, id DESC
 LIMIT ?;
+
+-- Keyset page, newest first, strictly older than the cursor row (?2 timestamp, ?3 id) in
+-- (timestamp DESC, id DESC) order. The cursor row itself is looked up separately (getMessageById)
+-- so the caller can 400 on an unknown/foreign cursor before running this query.
+getMessagesForDevicePageBefore:
+SELECT *
+FROM messages
+WHERE remote_device_id = ?1
+  AND (timestamp < ?2 OR (timestamp = ?2 AND id < ?3))
+ORDER BY timestamp DESC, id DESC
+LIMIT ?4;
+
+getMessageById:
+SELECT *
+FROM messages
+WHERE id = ?
+LIMIT 1;
+
+getMessageByFileTransferId:
+SELECT *
+FROM messages
+WHERE file_transfer_id = ?
+LIMIT 1;
 
 -- Flips a single outgoing row, identified by its DB autoincrement id (returned by `insert` via
 -- `lastInsertRowId`), to its terminal delivery state. Used exactly once per logical send,

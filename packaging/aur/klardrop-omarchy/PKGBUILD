@@ -1,0 +1,56 @@
+# Maintainer: Carlo Marinangeli <carlo.marinangeli@gmail.com>
+#
+# The release workflow renders @VERSION@ and @SHA256@ from the release artifacts
+# and pushes this package to the AUR as `klardrop-omarchy`. A placeholder left
+# unrendered fails the release. The push itself is gated only on the AUR
+# repository existing (`git ls-remote`): a repository that does not exist yet is
+# skipped with a warning, never a failed release.
+#
+# Scope: Provides the Omarchy shell plugin (bar widget and quick panel window)
+# and per-user activation scripts. Full desktop integration (application menu
+# entries, file manager context actions, and Nautilus extensions) is supplied
+# by the full installer (packaging/install.sh --omarchy).
+#
+# `klardrop-native-bin` owns both binaries (`/usr/bin/klardrop` the Rust CLI and
+# `/usr/bin/klardrop-engine` the Kotlin/Native daemon, which the unit starts with
+# `klardrop-engine daemon`). This package installs NEITHER: shipping its own copy
+# of either is exactly how a client ends up beside an engine from another version.
+#
+# Supplies plugin assets to /usr/share (NEVER touches user's $HOME directly during
+# package install).
+# Users activate the integration in their user account with the included
+# `klardrop-omarchy-enable` script (or deactivate with `klardrop-omarchy-disable`).
+
+pkgname=klardrop-omarchy
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Omarchy shell plugin (bar widget & quick panel) for the Klardrop native engine"
+arch=('any')
+url="https://github.com/carlonzo/klardrop"
+license=('Apache-2.0')
+# `=${pkgver}`, not a bare name: the plugin drives the engine and the CLI that
+# this very release publishes, so an unpinned dependency would let it run
+# against a different release's engine.
+depends=("klardrop-native-bin=${pkgver}")
+optdepends=('perl: optional helper for Omarchy menu shortcut integration')
+provides=('klardrop-omarchy')
+conflicts=('klardrop-omarchy')
+
+source=("klardrop-native-${pkgver}.tar.gz::${url}/releases/download/v${pkgver}/klardrop-native-linux-x64.tar.gz"
+        "klardrop-omarchy-enable"
+        "klardrop-omarchy-disable")
+sha256sums=('@SHA256@'
+            'SKIP'
+            'SKIP')
+
+package() {
+  cd "${srcdir}/klardrop-native-linux-x64"
+
+  # Plugin assets to /usr/share (not user's HOME)
+  install -d "${pkgdir}/usr/share/klardrop/omarchy-plugin"
+  cp -a share/klardrop/omarchy-plugin/. "${pkgdir}/usr/share/klardrop/omarchy-plugin/"
+
+  # Per-user activation and deactivation scripts
+  install -Dm755 "${srcdir}/klardrop-omarchy-enable" "${pkgdir}/usr/bin/klardrop-omarchy-enable"
+  install -Dm755 "${srcdir}/klardrop-omarchy-disable" "${pkgdir}/usr/bin/klardrop-omarchy-disable"
+}

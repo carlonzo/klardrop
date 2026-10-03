@@ -1,0 +1,40 @@
+klardrop | Fixture Host | daemon: connected | 3 devices
+┌> Devices  * reachable  + trusted  ! pairing──┐┌  Conversation────────────────────────────────────────────────────────┐
+│> *+ Fixture Phone  reachable · trusted (2)   ││Select a device and press Enter                                       │
+│   - Fixture Tablet  offline · untrusted      ││                                                                      │
+│   * Fixture Laptop  reachable · untrusted    ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                       ┌Keys──────────────────────────────────────────────────────────────────┐                       │
+│                       │Tab / Shift-Tab  move between the device and conversation panes       │                       │
+│                       │Up / Down  select a device; scroll the conversation                   │                       │
+│                       │PageUp / PageDown  page through older messages                        │                       │
+│                       │Enter  open the selected device; start a message                      │                       │
+│                       │i  write a message                                                    │                       │
+│                       │f  send files by absolute path                                        │                       │
+│                       │y  send the clipboard                                                 │                       │
+│                       │Esc  close the overlay, the compose line or the conversation          │                       │
+│                       │a  decisions and secondary actions                                    │                       │
+│                       │n  rename this device                                                 │                       │
+│                       │r  refresh now                                                        │                       │
+│                       │?  this help                                                          │                       │
+│                       │Ctrl-Space  release the mouse so the terminal can select and copy; pre│                       │
+│                       │q / Ctrl-C  quit                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       └──────────────────────────────────────────────────────────────────────┘                       │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+└──────────────────────────────────────────────┘└──────────────────────────────────────────────────────────────────────┘
+Tab pane Up/Down select Enter open i text f files y clipboard a actions ? help q quit
+Esc quits · ? for keys · no mouse · Ctrl-Space stays off

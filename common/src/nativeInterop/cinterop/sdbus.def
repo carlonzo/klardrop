@@ -1,0 +1,15 @@
+headers = systemd/sd-bus.h systemd/sd-bus-protocol.h
+headerFilter = systemd/sd-bus*.h
+package = com.carlom.klardrop.common.ble.sdbus
+# Debian/Ubuntu keep the arch-specific half of glibc (bits/*) under /usr/include/<triplet>,
+# which the interop clang never searches on its own: without these the index dies with
+# "bits/timesize.h file not found". This .def is shared by the x64 and arm64 targets, so
+# both triplets are listed: the host's own directory is always present and is searched
+# first, and the other is absent or a copy of the same file set with other arch constants.
+compilerOpts = -I/usr/include -I/usr/include/x86_64-linux-gnu -I/usr/include/aarch64-linux-gnu
+# --allow-shlib-undefined: this library comes from the host, and the host's glibc is newer
+# than the one Kotlin/Native links against, so it references symbol versions konan's sysroot
+# does not have. They resolve at load time against the host's libc. It lives here rather
+# than in a per-module `linkerOpts` so every consumer gets it — including the test binaries
+# of modules that only reach libsystemd through :klardrop-common.
+linkerOpts = -L/usr/lib -L/usr/lib64 -lsystemd --allow-shlib-undefined

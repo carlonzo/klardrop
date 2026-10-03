@@ -11,10 +11,12 @@ import com.github.ajalt.clikt.core.subcommands
 class KlardropCli : CliktCommand(name = "klardrop") {
   init {
     subcommands(
-        DiscoverCommand(),
-        ListenCommand(),
-        SendCommand(),
-        StatusCommand()
+        listOf(
+            DiscoverCommand(),
+            ListenCommand(),
+            SendCommand(),
+            StatusCommand(),
+        ) + platformSubcommands()
     )
   }
 

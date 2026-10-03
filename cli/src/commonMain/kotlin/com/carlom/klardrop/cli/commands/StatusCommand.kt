@@ -2,13 +2,13 @@ package com.carlom.klardrop.cli.commands
 
 import com.carlom.klardrop.cli.CliController
 import com.carlom.klardrop.cli.CliLogging
+import com.carlom.klardrop.cli.cliExitProcess
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
-import kotlin.system.exitProcess
 
 private const val EXIT_OK = 0
 private const val EXIT_INIT_FAILURE = 3
@@ -31,7 +31,7 @@ class StatusCommand : CliktCommand(
 
     if (!controller.initialize(debug = debug, dataDir = dataDir)) {
       CliLogging.error("Failed to initialize Klardrop")
-      exitProcess(EXIT_INIT_FAILURE)
+      cliExitProcess(EXIT_INIT_FAILURE)
     }
 
     val devices = controller.getVisibleDevices().first()
@@ -75,6 +75,6 @@ class StatusCommand : CliktCommand(
     }
 
     controller.shutdown()
-    exitProcess(EXIT_OK)
+    cliExitProcess(EXIT_OK)
   }
 }

@@ -52,6 +52,9 @@ class UpdateCheckerTest {
     // stay hermetic (no real download on the test JVM).
     installerFactory: (InstallChannel) -> UpdateInstaller? = { null },
     recheckInterval: Duration = 6.hours,
+    assetKey: String = UpdateChecker.ASSET_LINUX_TARBALL,
+    detectFlavorFlag: () -> String? = { null },
+    releaseChannel: String = "stable",
   ) = UpdateChecker(
     currentVersion = current,
     osType = osType,
@@ -59,7 +62,10 @@ class UpdateCheckerTest {
     detectChannel = { channel },
     coroutines = TestCoroutines(dispatcher),
     installerFactory = installerFactory,
+    releaseChannel = releaseChannel,
     recheckInterval = recheckInterval,
+    assetKey = assetKey,
+    detectFlavorFlag = detectFlavorFlag,
   )
 
   @Test
@@ -205,7 +211,7 @@ class UpdateCheckerTest {
   @Test
   fun packageManagerChannelsUseTheirOwnUpgradeCommand() = runTest {
     val expected = mapOf(
-      InstallChannel.PACMAN to "yay -S klardrop-bin",
+      InstallChannel.PACMAN to "yay -S ${UpdateChecker.AUR_PACKAGE}",
       InstallChannel.FLATPAK to "flatpak update com.carlom.Klardrop",
       InstallChannel.SNAP to "sudo snap refresh klardrop",
       InstallChannel.NIX to "nix profile upgrade klardrop",
@@ -219,6 +225,24 @@ class UpdateCheckerTest {
       val status = checker.status.value
       assertIs<UpdateStatus.Available>(status, "channel $channel")
       assertEquals(UpdateAction.RunCommand(command), status.action, "channel $channel")
+    }
+  }
+
+  @Test
+  fun pacmanChannelWithNativeAssetKeyUsesNativeAurPackage() = runTest {
+    for (nativeKey in listOf(UpdateChecker.ASSET_LINUX_NATIVE_X64, UpdateChecker.ASSET_LINUX_NATIVE_ARM64)) {
+      val dispatcher = StandardTestDispatcher(testScheduler)
+      val checker = checker(
+        dispatcher,
+        channel = InstallChannel.PACMAN,
+        assetKey = nativeKey,
+      )
+      checker.checkNow()
+      advanceUntilIdle()
+
+      val status = checker.status.value
+      assertIs<UpdateStatus.Available>(status, "nativeKey $nativeKey")
+      assertEquals(UpdateAction.RunCommand("yay -S klardrop-native-bin"), status.action, "nativeKey $nativeKey")
     }
   }
 
@@ -237,6 +261,42 @@ class UpdateCheckerTest {
       UpdateAction.OpenUrl("https://example/klardrop-linux-x64.tar.gz"),
       status.action,
     )
+  }
+
+  @Test
+  fun windowsWithoutAnMsiFallsBackToTheNativeCli() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    // A build that published the CLI but no installer (a fork without the
+    // signing secrets, an unsigned CI run). Sending the user to the release
+    // notes here is not "no download available" — a Windows binary exists.
+    val cliOnly = manifest("0.2.0").let {
+      it.copy(platforms = it.platforms - "windows" + ("windows-cli" to ReleaseAsset("https://example/klardrop-cli-windows-x64.zip")))
+    }
+    val checker = checker(dispatcher, channel = InstallChannel.MSI, osType = OsType.WINDOWS, fetched = cliOnly)
+    checker.checkNow()
+    advanceUntilIdle()
+
+    val status = checker.status.value
+    assertIs<UpdateStatus.Available>(status)
+    assertEquals(
+      UpdateAction.OpenUrl("https://example/klardrop-cli-windows-x64.zip"),
+      status.action,
+    )
+  }
+
+  @Test
+  fun windowsPrefersTheInstallerOverTheCli() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val both = manifest("0.2.0").let {
+      it.copy(platforms = it.platforms + ("windows-cli" to ReleaseAsset("https://example/klardrop-cli-windows-x64.zip")))
+    }
+    val checker = checker(dispatcher, channel = InstallChannel.MSI, osType = OsType.WINDOWS, fetched = both)
+    checker.checkNow()
+    advanceUntilIdle()
+
+    val status = checker.status.value
+    assertIs<UpdateStatus.Available>(status)
+    assertEquals(UpdateAction.OpenUrl("https://example/klardrop.msi"), status.action)
   }
 
   @Test
@@ -319,5 +379,218 @@ class UpdateCheckerTest {
     advanceUntilIdle()
     assertEquals(1, downloads, "a staged update is not downloaded again")
     assertEquals(InstallProgress.Ready, checker.install.value)
+  }
+
+  @Test
+  fun nativeAssetKeyPicksNativeOverTarballFromManifestWithBoth() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val manifestWithBoth = LatestManifest(
+      version = "0.2.0",
+      platforms = mapOf(
+        UpdateChecker.ASSET_LINUX_TARBALL to ReleaseAsset("https://example/klardrop-linux-x64.tar.gz"),
+        UpdateChecker.ASSET_LINUX_NATIVE_X64 to ReleaseAsset("https://example/klardrop-native-linux-x64.tar.gz"),
+      ),
+    )
+    var stagedAssetUrl: String? = null
+    val fakeInstaller = object : UpdateInstaller {
+      override suspend fun downloadAndStage(asset: ReleaseAsset, onProgress: (Float?) -> Unit) {
+        stagedAssetUrl = asset.url
+      }
+      override fun applyAndRestart() {}
+    }
+    val checker = checker(
+      dispatcher,
+      channel = InstallChannel.TARBALL,
+      fetched = manifestWithBoth,
+      assetKey = UpdateChecker.ASSET_LINUX_NATIVE_X64,
+      installerFactory = { fakeInstaller },
+    )
+    checker.checkNow()
+    advanceUntilIdle()
+
+    assertEquals("https://example/klardrop-native-linux-x64.tar.gz", stagedAssetUrl)
+  }
+
+  @Test
+  fun tarballChannelWithNativeAssetKeyAppendsNative() = runTest {
+    for (nativeKey in listOf(UpdateChecker.ASSET_LINUX_NATIVE_X64, UpdateChecker.ASSET_LINUX_NATIVE_ARM64)) {
+      val dispatcher = StandardTestDispatcher(testScheduler)
+      val checker = checker(
+        dispatcher,
+        channel = InstallChannel.TARBALL,
+        assetKey = nativeKey,
+      )
+      checker.checkNow()
+      advanceUntilIdle()
+
+      val status = checker.status.value
+      assertIs<UpdateStatus.Available>(status, "nativeKey $nativeKey")
+      assertEquals(
+        UpdateAction.RunCommand("curl -fsSL ${UpdateChecker.INSTALL_SCRIPT_URL} | bash -s -- --native"),
+        status.action,
+        "nativeKey $nativeKey",
+      )
+    }
+  }
+
+  @Test
+  fun tarballChannelWithQtFlavorAppendsQt() = runTest {
+    for (nativeKey in listOf(UpdateChecker.ASSET_LINUX_NATIVE_X64, UpdateChecker.ASSET_LINUX_NATIVE_ARM64)) {
+      val dispatcher = StandardTestDispatcher(testScheduler)
+      val checker = checker(
+        dispatcher,
+        channel = InstallChannel.TARBALL,
+        assetKey = nativeKey,
+        detectFlavorFlag = { "--qt" },
+      )
+      checker.checkNow()
+      advanceUntilIdle()
+
+      val status = checker.status.value
+      assertIs<UpdateStatus.Available>(status, "nativeKey $nativeKey")
+      assertEquals(
+        UpdateAction.RunCommand("curl -fsSL ${UpdateChecker.INSTALL_SCRIPT_URL} | bash -s -- --qt"),
+        status.action,
+        "nativeKey $nativeKey",
+      )
+    }
+  }
+
+  @Test
+  fun tarballChannelWithOmarchyFlavorAppendsOmarchy() = runTest {
+    for (nativeKey in listOf(UpdateChecker.ASSET_LINUX_NATIVE_X64, UpdateChecker.ASSET_LINUX_NATIVE_ARM64)) {
+      val dispatcher = StandardTestDispatcher(testScheduler)
+      val checker = checker(
+        dispatcher,
+        channel = InstallChannel.TARBALL,
+        assetKey = nativeKey,
+        detectFlavorFlag = { "--omarchy" },
+      )
+      checker.checkNow()
+      advanceUntilIdle()
+
+      val status = checker.status.value
+      assertIs<UpdateStatus.Available>(status, "nativeKey $nativeKey")
+      assertEquals(
+        UpdateAction.RunCommand("curl -fsSL ${UpdateChecker.INSTALL_SCRIPT_URL} | bash -s -- --omarchy"),
+        status.action,
+        "nativeKey $nativeKey",
+      )
+    }
+  }
+
+  @Test
+  fun tarballChannelNightlyWithNativeAssetKeyAppendsNightlyAndNative() = runTest {
+    for (nativeKey in listOf(UpdateChecker.ASSET_LINUX_NATIVE_X64, UpdateChecker.ASSET_LINUX_NATIVE_ARM64)) {
+      val dispatcher = StandardTestDispatcher(testScheduler)
+      val checker = checker(
+        dispatcher,
+        channel = InstallChannel.TARBALL,
+        assetKey = nativeKey,
+        releaseChannel = "nightly",
+      )
+      checker.checkNow()
+      advanceUntilIdle()
+
+      val status = checker.status.value
+      assertIs<UpdateStatus.Available>(status, "nativeKey $nativeKey")
+      assertEquals(
+        UpdateAction.RunCommand("curl -fsSL ${UpdateChecker.INSTALL_SCRIPT_URL} | bash -s -- --nightly --native"),
+        status.action,
+        "nativeKey $nativeKey",
+      )
+    }
+  }
+
+  @Test
+  fun tarballChannelNightlyWithQtFlavorAppendsNightlyAndQt() = runTest {
+    for (nativeKey in listOf(UpdateChecker.ASSET_LINUX_NATIVE_X64, UpdateChecker.ASSET_LINUX_NATIVE_ARM64)) {
+      val dispatcher = StandardTestDispatcher(testScheduler)
+      val checker = checker(
+        dispatcher,
+        channel = InstallChannel.TARBALL,
+        assetKey = nativeKey,
+        releaseChannel = "nightly",
+        detectFlavorFlag = { "--qt" },
+      )
+      checker.checkNow()
+      advanceUntilIdle()
+
+      val status = checker.status.value
+      assertIs<UpdateStatus.Available>(status, "nativeKey $nativeKey")
+      assertEquals(
+        UpdateAction.RunCommand("curl -fsSL ${UpdateChecker.INSTALL_SCRIPT_URL} | bash -s -- --nightly --qt"),
+        status.action,
+        "nativeKey $nativeKey",
+      )
+    }
+  }
+
+  @Test
+  fun tarballChannelGenericJvmFallbackUnchanged() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val checker = checker(
+      dispatcher,
+      channel = InstallChannel.TARBALL,
+      assetKey = UpdateChecker.ASSET_LINUX_TARBALL,
+      releaseChannel = "stable",
+      detectFlavorFlag = { "--qt" },
+    )
+    checker.checkNow()
+    advanceUntilIdle()
+
+    val status = checker.status.value
+    assertIs<UpdateStatus.Available>(status)
+    assertEquals(
+      UpdateAction.RunCommand("curl -fsSL ${UpdateChecker.INSTALL_SCRIPT_URL} | bash"),
+      status.action,
+    )
+  }
+
+  @Test
+  fun tarballChannelGenericJvmNightlyFallbackUnchanged() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val checker = checker(
+      dispatcher,
+      channel = InstallChannel.TARBALL,
+      assetKey = UpdateChecker.ASSET_LINUX_TARBALL,
+      releaseChannel = "nightly",
+      detectFlavorFlag = { "--qt" },
+    )
+    checker.checkNow()
+    advanceUntilIdle()
+
+    val status = checker.status.value
+    assertIs<UpdateStatus.Available>(status)
+    assertEquals(
+      UpdateAction.RunCommand("curl -fsSL ${UpdateChecker.INSTALL_SCRIPT_URL} | bash -s -- --nightly"),
+      status.action,
+    )
+  }
+
+  @Test
+  fun applyUpdateFailureSetsInstallProgressFailed() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val failingInstaller = object : UpdateInstaller {
+      override suspend fun downloadAndStage(asset: ReleaseAsset, onProgress: (Float?) -> Unit) {}
+      override fun applyAndRestart() {
+        throw RuntimeException("restart failed")
+      }
+    }
+    val checker = checker(
+      dispatcher,
+      channel = InstallChannel.TARBALL,
+      installerFactory = { failingInstaller },
+    )
+    checker.checkNow()
+    advanceUntilIdle()
+    assertEquals(InstallProgress.Ready, checker.install.value)
+
+    checker.applyUpdate()
+    advanceUntilIdle()
+
+    val install = checker.install.value
+    assertIs<InstallProgress.Failed>(install)
+    assertEquals("restart failed", install.message)
   }
 }
