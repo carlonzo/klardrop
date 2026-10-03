@@ -25,3 +25,7 @@ jobs:
       - name: Run the pty diagnostic
         shell: bash
         run: cargo test --locked --test zz_diag -- --nocapture --test-threads=1
+
+      - name: Run the real tui_flows test
+        shell: bash
+        run: cargo test --locked --test tui_flows

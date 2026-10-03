@@ -375,6 +375,23 @@ impl Tui {
             })
             .expect("open pty");
 
+        // Establish the geometry on the pty itself, not only in `openpty`'s argument.
+        // On unix portable-pty applies `PtySize` as it opens the pair, so this repeats
+        // what already holds. On Windows the pseudoconsole is not reliably sized by that
+        // argument, and a client that starts inside a one-row window clamps every
+        // absolute cursor position it is given: the frame collapses onto one line, and
+        // every assertion that reads a ROW — the selection marker, the panes — fails
+        // for a reason that has nothing to do with the client. Asserting the size here
+        // makes the window the client draws into the one the tests are written against.
+        pair.master
+            .resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("size the pty");
+
         // `CommandBuilder` rather than `std::process::Command`: portable-pty
         // spawns through its own `fork`/`exec`, so the child is the pty slave.
         // Motion, mouse capture and colour follow the options, and the theme
