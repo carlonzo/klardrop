@@ -67,8 +67,8 @@ fn diag_can_windows_rows_be_recovered() {
     println!("DIAG2 plain bytes     = {}", plain.len());
     println!("DIAG2 lines after ANSI-strip = {}", lines.len());
     println!("DIAG2 line lengths    = {:?}", lines.iter().map(|l| l.len()).take(12).collect::<Vec<_>>());
-    for (n, line) in lines.iter().take(6).enumerate() {
-        println!("DIAG2 [{n}] {:?}", line);
+    for (n, line) in lines.iter().enumerate() {
+        println!("DIAG2 [{n}] len={} {:?}", line.len(), &line[..line.len().min(110)]);
     }
     println!(
         "DIAG2 selected rows   = {}",
