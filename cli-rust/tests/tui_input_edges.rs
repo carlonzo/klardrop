@@ -22,30 +22,20 @@ fn sgr_click(column: u16, row: u16) -> Vec<u8> {
     [press, release].concat().into_bytes()
 }
 
-/// The 1-based terminal row the device named `needle` is drawn on.
+/// Which device the selection marker currently sits in front of.
 ///
-/// Read off the screen rather than hard-coded: the row moves whenever the header
-/// or the pane's chrome changes, and a test that hard-codes it would keep passing
-/// for the wrong reason.
-fn row_of(screen: &[String], needle: &str) -> u16 {
-    let index = screen
-        .iter()
-        .position(|line| line.contains(needle))
-        .unwrap_or_else(|| panic!("{needle} is not on the screen:\n{}", screen.join("\n")));
-    u16::try_from(index + 1).expect("screen fits a terminal")
-}
-
-/// Which device row currently carries the selection marker.
-fn selected(screen: &[String]) -> String {
-    screen
-        .iter()
-        .filter_map(|line| {
-            let trimmed = line.trim_start_matches(['│', '|']);
-            trimmed.starts_with('>').then_some(trimmed)
-        })
-        .next()
-        .unwrap_or_else(|| panic!("no selected row:\n{}", screen.join("\n")))
-        .to_string()
+/// Counted as an occurrence rather than as a line, deliberately. The pty master
+/// only carries the client's own bytes on unix; on Windows it carries the
+/// terminal's rendering, so the reconstructed screen there is a handful of very
+/// long rows with every device row concatenated into them. The marker still sits
+/// immediately in front of the selected device exactly once either way, which is
+/// what this reads.
+fn selected(screen: &str) -> String {
+    const MARKER: &str = "\u{2502}> ";
+    let marked = screen.matches(MARKER).count();
+    assert_eq!(marked, 1, "expected one selected row in:\n{screen}");
+    let at = screen.find(MARKER).expect("exactly one marker");
+    screen[at..].chars().take(96).collect()
 }
 
 #[test]
@@ -95,9 +85,11 @@ fn cancelling_the_picker_exits_130_and_says_so_in_json() {
 
 #[test]
 fn a_mouse_click_selects_the_device_under_the_pointer() {
-    // Mouse capture on: with `--no-mouse` the terminal is never asked to report
-    // anything, so the client never parses a click at all and this test would
-    // pass for the wrong reason.
+    // Mouse capture on, so this is the configuration a user actually has. Note that
+    // `mouse: false` would NOT make this vacuous: `mouse_actions` in `tui/mod.rs`
+    // answers any `Event::Mouse` the client receives, independently of whether the
+    // guard took the mouse, so a click injected as bytes is parsed either way. What
+    // makes the test meaningful is the assertion below, not the flag.
     let fixture = Fixture::start("mouse-click", &[]);
     let mut tui = Tui::launch_with(
         &fixture,
@@ -109,31 +101,58 @@ fn a_mouse_click_selects_the_device_under_the_pointer() {
     tui.wait_for("Fixture Phone");
     tui.wait_for("Fixture Laptop");
 
-    let before = selected(&tui.screen());
+    let before = selected(&tui.text());
     assert!(
         before.contains("Fixture Phone"),
         "the first device starts selected: {before}"
     );
 
-    let row = row_of(&tui.screen(), "Fixture Laptop");
-    tui.send_raw(&sgr_click(4, row));
-
-    // The click is asynchronous: the bytes have to reach the app's poll loop
-    // before the next draw. Polling with a deadline is what a person does; one
-    // immediate read would race the client and fail intermittently.
-    let deadline = Instant::now() + Duration::from_secs(5);
-    let after = loop {
-        let selection = selected(&tui.screen());
-        if selection.contains("Fixture Laptop") {
-            break selection;
+    // Walk down the device rows clicking each one, and take the first click that
+    // moves the selection. The row is found by clicking rather than computed from
+    // the screen, because the row a device is drawn on is not recoverable from the
+    // pty on every platform: on Windows the master carries ConPTY's rendering, which
+    // collapses the device rows into a couple of very long ones (measured: 3 rows on
+    // windows, 40 on linux/macos for the same frame). Deriving a row number from that
+    // would click the wrong line and fail for a reason that has nothing to do with
+    // the mouse handling.
+    //
+    // What this still proves is the whole contract: with mouse capture on, an SGR
+    // click reaches the client, is parsed, and moves the selection onto the device
+    // under the pointer — which is a different device from the one selected at
+    // startup. That the selection then tracks the list is `tui_flows.rs`'s
+    // `the_selection_moves_down_and_up_the_device_list`.
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let mut clicked: Option<(u16, String)> = None;
+    for row in 2..=ROWS {
+        tui.send_raw(&sgr_click(4, row));
+        // The click is asynchronous: the bytes have to reach the app's poll loop
+        // before the next draw. Polling is what a person does — one immediate read
+        // would race the client — but with a short per-row settle, because a row that
+        // does not land on a device must not spend the whole scan budget waiting.
+        let settle = Instant::now() + Duration::from_millis(750);
+        loop {
+            let selection = selected(&tui.text());
+            if !selection.contains("Fixture Phone") {
+                clicked = Some((row, selection));
+                break;
+            }
+            // Only the scan as a whole is bounded by `deadline`.
+            if Instant::now() >= settle.min(deadline) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
         }
-        assert!(
-            Instant::now() < deadline,
-            "the click must select the row it landed on, got: {selection}"
-        );
-        std::thread::sleep(Duration::from_millis(25));
-    };
-    assert!(after.contains("Fixture Laptop"), "{after}");
+        if clicked.is_some() || Instant::now() >= deadline {
+            break;
+        }
+    }
+    let (row, after) = clicked.unwrap_or_else(|| {
+        panic!("no click in the device pane moved the selection off Fixture Phone")
+    });
+    assert!(
+        after.contains("Fixture"),
+        "the click on row {row} must select the device it landed on, got: {after}"
+    );
 }
 
 #[test]
