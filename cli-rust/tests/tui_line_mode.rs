@@ -10,7 +10,7 @@
 
 mod support;
 
-use support::{printed_text, Fixture, LaunchOptions, Tui};
+use support::{strip_escapes, Fixture, LaunchOptions, Tui};
 
 /// The bytes that mean "the client took the screen".
 const ALT_SCREEN_ON: &str = "\x1b[?1049h";
@@ -61,7 +61,7 @@ fn a_dumb_terminal_prints_the_state_and_never_touches_the_screen() {
     assert_eq!(code, 0, "line mode is a working answer, not a failure");
 
     assert_no_escape_bytes(&tui);
-    let text = printed_text(&tui.raw());
+    let text = strip_escapes(&tui.raw());
     assert!(text.contains("line mode"), "{text}");
     assert!(text.contains("dumb"), "the reason is named: {text}");
     assert!(text.contains("self:"), "the self device: {text}");
@@ -104,9 +104,20 @@ fn a_window_below_the_layout_minimum_gets_lines_too() {
 
     assert_eq!(tui.wait_for_exit(), 0);
     assert_no_escape_bytes(&tui);
-    let text = printed_text(&tui.raw());
+    let text = strip_escapes(&tui.raw());
+    assert!(text.contains("line mode"), "{text}");
     assert!(text.contains("10x4"), "the size is named: {text}");
-    assert!(text.contains("Fixture Phone"), "{text}");
+    // Deliberately no device-name assertion here. At ten columns the summary wraps
+    // mid-word, and on Windows the pty master is ConPTY's rendering, which re-emits
+    // the wrap-column character — CI shows "Fixture Phone" arriving as
+    // "Fixtturre Phone", because the 't' at the wrap is written on both rows. The
+    // name is not recoverable from that stream at any effort short of reconstructing
+    // ConPTY's wrap rules.
+    //
+    // This is not lost coverage. a_dumb_terminal_prints_the_state_and_never_touches_the_screen
+    // asserts every device name, at a width where nothing wraps, on every platform.
+    // What is specific to a narrow window is that line mode is chosen at all and that
+    // it names the size it was given — which is what the two assertions above check.
 }
 
 #[test]
@@ -122,7 +133,7 @@ fn an_explicit_line_mode_asks_for_lines_on_a_capable_terminal() {
 
     assert_eq!(tui.wait_for_exit(), 0);
     assert_no_escape_bytes(&tui);
-    let text = printed_text(&tui.raw());
+    let text = strip_escapes(&tui.raw());
     assert!(
         text.contains("--line-mode"),
         "the reason is the request: {text}"
