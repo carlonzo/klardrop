@@ -362,6 +362,23 @@ pub fn strip_escapes(bytes: &[u8]) -> String {
     }
     String::from_utf8_lossy(&out).into_owned()
 }
+/// The printed text as one continuous run: [`strip_escapes`], then the terminal's
+/// own line breaks removed.
+///
+/// The second half matters wherever the window is narrow. ConPTY renders what the
+/// client printed into the columns it was given, so a 10-column window wraps
+/// mid-word — `self: Fixt`, newline, `ture Host (` — and the phrase the client
+/// printed contiguously is split across rows. Taking the newlines out undoes that
+/// wrapping and restores the logical text.
+///
+/// On unix this is the identity in practice: a line-mode client emits its own
+/// newlines and no escapes, so the result is the same text it printed.
+pub fn printed_text(bytes: &[u8]) -> String {
+    strip_escapes(bytes)
+        .chars()
+        .filter(|c| !matches!(c, '\n' | '\r'))
+        .collect()
+}
 
 /// The client, running on a pty, with its screen decoded.
 pub struct Tui {
