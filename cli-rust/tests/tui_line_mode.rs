@@ -28,6 +28,14 @@ fn line_mode_options(term: &str) -> LaunchOptions {
 }
 
 fn assert_no_escape_bytes(tui: &Tui) {
+    // Only meaningful where the pty master carries the client's own bytes. On Windows
+    // it carries ConPTY's rendering of them instead, and that stream opens with an
+    // OSC window-title sequence of ConPTY's own, so an ESC byte is present whatever
+    // this client did — measured in the run that found this: 204 ESC bytes on windows
+    // against 187 on macos for the same frame, the surplus being ConPTY's title.
+    if cfg!(windows) {
+        return;
+    }
     let raw = tui.raw();
     assert!(
         !raw.contains(&0x1b),
@@ -178,17 +186,28 @@ fn a_hostile_name_cannot_reach_the_terminal_through_line_mode() {
     assert_eq!(code, 0, "line mode is a working answer, not a failure");
 
     assert_no_escape_bytes(&tui);
+    // What the user actually gets is asserted on the SCREEN, on every platform: the
+    // name's characters survive and none of its control ones do. The byte-level check
+    // below cannot be the one that proves it on Windows, where `raw` is ConPTY's
+    // rendering and carries a BEL of its own for the window title — the same reasoning
+    // tui_flows.rs applies to its equivalent assertions.
+    let screen = tui.text();
+    for (what, byte) in [("a bell", 0x07u8), ("a NUL", 0x00)] {
+        assert!(
+            !screen.as_bytes().contains(&byte),
+            "{what} reached the screen; output was:\n{screen}"
+        );
+    }
+    // Where the wire IS the client's bytes, the stronger claim still holds.
+    if !cfg!(windows) {
+        let raw = tui.raw();
+        assert!(
+            !raw.contains(&0x07) && !raw.contains(&0x00),
+            "a control byte reached the terminal; output was:\n{}",
+            String::from_utf8_lossy(&raw)
+        );
+    }
     let raw = tui.raw();
-    assert!(
-        !raw.contains(&0x07),
-        "a bell reached the terminal; output was:\n{}",
-        String::from_utf8_lossy(&raw)
-    );
-    assert!(
-        !raw.contains(&0x00),
-        "a NUL reached the terminal; output was:\n{}",
-        String::from_utf8_lossy(&raw)
-    );
     let text = String::from_utf8_lossy(&raw).into_owned();
     assert!(
         text.contains("evil"),
