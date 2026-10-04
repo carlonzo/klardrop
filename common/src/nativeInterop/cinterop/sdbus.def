@@ -12,4 +12,7 @@ compilerOpts = -I/usr/include -I/usr/include/x86_64-linux-gnu -I/usr/include/aar
 # does not have. They resolve at load time against the host's libc. It lives here rather
 # than in a per-module `linkerOpts` so every consumer gets it — including the test binaries
 # of modules that only reach libsystemd through :klardrop-common.
-linkerOpts = -L/usr/lib -L/usr/lib64 -lsystemd --allow-shlib-undefined
+# The -L triplet paths are the link-time counterpart of the include paths above; see
+# the note in avahi.def. Without them a Debian/Ubuntu link fails with
+# "unable to find library -lsystemd".
+linkerOpts = -L/usr/lib -L/usr/lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/lib/aarch64-linux-gnu -lsystemd --allow-shlib-undefined

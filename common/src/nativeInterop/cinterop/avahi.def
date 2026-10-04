@@ -12,4 +12,9 @@ compilerOpts = -I/usr/include -I/usr/include/x86_64-linux-gnu -I/usr/include/aar
 # does not have. They resolve at load time against the host's libc. It lives here rather
 # than in a per-module `linkerOpts` so every consumer gets it — including the test binaries
 # of modules that only reach avahi through :klardrop-common.
-linkerOpts = -L/usr/lib -L/usr/lib64 -lavahi-client -lavahi-common --allow-shlib-undefined
+# The -L triplet paths are the link-time counterpart of the include paths above:
+# Debian and Ubuntu are multiarch and put libavahi-*.so in /usr/lib/<triplet>, which
+# ld.lld's built-in search list (plain /usr/lib, /usr/lib64, /lib, /lib64) does not
+# include, so a link there fails with "unable to find library -lavahi-client". Arch and
+# Fedora use /usr/lib, which is why this only ever showed up on CI.
+linkerOpts = -L/usr/lib -L/usr/lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/lib/aarch64-linux-gnu -lavahi-client -lavahi-common --allow-shlib-undefined

@@ -17,9 +17,24 @@ kotlin {
       jvmTarget = JvmTarget.JVM_21
     }
   }
-  linuxX64()
+  linuxX64().binaries.all {
+    // See the note in common/src/nativeInterop/cinterop/avahi.def: ld.lld's built-in
+    // search list does not include Debian/Ubuntu's multiarch /usr/lib/<triplet>, so
+    // without these this module's own test binary fails to link its sqlite3.
+    linkerOpts(
+      "-L/usr/lib/x86_64-linux-gnu",
+      "-L/usr/lib/aarch64-linux-gnu",
+    )
+  }
   // arm64 Linux builds only on an aarch64 host — see `hostCanBuildLinuxArm64`.
-  if (rootProject.extra["hostCanBuildLinuxArm64"] as Boolean) linuxArm64()
+  if (rootProject.extra["hostCanBuildLinuxArm64"] as Boolean) {
+    linuxArm64().binaries.all {
+      linkerOpts(
+        "-L/usr/lib/x86_64-linux-gnu",
+        "-L/usr/lib/aarch64-linux-gnu",
+      )
+    }
+  }
   // The native macOS app (iosApp/KlardropMac, SwiftUI + presentation.framework) is a
   // *separate framework*, not a JVM app: :presentation's KlardropBootstrap cannot reference
   // ControlPlane because :control-plane already depends on :presentation, so wiring the host

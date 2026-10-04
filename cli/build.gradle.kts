@@ -39,6 +39,11 @@ kotlin {
     binaries.all {
       linkerOpts(
         "-Wl,--as-needed",
+        // See the note in common/src/nativeInterop/cinterop/avahi.def: ld.lld's built-in
+        // search list does not include Debian/Ubuntu's multiarch /usr/lib/<triplet>, so
+        // without these the engine fails to link with "unable to find library -lsqlite3".
+        "-L/usr/lib/x86_64-linux-gnu",
+        "-L/usr/lib/aarch64-linux-gnu",
         // Kotlin/Native links against its bundled older glibc sysroot; host libs reference
         // newer glibc symbol versions that resolve correctly at runtime.
         "--allow-shlib-undefined",
@@ -71,6 +76,9 @@ kotlin {
       binaries.all {
         linkerOpts(
           "-Wl,--as-needed",
+          // Same multiarch library paths as linuxX64 above; see the note there.
+          "-L/usr/lib/x86_64-linux-gnu",
+          "-L/usr/lib/aarch64-linux-gnu",
           // Same bundled-sysroot arrangement as linuxX64 above; arm64 runners provide
           // the aarch64 system libs at these paths natively (no cross-linking).
           "--allow-shlib-undefined",
