@@ -310,6 +310,58 @@ pub fn styling_sequences(raw: &str) -> Vec<&str> {
         })
         .collect()
 }
+/// `bytes` with every escape sequence removed: CSI, OSC and the two-character
+/// escapes, the way a terminal would consume them.
+///
+/// Needed because on Windows `raw` is ConPTY's rendering of the client's output,
+/// not the output itself, and that rendering interleaves cursor moves through the
+/// text. In a 10-column window ConPTY emits `self: Fixt`, then `ESC[3;10H`, then
+/// `ture Host`, so a phrase the client printed contiguously is not contiguous in
+/// the stream and a `contains` on the raw bytes cannot see it. Removing the
+/// sequences reassembles the logical text on both platforms, and is a no-op on
+/// unix, where a line-mode client emits no escapes to begin with.
+pub fn strip_escapes(bytes: &[u8]) -> String {
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != 0x1b {
+            out.push(bytes[i]);
+            i += 1;
+            continue;
+        }
+        i += 1; // the ESC itself
+        match bytes.get(i) {
+            Some(b'[') => {
+                i += 1; // CSI introducer
+                while i < bytes.len() && (0x20..0x30).contains(&bytes[i]) {
+                    i += 1;
+                }
+                while i < bytes.len() && !(0x40..=0x7e).contains(&bytes[i]) {
+                    i += 1;
+                }
+                i += 1; // the final byte
+            }
+            Some(b']') => {
+                i += 1; // OSC introducer
+                        // Terminated by BEL, or by ESC \.
+                while i < bytes.len() {
+                    if bytes[i] == 0x07 {
+                        i += 1;
+                        break;
+                    }
+                    if bytes[i] == 0x1b && bytes.get(i + 1) == Some(&b'\\') {
+                        i += 2;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            Some(_) => i += 1, // any other two-character escape
+            None => {}
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
 
 /// The client, running on a pty, with its screen decoded.
 pub struct Tui {
