@@ -672,9 +672,18 @@ impl Tui {
     /// gone the pty is gone with them, and there is nothing left to type at.
     ///
     /// `Some(false)` — the probe ran and the pty did not echo — is the failure.
-    /// `None` means the write itself was refused (macOS), which says nothing about
-    /// the client; see the body.
+    /// `None` means the platform cannot report it (macOS refuses the write, Windows
+    /// does not echo), which says nothing about the client; see the body.
     pub fn echoes_input(&mut self) -> Option<bool> {
+        // ConPTY does not echo input written to the master back to it, so on Windows
+        // the probe cannot report what the line discipline is doing. That is the same
+        // situation as macOS below and for the same reason — a fact about the platform,
+        // not about the client — so it is reported as "cannot probe" rather than
+        // dressed up as "did not restore". Callers assert the restore with the
+        // escape-sequence comparison, which works on every platform.
+        if cfg!(windows) {
+            return None;
+        }
         let before = self.raw().len();
         // macOS revokes the tty when the session leader that owned it exits, so the
         // slave refuses writes with EIO even though `keep_slave` still holds a live
