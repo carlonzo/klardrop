@@ -1187,18 +1187,18 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				ONLY_ACTIVE_ARCH = YES;
-				/* One Kotlin framework only. `presentation` here is the umbrella built by
-				   :control-plane:linkDebugFrameworkMacosArm64, which embeds :presentation and
-				   :klardrop-common, so `import presentation` still resolves in the Swift
-				   files this target shares with iOS. The `presentation` pod is deliberately
-				   absent from this target (see Podfile): a second, separate
-				   presentation.framework would make the same ObjC class visible through two
-				   Swift modules, which is what produced "'KlardropBootstrap' is ambiguous
-				   for type lookup in this context". ld64's lazy archive-member extraction
-				   used to hide that, by never pulling in the second framework's copy. */
+				/* control_plane comes FIRST on purpose. Both it and presentation.framework are
+				   static Kotlin/Native frameworks, and control_plane's archive also contains
+				   its own copy of :presentation and :klardrop-common. ld64 pulls an archive
+				   member only while it resolves a pending undefined symbol, so whichever
+				   framework is scanned first supplies those classes; the second one is then
+				   never pulled in and nothing is defined twice. Put presentation first and
+				   control_plane redefines every symbol it already got. Debug used to list
+				   control_plane AFTER $(inherited), which put presentation.framework first —
+				   the opposite of what this comment claims, and a duplicate-symbol build. */
 				OTHER_LDFLAGS = (
 					"-framework",
-					"presentation",
+					"control_plane",
 					"$(inherited)",
 					"-lsqlite3",
 					"-Xlinker",
@@ -1271,16 +1271,16 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				/* One Kotlin framework only. `presentation` here is the umbrella built by
-				   :control-plane:linkReleaseFrameworkMacosArm64, which embeds :presentation
-				   and :klardrop-common, so `import presentation` still resolves in the
-				   Swift files this target shares with iOS. The `presentation` pod is
-				   deliberately absent from this target (see Podfile): a second, separate
-				   presentation.framework would make the same ObjC class visible through
-				   two Swift modules. */
+				/* control_plane comes FIRST on purpose. Both it and presentation.framework are
+				   static Kotlin/Native frameworks, and control_plane's archive also contains
+				   its own copy of :presentation and :klardrop-common. ld64 pulls an archive
+				   member only while it resolves a pending undefined symbol, so whichever
+				   framework is scanned first supplies those classes; the second one is then
+				   never pulled in and nothing is defined twice. Put presentation first and
+				   control_plane redefines every symbol it already got. */
 				OTHER_LDFLAGS = (
 					"-framework",
-					"presentation",
+					"control_plane",
 					"$(inherited)",
 					"-lsqlite3",
 					"-Xlinker",

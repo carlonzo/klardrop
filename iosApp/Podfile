@@ -24,12 +24,6 @@ end
 target 'KlardropMac' do
   use_frameworks!
   platform :osx, '14.0'
-  # No `pod 'presentation'` here on purpose. KlardropMac links exactly ONE Kotlin
-  # framework, built by `:control-plane:link{Debug,Release}FrameworkMacosArm64` and
-  # named `presentation`, which embeds :presentation and :klardrop-common. The pod
-  # would put a second, separate `presentation.framework` on the search path, and two
-  # static Kotlin/Native frameworks that share Kotlin types make the same ObjC class
-  # visible through two Swift modules ("'KlardropBootstrap' is ambiguous"). The iOS
-  # target above still uses the pod; it has no control_plane counterpart.
+  pod 'presentation', :path => '../presentation'
   pod 'Sentry', SENTRY_COCOA_VERSION
 end

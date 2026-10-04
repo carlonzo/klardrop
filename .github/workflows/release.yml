@@ -542,11 +542,10 @@ jobs:
       # Only the Debug variant exists locally after local dev; CI must produce the Release variant
       # explicitly here.
       - name: Build Kotlin macOS frameworks (Sentry synthetic + dummy + control plane)
-        # :control-plane:linkReleaseFrameworkMacosArm64 produces presentation.framework — the
-        # umbrella (it embeds :presentation and :klardrop-common) that the KlardropMac target
-        # links (FRAMEWORK_SEARCH_PATHS / -framework presentation in project.pbxproj) and that
-        # MacApp.swift reaches through `import presentation` to start the local control plane.
-        # Without it the macOS app has no local IPC at all and `klardrop devices` cannot reach it.
+        # :control-plane:linkReleaseFrameworkMacosArm64 produces control_plane.framework, which
+        # the KlardropMac target links (FRAMEWORK_SEARCH_PATHS / -framework control_plane in
+        # project.pbxproj) and MacApp.swift imports to start the local control plane. Without it
+        # the macOS app has no local IPC at all and `klardrop devices` cannot reach it.
         run: >-
           ./gradlew
           :klardrop-common:podBuildSentryMacos

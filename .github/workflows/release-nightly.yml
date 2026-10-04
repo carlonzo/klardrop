@@ -851,10 +851,8 @@ jobs:
           restore-keys: konan-${{ runner.os }}-
 
       - name: Build Kotlin macOS frameworks (Sentry synthetic + dummy + control plane)
-        # presentation.framework — the umbrella :control-plane builds (it embeds
-        # :presentation and :klardrop-common) — is what MacApp.swift reaches through
-        # `import presentation` to start the local control plane; without it the shipped
-        # macOS app serves no local IPC at all.
+        # control_plane.framework is what MacApp.swift imports to start the local control
+        # plane; without it the shipped macOS app serves no local IPC at all.
         run: >-
           ./gradlew
           :klardrop-common:podBuildSentryMacos

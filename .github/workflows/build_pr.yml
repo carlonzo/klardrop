@@ -194,9 +194,8 @@ jobs:
         run: |
           # Prebuild the Sentry macOS synthetic + dummy frameworks that the
           # cocoapods integration and macOS FRAMEWORK_SEARCH_PATHS depend on, plus
-          # the umbrella presentation.framework — built by :control-plane (it embeds
-          # :presentation and :klardrop-common), the only Kotlin framework KlardropMac
-          # links, and the module MacApp.swift's `import presentation` resolves to.
+          # control_plane.framework — what MacApp.swift imports to start the local
+          # control plane, and what the KlardropMac target links.
           ./gradlew :klardrop-common:podBuildSentryMacos :presentation:generateDummyFramework
           ./gradlew :control-plane:linkDebugFrameworkMacosArm64
           pod install --project-directory=iosApp
