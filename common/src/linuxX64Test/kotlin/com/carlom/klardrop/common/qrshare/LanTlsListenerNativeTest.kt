@@ -2,6 +2,10 @@
 
 package com.carlom.klardrop.common.qrshare
 
+// `SSL` comes from the cryptography provider's OpenSSL cinterop, not from our own
+// `openssl` cinterop: both index the same system headers, so cinterop dedups it out
+// of ours and into the provider's package. Same reason as in LanTlsListener.linux.kt.
+import dev.whyoleg.cryptography.providers.openssl3.internal.cinterop.SSL
 import com.carlom.klardrop.common.qrshare.openssl.SSL_CTX_free
 import com.carlom.klardrop.common.qrshare.openssl.SSL_CTX_new
 import com.carlom.klardrop.common.qrshare.openssl.SSL_CTX_set_verify
@@ -58,7 +62,7 @@ class LanTlsListenerNativeTest {
     private const val TEST_TIMEOUT_MS = 10_000L
   }
 
-  private fun connectRawTls(port: Int): Pair<Int, kotlinx.cinterop.CPointer<com.carlom.klardrop.common.qrshare.openssl.SSL>> {
+  private fun connectRawTls(port: Int): Pair<Int, kotlinx.cinterop.CPointer<SSL>> {
     val fd = socket(AF_INET, SOCK_STREAM, 0)
     check(fd >= 0) { "client socket() failed" }
     memScoped {

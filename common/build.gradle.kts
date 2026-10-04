@@ -40,6 +40,17 @@ kotlin {
     binaries.all {
       linkerOpts(
         "-Wl,--as-needed",
+        // Kotlin/Native invokes ld.lld directly, and lld's built-in search list is the
+        // plain /usr/lib, /usr/lib64, /lib, /lib64. Debian and Ubuntu are multiarch:
+        // libsqlite3.so, libssl.so, libavahi-*.so and libsystemd.so live in
+        // /usr/lib/<triplet>, which that list does not include — so a link there fails
+        // with "unable to find library -lsqlite3" and friends. Arch and Fedora put the
+        // same libraries in /usr/lib, which is why this only ever showed up on CI.
+        // Listed for both triplets, like the include paths in openssl.def: the host's
+        // own directory is always present and is searched first, the other is simply
+        // absent and ignored.
+        "-L/usr/lib/x86_64-linux-gnu",
+        "-L/usr/lib/aarch64-linux-gnu",
         // Kotlin/Native links against its bundled older glibc sysroot, and the host libavahi/libsqlite3 reference newer glibc symbol versions that resolve at runtime.
         "--allow-shlib-undefined",
         "-lsqlite3",
@@ -74,6 +85,9 @@ kotlin {
       binaries.all {
         linkerOpts(
           "-Wl,--as-needed",
+          // Same multiarch library paths as linuxX64 above; see the comment there.
+          "-L/usr/lib/x86_64-linux-gnu",
+          "-L/usr/lib/aarch64-linux-gnu",
           // Same bundled-sysroot arrangement as linuxX64 above. The .def files only point at
           // /usr/include and -L/usr/lib(64), which resolve to the aarch64 headers/libs
           // natively on an arm64 runner — no cross-linking, same as x64.
