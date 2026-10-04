@@ -29,14 +29,25 @@ kotlin {
   // exact code the shipped macOS app runs.
   macosArm64 {
     binaries.framework {
-      baseName = "control_plane"
+      // Named `presentation` because this is the ONLY Kotlin framework KlardropMac
+      // links. It embeds :presentation and :klardrop-common, so the ~20 Swift files
+      // shared with iOS keep resolving `import presentation` unchanged, and
+      // `ControlPlane` simply appears in that module.
+      //
+      // Naming it anything else would mean linking two static Kotlin/Native
+      // frameworks that share Kotlin types, which is unsound: the same ObjC class
+      // becomes visible through two Swift modules, which is what made MacApp.swift
+      // fail with "'KlardropBootstrap' is ambiguous for type lookup". ld64's lazy
+      // archive-member extraction and `-undefined dynamic_lookup` had been hiding
+      // that at link time rather than removing it.
+      baseName = "presentation"
       isStatic = true
-      // The framework's public API is `ControlPlane.start(Klardrop)` and
-      // `bind(DiscoveryController, Klardrop)` — types this module does not own.
-      // Without `export` the generated header cannot name them and MacApp.swift
-      // fails to compile; :presentation exports :klardrop-common for the same
-      // reason.
+      // Both exports are required by the framework's public API: `start(Klardrop)`
+      // and `bind(DiscoveryController, Klardrop)` name types this module does not
+      // own. Without `export` the generated header cannot name them and MacApp.swift
+      // fails to compile.
       export(project(":presentation"))
+      export(project(":klardrop-common"))
     }
   }
   applyDefaultHierarchyTemplate()
@@ -74,6 +85,17 @@ kotlin {
         implementation(deps.kotlinx.coroutines.core)
         implementation(deps.kotlinx.serialization.json)
         implementation(deps.ktor.network)
+      }
+    }
+    val macosArm64Main by getting {
+      dependencies {
+        // The macosArm64 framework `export`s :presentation and :klardrop-common, and
+        // the Kotlin linker refuses to build a framework whose exports are not API
+        // dependencies of the source set it is produced from — it fails with
+        // "not specified as API-dependencies of a corresponding source set". Declared
+        // here rather than in commonMain so only the target that exports pays for it.
+        api(project(":presentation"))
+        api(project(":klardrop-common"))
       }
     }
     val desktopJvmMain by getting {

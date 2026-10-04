@@ -2,7 +2,6 @@
 import SwiftUI
 import AppKit
 import presentation
-import control_plane
 
 // ---------------------------------------------------------------------------
 // KlardropMacApp — macOS app entry point (Phase 2B).
@@ -54,10 +53,17 @@ struct KlardropMacApp: App {
     //
     // :control-plane depends on :presentation, so KlardropBootstrap cannot
     // reference ControlPlane without a module cycle. The cycle is broken the
-    // other way round: :control-plane ships its own macOS framework
-    // (control_plane.framework, built by `:control-plane:linkReleaseFrameworkMacosArm64`
-    // and found through the KlardropMac target's FRAMEWORK_SEARCH_PATHS), and this
-    // file imports it. One implementation, no per-platform copy of the server.
+    // other way round: :control-plane produces the macOS framework this target
+    // links, and that framework is NAMED `presentation` — it embeds
+    // :presentation and :klardrop-common, so `import presentation` (above) is the
+    // only Kotlin import this file needs and `ControlPlane` arrives in the same
+    // module. One implementation, no per-platform copy of the server.
+    //
+    // It is deliberately the ONLY Kotlin framework KlardropMac links: two static
+    // Kotlin/Native frameworks that share Kotlin types make the same ObjC class
+    // visible through two Swift modules, and Swift then rejects every use as
+    // ambiguous. That is why the `presentation` pod is absent from this target
+    // (see Podfile) — it would add a second, separate presentation.framework.
     //
     // start() binds 127.0.0.1 and publishes control.json — port, token and the
     // capability list — into the app's App Group container, the only location a
