@@ -2,10 +2,21 @@
 
 package com.carlom.klardrop.common.qrshare
 
+// `SSL`, `SSL_CTX` and `EVP_PKEY_free` are imported from the cryptography provider's
+// OpenSSL cinterop, not from our own `openssl` cinterop below. Both index the same
+// system OpenSSL headers, and cinterop drops a declaration from the klib being built
+// when a `-library` dependency already declares it — so these three land in the
+// provider's package and are absent from ours. cinterop dedups by C name only, so
+// this is not avoidable by renaming on our side, and the two opaque struct types
+// cannot be mixed across packages (`cnames.structs.ssl_ctx_st` is unreachable).
+// Everything else is still only declared by our own cinterop, hence the split.
+// Verified against the Ubuntu Noble OpenSSL 3.0.13 headers CI uses, where the
+// previous all-`openssl` imports failed to resolve.
+import dev.whyoleg.cryptography.providers.openssl3.internal.cinterop.EVP_PKEY_free
+import dev.whyoleg.cryptography.providers.openssl3.internal.cinterop.SSL
+import dev.whyoleg.cryptography.providers.openssl3.internal.cinterop.SSL_CTX
 import com.carlom.klardrop.common.qrshare.openssl.EVP_PKCS82PKEY
-import com.carlom.klardrop.common.qrshare.openssl.EVP_PKEY_free
 import com.carlom.klardrop.common.qrshare.openssl.PKCS8_PRIV_KEY_INFO_free
-import com.carlom.klardrop.common.qrshare.openssl.SSL
 import com.carlom.klardrop.common.qrshare.openssl.SSL_CTX_free
 import com.carlom.klardrop.common.qrshare.openssl.SSL_CTX_ctrl
 import com.carlom.klardrop.common.qrshare.openssl.SSL_CTX_new
@@ -128,7 +139,7 @@ actual class LanTlsListener actual constructor() {
   private var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private var listenFd: Int? = null
   private var acceptJob: Job? = null
-  private var sslCtx: CPointer<com.carlom.klardrop.common.qrshare.openssl.SSL_CTX>? = null
+  private var sslCtx: CPointer<SSL_CTX>? = null
   private var connectionsChannel = Channel<TlsConnection>(Channel.BUFFERED)
   private val activeConnections = mutableListOf<TlsConnection>()
   private val mutex = Mutex()
@@ -252,7 +263,7 @@ actual class LanTlsListener actual constructor() {
 
   private fun buildSslContext(
     certResult: QrTlsCertResult,
-  ): CPointer<com.carlom.klardrop.common.qrshare.openssl.SSL_CTX> {
+  ): CPointer<SSL_CTX> {
     val ctx = TLS_server_method()?.let { SSL_CTX_new(it) }
       ?: error("SSL_CTX_new failed")
     // SSL_CTX_set_min_proto_version is a C macro (SSL_CTX_ctrl call), not a real symbol cinterop
@@ -299,7 +310,7 @@ actual class LanTlsListener actual constructor() {
 
   private fun startAcceptLoop(
     fd: Int,
-    ctx: CPointer<com.carlom.klardrop.common.qrshare.openssl.SSL_CTX>,
+    ctx: CPointer<SSL_CTX>,
     acceptScope: CoroutineScope,
   ): Job {
     return acceptScope.launch(Dispatchers.IO) {
@@ -368,7 +379,7 @@ actual class LanTlsListener actual constructor() {
   private suspend fun handleClient(
     clientFd: Int,
     peerIpv4: String,
-    ctx: CPointer<com.carlom.klardrop.common.qrshare.openssl.SSL_CTX>,
+    ctx: CPointer<SSL_CTX>,
   ) {
     // See CLIENT_POLL_INTERVAL_MS: bounds how long a blocked SSL_read/SSL_write can hold this
     // connection's dispatcher thread before it wakes up to re-check the idle deadline.
