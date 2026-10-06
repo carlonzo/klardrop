@@ -3,11 +3,11 @@
 //! Search order (identical to every other Klardrop client):
 //!
 //! 1. an explicit `--control-file <path>` override;
-//! 2. `$XDG_RUNTIME_DIR/klardrop/control.json` (unix, when set and non-empty);
-//! 3. `$HOME/.cache/klardrop/control.json` (unix).
+//! 2. `$XDG_RUNTIME_DIR/klardrop/control.json` (when set and non-empty);
+//! 3. `$HOME/.cache/klardrop/control.json`.
 //!
-//! On Windows only `%LOCALAPPDATA%\Klardrop\control.json` is used — there is
-//! no POSIX fallback there.
+//! Unix only: the Rust client runs on Linux (native engine host) and macOS
+//! (app companion). Windows desktop runs the JVM app and has no Rust CLI.
 //!
 //! Validation is defensive because the file is attacker-influenceable on a
 //! shared machine and its contents become an `Authorization` header value:
@@ -79,24 +79,9 @@ impl ControlFile {
 }
 
 /// Pure search-order resolution, unit-testable without mutating process env.
-fn resolve_from_env(
-    xdg_runtime_dir: Option<&str>,
-    home: Option<&str>,
-    local_app_data: Option<&str>,
-    windows: bool,
-) -> CliResult<PathBuf> {
+fn resolve_from_env(xdg_runtime_dir: Option<&str>, home: Option<&str>) -> CliResult<PathBuf> {
     fn non_empty(value: Option<&str>) -> Option<&str> {
         value.map(str::trim).filter(|trimmed| !trimmed.is_empty())
-    }
-
-    if windows {
-        return match non_empty(local_app_data) {
-            Some(base) => Ok(Path::new(base).join("Klardrop").join("control.json")),
-            None => Err(CliError::new(
-                ErrorCode::DaemonControlInvalid,
-                "cannot locate the daemon control file: LOCALAPPDATA is not set",
-            )),
-        };
     }
 
     if let Some(base) = non_empty(xdg_runtime_dir) {
@@ -141,13 +126,7 @@ pub fn resolve_path(override_path: Option<&Path>) -> CliResult<PathBuf> {
             }
 
             let xdg = std::env::var("XDG_RUNTIME_DIR").ok();
-            let local_app_data = std::env::var("LOCALAPPDATA").ok();
-            resolve_from_env(
-                xdg.as_deref(),
-                home.as_deref(),
-                local_app_data.as_deref(),
-                cfg!(windows),
-            )
+            resolve_from_env(xdg.as_deref(), home.as_deref())
         }
     }
 }
@@ -373,41 +352,21 @@ mod tests {
 
     #[test]
     fn search_order_prefers_xdg_runtime_dir() {
-        let path = resolve_from_env(Some("/run/user/1000"), Some("/home/u"), None, false).unwrap();
+        let path = resolve_from_env(Some("/run/user/1000"), Some("/home/u")).unwrap();
         assert_eq!(path, PathBuf::from("/run/user/1000/klardrop/control.json"));
     }
 
     #[test]
     fn search_order_falls_back_to_home_cache() {
-        let path = resolve_from_env(None, Some("/home/u"), None, false).unwrap();
+        let path = resolve_from_env(None, Some("/home/u")).unwrap();
         assert_eq!(path, PathBuf::from("/home/u/.cache/klardrop/control.json"));
-        let path = resolve_from_env(Some(""), Some("/home/u"), None, false).unwrap();
+        let path = resolve_from_env(Some(""), Some("/home/u")).unwrap();
         assert_eq!(path, PathBuf::from("/home/u/.cache/klardrop/control.json"));
     }
 
     #[test]
     fn search_order_without_any_env_var_fails() {
-        let error = resolve_from_env(None, None, None, false).expect_err("no env vars");
-        assert_eq!(error.code, ErrorCode::DaemonControlInvalid);
-    }
-
-    #[test]
-    fn windows_uses_local_app_data_only() {
-        let path = resolve_from_env(
-            Some("/run/user/1000"),
-            Some("/home/u"),
-            Some(r"C:\Users\u\AppData\Local"),
-            true,
-        )
-        .unwrap();
-        assert_eq!(
-            path,
-            PathBuf::from(r"C:\Users\u\AppData\Local")
-                .join("Klardrop")
-                .join("control.json")
-        );
-        let error = resolve_from_env(Some("/run/user/1000"), Some("/home/u"), None, true)
-            .expect_err("no LOCALAPPDATA on windows");
+        let error = resolve_from_env(None, None).expect_err("no env vars");
         assert_eq!(error.code, ErrorCode::DaemonControlInvalid);
     }
 

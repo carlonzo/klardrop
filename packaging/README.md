@@ -201,29 +201,10 @@ Download the `.msi` from the [latest release](https://github.com/carlonzo/klardr
 Windows still uses `jpackage` with a **bundled JRE** — users are not expected to
 have Java installed. Mac is the native app (Homebrew cask / DMG); it is unchanged.
 
-The Rust CLI ships as a **sibling release asset**, `klardrop-cli-windows-x64.zip`,
-published under its own `windows-cli` key in `latest.json` — deliberately *not*
-inside the MSI. jpackage signs what it builds, so a file dropped into the install
-directory afterwards invalidates the installer's signature.
-
-**The name collides, and that is the one thing to be careful about.** The MSI
-installs a jpackage launcher that is itself called `klardrop.exe` at
-`C:\Program Files\Klardrop\app\klardrop.exe` — that is the GUI. The zip contains a
-different `klardrop.exe`: the native CLI. Unzip it to a directory that is **not**
-the jpackage `app` directory, or the GUI will shadow it on `PATH`:
-
-```powershell
-# anywhere that is on PATH and is NOT C:\Program Files\Klardrop\app
-Expand-Archive klardrop-cli-windows-x64.zip -DestinationPath "$env:LOCALAPPDATA\Klardrop\bin"
-& "$env:LOCALAPPDATA\Klardrop\bin\klardrop.exe" devices
-```
-
-Both binaries talk to the same running desktop app through
-`%LOCALAPPDATA%\Klardrop\control.json`; neither starts an engine of its own. The
-app's own update dialog links the CLI when a build published no MSI
-(`UpdateChecker.ASSET_WINDOWS_CLI`). On macOS the CLI does ship *inside* the DMG:
-signing and notarization happen on the final image, so the signed CLI travels
-with it.
+Windows ships the JVM desktop app only. The Rust CLI is Unix-only — Linux
+(native engine host) and macOS (app companion) — so there is no Windows CLI
+asset, no `windows-cli` key in `latest.json`, and no `ASSET_WINDOWS_CLI`
+fallback in the updater.
 
 ## The native Linux tarball
 

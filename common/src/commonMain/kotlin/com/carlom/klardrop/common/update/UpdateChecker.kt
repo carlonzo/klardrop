@@ -277,10 +277,9 @@ class UpdateChecker(
       // one of the two that needs no installer.
       OsType.APPLE -> p[ASSET_MACOS] ?: p[ASSET_MACOS_CLI]
       OsType.LINUX -> p[assetKey] ?: p[ASSET_LINUX_TARBALL] ?: p[ASSET_LINUX_DEB] ?: p[ASSET_LINUX_RPM]
-      // Same shape as Apple: a build that published no MSI still published the
-      // native CLI, and without this fallback a Windows user whose update found
-      // no installer was sent to the release notes with no route to a binary.
-      OsType.WINDOWS -> p[ASSET_WINDOWS] ?: p[ASSET_WINDOWS_CLI]
+      // Windows ships the JVM MSI only: the Rust CLI is Unix-only, so a build
+      // with no installer has no binary to offer and falls to the release notes.
+      OsType.WINDOWS -> p[ASSET_WINDOWS]
       // ANDROID and UNKNOWN have no desktop installer on any channel.
       else -> null
     }
@@ -306,10 +305,6 @@ class UpdateChecker(
      * it ships inside the `linux-native-*` tarballs, next to the engine it drives. */
     const val ASSET_MACOS_CLI = "macos-cli"
     const val ASSET_WINDOWS = "windows"
-    /** Standalone native Rust CLI for Windows, published beside the MSI rather
-     * than inside it: jpackage signs what it builds, so a file dropped in
-     * afterwards would invalidate the installer's signature. */
-    const val ASSET_WINDOWS_CLI = "windows-cli"
     const val ASSET_LINUX_TARBALL = "linux-tarball"
     const val ASSET_LINUX_NATIVE_X64 = "linux-native-x64"
     const val ASSET_LINUX_NATIVE_ARM64 = "linux-native-arm64"

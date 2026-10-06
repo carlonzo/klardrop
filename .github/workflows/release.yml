@@ -207,46 +207,9 @@ jobs:
         shell: bash
         run: ./gradlew :desktop:packageReleaseMsi $GRADLE_VERSION_ARGS
 
-      # The Rust CLI is the user-facing command on every platform, and Windows
-      # ships through this job. It deliberately does NOT go inside the MSI:
-      # jpackage signs what it builds, and a file dropped in afterwards
-      # invalidates that signature. So it is published as a sibling asset with
-      # its own `windows-cli` key in latest.json, exactly as the macOS job does
-      # with `macos-cli`. --locked, because Cargo.lock is committed and a build
-      # that updated it would ship dependency versions nobody reviewed.
-      - name: Build the Rust CLI for Windows
-        if: matrix.target == 'windows'
-        shell: bash
-        working-directory: cli-rust
-        run: |
-          set -euo pipefail
-          rustc --version
-          cargo --version
-          cargo build --locked --release
-          test -f target/release/klardrop.exe
-
-      - name: Stage the Windows Rust CLI
-        if: matrix.target == 'windows'
-        # pwsh, NOT bash, and that is the whole point of this step. Under
-        # `shell: bash` on windows-latest, `tar` resolves to Git Bash's GNU tar,
-        # whose `-a` is --auto-compress: it picks a COMPRESSOR from the suffix and
-        # cannot emit a zip container. That step exited 0 and published an
-        # uncompressed POSIX tar named `.zip`, which unzip then refuses. Only
-        # System32 bsdtar understands `-a` as "pick the container"; Compress-Archive
-        # needs no such assumption, so it is what runs here.
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path dist, stage-win | Out-Null
-          Copy-Item cli-rust/target/release/klardrop.exe stage-win/klardrop.exe
-          Compress-Archive -Path stage-win/klardrop.exe -DestinationPath dist/klardrop-cli-windows-x64.zip -Force
-          # Prove the container is a zip and not a tar wearing a .zip name: the
-          # published manifest points consumers at this file, and a wrong
-          # container is silently unfriendly until somebody tries to unzip it.
-          $sig = [System.IO.File]::ReadAllBytes("$PWD/dist/klardrop-cli-windows-x64.zip")[0..1]
-          if ($sig[0] -ne 0x50 -or $sig[1] -ne 0x4B) {
-            throw "klardrop-cli-windows-x64.zip is not a zip container (magic: $($sig -join ','))"
-          }
+      # Windows ships the JVM desktop app only (MSI below). The Rust CLI is
+      # Unix-only — Linux (native engine host) and macOS (app companion) — so
+      # there is no Windows CLI to build or stage here.
 
       # Decode the release keystore so the APK/AAB are signed with the real upload
       # key. Without the secret (e.g. a fork) the build falls back to debug signing.
@@ -892,15 +855,10 @@ jobs:
           # needs no key of its own: it ships inside the native tarballs above.
           MACOS_CLI=$(pick "klardrop-cli-macos-arm64.tar.gz")
 
-          # The Windows CLI, built by this job's `windows` matrix arm. It is a
-          # sibling asset rather than a file inside the MSI — see that step for
-          # why — so it needs a key of its own, exactly like the macOS one.
-          WINDOWS_CLI=$(pick "klardrop-cli-windows-x64.zip")
-
           export BASE="https://github.com/${REPO}/releases/download/${TAG}"
-          python3 - "$DMG" "$MSI" "$APK" "$TGZ" "$NATIVE_TGZ" "$NATIVE_TGZ_ARM64" "$MACOS_CLI" "$WINDOWS_CLI" <<'PY' > latest.json
+          python3 - "$DMG" "$MSI" "$APK" "$TGZ" "$NATIVE_TGZ" "$NATIVE_TGZ_ARM64" "$MACOS_CLI" <<'PY' > latest.json
           import json, os, sys, datetime, pathlib
-          dmg, msi, apk, tgz, native_tgz, native_tgz_arm64, macos_cli, windows_cli = sys.argv[1:9]
+          dmg, msi, apk, tgz, native_tgz, native_tgz_arm64, macos_cli = sys.argv[1:8]
           base = os.environ["BASE"]
           def entry(name):
               if not name: return None
@@ -918,7 +876,6 @@ jobs:
           if native_tgz: platforms["linux-native-x64"] = entry(native_tgz)
           if native_tgz_arm64: platforms["linux-native-arm64"] = entry(native_tgz_arm64)
           if macos_cli: platforms["macos-cli"] = entry(macos_cli)
-          if windows_cli: platforms["windows-cli"] = entry(windows_cli)
           if apk: platforms["android"]          = entry(apk)
           out = {
             "version":     os.environ["VERSION"],

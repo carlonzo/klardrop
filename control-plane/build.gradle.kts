@@ -85,7 +85,12 @@ kotlin {
     commonMain {
       dependencies {
         implementation(project(":klardrop-common"))
-        implementation(project(":presentation"))
+        // `api`, not `implementation`: the macosArm64 framework above exports
+        // :presentation, and an exported dependency must be an API dependency
+        // of its source set. `implementation` links the tests fine but fails
+        // :control-plane:linkDebugFrameworkMacosArm64 with "not specified as
+        // API-dependencies of a corresponding source set".
+        api(project(":presentation"))
         implementation(deps.kotlinx.coroutines.core)
         implementation(deps.kotlinx.serialization.json)
         implementation(deps.ktor.network)

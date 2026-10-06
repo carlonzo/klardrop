@@ -313,13 +313,8 @@ pub fn styling_sequences(raw: &str) -> Vec<&str> {
 /// `bytes` with every escape sequence removed: CSI, OSC and the two-character
 /// escapes, the way a terminal would consume them.
 ///
-/// Needed because on Windows `raw` is ConPTY's rendering of the client's output,
-/// not the output itself, and that rendering interleaves cursor moves through the
-/// text. In a 10-column window ConPTY emits `self: Fixt`, then `ESC[3;10H`, then
-/// `ture Host`, so a phrase the client printed contiguously is not contiguous in
-/// the stream and a `contains` on the raw bytes cannot see it. Removing the
-/// sequences reassembles the logical text on both platforms, and is a no-op on
-/// unix, where a line-mode client emits no escapes to begin with.
+/// Removing the sequences reassembles the logical text the client printed, so
+/// a `contains` on the raw bytes sees phrases the cursor moves interleave.
 pub fn strip_escapes(bytes: &[u8]) -> String {
     let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -427,14 +422,8 @@ impl Tui {
             })
             .expect("open pty");
 
-        // Establish the geometry on the pty itself, not only in `openpty`'s argument.
-        // On unix portable-pty applies `PtySize` as it opens the pair, so this repeats
-        // what already holds. On Windows the pseudoconsole is not reliably sized by that
-        // argument, and a client that starts inside a one-row window clamps every
-        // absolute cursor position it is given: the frame collapses onto one line, and
-        // every assertion that reads a ROW — the selection marker, the panes — fails
-        // for a reason that has nothing to do with the client. Asserting the size here
-        // makes the window the client draws into the one the tests are written against.
+        // Establish the geometry on the pty itself, not only in `openpty`'s argument,
+        // so the window the client draws into is the one the tests are written against.
         pair.master
             .resize(PtySize {
                 rows,
@@ -724,18 +713,9 @@ impl Tui {
     /// gone the pty is gone with them, and there is nothing left to type at.
     ///
     /// `Some(false)` — the probe ran and the pty did not echo — is the failure.
-    /// `None` means the platform cannot report it (macOS refuses the write, Windows
-    /// does not echo), which says nothing about the client; see the body.
+    /// `None` means the platform cannot report it (macOS refuses the write),
+    /// which says nothing about the client; see the body.
     pub fn echoes_input(&mut self) -> Option<bool> {
-        // ConPTY does not echo input written to the master back to it, so on Windows
-        // the probe cannot report what the line discipline is doing. That is the same
-        // situation as macOS below and for the same reason — a fact about the platform,
-        // not about the client — so it is reported as "cannot probe" rather than
-        // dressed up as "did not restore". Callers assert the restore with the
-        // escape-sequence comparison, which works on every platform.
-        if cfg!(windows) {
-            return None;
-        }
         let before = self.raw().len();
         // macOS revokes the tty when the session leader that owned it exits, so the
         // slave refuses writes with EIO even though `keep_slave` still holds a live

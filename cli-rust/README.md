@@ -358,15 +358,11 @@ binary cannot be found the command says so rather than silently doing nothing.
    `Klardrop.app` publishes: it is sandboxed, so it cannot write to `$HOME/.cache`,
    and the App Group container is the one location it and this unsandboxed CLI can
    both reach;
-3. `$XDG_RUNTIME_DIR/klardrop/control.json` — unix, only when the variable is
+3. `$XDG_RUNTIME_DIR/klardrop/control.json` — only when the variable is
    set and non-empty;
-4. `$HOME/.cache/klardrop/control.json` — unix. This is what the non-sandboxed JVM
+4. `$HOME/.cache/klardrop/control.json`. This is what the non-sandboxed JVM
    desktop host on macOS still uses, which is why the App Group probe above only
    wins when a file is actually there.
-
-On Windows only `%LOCALAPPDATA%\Klardrop\control.json` is used; there is no
-`XDG_RUNTIME_DIR`/`$HOME` fallback there. The resolved path is identical to the
-one the daemon writes and to the one the Qt client reads.
 
 The file looks like:
 
@@ -574,12 +570,11 @@ does *not* answer 130: leaving the client cancels nothing, the daemon keeps any
 transfer, and that is an ordinary exit 0.
 
 `Ctrl-C` *during a wait* is a different thing and does answer 130. The client
-installs a console handler — `signal(2)` for `SIGINT` on Unix,
-`SetConsoleCtrlHandler` for `CTRL_C_EVENT`/`CTRL_BREAK_EVENT` on Windows — whose
-only job is to set a flag; the poll loop notices it and leaves through the same
-door an expired deadline takes. So `share --wait` prints one JSON value naming
-the request id with `status: "unknown"` and `error.code: "cancelled"`, and
-`discover --wait` prints a plain `cancelled` value because it sends nothing.
+installs a `SIGINT` handler whose only job is to set a flag; the poll loop
+notices it and leaves through the same door an expired deadline takes. So
+`share --wait` prints one JSON value naming the request id with
+`status: "unknown"` and `error.code: "cancelled"`, and `discover --wait`
+prints a plain `cancelled` value because it sends nothing.
 **The daemon is never told to stop and nothing is ever retried**, so the request
 can still be inspected with `klardrop transfers --id <request-id>`; a client that
 had died on the signal would have taken that id with it.

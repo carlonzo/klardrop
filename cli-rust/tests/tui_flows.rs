@@ -425,35 +425,27 @@ fn a_hostile_device_name_cannot_reach_the_terminal_through_the_panes() {
         "the user's name must survive as inert text:\n{screen}"
     );
 
-    // The wire itself is only the client's own bytes on unix. On Windows the
-    // pty master carries the terminal's RENDERING: it opens by announcing its
-    // window title as an OSC 0 sequence holding the executable path, BEL
-    // terminated, and it emits CRLFs the client never writes. A BEL in that
-    // stream is the terminal introducing itself, not this name ringing
-    // anything, so the byte-level assertions are scoped to where the two are
-    // the same thing. The sanitiser is pinned everywhere regardless: `escape`'s
-    // and the renderer's own tests read the client's output before any pty is
-    // involved, and everything above is asserted against the screen on all three.
-    if !cfg!(windows) {
-        let raw = tui.raw();
-        assert!(
-            !raw.contains(&0x07),
-            "a bell reached the terminal: a daemon-supplied name rang it"
-        );
-        assert!(
-            !raw.contains(&0x00),
-            "a NUL reached the terminal: a daemon-supplied name carried it"
-        );
-        let text = String::from_utf8_lossy(&raw).into_owned();
-        assert!(
-            !text.contains("\u{1b}]0;pwned"),
-            "the device name's OSC reached the terminal as a live sequence, which retitles the window"
-        );
-        assert!(
-            text.contains("]0;pwned"),
-            "the name's printable residue must still be drawn as inert text:\n{text}"
-        );
-    }
+    // The pty master carries the client's own bytes, so the byte-level
+    // assertions below pin the sanitiser: a BEL or NUL in that stream is a
+    // daemon-supplied name reaching the terminal live.
+    let raw = tui.raw();
+    assert!(
+        !raw.contains(&0x07),
+        "a bell reached the terminal: a daemon-supplied name rang it"
+    );
+    assert!(
+        !raw.contains(&0x00),
+        "a NUL reached the terminal: a daemon-supplied name carried it"
+    );
+    let text = String::from_utf8_lossy(&raw).into_owned();
+    assert!(
+        !text.contains("\u{1b}]0;pwned"),
+        "the device name's OSC reached the terminal as a live sequence, which retitles the window"
+    );
+    assert!(
+        text.contains("]0;pwned"),
+        "the name's printable residue must still be drawn as inert text:\n{text}"
+    );
     tui.dump("panes-hostile-names");
     assert!(
         !tui.has_exited(),

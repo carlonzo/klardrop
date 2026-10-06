@@ -3,7 +3,7 @@
 //! Every test drives the real binary against the fixture daemon
 //! (`klardrop-fixture-daemon`) over loopback. Nothing here touches a real
 //! daemon: each test gets its own temp directory, and the child processes get
-//! an isolated `XDG_RUNTIME_DIR`/`HOME`/`LOCALAPPDATA` so the search order can
+//! an isolated `XDG_RUNTIME_DIR`/`HOME` so the search order can
 //! never resolve to the developer's real control file.
 
 use std::fs;
@@ -167,8 +167,7 @@ fn run(control: Option<&Path>, args: &[&str], dir: &Path) -> CliRun {
     // Never let an ambient proxy or a real control file influence a test.
     command
         .env("XDG_RUNTIME_DIR", dir.join("xdg"))
-        .env("HOME", dir.join("home"))
-        .env("LOCALAPPDATA", dir.join("appdata"));
+        .env("HOME", dir.join("home"));
 
     let started = Instant::now();
     let output = command.output().expect("run klardrop CLI");
@@ -334,21 +333,14 @@ fn stale_control_file_fails_fast_without_hanging() {
 
     let run = run(Some(&control), &["devices", "--json"], &dir.path);
     assert_ne!(run.code, 0, "a stale control file must not report success");
-    let code = run.error_code();
-    // Unix refuses the connect outright and says so. Windows surfaces the same dead
-    // port as an unanswered request at the deadline instead — the identical fact about
-    // the identical port, reported the only way that platform can — so the refusal is
-    // asserted strictly only where it is a refusal, and this test keeps its actual
-    // subject (does not hang) everywhere.
-    if cfg!(windows) {
-        assert!(
-            matches!(code.as_str(), "daemon_unreachable" | "daemon_timeout"),
-            "a dead port must be reported as unanswered, got {code}: {}",
-            run.stderr,
-        );
-    } else {
-        assert_eq!(code, "daemon_unreachable", "stderr: {}", run.stderr);
-    }
+    // A dead port refuses the connect outright, which is also what bounds the
+    // wait: the subject of this test is that it does not hang.
+    assert_eq!(
+        run.error_code(),
+        "daemon_unreachable",
+        "stderr: {}",
+        run.stderr
+    );
     assert!(
         run.elapsed < STALE_BOUND,
         "stale control file must fail fast, took {:?}",
@@ -671,23 +663,13 @@ fn human_output_is_readable_and_not_json() {
 #[test]
 fn control_file_search_order_uses_the_ambient_directory() {
     let fixture = Fixture::start("search-order", &[]);
-    // The first ambient location is `$XDG_RUNTIME_DIR/klardrop` on unix and
-    // `%LOCALAPPDATA%\Klardrop` on Windows, which has no POSIX fallback at all — so the
-    // copy has to land where THIS platform looks first, or the search order is never
-    // exercised. `run` below points both variables at the fixture's own directory.
-    let ambient = if cfg!(windows) {
-        fixture
-            .dir()
-            .join("appdata")
-            .join("Klardrop")
-            .join("control.json")
-    } else {
-        fixture
-            .dir()
-            .join("xdg")
-            .join("klardrop")
-            .join("control.json")
-    };
+    // The first ambient location is `$XDG_RUNTIME_DIR/klardrop`; `run` below
+    // points that variable at the fixture's own directory.
+    let ambient = fixture
+        .dir()
+        .join("xdg")
+        .join("klardrop")
+        .join("control.json");
     fs::create_dir_all(ambient.parent().expect("parent")).expect("create ambient dir");
     fs::copy(fixture.control(), &ambient).expect("copy control file");
 

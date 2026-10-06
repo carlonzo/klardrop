@@ -264,39 +264,23 @@ class UpdateCheckerTest {
   }
 
   @Test
-  fun windowsWithoutAnMsiFallsBackToTheNativeCli() = runTest {
+  fun windowsWithoutAnMsiFallsBackToTheReleaseNotes() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
-    // A build that published the CLI but no installer (a fork without the
-    // signing secrets, an unsigned CI run). Sending the user to the release
-    // notes here is not "no download available" — a Windows binary exists.
-    val cliOnly = manifest("0.2.0").let {
-      it.copy(platforms = it.platforms - "windows" + ("windows-cli" to ReleaseAsset("https://example/klardrop-cli-windows-x64.zip")))
+    // The Rust CLI is Unix-only, so a Windows build with no MSI has no binary
+    // to offer: the user goes to the release notes rather than a dead CLI link.
+    val noMsi = manifest("0.2.0").let {
+      it.copy(platforms = it.platforms - "windows")
     }
-    val checker = checker(dispatcher, channel = InstallChannel.MSI, osType = OsType.WINDOWS, fetched = cliOnly)
+    val checker = checker(dispatcher, channel = InstallChannel.MSI, osType = OsType.WINDOWS, fetched = noMsi)
     checker.checkNow()
     advanceUntilIdle()
 
     val status = checker.status.value
     assertIs<UpdateStatus.Available>(status)
     assertEquals(
-      UpdateAction.OpenUrl("https://example/klardrop-cli-windows-x64.zip"),
+      UpdateAction.OpenUrl("https://example/notes/0.2.0"),
       status.action,
     )
-  }
-
-  @Test
-  fun windowsPrefersTheInstallerOverTheCli() = runTest {
-    val dispatcher = StandardTestDispatcher(testScheduler)
-    val both = manifest("0.2.0").let {
-      it.copy(platforms = it.platforms + ("windows-cli" to ReleaseAsset("https://example/klardrop-cli-windows-x64.zip")))
-    }
-    val checker = checker(dispatcher, channel = InstallChannel.MSI, osType = OsType.WINDOWS, fetched = both)
-    checker.checkNow()
-    advanceUntilIdle()
-
-    val status = checker.status.value
-    assertIs<UpdateStatus.Available>(status)
-    assertEquals(UpdateAction.OpenUrl("https://example/klardrop.msi"), status.action)
   }
 
   @Test

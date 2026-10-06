@@ -10,11 +10,8 @@
 //! the process and the only way to find the transfer again was to guess. The
 //! assertions below fail on that code.
 //!
-//! Both platforms run the same contract, because both deliver an interrupt in
-//! their own way — `SIGINT` on Unix, a console control event on Windows — and
-//! both must produce the same envelope. Only the delivery is platform-specific,
-//! so only [`interrupted_run`] is duplicated; the assertions are written once
-//! and both waits use them.
+//! The interrupt arrives as `SIGINT`, and the client must produce the same
+//! envelope: exit 130, `unknown`, and the request id.
 
 mod support;
 
@@ -29,9 +26,6 @@ const CLI: &str = env!("CARGO_BIN_EXE_klardrop");
 /// that the wait — not the submission — is what gets interrupted; and if a slow
 /// machine submitted late anyway, the interrupt flag is sticky, so the wait
 /// would still end the way it is asserted to end.
-#[cfg(windows)]
-const SETTLE: Duration = Duration::from_millis(1000);
-#[cfg(not(windows))]
 const SETTLE: Duration = Duration::from_millis(400);
 
 struct Run {
@@ -40,7 +34,6 @@ struct Run {
     /// Raw status, so a test can ask whether the process exited or was killed.
     /// Exit code 130 comes from the client's own handler; a signal would mean
     /// the default disposition did it, which is the bug.
-    #[cfg(unix)]
     status: std::process::ExitStatus,
     stderr: String,
 }
@@ -50,7 +43,6 @@ impl From<Output> for Run {
         Self {
             code: output.status.code(),
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-            #[cfg(unix)]
             status: output.status,
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         }
@@ -109,8 +101,8 @@ fn scene(tag: &str, behaviors: &[&str]) -> Scene {
     }
 }
 
-/// The contract the two platforms below both assert: exit 130, an envelope that
-/// says `unknown` and names the request, and a request the daemon still holds.
+/// The interrupted-wait contract: exit 130, an envelope that says `unknown`
+/// and names the request, and a request the daemon still holds.
 fn assert_interrupted_wait(fixture: &Fixture, home: &TempDir, finished: &Run) {
     // 130 is what separates "the operator stopped watching" from "the transfer
     // failed". It also happens to be what the default disposition produces, so
@@ -179,15 +171,12 @@ fn interrupting_a_share_wait_names_the_request_and_admits_it_is_unknown() {
         ],
     ));
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        assert_eq!(
-            finished.status.signal(),
-            None,
-            "the client must handle SIGINT itself, not be killed by it"
-        );
-    }
+    use std::os::unix::process::ExitStatusExt;
+    assert_eq!(
+        finished.status.signal(),
+        None,
+        "the client must handle SIGINT itself, not be killed by it"
+    );
     assert_interrupted_wait(&scene.fixture, &scene.home, &finished);
 }
 
@@ -248,9 +237,8 @@ fn interrupting_a_discover_wait_stops_instead_of_polling_to_the_window_end() {
 
 // ------------------------------------------------------------- delivery
 
-/// Runs `command`, waits until it has settled into its wait, delivers the
-/// platform's interrupt to it alone, and returns how it finished.
-#[cfg(unix)]
+/// Runs `command`, waits until it has settled into its wait, delivers SIGINT
+/// to it alone, and returns how it finished.
 fn interrupted_run(command: &mut Command) -> Run {
     let child = command.spawn().expect("spawn klardrop");
     let submitted = std::time::Instant::now();
@@ -269,60 +257,4 @@ fn interrupted_run(command: &mut Command) -> Run {
     assert_eq!(signalled, 0, "could not deliver SIGINT to the client");
 
     Run::from(child.wait_with_output().expect("wait for klardrop"))
-}
-
-/// `CTRL_BREAK_EVENT` rather than `CTRL_C_EVENT`, and a new process group so
-/// the event is aimed at this child alone: Ctrl-C is broadcast to every process
-/// sharing the console — which would take the test and the fixture daemon with
-/// it — and `CREATE_NEW_PROCESS_GROUP` also switches Ctrl-C off for the group,
-/// leaving Ctrl-Break as the event that can be delivered to one process. The
-/// client answers both, which is why this still tests the handler.
-#[cfg(windows)]
-fn interrupted_run(command: &mut Command) -> Run {
-    use std::os::windows::process::CommandExt;
-    use windows_sys::Win32::System::Console::{GenerateConsoleCtrlEvent, CTRL_BREAK_EVENT};
-    use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
-
-    ensure_console();
-    command.creation_flags(CREATE_NEW_PROCESS_GROUP);
-    let child = command.spawn().expect("spawn klardrop");
-
-    std::thread::sleep(SETTLE);
-
-    // SAFETY: a plain console call whose only argument this test owns — the
-    // group id of the child spawned into its own process group above.
-    let delivered = unsafe { GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, child.id()) };
-    assert_ne!(
-        delivered, 0,
-        "could not deliver CTRL_BREAK_EVENT to the client; it may have exited early"
-    );
-
-    let finished = child.wait_with_output().expect("wait for klardrop");
-    // Unlike a Unix signal there is no separate "was it a signal" flag to read.
-    // Windows ends a process on the default disposition with
-    // `STATUS_CONTROL_C_EXIT` (0xC000013A), and `ExitStatus` on Windows is a
-    // plain `u32`, so `code()` reports that as `Some(-1073741766)` rather than
-    // as no code at all. `Some(130)` is therefore what rules the default
-    // disposition out, because only the client's own envelope produces 130.
-    Run::from(finished)
-}
-
-/// A console event can only be delivered to a process that has a console. A
-/// Windows CI step normally does; a service-hosted one does not. Attaching one
-/// when there is none is harmless, and without it the assertions above fail on
-/// the client having been killed by the default disposition — which is a real
-/// defect worth failing on, not something to skip around.
-#[cfg(windows)]
-fn ensure_console() {
-    use windows_sys::Win32::System::Console::{AllocConsole, GetConsoleCP};
-
-    // SAFETY: neither call takes an argument or retains anything;
-    // `GetConsoleCP` returns 0 exactly when this process has no console.
-    if unsafe { GetConsoleCP() } == 0 {
-        assert_ne!(
-            unsafe { AllocConsole() },
-            0,
-            "the Windows interrupted-wait tests need a console to deliver a control event"
-        );
-    }
 }

@@ -47,25 +47,12 @@ crossterm = "0.28"
 # named here because the crate measures with it directly.
 unicode-width = "0.2"
 
-# Unix only, and only for `signal(2)`: an interrupted `share --wait` has to
+# Only for `signal(2)`: an interrupted `share --wait` has to
 # leave the caller holding the request id instead of dying silently. Already in
 # the dependency graph through crossterm/ureq, so this adds no new package.
-[target.'cfg(unix)'.dependencies]
+# The client targets Unix only — Linux (native engine host) and macOS (app
+# companion). Windows desktop runs the JVM app and has no Rust CLI.
 libc = "0.2"
-
-# Windows only, and only for `SetConsoleCtrlHandler`: the console equivalent of
-# the `signal(2)` handler above, so Ctrl-C during `share --wait` leaves the
-# caller holding the request id instead of killing the client. The pinned
-# version is already in Cargo.lock (errno, mio and rustix reference it), so
-# this introduces no new package version — but this crate is its only consumer
-# in the Windows build graph, so it is a real normal dependency there. The
-# Linux graph is unchanged: `cargo tree -e normal --target
-# x86_64-unknown-linux-gnu` does not list it at all.
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = [
-    "Win32_Foundation",
-    "Win32_System_Console",
-] }
 
 [profile.release]
 strip = true
@@ -77,20 +64,3 @@ strip = true
 # them.
 portable-pty = "0.8"
 vt100 = "0.15"
-
-# `kill(2)` so the interrupted-wait test can send a real SIGINT. `Child::kill`
-# is SIGKILL, which would test the default disposition instead of the handler.
-[target.'cfg(unix)'.dev-dependencies]
-libc = "0.2"
-
-# `GenerateConsoleCtrlEvent` and `CREATE_NEW_PROCESS_GROUP` so the Windows
-# interrupted-wait test can aim a console event at one owned child. Ctrl-C is
-# broadcast to every process on the console and is switched off for a new
-# process group, so a single-process test has to send Ctrl-Break instead —
-# which is exactly why the client answers both events.
-[target.'cfg(windows)'.dev-dependencies]
-windows-sys = { version = "0.59", features = [
-    "Win32_Foundation",
-    "Win32_System_Console",
-    "Win32_System_Threading",
-] }

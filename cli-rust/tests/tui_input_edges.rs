@@ -24,11 +24,8 @@ fn sgr_click(column: u16, row: u16) -> Vec<u8> {
 
 /// Which device the selection marker currently sits in front of.
 ///
-/// Counted as an occurrence rather than as a line, deliberately. The pty master
-/// only carries the client's own bytes on unix; on Windows it carries the
-/// terminal's rendering, so the reconstructed screen there is a handful of very
-/// long rows with every device row concatenated into them. The marker still sits
-/// immediately in front of the selected device exactly once either way, which is
+/// Counted as an occurrence rather than as a line, deliberately: the marker
+/// sits immediately in front of the selected device exactly once, which is
 /// what this reads.
 fn selected(screen: &str) -> String {
     const MARKER: &str = "\u{2502}> ";
@@ -109,12 +106,7 @@ fn a_mouse_click_selects_the_device_under_the_pointer() {
 
     // Walk down the device rows clicking each one, and take the first click that
     // moves the selection. The row is found by clicking rather than computed from
-    // the screen, because the row a device is drawn on is not recoverable from the
-    // pty on every platform: on Windows the master carries ConPTY's rendering, which
-    // collapses the device rows into a couple of very long ones (measured: 3 rows on
-    // windows, 40 on linux/macos for the same frame). Deriving a row number from that
-    // would click the wrong line and fail for a reason that has nothing to do with
-    // the mouse handling.
+    // the pane layout, which the test does not reconstruct.
     //
     // What this still proves is the whole contract: with mouse capture on, an SGR
     // click reaches the client, is parsed, and moves the selection onto the device

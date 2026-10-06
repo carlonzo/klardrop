@@ -212,14 +212,13 @@ jobs:
 
   # The native Rust client (cli-rust/) has no Gradle wiring at all, so the Linux
   # and macOS jobs above never compile, lint or test it — a Rust-only regression
-  # would be invisible to this workflow. One matrix job covers all three
-  # platforms the shell is expected to run on:
+  # would be invisible to this workflow. One matrix job covers the two Unix
+  # platforms the shell runs on: Linux (native engine host) and macOS (app
+  # companion). Windows desktop runs the JVM app and has no Rust CLI.
   #   ubuntu-latest    — Linux, the platform with a native engine fixture;
   #   macos-14         — Apple Silicon (aarch64-apple-darwin), so the shell is
   #                      compiled for the same triple the macOS app runs on,
-  #                      against the production JVM engine on the other side;
-  #   windows-latest   — Windows, where the Rust client is native and talks to
-  #                      the existing KMP JVM engine.
+  #                      against the production JVM engine on the other side.
   # macos-14 (not the macos-26 image above) on purpose: this job needs no Xcode,
   # no Apple SDK and no Kotlin/Native, only a JDK-free `cargo`. The image
   # comment above is about Kotlin/Native SDK versions, which do not apply here.
@@ -230,7 +229,7 @@ jobs:
       # One broken platform must not hide the others' results.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-14, windows-latest]
+        os: [ubuntu-latest, macos-14]
     defaults:
       run:
         working-directory: cli-rust
@@ -253,19 +252,6 @@ jobs:
       - name: Test
         shell: bash
         run: cargo test --locked
-
-      # The interrupted-wait contract has a platform-specific half that no other
-      # leg can check: on Windows the event arrives through
-      # `SetConsoleCtrlHandler`, not a signal, so "the client keeps the request
-      # id instead of dying on the default disposition" has to be proved with a
-      # real console event aimed at a real owned child process. `cargo test`
-      # above already runs it; naming it separately means a failure says which
-      # gate broke, and `--nocapture` means a runner whose console could not
-      # deliver the event shows that instead of a bare assertion.
-      - name: Interrupted wait (Windows console event)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: cargo test --locked --test interrupted_wait -- --nocapture
 
       - name: Lint
         shell: bash
@@ -460,44 +446,3 @@ jobs:
       - name: Qt frontend vs. the real engine
         timeout-minutes: 30
         run: ./scripts/klardrop-qt-real-engine-tests.sh
-
-  # The Windows release artifact, built and packaged the way release.yml builds
-  # it. The `rust` matrix above covers compilation and tests on windows-latest,
-  # but only in the dev profile — the release-profile build, the archive staging
-  # and the container check only ever ran in the tagged `build` job, which is how
-  # a tar file named `.zip` shipped without any PR noticing.
-  windows-release-package:
-    name: Windows release package (Rust CLI)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Build the Rust CLI (release profile)
-        working-directory: cli-rust
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo build --locked --release
-          test -f target/release/klardrop.exe
-
-      # Identical to release.yml's staging step, deliberately: this job exists
-      # to fail when that one would. pwsh, because under `shell: bash` on
-      # windows-latest `tar` is GNU tar, whose -a is --auto-compress and can never
-      # produce a zip container.
-      - name: Stage and verify the archive
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path dist, stage-win | Out-Null
-          Copy-Item cli-rust/target/release/klardrop.exe stage-win/klardrop.exe
-          Compress-Archive -Path stage-win/klardrop.exe -DestinationPath dist/klardrop-cli-windows-x64.zip -Force
-          $sig = [System.IO.File]::ReadAllBytes("$PWD/dist/klardrop-cli-windows-x64.zip")[0..1]
-          if ($sig[0] -ne 0x50 -or $sig[1] -ne 0x4B) {
-            throw "klardrop-cli-windows-x64.zip is not a zip container (magic: $($sig -join ','))"
-          }
-          # And it must actually extract to the CLI, not to some other layout.
-          Expand-Archive -Path dist/klardrop-cli-windows-x64.zip -DestinationPath verify -Force
-          if (-not (Test-Path verify/klardrop.exe)) {
-            throw "the archive does not contain klardrop.exe at its root"
-          }
-          Write-Host "archive verified: $((Get-Item dist/klardrop-cli-windows-x64.zip).Length) bytes"

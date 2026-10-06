@@ -142,10 +142,6 @@ mod tests {
             legacy_payload(Some("/tmp/report.pdf"), &[], None).expect("path"),
             Payload::Files(files(&["/tmp/report.pdf"]))
         );
-        assert_eq!(
-            legacy_payload(Some(r"C:\Users\me\report.pdf"), &[], None).expect("windows path"),
-            Payload::Files(files(&[r"C:\Users\me\report.pdf"]))
-        );
         // Prose that happens to contain a separator is still a file under the
         // legacy rule. That is deliberate: old scripts keep working.
         assert_eq!(

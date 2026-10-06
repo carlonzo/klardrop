@@ -65,12 +65,9 @@ fn exit_code(status: &std::process::ExitStatus) -> i32 {
     if let Some(code) = status.code() {
         return code;
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        if let Some(signal) = status.signal() {
-            return 128 + signal;
-        }
+    use std::os::unix::process::ExitStatusExt;
+    if let Some(signal) = status.signal() {
+        return 128 + signal;
     }
     // No code and no signal means the platform has nothing to say; anything
     // but 0 here would report a success that did not happen.

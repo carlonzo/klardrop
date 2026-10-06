@@ -1104,14 +1104,8 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # Windows ships the JVM desktop app through jpackage (MSI) plus the native Rust
-  # CLI as a sibling asset. Both are here because the nightly channel is where
-  # new CLI work is exercised first, and a channel that ships only the GUI makes
-  # every CLI change look tested on a platform nobody runs it on.
-  #
-  # The CLI deliberately stays OUT of the MSI: jpackage signs what it builds and
-  # a file dropped in afterwards invalidates that signature. It is published as
-  # its own asset with its own `windows-cli` key, exactly as stable does.
+  # Windows ships the JVM desktop app through jpackage (MSI) only. The Rust CLI
+  # is Unix-only, so there is no Windows CLI asset on this channel either.
   windows:
     needs: gate
     if: needs.gate.outputs.proceed == 'true'
@@ -1138,30 +1132,6 @@ jobs:
       - name: Build Windows MSI
         shell: bash
         run: ./gradlew :desktop:packageReleaseMsi $GRADLE_VERSION_ARGS
-
-      - name: Build the Rust CLI for Windows
-        shell: bash
-        working-directory: cli-rust
-        run: |
-          set -euo pipefail
-          rustc --version
-          cargo --version
-          cargo build --locked --release
-          test -f target/release/klardrop.exe
-
-      # pwsh, not bash: under `shell: bash` on windows-latest `tar` is Git
-      # Bash's GNU tar, whose -a is --auto-compress and can never emit a zip.
-      - name: Stage the Windows Rust CLI
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force -Path dist, stage-win | Out-Null
-          Copy-Item cli-rust/target/release/klardrop.exe stage-win/klardrop.exe
-          Compress-Archive -Path stage-win/klardrop.exe -DestinationPath dist/klardrop-cli-windows-x64.zip -Force
-          $sig = [System.IO.File]::ReadAllBytes("$PWD/dist/klardrop-cli-windows-x64.zip")[0..1]
-          if ($sig[0] -ne 0x50 -or $sig[1] -ne 0x4B) {
-            throw "klardrop-cli-windows-x64.zip is not a zip container (magic: $($sig -join ','))"
-          }
 
       - name: Collect the MSI
         shell: pwsh
@@ -1221,16 +1191,15 @@ jobs:
           NATIVE_TGZ=$(pick "klardrop-native-linux-x64.tar.gz")
           NATIVE_TGZ_ARM64=$(pick "klardrop-native-linux-arm64.tar.gz")
 
-          # The standalone native CLIs, built by the nightly `macos` and `windows`
-          # jobs. The Linux CLI needs no key of its own: it ships inside the native
+          # The standalone native CLI, built by the nightly `macos` job. The
+          # Linux CLI needs no key of its own: it ships inside the native
           # tarballs above.
           MACOS_CLI=$(pick "klardrop-cli-macos-arm64.tar.gz")
-          WINDOWS_CLI=$(pick "klardrop-cli-windows-x64.zip")
           MSI=$(pick "*.msi")
           export BASE="https://github.com/${REPO}/releases/download/nightly"
-          python3 - "$DMG" "$TGZ" "$NATIVE_TGZ" "$NATIVE_TGZ_ARM64" "$MACOS_CLI" "$WINDOWS_CLI" "$MSI" <<'PY' > latest.json
+          python3 - "$DMG" "$TGZ" "$NATIVE_TGZ" "$NATIVE_TGZ_ARM64" "$MACOS_CLI" "$MSI" <<'PY' > latest.json
           import json, os, sys, datetime, pathlib
-          dmg, tgz, native_tgz, native_tgz_arm64, macos_cli, windows_cli, msi = sys.argv[1:8]
+          dmg, tgz, native_tgz, native_tgz_arm64, macos_cli, msi = sys.argv[1:7]
           base = os.environ["BASE"]
           def entry(name):
               if not name: return None
@@ -1243,10 +1212,6 @@ jobs:
           if native_tgz: platforms["linux-native-x64"] = entry(native_tgz)
           if native_tgz_arm64: platforms["linux-native-arm64"] = entry(native_tgz_arm64)
           if macos_cli: platforms["macos-cli"] = entry(macos_cli)
-          # Same keys as the stable manifest: a channel that renames or omits them
-          # makes the updater's platform lookup fail for nightly users only, which
-          # is exactly the kind of gap nobody notices until a tester reports it.
-          if windows_cli: platforms["windows-cli"] = entry(windows_cli)
           if msi: platforms["windows"]        = entry(msi)
           out = {
             "version":     os.environ["VERSION"],

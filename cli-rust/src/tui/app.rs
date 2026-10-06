@@ -1497,9 +1497,8 @@ mod tests {
         press(&mut app, KeyCode::Enter);
         press_char(&mut app, 'f');
         assert_eq!(app.input_mode(), InputMode::Compose);
-        // Built from temp_dir rather than spelled "/tmp/one.pdf": a rooted Unix path is
-        // not absolute on Windows, where it resolves against the current drive, so the
-        // prompt would (correctly) refuse it and this would only test the refusal.
+        // Built from temp_dir rather than spelled "/tmp/one.pdf", so the test
+        // holds on macOS too (TMPDIR) and not only on Linux (/tmp).
         let one = std::env::temp_dir().join("one.pdf");
         let two = std::env::temp_dir().join("two.pdf");
         app.paste(&format!("{} {}", one.display(), two.display()));
@@ -1755,8 +1754,7 @@ mod tests {
 
     #[test]
     fn every_key_the_reducer_accepts_is_a_press() {
-        // Guards against a future Windows-style key filter silently changing
-        // what reaches the reducer: release events must not act.
+        // Release events must not act: the reducer only answers presses.
         let mut app = app_with_devices();
         let mut release = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
         release.kind = KeyEventKind::Release;

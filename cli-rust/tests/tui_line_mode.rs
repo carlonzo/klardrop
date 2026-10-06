@@ -28,14 +28,8 @@ fn line_mode_options(term: &str) -> LaunchOptions {
 }
 
 fn assert_no_escape_bytes(tui: &Tui) {
-    // Only meaningful where the pty master carries the client's own bytes. On Windows
-    // it carries ConPTY's rendering of them instead, and that stream opens with an
-    // OSC window-title sequence of ConPTY's own, so an ESC byte is present whatever
-    // this client did — measured in the run that found this: 204 ESC bytes on windows
-    // against 187 on macos for the same frame, the surplus being ConPTY's title.
-    if cfg!(windows) {
-        return;
-    }
+    // The pty master carries the client's own bytes, so an ESC byte in that
+    // stream is the client touching the screen.
     let raw = tui.raw();
     assert!(
         !raw.contains(&0x1b),
@@ -108,16 +102,11 @@ fn a_window_below_the_layout_minimum_gets_lines_too() {
     assert!(text.contains("line mode"), "{text}");
     assert!(text.contains("10x4"), "the size is named: {text}");
     // Deliberately no device-name assertion here. At ten columns the summary wraps
-    // mid-word, and on Windows the pty master is ConPTY's rendering, which re-emits
-    // the wrap-column character — CI shows "Fixture Phone" arriving as
-    // "Fixtturre Phone", because the 't' at the wrap is written on both rows. The
-    // name is not recoverable from that stream at any effort short of reconstructing
-    // ConPTY's wrap rules.
-    //
-    // This is not lost coverage. a_dumb_terminal_prints_the_state_and_never_touches_the_screen
-    // asserts every device name, at a width where nothing wraps, on every platform.
-    // What is specific to a narrow window is that line mode is chosen at all and that
-    // it names the size it was given — which is what the two assertions above check.
+    // mid-word, so the name is not contiguous in the stream. This is not lost
+    // coverage: a_dumb_terminal_prints_the_state_and_never_touches_the_screen
+    // asserts every device name at a width where nothing wraps. What is specific
+    // to a narrow window is that line mode is chosen at all and that it names
+    // the size it was given — which is what the two assertions above check.
 }
 
 #[test]
@@ -197,11 +186,8 @@ fn a_hostile_name_cannot_reach_the_terminal_through_line_mode() {
     assert_eq!(code, 0, "line mode is a working answer, not a failure");
 
     assert_no_escape_bytes(&tui);
-    // What the user actually gets is asserted on the SCREEN, on every platform: the
-    // name's characters survive and none of its control ones do. The byte-level check
-    // below cannot be the one that proves it on Windows, where `raw` is ConPTY's
-    // rendering and carries a BEL of its own for the window title — the same reasoning
-    // tui_flows.rs applies to its equivalent assertions.
+    // The user's data survives and the control bytes do not, asserted on both
+    // the screen and the wire: the pty master carries the client's own bytes.
     let screen = tui.text();
     for (what, byte) in [("a bell", 0x07u8), ("a NUL", 0x00)] {
         assert!(
@@ -209,16 +195,12 @@ fn a_hostile_name_cannot_reach_the_terminal_through_line_mode() {
             "{what} reached the screen; output was:\n{screen}"
         );
     }
-    // Where the wire IS the client's bytes, the stronger claim still holds.
-    if !cfg!(windows) {
-        let raw = tui.raw();
-        assert!(
-            !raw.contains(&0x07) && !raw.contains(&0x00),
-            "a control byte reached the terminal; output was:\n{}",
-            String::from_utf8_lossy(&raw)
-        );
-    }
     let raw = tui.raw();
+    assert!(
+        !raw.contains(&0x07) && !raw.contains(&0x00),
+        "a control byte reached the terminal; output was:\n{}",
+        String::from_utf8_lossy(&raw)
+    );
     let text = String::from_utf8_lossy(&raw).into_owned();
     assert!(
         text.contains("evil"),
