@@ -113,6 +113,12 @@ fn no_motion_draws_the_same_frame_twice_while_waiting() {
     let fixture = Fixture::start("motion-static", &["state_long_poll"]);
     let tui = Tui::launch_with(&fixture, &still());
     tui.wait_for("connecting");
+    // The first full frame, not the first bytes: `wait_for` returns mid-draw,
+    // when the header is on the grid but the footer rows below it are not yet.
+    // Capturing then compares a partial frame against a complete one and fails
+    // for a reason that has nothing to do with motion. The footer is drawn
+    // last, so waiting for it makes both captures whole.
+    tui.wait_for("Ctrl-Space stays off");
 
     let first = tui.screen();
     std::thread::sleep(GAP);
