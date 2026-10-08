@@ -205,6 +205,13 @@ private fun UpdatePath(
         PillButton(label = "Restart now", onClick = onRestart)
       }
 
+      is InstallProgress.Applying -> {
+        Text(
+          text = "Restarting…",
+          style = typography.caption.copy(color = colors.text2),
+        )
+      }
+
       else -> {
         // Idle (this channel can't self-install) or Failed (it tried and couldn't):
         // either way the channel's own upgrade path is what's left.
@@ -309,6 +316,7 @@ private fun PillButton(
 
 /** One-line summary of where the update check stands. */
 private fun statusLine(status: UpdateStatus, installProgress: InstallProgress): String = when {
+  installProgress is InstallProgress.Applying -> "Restarting…"
   installProgress is InstallProgress.Ready -> "Update ready — restart to apply"
   status is UpdateStatus.Checking -> "Checking for updates…"
   status is UpdateStatus.UpToDate -> "You're on the latest version"
@@ -321,6 +329,7 @@ private fun statusLine(status: UpdateStatus, installProgress: InstallProgress): 
 private fun statusColor(status: UpdateStatus, installProgress: InstallProgress): Color {
   val colors = KdTheme.colors
   return when {
+    installProgress is InstallProgress.Applying -> colors.accent
     installProgress is InstallProgress.Ready -> colors.accent
     status is UpdateStatus.Available -> colors.accent
     status is UpdateStatus.Failed -> colors.warn

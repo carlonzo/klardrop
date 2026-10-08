@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.MessengerSendProgress.Error
 import com.carlom.klardrop.common.communication.MessengerSendProgress.Pending
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
+import com.carlom.klardrop.common.communication.message.NearbyTransferRejectedException
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.message.TransferRejectedException
 import com.carlom.klardrop.common.communication.message.TrustPairingRequest
@@ -346,23 +347,36 @@ class MessengerImpl(
     // service can advertise stale ports if the peer's Quick Share session
     // ended between discovery and our connect, so a "Connection refused" on
     // the first endpoint is normal — try the rest before giving up.
+    //
+    // A decline is the exception: it is a decision by a person, so trying the device's *next*
+    // endpoint would prompt the same person again. It ends the walk for this device, exactly as
+    // the Klardrop transport's `TransferRejectedException` branch does.
     var lastError: Throwable? = null
-    val success = nearbyConnections.any { connection ->
+    var declined = false
+    for (connection in nearbyConnections) {
       log("Messenger", "Client sending message to $deviceId: ${connection.address} ${connection.port}")
-      runCatching {
+      val outcome = runCatching {
         sendNearby(connection.address, connection.port, listOf(messageRequest), sendFlow)
-      }.onFailure { exception ->
+      }
+      outcome.onFailure { exception ->
         lastError = exception
         log("Messenger", "Error sending message to $deviceId via ${connection.address}:${connection.port}", exception)
-      }.isSuccess
+      }
+      if (outcome.isSuccess) return true
+      if (outcome.exceptionOrNull() is NearbyTransferRejectedException) {
+        declined = true
+        break
+      }
     }
 
-    if (!success) {
+    if (declined) {
+      sendFlow.emit(Error("Recipient declined the transfer", reason = "declined"))
+    } else {
       val reason = lastError?.message?.takeIf { it.isNotBlank() }
         ?: "Could not reach $deviceId over Nearby Share"
       sendFlow.emit(Error(reason))
     }
-    return success
+    return false
   }
 
   private suspend fun sendNearby(
@@ -454,7 +468,7 @@ class MessengerImpl(
         // (that would re-prompt the recipient), and leave the connection healthy for other sends.
         if (exception is TransferRejectedException) {
           log("Messenger", "[DEBUG] Transfer to $deviceId was declined by the recipient; not retrying")
-          flow.emit(Error("Recipient declined the transfer"))
+          flow.emit(Error("Recipient declined the transfer", reason = "declined"))
           return false
         }
         log(
@@ -765,6 +779,8 @@ sealed interface MessengerSendProgress {
    *   - "no-endpoints" — device not visible and no pooled connection
    *   - "connect-failed(<cause class>)" — endpoints existed but every dial/send failed
    *   - "ack-timeout" — connected, but the peer never acknowledged
+   *   - "declined" — the recipient actively rejected the transfer (a terminal user decision,
+   *     not a transport failure)
    * Null for legacy failure sites that have no classified cause.
    */
   data class Error(val message: String = "", val reason: String? = null) : MessengerSendProgress

@@ -1,0 +1,40 @@
+klardrop | Fixture Host | daemon: connected | 3 devices
+┌> Devices  * reachable  + trusted  ! pairing──┐┌  Conversation────────────────────────────────────────────────────────┐
+│> *+ Fixture Phone  reachable · trusted (2)   ││Select a device and press Enter                                       │
+│   - Fixture Tablet  offline · untrusted      ││                                                                      │
+│   * Fixture Laptop  reachable · untrusted    ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+└──────────────────────────────────────────────┘└──────────────────────────────────────────────────────────────────────┘
+Tab pane Up/Down select Enter open i text f files y clipboard a actions ? help q quit
+this session captures no mouse — Ctrl-Space will not take one

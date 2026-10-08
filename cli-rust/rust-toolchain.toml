@@ -1,0 +1,7 @@
+# Pinned so the Rust CLI builds identically on every developer machine and every CI
+# runner image, instead of tracking whatever "stable" the image happens to ship.
+# `clippy` and `rustfmt` are components because the crate's checks gate on both.
+[toolchain]
+channel = "1.88.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

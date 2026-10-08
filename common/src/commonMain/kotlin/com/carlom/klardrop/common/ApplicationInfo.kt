@@ -6,6 +6,11 @@ data class ApplicationInfo(
   // useful for testing on desktop to run multiple instance in the same machine
   val disablePersistence: Boolean = false,
 
+  /** Desktop only: back the clipboard with an in-memory string instead of the real AWT/system
+   *  clipboard. Tests set this so they never read/write the developer's actual desktop
+   *  clipboard. */
+  val disableSystemClipboard: Boolean = false,
+
   val enableKlardropServer: Boolean = true,
 
   val enableNearbyServer: Boolean = true,
@@ -14,8 +19,10 @@ data class ApplicationInfo(
   val enableBle: Boolean = true,
 
   /**
-   * Loopback HTTP control port for autonomous UI-equivalent actions (pair, send, accept).
-   * Null means do not start the server. Only honored when [isDebug] is true.
+   * Loopback HTTP control port for UI-equivalent actions (pair, send, accept) used by
+   * `klardrop`, the native CLI/TUI and the Qt / Omarchy frontends. Null means do not start the
+   * server. Honored in every build; `0` binds an ephemeral port (still published to
+   * control.json).
    */
   val controlPort: Int? = null,
 

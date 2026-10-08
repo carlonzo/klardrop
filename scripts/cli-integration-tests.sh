@@ -26,6 +26,12 @@ RESTART_OFFLINE_SEC="${KLARDROP_RESTART_OFFLINE:-3}"
 # Klardrop debounces mDNS browse refresh ~30s after ServiceLost; wait before re-discover.
 RESTART_WARMUP_SEC="${KLARDROP_RESTART_WARMUP:-35}"
 TIER4_SETTLE_TIMEOUT="${KLARDROP_TIER4_SETTLE:-60}"
+# Tier 4 peer-restart discovery tunables (mDNS timing only; tier0-3 untouched).
+TIER4_DISCOVER_PROBES="${KLARDROP_TIER4_DISCOVER_PROBES:-6}"
+TIER4_DISCOVER_TIMEOUT="${KLARDROP_TIER4_DISCOVER_TIMEOUT:-8}"
+TIER4_DISCOVER_BASE_SLEEP="${KLARDROP_TIER4_DISCOVER_SLEEP:-2}"
+TIER4_DISCOVER_MAX_SLEEP="${KLARDROP_TIER4_DISCOVER_MAX_SLEEP:-10}"
+TIER4_RECEIPT_TIMEOUT="${KLARDROP_TIER4_RECEIPT_TIMEOUT:-30}"
 
 TMPROOT="$(mktemp -d "${TMPDIR:-/tmp}/klardrop-cli-test.XXXXXX")"
 LISTENER_PID=""
@@ -278,6 +284,50 @@ run_tier0() {
   else
     fail "send to unknown device should report not found" "exit=$RUN_CLI_EXIT"
   fi
+
+  # `daemon` exits non-zero (not a crash/abort) when its control port is already taken.
+  # The listener holds the port for well longer than a cold `:cli:jvmRun` can take to start
+  # (first Gradle invocation in a run pays JVM+classloading cost), and the daemon invocation
+  # itself is bounded by `timeout` so a regression here fails the test instead of hanging the
+  # whole suite (a real prior bug: the port never freed up but the daemon still hung on exit).
+  dir="$(fresh_sender_dir)"
+  python3 -u -c "
+import socket, time
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('127.0.0.1', 0))
+s.listen(1)
+print(s.getsockname()[1])
+time.sleep(180)
+" >"$TMPROOT/busy-port.log" 2>&1 &
+  local busy_pid=$!
+  LISTENER_PIDS+=("$busy_pid")
+  local busy_port=""
+  local i=0
+  while (( i < 20 )); do
+    busy_port="$(head -1 "$TMPROOT/busy-port.log" 2>/dev/null || true)"
+    [[ -n "$busy_port" ]] && break
+    sleep 0.5
+    i=$((i + 1))
+  done
+  if [[ -z "$busy_port" ]]; then
+    fail "daemon exits non-zero when control port is busy" "could not occupy a port to test with"
+  else
+    local busy_out busy_err busy_rc
+    busy_err="$(mktemp "$TMPROOT/busy-daemon-err.XXXXXX")"
+    busy_out="$(timeout 120 ./gradlew "$CLI_TASK" --quiet \
+      --args="daemon --port=$busy_port --no-klardrop --no-nearby --no-ble --data-dir=$dir" \
+      2>"$busy_err")" && busy_rc=0 || busy_rc=$?
+    if [[ $busy_rc -ne 0 && $busy_rc -ne 124 ]] && \
+      printf '%s\n%s' "$busy_out" "$(cat "$busy_err")" | grep -Fq "already in use"; then
+      pass "daemon exits non-zero when control port is busy"
+    else
+      fail "daemon exits non-zero when control port is busy" "exit=$busy_rc"
+    fi
+    rm -f "$busy_err"
+  fi
+  kill "$busy_pid" 2>/dev/null || true
+  wait "$busy_pid" 2>/dev/null || true
 }
 
 # ── Tier 1–2: two-node (receiver + fresh sender per command) ────────────────
@@ -402,6 +452,51 @@ assert 'device_count' in d and 'devices' in d
   fi
 }
 
+# ── Tier 4 helpers: peer-restart / mDNS timing (tier0-3 untouched) ──────────
+#
+# Bounded discovery retry with truncated exponential backoff for a restarted
+# peer. Each probe uses a fresh sender dir (same SQLite-migration reason as
+# wait_for_peer). Gives up after TIER4_DISCOVER_PROBES misses.
+wait_for_peer_restart() {
+  local expected_id="$1"
+  local probe=1 sleep_sec="$TIER4_DISCOVER_BASE_SLEEP"
+  while (( probe <= TIER4_DISCOVER_PROBES )); do
+    local sender_dir
+    sender_dir="$(fresh_sender_dir)"
+    run_cli discover --json --timeout="$TIER4_DISCOVER_TIMEOUT" --data-dir="$sender_dir"
+    local devices_json
+    devices_json="$(cli_json_line)"
+    if [[ $RUN_CLI_EXIT -eq 0 ]] && [[ "$(discover_includes_device "$devices_json" "$expected_id")" == "true" ]]; then
+      return 0
+    fi
+    log "tier4 discovery probe $probe/$TIER4_DISCOVER_PROBES missed; backing off ${sleep_sec}s..."
+    sleep "$sleep_sec"
+    sleep_sec=$((sleep_sec * 2))
+    if (( sleep_sec > TIER4_DISCOVER_MAX_SLEEP )); then
+      sleep_sec="$TIER4_DISCOVER_MAX_SLEEP"
+    fi
+    probe=$((probe + 1))
+  done
+  return 1
+}
+
+# Bounded poll for a TEXT payload in a listen --json log. Same assertion
+# strength as a single check — just tolerates slow flushes under load.
+wait_for_listen_text() {
+  local logfile="$1"
+  local expected="$2"
+  local timeout="${3:-$TIER4_RECEIPT_TIMEOUT}"
+  local elapsed=0
+  while (( elapsed < timeout )); do
+    if [[ "$(listen_received_text "$logfile" "$expected")" == "true" ]]; then
+      return 0
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  [[ "$(listen_received_text "$logfile" "$expected")" == "true" ]]
+}
+
 # ── Tier 4: peer goes offline then back; stayer sends again ─────────────────
 #
 # Layout:
@@ -507,8 +602,7 @@ run_tier4_peer_restart() {
     fail "tier4: first send succeeds while both instances are up" "exit=$?"
   fi
 
-  sleep 2
-  if [[ "$(listen_received_text "$listen_b_log" "$payload1")" == "true" ]]; then
+  if wait_for_listen_text "$listen_b_log" "$payload1"; then
     pass "tier4: receiver B got first message"
   else
     fail "tier4: receiver B got first message" "payload=$payload1"
@@ -522,10 +616,11 @@ run_tier4_peer_restart() {
 
   b_pid="$(start_listener_bg "$node_b" "$listen_b_log" "$listener_timeout" true)"
 
-  log "Waiting ${LISTENER_WARMUP_SEC}s for restarted B to publish..."
-  sleep "$LISTENER_WARMUP_SEC"
+  # Brief settle so the restarted JVM/ listener can bind before the first probe;
+  # readiness itself is established by the bounded discovery retry below.
+  sleep 5
 
-  if wait_for_peer "$receiver_id" 10; then
+  if wait_for_peer_restart "$receiver_id"; then
     log "Restarted B visible in discover"
   else
     log "Restarted B not yet in discover; relying on send settle-timeout (${TIER4_SETTLE_TIMEOUT}s)"
@@ -538,8 +633,7 @@ run_tier4_peer_restart() {
     fail "tier4: second send succeeds after peer restart" "exit=$?"
   fi
 
-  sleep 2
-  if [[ "$(listen_received_text "$listen_b_log" "$payload2")" == "true" ]]; then
+  if wait_for_listen_text "$listen_b_log" "$payload2"; then
     pass "tier4: receiver B got second message after restart"
   else
     fail "tier4: receiver B got second message after restart" "payload=$payload2"

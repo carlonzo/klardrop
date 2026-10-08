@@ -2,6 +2,7 @@
 import SwiftUI
 import AppKit
 import presentation
+import control_plane
 
 // ---------------------------------------------------------------------------
 // KlardropMacApp — macOS app entry point (Phase 2B).
@@ -23,7 +24,7 @@ import presentation
 @main
 struct KlardropMacApp: App {
 
-    private let bootstrap: KlardropBootstrap
+    private let bootstrap: presentation.KlardropBootstrap
 
     // App-owned so the MenuBarExtra and the window share a single
     // DiscoveryController (never construct a second one — see DiscoveryAppModel).
@@ -33,9 +34,52 @@ struct KlardropMacApp: App {
 
     init() {
         // Constructing the bootstrap also starts Sentry (see KlardropBootstrap).
-        let bootstrap = KlardropBootstrap()
+        // The default controlPort is an ephemeral loopback port; KLARDROP_CONTROL_PORT
+        // can pin it, and -1 disables local IPC entirely.
+        let bootstrap = presentation.KlardropBootstrap()
         self.bootstrap = bootstrap
-        _model = State(initialValue: DiscoveryAppModel(bootstrap: bootstrap))
+        let model = DiscoveryAppModel(bootstrap: bootstrap)
+        _model = State(initialValue: model)
+
+        // Publish and serve the local control plane (see startLocalControlPlane).
+        // model.controller is the SAME DiscoveryController the menu bar and the window
+        // render from, so the control plane observes one shared engine.
+        KlardropMacApp.startLocalControlPlane(app: bootstrap.klardrop,
+                                             controller: model.controller)
+    }
+
+    // -----------------------------------------------------------------------
+    // Local control plane — what makes `klardrop devices/status/share` work
+    // against the running macOS app.
+    //
+    // :control-plane depends on :presentation, so KlardropBootstrap cannot
+    // reference ControlPlane without a module cycle. The cycle is broken the
+    // other way round: :control-plane ships its own macOS framework
+    // (control_plane.framework, built by `:control-plane:linkReleaseFrameworkMacosArm64`
+    // and found through the KlardropMac target's FRAMEWORK_SEARCH_PATHS), and this
+    // file imports it. One implementation, no per-platform copy of the server.
+    //
+    // start() binds 127.0.0.1 and publishes control.json — port, token and the
+    // capability list — into the app's App Group container, the only location a
+    // sandboxed app and the unsandboxed `klardrop` CLI can both reach. bind()
+    // then wires the DiscoveryController in; until it runs, the submission routes
+    // answer 503 rather than pretending an engine is attached.
+    //
+    // Runs off the main actor: start() binds a socket and publishes a file, and
+    // bind() launches the flow collectors on the engine's app scope.
+    // -----------------------------------------------------------------------
+
+    private static func startLocalControlPlane(app: presentation.Klardrop, controller: presentation.DiscoveryController) {
+        Task.detached(priority: .background) {
+            do {
+                try await ControlPlane.shared.start(app: app)
+                try await ControlPlane.shared.bind(discoveryController: controller, app: app)
+            } catch {
+                // A control plane that cannot start must not take the app down with it: the
+                // GUI is fully usable without local IPC, so this is a diagnostic, not a crash.
+                NSLog("Klardrop: control plane unavailable: \(error.localizedDescription)")
+            }
+        }
     }
 
     var body: some Scene {
@@ -113,7 +157,7 @@ private struct MenuBarContent: View {
 
     /// Open the app and select the tapped device — same flow as a sidebar tap
     /// in KlardropNav (select chat, notify controller, mark active chat).
-    private func open(_ device: DeviceUi) {
+    private func open(_ device: presentation.DeviceUi) {
         activateApp()
         let route = ChatRoute(deviceId: device.deviceId, deviceName: device.deviceName)
         model.selectedChat = route

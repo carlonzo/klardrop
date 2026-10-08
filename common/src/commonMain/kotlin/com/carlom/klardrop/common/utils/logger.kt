@@ -17,11 +17,11 @@ fun log(message: String, throwable: Throwable) {
   CrashReporter.notify(throwable)
 }
 
-fun log(tag: String, message: String, throwable: Throwable) {
+fun log(tag: String, message: String, throwable: Throwable, fatal: Boolean = false) {
   nativeLoggerException(tag, message, throwable)
   LogBuffer.append("[$tag]: $message (${throwable.message})")
   CrashReporter.leaveBreadcrumb("[$tag]: $message", type = BreadcrumbType.ERROR)
-  CrashReporter.notify(throwable)
+  CrashReporter.notify(throwable, fatal)
 }
 
 fun log(tag: String, message: String) {

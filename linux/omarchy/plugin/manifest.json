@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "klardrop.omarchy",
+  "name": "Klardrop",
+  "version": "1.0.0",
+  "author": "Klardrop",
+  "license": "Apache-2.0",
+  "description": "Local device sharing over LAN and Nearby Share.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Klardrop",
+    "description": "Local device sharing over LAN and Nearby Share.",
+    "category": "Network",
+    "allowMultiple": false
+  }
+}

@@ -683,6 +683,106 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # Native (JVM-free) Kotlin/Native Linux build, published ALONGSIDE nightly-linux above,
+  # not replacing it. See linux/omarchy/TODO.md Phase 2 step 3.
+  linux-native:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            target: linuxX64
+            # `linkReleaseExecutableLinuxX64` vs `linuxX64Test`: the link task
+            # capitalises the arch, the test task does not. Concatenating one
+            # value onto both produced a task name that resolves to nothing.
+            linkTarget: LinuxX64
+            runner: ubuntu-24.04
+          - arch: arm64
+            target: linuxArm64
+            linkTarget: LinuxArm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.gate.outputs.semver }}
+        -Pklardrop.packageVersion=${{ needs.gate.outputs.base }}
+        -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
+        -Pklardrop.updateChannel=nightly
+      # Sentry DSN, baked in at compile time — see the `linux` job above for why this
+      # is ORG_GRADLE_PROJECT_* rather than a `-P` flag.
+      ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-${{ matrix.arch }}-
+
+      - name: Install native build deps
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y
+          libavahi-client-dev libsqlite3-dev libssl-dev libsystemd-dev
+          qt6-base-dev qt6-declarative-dev qmake6 libgl-dev xvfb
+          qml6-module-qtquick qml6-module-qtquick-controls
+          qml6-module-qtquick-layouts qml6-module-qtquick-templates
+          qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models
+          qml6-module-qtqml-workerscript
+
+      - name: Build + test linux (${{ matrix.target }})
+        run: >-
+          ./gradlew
+          :cli:linkReleaseExecutable${{ matrix.linkTarget }}
+          :klardrop-common:${{ matrix.target }}Test
+          $GRADLE_VERSION_ARGS
+
+      - name: Build + test Qt frontend (${{ matrix.target }})
+        shell: bash
+        run: |
+          mkdir -p /tmp/build-klardrop-qt
+          cd /tmp/build-klardrop-qt
+          qmake6 "KLARDROP_VERSION=${{ needs.gate.outputs.semver }}" "$GITHUB_WORKSPACE/linux/qt/klardrop-qt.pro"
+          make -j$(nproc)
+          ./klardrop-qt --check-runtime
+          python3 "$GITHUB_WORKSPACE/linux/qt/tests/test_integration.py"
+
+      # The native tarball ships TWO binaries: the Kotlin/Native engine linked above
+      # and the native Rust CLI. packaging/linux/stage-native-tarball.sh fails closed
+      # without it, so it is built here for both matrix arches (the runners are
+      # native x64 and arm64 — no cross-compilation). cli-rust/rust-toolchain.toml
+      # pins the toolchain, which the hosted image's rustup installs on first use;
+      # --locked keeps the committed Cargo.lock authoritative.
+      - name: Build Rust CLI client (${{ matrix.arch }})
+        working-directory: cli-rust
+        shell: bash
+        run: |
+          rustc --version
+          cargo --version
+          cargo build --locked --release
+
+      - name: Stage native Linux tarball (${{ matrix.arch }})
+        shell: bash
+        env:
+          KLARDROP_QT_BIN: /tmp/build-klardrop-qt/klardrop-qt
+        run: bash packaging/linux/stage-native-tarball.sh "${{ needs.gate.outputs.semver }}" "${{ matrix.arch }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-linux-${{ matrix.arch }}-native
+          path: dist/*
+          if-no-files-found: error
+
   # Native macOS DMG. Signed + notarized when the Apple secrets are present (same
   # flow as the production build), otherwise an unsigned DMG for testers.
   macos:
@@ -729,6 +829,18 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # The native Rust CLI (`cli-rust/`) ships with the macOS tester build for the
+      # same reason it ships in the stable one: `klardrop` is the user-facing
+      # command, and testers exercise it from a terminal. A plain cargo build — no
+      # Kotlin/Native, no Xcode — so it runs before the framework steps.
+      - name: Build Rust CLI client
+        working-directory: cli-rust
+        shell: bash
+        run: |
+          rustc --version
+          cargo --version
+          cargo build --locked --release
+
       # Cache ~/.konan (Kotlin/Native compiler + Apple platform libs) — outside the
       # Gradle home setup-gradle caches. Keyed on the version catalog.
       - name: Cache Kotlin/Native (~/.konan)
@@ -738,8 +850,15 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
           restore-keys: konan-${{ runner.os }}-
 
-      - name: Build Kotlin macOS frameworks (Sentry synthetic + dummy)
-        run: ./gradlew :klardrop-common:podBuildSentryMacos :presentation:generateDummyFramework $GRADLE_VERSION_ARGS
+      - name: Build Kotlin macOS frameworks (Sentry synthetic + dummy + control plane)
+        # control_plane.framework is what MacApp.swift imports to start the local control
+        # plane; without it the shipped macOS app serves no local IPC at all.
+        run: >-
+          ./gradlew
+          :klardrop-common:podBuildSentryMacos
+          :presentation:generateDummyFramework
+          :control-plane:linkReleaseFrameworkMacosArm64
+          $GRADLE_VERSION_ARGS
 
       - name: pod install
         run: pod install --project-directory=iosApp
@@ -923,6 +1042,21 @@ jobs:
           fi
           cp -R "$APP" stage/
 
+          # The native Rust CLI travels with the macOS build, in the DMG and as a
+          # standalone download. Signed builds sign it with the same Developer ID
+          # identity (notarization rejects an image containing unsigned code); the
+          # Klardrop.app bundle is left alone so its verified signature stands.
+          CLI_DIR="$RUNNER_TEMP/klardrop-cli"
+          mkdir -p "$CLI_DIR" "stage/Klardrop CLI"
+          cp cli-rust/target/release/klardrop "$CLI_DIR/klardrop"
+          if [ "$SIGNED" = "true" ]; then
+            codesign --force --options runtime --timestamp \
+              --sign "Developer ID Application" "$CLI_DIR/klardrop"
+          fi
+          cp "$CLI_DIR/klardrop" "stage/Klardrop CLI/klardrop"
+          # Standalone download, the asset behind the `macos-cli` key in latest.json.
+          tar -czf dist/klardrop-cli-macos-arm64.tar.gz -C "$CLI_DIR" klardrop
+
           if [ "$SIGNED" = "true" ]; then
             mkdir -p "$RUNNER_TEMP/keys"
             echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey.p8"
@@ -970,12 +1104,54 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # Windows ships the JVM desktop app through jpackage (MSI) only. The Rust CLI
+  # is Unix-only, so there is no Windows CLI asset on this channel either.
+  windows:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: windows-latest
+    env:
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.gate.outputs.semver }}
+        -Pklardrop.packageVersion=${{ needs.gate.outputs.base }}
+        -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # shell: bash is load-bearing here for the same reason as the stable
+      # workflow's Windows job: windows-latest defaults to pwsh, where
+      # $GRADLE_VERSION_ARGS is an undefined variable that expands to nothing and
+      # every -P flag is silently dropped.
+      - name: Build Windows MSI
+        shell: bash
+        run: ./gradlew :desktop:packageReleaseMsi $GRADLE_VERSION_ARGS
+
+      - name: Collect the MSI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem -Path desktop/build/compose/binaries -Filter *.msi -Recurse |
+            ForEach-Object { Copy-Item $_.FullName dist/ -Force }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-windows
+          path: dist/*
+          if-no-files-found: error
+
   # Collect the desktop artifacts and (re)publish the rolling `nightly` prerelease on top
   # of the tag the `gate` already advanced to this commit. Runs only when every build job
   # succeeded. prerelease:true keeps it off `releases/latest`, so install.sh / Homebrew
   # (which track the stable release) are unaffected.
   publish:
-    needs: [gate, android, ios, linux, macos]
+    needs: [gate, android, ios, linux, linux-native, macos, windows]
     if: needs.gate.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -1009,11 +1185,21 @@ jobs:
           done
           pick() { ls $1 2>/dev/null | head -n1 || true; }
           DMG=$(pick "*.dmg")
-          TGZ=$(pick "*.tar.gz")
+          # Exact name, not *.tar.gz — klardrop-native-linux-x64.tar.gz also matches that
+          # glob and must never end up in the JVM self-updater's latest.json.
+          TGZ=$(pick "klardrop-linux-x64.tar.gz")
+          NATIVE_TGZ=$(pick "klardrop-native-linux-x64.tar.gz")
+          NATIVE_TGZ_ARM64=$(pick "klardrop-native-linux-arm64.tar.gz")
+
+          # The standalone native CLI, built by the nightly `macos` job. The
+          # Linux CLI needs no key of its own: it ships inside the native
+          # tarballs above.
+          MACOS_CLI=$(pick "klardrop-cli-macos-arm64.tar.gz")
+          MSI=$(pick "*.msi")
           export BASE="https://github.com/${REPO}/releases/download/nightly"
-          python3 - "$DMG" "$TGZ" <<'PY' > latest.json
+          python3 - "$DMG" "$TGZ" "$NATIVE_TGZ" "$NATIVE_TGZ_ARM64" "$MACOS_CLI" "$MSI" <<'PY' > latest.json
           import json, os, sys, datetime, pathlib
-          dmg, tgz = sys.argv[1:3]
+          dmg, tgz, native_tgz, native_tgz_arm64, macos_cli, msi = sys.argv[1:7]
           base = os.environ["BASE"]
           def entry(name):
               if not name: return None
@@ -1021,8 +1207,12 @@ jobs:
               size   = pathlib.Path(name).stat().st_size
               return {"url": f"{base}/{name}", "sha256": digest, "size": size}
           platforms = {}
-          if dmg: platforms["macos"]         = entry(dmg)
-          if tgz: platforms["linux-tarball"] = entry(tgz)
+          if dmg: platforms["macos"]                   = entry(dmg)
+          if tgz: platforms["linux-tarball"]           = entry(tgz)
+          if native_tgz: platforms["linux-native-x64"] = entry(native_tgz)
+          if native_tgz_arm64: platforms["linux-native-arm64"] = entry(native_tgz_arm64)
+          if macos_cli: platforms["macos-cli"] = entry(macos_cli)
+          if msi: platforms["windows"]        = entry(msi)
           out = {
             "version":     os.environ["VERSION"],
             "tag":         "nightly",

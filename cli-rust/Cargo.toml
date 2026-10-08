@@ -1,0 +1,66 @@
+[package]
+name = "klardrop"
+version = "0.1.0"
+edition = "2021"
+# The floor of the locked dependency graph, not a guess: `ureq` pulls `url`, which pulls
+# `idna`, whose `icu_*` crates require 1.88. Declaring a lower MSRV produced a confusing
+# toolchain error instead of a clear one.
+rust-version = "1.88"
+description = "Native CLI client for a running Klardrop daemon (loopback control plane)"
+# The repository ships a single Apache-2.0 LICENSE at its root and every other
+# component in it is under that licence; a new subdirectory does not get its own.
+license = "Apache-2.0"
+publish = false
+
+[[bin]]
+name = "klardrop"
+path = "src/main.rs"
+
+# Test fixture only: a fake daemon used by tests/cli_contract.rs. Never shipped
+# as a user-facing binary.
+[[bin]]
+name = "klardrop-fixture-daemon"
+path = "src/bin/klardrop-fixture-daemon.rs"
+
+[dependencies]
+# No `color` feature: clap must never emit ANSI that could contaminate stdout.
+clap = { version = "4", default-features = false, features = [
+    "std",
+    "derive",
+    "help",
+    "usage",
+    "error-context",
+    "suggestions",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Loopback-only plain HTTP: no TLS, no gzip, no async runtime.
+ureq = { version = "2", default-features = false }
+# Terminal UI. Ratatui is pulled in with its crossterm backend only — no other
+# backend is compiled — and crossterm is the single owner of raw mode, the
+# alternate screen and input decoding. A second input source would be a bug.
+ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+crossterm = "0.28"
+# A terminal cell is a *column*, not a character: a CJK glyph or an emoji is
+# one `char` and two columns, so anything that budgets a name in `char`s
+# overflows the row it was measured for. Already in the tree through ratatui;
+# named here because the crate measures with it directly.
+unicode-width = "0.2"
+
+# Only for `signal(2)`: an interrupted `share --wait` has to
+# leave the caller holding the request id instead of dying silently. Already in
+# the dependency graph through crossterm/ureq, so this adds no new package.
+# The client targets Unix only — Linux (native engine host) and macOS (app
+# companion). Windows desktop runs the JVM app and has no Rust CLI.
+libc = "0.2"
+
+[profile.release]
+strip = true
+
+[dev-dependencies]
+# The TUI flow tests drive the real binary on a pseudo terminal and read the
+# screen back, because a TUI's contract is what it puts on the screen. Neither
+# crate reaches the shipped client: `cargo tree -e normal` must never list
+# them.
+portable-pty = "0.8"
+vt100 = "0.15"

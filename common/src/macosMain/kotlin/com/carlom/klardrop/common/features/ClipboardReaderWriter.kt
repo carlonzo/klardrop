@@ -1,9 +1,10 @@
 package com.carlom.klardrop.common.features
 
+import kotlinx.coroutines.flow.Flow
 import platform.AppKit.NSPasteboard
 import platform.AppKit.NSPasteboardTypeString
 
-actual class ClipboardReaderWriter {
+actual class ClipboardReaderWriter : ClipboardSource {
 
   private val pasteboard by lazy { NSPasteboard.generalPasteboard }
 
@@ -15,7 +16,7 @@ actual class ClipboardReaderWriter {
   private var lastChangeCount = -1L
   private var cached = ""
 
-  actual fun read(): String {
+  actual override fun read(): String {
     val count = pasteboard.changeCount
     if (count == lastChangeCount) return cached
     lastChangeCount = count
@@ -23,10 +24,12 @@ actual class ClipboardReaderWriter {
     return cached
   }
 
-  actual fun readForSync(): String = read()
+  actual override fun readForSync(): String = read()
 
-  actual fun write(text: String) {
+  actual override fun write(text: String) {
     pasteboard.clearContents()
     pasteboard.setString(text, forType = NSPasteboardTypeString)
   }
+
+  actual override fun changeSignals(): Flow<Unit>? = null
 }
