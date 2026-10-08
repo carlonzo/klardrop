@@ -52,6 +52,13 @@ private fun resolveControlPort(): Int =
  */
 class KlardropBootstrap(controlPort: Int = resolveControlPort()) {
 
+    // Kotlin default arguments are invisible to Objective-C, so without this
+    // Swift sees only `init(controlPort:)` and the bare `KlardropBootstrap()`
+    // call in MacApp.swift fails with "'init()' is unavailable". The iOS twin
+    // takes no arguments at all, so this keeps the two entry points identical
+    // from Swift's side.
+    constructor() : this(resolveControlPort())
+
     private val applicationInfo = ApplicationInfo(controlPort = controlPort)
 
     val klardrop: Klardrop = Klardrop(
