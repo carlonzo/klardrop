@@ -1,6 +1,7 @@
 package com.carlom.klardrop.theme
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.unit.dp
@@ -22,3 +23,10 @@ val LocalIsDesktop = staticCompositionLocalOf { false }
  * platform handles the status bar via `WindowInsets.statusBars` instead.
  */
 val LocalContentInsets = compositionLocalOf { PaddingValues(0.dp) }
+
+/**
+ * Platform-only settings the entry point contributes to the shared settings
+ * pane (e.g. the macOS dock / menu-bar choice), rendered above the shared
+ * sections. Null when the platform has none.
+ */
+val LocalPlatformSettings = staticCompositionLocalOf<(@Composable () -> Unit)?> { null }
