@@ -13,8 +13,7 @@ cask "klardrop-nightly" do
   version "@VERSION@"
   sha256 "@SHA256@"
 
-  url "https://github.com/carlonzo/klardrop/releases/download/nightly/@DMG@",
-      verified: "github.com/carlonzo/klardrop/"
+  url "https://github.com/carlonzo/klardrop/releases/download/nightly/@DMG@"
   name "Klardrop (nightly)"
   desc "Nightly tester build of Klardrop — share files and clipboard with nearby devices"
   homepage "https://github.com/carlonzo/klardrop"
