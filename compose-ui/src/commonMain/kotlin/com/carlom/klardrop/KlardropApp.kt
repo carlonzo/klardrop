@@ -22,6 +22,7 @@ import com.carlom.klardrop.theme.AppTheme
 import com.carlom.klardrop.theme.KdTheme
 import com.carlom.klardrop.theme.LocalContentInsets
 import com.carlom.klardrop.theme.LocalIsDesktop
+import com.carlom.klardrop.theme.LocalPlatformSettings
 
 @Composable
 fun KlardropApp(
@@ -31,6 +32,7 @@ fun KlardropApp(
   pendingFiles: List<String>? = null,
   onClearPendingFiles: () -> Unit = {},
   onDiscoveryControllerAvailable: (DiscoveryController) -> Unit = {},
+  platformSettings: (@Composable () -> Unit)? = null,
 ) {
   val uiDependencies = remember { UiDependencies(klardrop.commonComponent) }
   val visibleDevicesController = remember { uiDependencies.discoveryController() }
@@ -59,6 +61,7 @@ fun KlardropApp(
       CompositionLocalProvider(
         LocalIsDesktop provides isDesktop,
         LocalContentInsets provides contentInsets,
+        LocalPlatformSettings provides platformSettings,
       ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
           KlardropNavigator(

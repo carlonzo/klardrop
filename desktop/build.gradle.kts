@@ -32,6 +32,8 @@ kotlin {
         // show the live device list from this process. macOS/Windows keep the
         // Compose Desktop AWT tray.
         implementation(deps.nucleus.composenativetray)
+        // macOS dock icon toggling (NSApplication activation policy) via the ObjC runtime.
+        implementation(deps.jna)
       }
     }
     val jvmTest by getting {
