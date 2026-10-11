@@ -52,7 +52,7 @@ kotlinx-io-okio = { module = "org.jetbrains.kotlinx:kotlinx-io-okio", version.re
 
 
 
-jmdns = { module = "org.jmdns:jmdns", version = "3.6.3" }
+jmdns = { module = "org.jmdns:jmdns", version = "3.6.4" }
 dbus-java-core = { module = "com.github.hypfvieh:dbus-java-core", version.ref = "dbus-java" }
 dbus-java-transport-native-unixsocket = { module = "com.github.hypfvieh:dbus-java-transport-native-unixsocket", version.ref = "dbus-java" }
 jna = { module = "net.java.dev.jna:jna", version = "5.19.1" }
