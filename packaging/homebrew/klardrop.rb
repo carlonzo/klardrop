@@ -15,8 +15,7 @@ cask "klardrop" do
   version "@VERSION@"
   sha256 "@SHA256@"
 
-  url "https://github.com/carlonzo/klardrop/releases/download/v#{version}/klardrop-#{version}.dmg",
-      verified: "github.com/carlonzo/klardrop/"
+  url "https://github.com/carlonzo/klardrop/releases/download/v#{version}/klardrop-#{version}.dmg"
   name "Klardrop"
   desc "Share files and clipboard with nearby devices over the local network (AirDrop-style)"
   homepage "https://github.com/carlonzo/klardrop"
