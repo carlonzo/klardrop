@@ -38,10 +38,20 @@ jobs:
 
       - name: Apply variant
         run: |
-          case "${{ matrix.variant }}" in
-            no-filekit) sed -i '/export(deps.filekit.core) {/,/^    }/d' presentation/build.gradle.kts ;;
-            no-common-export) sed -i '/export(project(":klardrop-common")) {/,/^    }/d' presentation/build.gradle.kts ;;
-          esac
+          python3 - "${{ matrix.variant }}" <<'PY'
+          import sys
+          variant = sys.argv[1]
+          marker = {"no-filekit": "export(deps.filekit.core) {",
+                    "no-common-export": 'export(project(":klardrop-common")) {'}.get(variant)
+          p = "presentation/build.gradle.kts"
+          lines = open(p).read().split("\n")
+          if marker:
+              i = next(n for n, l in enumerate(lines) if marker in l)
+              j = next(n for n in range(i + 1, len(lines)) if lines[n] == "    }")
+              del lines[i:j + 1]
+          open(p, "w").write("\n".join(lines))
+          print("variant", variant, "applied:", marker is not None)
+          PY
           grep -n -A3 "swiftExport {" presentation/build.gradle.kts
 
       - name: Run Xcode build (drives embedSwiftExportForXcode)
