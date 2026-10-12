@@ -4,6 +4,13 @@ plugins {
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.android.kmp.library)
   alias(deps.plugins.kotlin.serialization)
+  // SKIE must run on the module that *links* the framework, not the one that owns the
+  // types. The macosArm64 framework below is the `presentation` module KlardropMac
+  // imports, and the Swift it shares with iOS is written against SKIE's output
+  // (`onEnum(of:)`, StateFlow as AsyncSequence, real Swift enums). Without this the
+  // framework links fine and the app fails with "cannot find 'onEnum' in scope".
+  // Keep the version in step with :presentation's.
+  id("co.touchlab.skie") version "0.10.15"
 }
 
 kotlin {
@@ -35,23 +42,34 @@ kotlin {
       )
     }
   }
-  // The native macOS app (iosApp/KlardropMac, SwiftUI + presentation.framework) is a
-  // *separate framework*, not a JVM app: :presentation's KlardropBootstrap cannot reference
-  // ControlPlane because :control-plane already depends on :presentation, so wiring the host
-  // from :presentation would be a dependency cycle. This target is the way out — a second,
-  // static KMP framework that the Xcode target links alongside presentation.framework and that
-  // MacApp.swift imports to start/bind the shared server. It is not dead weight: it is the
+  // The native macOS app (iosApp/KlardropMac, SwiftUI) is not a JVM app: it links a Kotlin
+  // framework. :presentation's KlardropBootstrap cannot reference ControlPlane because
+  // :control-plane already depends on :presentation, so wiring the host from :presentation
+  // would be a dependency cycle. This target is the way out — :control-plane sits downstream
+  // of both, so it is the module that produces the one framework the Xcode target links, and
+  // MacApp.swift starts/binds the shared server through it. It is not dead weight: it is the
   // exact code the shipped macOS app runs.
   macosArm64 {
     binaries.framework {
-      baseName = "control_plane"
+      // Named `presentation` because this is the ONLY Kotlin framework KlardropMac
+      // links. It embeds :presentation and :klardrop-common, so the ~20 Swift files
+      // shared with iOS keep resolving `import presentation` unchanged, and
+      // `ControlPlane` simply appears in that module.
+      //
+      // Naming it anything else would mean linking two static Kotlin/Native
+      // frameworks that share Kotlin types, which is unsound: the same ObjC class
+      // becomes visible through two Swift modules, which is what made MacApp.swift
+      // fail with "'KlardropBootstrap' is ambiguous for type lookup". ld64's lazy
+      // archive-member extraction and `-undefined dynamic_lookup` had been hiding
+      // that at link time rather than removing it.
+      baseName = "presentation"
       isStatic = true
-      // The framework's public API is `ControlPlane.start(Klardrop)` and
-      // `bind(DiscoveryController, Klardrop)` — types this module does not own.
-      // Without `export` the generated header cannot name them and MacApp.swift
-      // fails to compile; :presentation exports :klardrop-common for the same
-      // reason.
+      // Both exports are required by the framework's public API: `start(Klardrop)`
+      // and `bind(DiscoveryController, Klardrop)` name types this module does not
+      // own. Without `export` the generated header cannot name them and MacApp.swift
+      // fails to compile.
       export(project(":presentation"))
+      export(project(":klardrop-common"))
     }
   }
   applyDefaultHierarchyTemplate()
@@ -84,12 +102,12 @@ kotlin {
   sourceSets {
     commonMain {
       dependencies {
-        implementation(project(":klardrop-common"))
-        // `api`, not `implementation`: the macosArm64 framework above exports
-        // :presentation, and an exported dependency must be an API dependency
-        // of its source set. `implementation` links the tests fine but fails
+        // `api`, not `implementation`: the macosArm64 framework above exports both,
+        // and an exported dependency must be an API dependency of its source set.
+        // `implementation` links the tests fine but fails
         // :control-plane:linkDebugFrameworkMacosArm64 with "not specified as
         // API-dependencies of a corresponding source set".
+        api(project(":klardrop-common"))
         api(project(":presentation"))
         implementation(deps.kotlinx.coroutines.core)
         implementation(deps.kotlinx.serialization.json)

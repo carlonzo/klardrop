@@ -47,8 +47,9 @@ private fun resolveControlPort(): Int =
  * [controlPort] is the one piece of host wiring this class owns for macOS: it is what makes
  * `ApplicationInfo.controlPort` non-null, which is the switch `ControlPlane.start` looks at. The
  * server itself is *not* started here — `:control-plane` depends on `:presentation`, so this
- * class cannot reference it. MacApp.swift starts it through the `control_plane` framework
- * instead; see the comment there.
+ * class cannot reference it. MacApp.swift starts it instead: `:control-plane` builds the one
+ * framework the macOS app links, so `ControlPlane` sits beside this class there; see the
+ * comment in MacApp.swift.
  */
 class KlardropBootstrap(controlPort: Int = resolveControlPort()) {
 
