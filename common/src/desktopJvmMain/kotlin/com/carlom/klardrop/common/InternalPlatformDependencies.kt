@@ -59,7 +59,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
   actual fun bleTransport(): BleTransport = bleTransport
 
   actual fun clipboardReaderWriter(): ClipboardReaderWriter {
-    return ClipboardReaderWriter()
+    return ClipboardReaderWriter(useInMemory = applicationInfo.disableSystemClipboard)
   }
 
   actual fun connectionInfoJoiner(): ConnectionInfoJoiner {

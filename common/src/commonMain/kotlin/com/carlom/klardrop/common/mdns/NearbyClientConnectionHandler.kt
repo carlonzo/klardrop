@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.FileManager
 import com.carlom.klardrop.common.communication.MessengerSendProgress
 import com.carlom.klardrop.common.communication.MessengerSendProgress.*
 import com.carlom.klardrop.common.communication.message.FileMessage
+import com.carlom.klardrop.common.communication.message.NearbyTransferRejectedException
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.communication.message.SignedSendMessageRequest
 import com.carlom.klardrop.common.communication.message.SimpleSendMessageRequest
@@ -99,6 +100,13 @@ class NearbyClientConnectionHandler(
         }
       }
 
+    } catch (e: NearbyTransferRejectedException) {
+      // A recipient refusal is a terminal user decision, and Messenger owns the single terminal
+      // event for it (the same rule ConnectionMessenger follows). Emitting here would win the
+      // race — `untilCompleted()` closes at the first terminal — and the caller would only ever
+      // see an unclassified failure.
+      log("NearbyClientConnectionHandler", "Transfer was rejected by the recipient")
+      throw e
     } catch (e: Exception) {
       log("NearbyClientConnectionHandler", "Transfer failed", e)
       sendFlow.emit(MessengerSendProgress.Error(e.message ?: "Unknown error"))
@@ -181,7 +189,7 @@ class NearbyClientConnectionHandler(
           log("NearbyClientConnectionHandler", "Transfer accepted by receiver")
           break
         } else {
-          throw IllegalStateException("Transfer rejected from the receiver $frame")
+          throw NearbyTransferRejectedException("Transfer rejected from the receiver")
         }
 
       }
@@ -356,7 +364,9 @@ class NearbyClientConnectionHandler(
     // read connection response
     val connectionResponseFrame = readChannel.readByteArray().let { OfflineFrame.ADAPTER.decode(it) }
     require(connectionResponseFrame.v1?.type == V1Frame.FrameType.CONNECTION_RESPONSE) { "Invalid frame type. Expected CONNECTION_RESPONSE" }
-    require(connectionResponseFrame.v1?.connection_response?.response == ConnectionResponseFrame.ResponseStatus.ACCEPT) { "Connection rejected" }
+    if (connectionResponseFrame.v1?.connection_response?.response != ConnectionResponseFrame.ResponseStatus.ACCEPT) {
+      throw NearbyTransferRejectedException("Connection rejected")
+    }
 
     // from now on we are encrypted
 

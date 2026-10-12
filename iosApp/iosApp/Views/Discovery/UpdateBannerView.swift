@@ -133,6 +133,9 @@ struct UpdateBannerView: View {
             return ("Downloading update\(pctStr)", nil, nil)
         case .ready:
             return ("Update downloaded \u{2014} restart to apply.", "Restart", onRestart)
+        case .applying:
+            // Restarting the app to apply update; no action button
+            return ("Restarting\u{2026}", nil, nil)
         default:
             return (fallbackDetail, fallbackLabel, {
                 if onAction(action) { copied = true }

@@ -85,6 +85,9 @@ fun UpdateBanner(
     is InstallProgress.Ready ->
       Triple("Update downloaded — restart to apply.", "Restart", onRestart)
 
+    is InstallProgress.Applying ->
+      Triple("Restarting…", null, null)
+
     else -> Triple(
       fallbackDetail,
       fallbackLabel,

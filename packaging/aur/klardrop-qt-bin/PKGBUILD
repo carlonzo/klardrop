@@ -1,0 +1,66 @@
+# Maintainer: Carlo Marinangeli <carlo.marinangeli@gmail.com>
+#
+# The release workflow renders @VERSION@, @SHA256_X64@ and @SHA256_ARM64@ from
+# the git tag and the REAL per-arch sha256 digests of the published native
+# release tarballs, then pushes this package to the AUR as `klardrop-qt-bin`.
+# A placeholder left unrendered fails the release. The push itself is gated only
+# on the AUR repository existing (`git ls-remote`); a repository that does not
+# exist yet is skipped with a warning, never a failed release.
+#
+# Depends on the native Linux package (`klardrop-native-bin`) and system Qt 6
+# runtime. That dependency is what supplies the daemon and the CLI: this package
+# deliberately ships only the Qt pair, never a copy of `klardrop` or
+# `klardrop-engine` (a second copy of either is how a client ends up beside a
+# mismatched engine).
+# Installs the standalone Qt UI (`/usr/bin/klardrop-qt`), the user desktop launcher
+# (`/usr/bin/klardrop-qt-launcher`), desktop entry, and icons.
+
+pkgname=klardrop-qt-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Standalone Qt Quick desktop frontend for the Klardrop native engine"
+arch=('x86_64' 'aarch64')
+url="https://github.com/carlonzo/klardrop"
+license=('Apache-2.0')
+# `=${pkgver}`, not a bare name: this package exists to sit beside the engine and
+# the CLI, and an unpinned dependency lets a user end up with this frontend from
+# release N driving the engine from release N+1 — the mixed-version state the
+# per-release pairing exists to prevent.
+depends=("klardrop-native-bin=${pkgver}" 'qt6-base' 'qt6-declarative')
+optdepends=('qt6-wayland: native Wayland support'
+            'hicolor-icon-theme: application icon')
+provides=('klardrop-qt')
+conflicts=('klardrop-qt')
+options=('!strip')
+
+source_x86_64=("klardrop-native-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkgver}/klardrop-native-linux-x64.tar.gz")
+sha256sums_x86_64=('@SHA256_X64@')
+
+source_aarch64=("klardrop-native-${pkgver}-aarch64.tar.gz::${url}/releases/download/v${pkgver}/klardrop-native-linux-arm64.tar.gz")
+sha256sums_aarch64=('@SHA256_ARM64@')
+
+package() {
+  local tarball_arch
+  case "${CARCH}" in
+    x86_64)  tarball_arch="x64" ;;
+    aarch64) tarball_arch="arm64" ;;
+    *) error "Unsupported architecture: ${CARCH}"; return 1 ;;
+  esac
+
+  cd "${srcdir}/klardrop-native-linux-${tarball_arch}"
+
+  # Standalone Qt frontend binary and desktop launcher
+  install -Dm755 bin/klardrop-qt "${pkgdir}/usr/bin/klardrop-qt"
+  install -Dm755 bin/klardrop-qt-launcher "${pkgdir}/usr/bin/klardrop-qt-launcher"
+
+  # Desktop entry
+  install -Dm644 share/klardrop/applications/klardrop.desktop "${pkgdir}/usr/share/applications/klardrop.desktop"
+
+  # Application icons
+  for s in 128 256; do
+    if [ -f "share/klardrop/icons/${s}x${s}/klardrop.png" ]; then
+      install -Dm644 "share/klardrop/icons/${s}x${s}/klardrop.png" \
+        "${pkgdir}/usr/share/icons/hicolor/${s}x${s}/apps/klardrop.png"
+    fi
+  done
+}

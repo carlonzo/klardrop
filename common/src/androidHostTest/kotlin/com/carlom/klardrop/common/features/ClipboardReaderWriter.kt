@@ -1,14 +1,18 @@
 package com.carlom.klardrop.common.features
 
+import kotlinx.coroutines.flow.Flow
+
 // Test-only implementation for ClipboardReaderWriter without requiring Android Context
-class ClipboardReaderWriter() {
+class ClipboardReaderWriter() : ClipboardSource {
   private var clipboard: String = ""
 
-  fun read(): String = clipboard
+  override fun read(): String = clipboard
 
-  fun readForSync(): String = read()
+  override fun readForSync(): String = read()
 
-  fun write(text: String) {
+  override fun write(text: String) {
     clipboard = text
   }
+
+  override fun changeSignals(): Flow<Unit>? = null
 }

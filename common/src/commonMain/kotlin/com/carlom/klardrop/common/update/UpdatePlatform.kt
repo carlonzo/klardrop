@@ -25,3 +25,18 @@ expect fun detectInstallChannel(): InstallChannel
  * in-app update checks (Android/iOS update through their stores).
  */
 expect fun createUpdateManifestFetcher(): UpdateManifestFetcher?
+
+/**
+ * The platform's release asset key in latest.json ("linux-tarball" on JVM,
+ * "linux-native-x64"/"linux-native-arm64" on native linux, per runtime arch).
+ */
+expect val platformUpdateAssetKey: String
+
+/**
+ * Detect the platform's installation flavor flag for fallback reinstall commands
+ * (e.g. "--qt", "--omarchy", or "--native" on native Linux). Returns null when
+ * not applicable (JVM / mobile).
+ */
+expect fun detectPlatformFlavorFlag(): String?
+
+

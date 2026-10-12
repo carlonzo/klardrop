@@ -43,7 +43,7 @@ dependencies {
   implementation(deps.androidx.core)
 
   debugImplementation(compose.uiTooling)
-  debugImplementation(project(":debug-control"))
+  debugImplementation(project(":control-plane"))
   implementation(compose.preview)
 
   testImplementation(deps.junit4)

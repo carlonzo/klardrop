@@ -33,11 +33,15 @@ import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.log
 import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.path
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
@@ -147,6 +151,9 @@ class DiscoveryController(
   fun setBackgroundDiscoveryEnabled(enabled: Boolean) {
     controllerScope.launch { localPropertiesRepository.saveBackgroundDiscoveryEnabled(enabled) }
   }
+
+  private val _outgoingTransfers = MutableSharedFlow<OutgoingTransfer>(extraBufferCapacity = 64)
+  val outgoingTransfers: SharedFlow<OutgoingTransfer> = _outgoingTransfers.asSharedFlow()
 
   // Live pairing requests keyed by deviceId so a notification action delivered
   // out-of-band (the user tapping Accept on a backgrounded notification) can
@@ -298,48 +305,163 @@ class DiscoveryController(
     }
   }
 
+  /**
+   * Starts a tracked text send and returns without waiting for delivery, so a control-plane
+   * caller can answer a submission immediately with a stable transfer id.
+   *
+   * [register] runs after the transfer is minted and BEFORE it is emitted on [outgoingTransfers]:
+   * the flow has no replay, so anything that observes this transfer must already be able to
+   * resolve it. [sendTextTracked] is the plain blocking variant.
+   */
+  suspend fun startTrackedTextSend(
+    deviceId: String,
+    text: String,
+    register: suspend (OutgoingTransfer) -> Unit = {},
+  ): OutgoingTransfer {
+    val message = TextMessage(text = text)
+    val flow = messenger.send(deviceId, message.toSimpleSendRequest()).untilCompleted()
+    val transfer = OutgoingTransfer(
+      id = message.id.toString(),
+      deviceId = deviceId,
+      fileName = message.text,
+      totalSize = 0L,
+      flow = flow,
+      kind = TRANSFER_KIND_TEXT,
+    )
+    register(transfer)
+    _outgoingTransfers.tryEmit(transfer)
+    coroutines.appScope.launch {
+      showDevicesHelper.collectProgress(flow, deviceId)
+    }
+    return transfer
+  }
+
+  /** Blocking variant of [startTrackedTextSend]: the same tracked send, awaited to a terminal
+   *  progress value, returning the minted message id. */
+  suspend fun sendTextTracked(deviceId: String, text: String): String {
+    val transfer = startTrackedTextSend(deviceId, text)
+    transfer.flow.lastOrNull()
+    return transfer.id
+  }
+
   fun sendFiles(
     deviceId: String,
     files: List<PlatformFile>,
     onProgress: ((MessengerSendProgress) -> Unit)? = null,
   ) {
     coroutines.appScope.launch {
-      files.forEach { file ->
+      startPreparedFiles(deviceId, prepareOutgoingFiles(files), onProgress)
+    }
+  }
 
-        val fileData = runCatching { platformFileSystem.getResolvedFileData(file) }
-          .onFailure { log("DiscoveryController", "Unable to resolve file at path $file. File cannot be sent!", it) }
-          .getOrNull() ?: return@forEach
-
-        val flow = messenger.send(
-          deviceId, FileMessage(
+  /**
+   * Resolves every submitted file and mints its [FileMessage], reporting a human-readable
+   * [PreparedFile.error] for each path that cannot be resolved instead of dropping it.
+   * Returns one entry per submitted file, in order. Never throws.
+   */
+  fun prepareOutgoingFiles(files: List<PlatformFile>): List<PreparedFile> =
+    files.map { file ->
+      val resolved = runCatching { platformFileSystem.getResolvedFileData(file) }
+      resolved.exceptionOrNull()?.let {
+        log(
+          "DiscoveryController",
+          "Unable to resolve file at path ${file.path}. File cannot be sent!",
+          it,
+        )
+      }
+      val fileData = resolved.getOrNull()
+      if (fileData == null) {
+        val cause = resolved.exceptionOrNull()
+        PreparedFile(
+          file = file,
+          path = file.path,
+          fileName = null,
+          message = null,
+          error = "cannot resolve file at ${file.path}: " +
+            (cause?.message ?: cause?.let { it::class.simpleName } ?: "file is not readable"),
+        )
+      } else {
+        PreparedFile(
+          file = file,
+          path = file.path,
+          fileName = fileData.fileName,
+          message = FileMessage(
             fileData.fileName,
             fileData.fileSize,
             fileData.mimeType
-          ).toSendRequest(file)
-        ).untilCompleted()
+          ),
+          error = null,
+        )
+      }
+    }
 
-        if (onProgress != null) {
-          launch {
-            flow.collect { progress ->
-              onProgress(progress)
-            }
+  /**
+   * Sends already-prepared files one after another on the calling coroutine (use it from
+   * `coroutines.appScope.launch` for the historical fire-and-forget behavior). Entries whose
+   * [PreparedFile.error] is set are skipped — the caller that prepared them reports them.
+   */
+  suspend fun startPreparedFiles(
+    deviceId: String,
+    prepared: List<PreparedFile>,
+    onProgress: ((MessengerSendProgress) -> Unit)? = null,
+  ) {
+    prepared.forEach { entry ->
+      val fileMessage = entry.message ?: return@forEach
+      val file = entry.file
+
+      val flow = messenger.send(
+        deviceId, fileMessage.toSendRequest(file)
+      ).untilCompleted()
+
+      _outgoingTransfers.tryEmit(
+        OutgoingTransfer(
+          id = fileMessage.id.toString(),
+          deviceId = deviceId,
+          fileName = entry.fileName.orEmpty(),
+          totalSize = fileMessage.fileSize,
+          flow = flow,
+        )
+      )
+
+      if (onProgress != null) {
+        coroutines.appScope.launch {
+          flow.collect { progress ->
+            onProgress(progress)
           }
         }
-        showDevicesHelper.collectProgress(flow, deviceId)
       }
+      showDevicesHelper.collectProgress(flow, deviceId)
     }
   }
 
   override fun onDeviceClick(deviceUi: DeviceUi) {
     log("DiscoveryController", "on device click for chat: ${deviceUi.deviceName}")
+    markDeviceRead(deviceUi.deviceId)
+  }
 
+  /** Marks [deviceId]'s messages read on disk and clears its unread flag in [screenStateFlow].
+   *  The DB write is fire-and-forget: the UI flag flips immediately, matching how the Compose
+   *  chat screen has always behaved on a device click. Callers that need the DB write to have
+   *  landed before they return (e.g. the debug HTTP API) should use [markDeviceReadAndWait]. */
+  fun markDeviceRead(deviceId: String) {
     controllerScope.launch {
-      messageRepository.markMessagesAsRead(deviceUi.deviceId)
+      messageRepository.markMessagesAsRead(deviceId)
     }
+    clearUnreadFlag(deviceId)
+  }
 
+  /** Same effect as [markDeviceRead], but awaits the DB write before clearing the unread flag,
+   *  so a caller that awaits this suspend fun can rely on the DB being marked read once it
+   *  returns. */
+  suspend fun markDeviceReadAndWait(deviceId: String) {
+    messageRepository.markMessagesAsRead(deviceId)
+    clearUnreadFlag(deviceId)
+  }
+
+  private fun clearUnreadFlag(deviceId: String) {
     screenStateFlow.update { currentState ->
       val updatedDevices = currentState.devices.map {
-        if (it.deviceId == deviceUi.deviceId) {
+        if (it.deviceId == deviceId) {
           it.copy(hasUnreadMessages = false)
         } else it
       }
@@ -796,6 +918,38 @@ class DiscoveryController(
       )
   }
 }
+
+/** [OutgoingTransfer.kind] of a file send — the historical default. */
+const val TRANSFER_KIND_FILE = "file"
+
+/** [OutgoingTransfer.kind] of a text or clipboard send. */
+const val TRANSFER_KIND_TEXT = "text"
+
+/**
+ * One observed outgoing transfer. [kind] is [TRANSFER_KIND_FILE] for a file send and
+ * [TRANSFER_KIND_TEXT] for a text/clipboard send; it defaults to the file case so every
+ * existing construction site keeps its exact previous meaning.
+ */
+data class OutgoingTransfer(
+  val id: String,
+  val deviceId: String,
+  val fileName: String,
+  val totalSize: Long,
+  val flow: Flow<MessengerSendProgress>,
+  val kind: String = TRANSFER_KIND_FILE,
+)
+
+/**
+ * A submitted file resolved for sending: [message] is the minted [FileMessage], or null with a
+ * human-readable [error] when the path could not be resolved. Nothing is ever dropped silently.
+ */
+data class PreparedFile(
+  val file: PlatformFile,
+  val path: String,
+  val fileName: String?,
+  val message: FileMessage?,
+  val error: String?,
+)
 
 data class DiscoveryScreenState(
   val devices: List<DeviceUi> = emptyList(),

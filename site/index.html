@@ -708,13 +708,13 @@
       <div class="linux-hero-header">
         <span class="linux-pill">Universal Installer · Recommended</span>
         <h3>One-line self-updating install</h3>
-        <p class="linux-hero-desc">Installs Klardrop (jars + launcher; uses your system Java 21+), registers desktop shortcuts and icons, and manages in-place updates automatically.</p>
+        <p class="linux-hero-desc">Installs native Klardrop with desktop GUI (standalone Qt Quick interface by default; Omarchy shell integration detected automatically). Preflight verifies dependencies with actionable install hints. No Java or JVM required.</p>
       </div>
       <div class="code linux-code">
         <code>curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash</code>
         <button class="copy" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
       </div>
-      <p class="linux-note">Distro-agnostic, installs to <code>~/.local</code> (no root required) and self-updates in place. Or run with <code>sudo</code> for a system-wide <code>/opt</code> install.</p>
+      <p class="linux-note">Installs per-user to <code>~/.local</code> (no root required) and self-updates in place. Ubuntu 24.04 / Qt 6.4 baseline; other distros require compatible native libraries and Qt 6 modules, checked before install (no verified all-distro claim). Legacy JVM flavor available via <code>--jvm</code>.</p>
     </div>
 
     <!-- Distro Packages Grid -->
@@ -724,13 +724,13 @@
         <div class="linux-pkg-head">
           <div class="linux-pkg-title">
             <h3>Arch Linux</h3>
-            <span class="linux-pkg-tag">AUR · <b>klardrop-bin</b></span>
+            <span class="linux-pkg-tag">AUR · <b>Legacy JVM (Compat)</b></span>
           </div>
           <div class="linux-pkg-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5L2.2 21.5h4.6l2.1-4.2c1.2.7 2.2 1.1 3.3 1.1 1.1 0 2.1-.4 3.3-1.1l2.1 4.2h4.6L12 2.5zm0 5.8l2.9 5.8c-.9-.4-1.9-.7-2.9-.7s-2 .3-2.9.7L12 8.3z"/></svg>
           </div>
         </div>
-        <p class="linux-pkg-desc">Maintained in the Arch User Repository as <code>klardrop-bin</code> (<code>java-runtime&gt;=21</code>). Includes desktop integration and updates via your AUR helper.</p>
+        <p class="linux-pkg-desc">The published AUR package <code>klardrop-bin</code> currently packages the legacy JVM desktop app (requires <code>java-runtime&gt;=21</code>). Maintained for compatibility until native packages are migrated. For native Qt/Omarchy builds, use the universal installer.</p>
         <div class="linux-pkg-action">
           <div class="linux-cmd-wrap">
             <div class="linux-cmd-label">Install command</div>
@@ -739,7 +739,7 @@
               <button class="copy" type="button" data-copy="yay -S klardrop-bin" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
             </div>
           </div>
-          <p class="linux-card-hint">AUR package registration pending · Install via one-line script below</p>
+          <p class="linux-card-hint">Published AUR package remains legacy JVM · Use universal script for native GUI</p>
         </div>
       </div>
 
@@ -748,22 +748,22 @@
         <div class="linux-pkg-head">
           <div class="linux-pkg-title">
             <h3>Debian · Ubuntu · Mint</h3>
-            <span class="linux-pkg-tag">System JRE <b>21+</b> · x86_64</span>
+            <span class="linux-pkg-tag">Native · <b>Qt GUI (Default)</b></span>
           </div>
           <div class="linux-pkg-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="15.5" cy="6" r="1.5" fill="currentColor"/><circle cx="15.5" cy="18" r="1.5" fill="currentColor"/><path d="M6.8 12a5.5 5.5 0 0 0 6.7 5.3M13.5 6.7a5.5 5.5 0 0 1 0 10.6M13.5 6.7A5.5 5.5 0 0 0 6.8 12"/></svg>
           </div>
         </div>
-        <p class="linux-pkg-desc">Uses the universal installer. Install a JRE 21 or newer first; the launcher execs system <code>java</code>.</p>
+        <p class="linux-pkg-desc">Installs native Klardrop with standalone Qt Quick desktop GUI (no Java required) via the universal installer. Ubuntu 24.04 / Qt 6.4 baseline; installer preflight checks required runtime libraries before install (no physical QA claimed across every distribution variant).</p>
         <div class="linux-pkg-action">
           <div class="linux-cmd-wrap">
-            <div class="linux-cmd-label">JRE, then install</div>
+            <div class="linux-cmd-label">Universal install command</div>
             <div class="code">
-              <code>sudo apt install openjdk-21-jre</code>
-              <button class="copy" type="button" data-copy="sudo apt install openjdk-21-jre" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+              <code>curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash</code>
+              <button class="copy" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
             </div>
           </div>
-          <p class="linux-card-hint">Then run the one-line installer above</p>
+          <p class="linux-card-hint">Installs to ~/.local · Runtime preflight checks dependencies automatically</p>
         </div>
       </div>
 
@@ -772,44 +772,44 @@
         <div class="linux-pkg-head">
           <div class="linux-pkg-title">
             <h3>Fedora · RHEL · openSUSE</h3>
-            <span class="linux-pkg-tag">System JRE <b>21+</b> · x86_64</span>
+            <span class="linux-pkg-tag">Native · <b>Qt GUI (Default)</b></span>
           </div>
           <div class="linux-pkg-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16.5 9.4-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12.5 20.71 7"/><line x1="12" y1="22.5" x2="12" y2="12.5"/></svg>
           </div>
         </div>
-        <p class="linux-pkg-desc">Uses the universal installer. Install a JRE 21 or newer first; the launcher execs system <code>java</code>.</p>
+        <p class="linux-pkg-desc">Installs native Klardrop with standalone Qt Quick desktop GUI (no Java required) via the universal installer. Requires compatible native libraries and Qt 6 modules checked by installer preflight before install (Ubuntu 24.04 baseline; no physical QA claimed on every RPM distribution).</p>
         <div class="linux-pkg-action">
           <div class="linux-cmd-wrap">
-            <div class="linux-cmd-label">JRE, then install</div>
+            <div class="linux-cmd-label">Universal install command</div>
             <div class="code">
-              <code>sudo dnf install java-21-openjdk</code>
-              <button class="copy" type="button" data-copy="sudo dnf install java-21-openjdk" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+              <code>curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash</code>
+              <button class="copy" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
             </div>
           </div>
-          <p class="linux-card-hint">Then run the one-line installer above</p>
+          <p class="linux-card-hint">Installs to ~/.local · Runtime preflight checks dependencies automatically</p>
         </div>
       </div>
 
-      <!-- Standalone Tarball (Any Distro) -->
+      <!-- Legacy JVM Tarball -->
       <div class="card linux-pkg-card">
         <div class="linux-pkg-head">
           <div class="linux-pkg-title">
-            <h3>Standalone Tarball</h3>
-            <span class="linux-pkg-tag">Portable <b>.tar.gz</b> · Any Distro</span>
+            <h3>Legacy JVM Tarball</h3>
+            <span class="linux-pkg-tag">Compatibility <b>.tar.gz</b> · x86_64</span>
           </div>
           <div class="linux-pkg-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
           </div>
         </div>
-        <p class="linux-pkg-desc">Portable archive of jars plus a launcher that execs system Java 21+. Extract and run; no bundled JRE, no root required.</p>
+        <p class="linux-pkg-desc">Legacy standalone archive of jars plus a launcher that execs system Java 21+. Maintained for explicit <code>--jvm</code> compatibility until separate package migration.</p>
         <div class="linux-pkg-action">
           <a class="btn btn-primary linux-dl-btn" id="linux-tarball-btn" href="https://github.com/carlonzo/klardrop/releases/latest/download/klardrop-linux-x64.tar.gz" rel="noopener">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <span>Download .tar.gz</span><span class="linux-size" id="linux-tarball-size"></span>
+            <span>Download .tar.gz (JVM)</span><span class="linux-size" id="linux-tarball-size"></span>
           </a>
           <div class="linux-cmd-wrap">
-            <div class="linux-cmd-label">Extract &amp; run</div>
+            <div class="linux-cmd-label">Extract &amp; run (requires Java 21+)</div>
             <div class="code">
               <code>tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop-linux-x64/klardrop/bin/klardrop</code>
               <button class="copy" type="button" data-copy="tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop-linux-x64/klardrop/bin/klardrop" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
@@ -906,6 +906,13 @@
     const CURL_CMD      = `curl -fsSL ${INSTALL_SH} | bash`;
     const CURL_NIGHTLY  = `curl -fsSL ${INSTALL_SH} | bash -s -- --nightly`;
     const NIGHTLY_TARBALL = `https://github.com/${REPO}/releases/download/nightly/klardrop-linux-x64.tar.gz`;
+    // What the Linux install actually puts on PATH: two binaries, two jobs. The
+    // `klardrop` name belongs to the native CLI; the daemon is `klardrop-engine`,
+    // and that is what the `klardrop.service` user unit starts. The self-updater
+    // replaces the pair together, so a client is never left beside an engine from
+    // a different release.
+    const LINUX_BINARIES_NOTE = "Installs two binaries into <code>~/.local/bin</code>: <code>klardrop</code>, the native CLI you type, and <code>klardrop-engine</code>, the daemon the <code>klardrop.service</code> user service runs. Updates replace both together, so a CLI is never left next to an engine from another release.";
+    const MACOS_CLI_NOTE = "The disk image also ships the native <code>klardrop</code> CLI, in the <code>Klardrop CLI</code> folder.";
     // Mobile stores — replace the placeholder IDs to light these buttons up (greyed out until then).
     const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.carlom.klardrop";
     const APP_STORE_URL  = "https://apps.apple.com/app/id<APPSTORE_ID>";
@@ -968,25 +975,27 @@
       return `<div class="mtabs">${heads}</div>${panes}`;
     }
     // a Linux download channel: install command + tarball link. `packages` adds the
-    // AUR command (Linux ships a system-JRE tarball; no jpackage .deb/.rpm).
+    // AUR command (AUR currently carries the legacy JVM package).
     function linuxChannel(cmd, tarballUrl, size, note, packages, isNightly){
       let extra = "";
       if (packages) {
-        extra = `<div class="modal-or">or use your package manager</div>`
-          + `<div><div class="opt-label">Arch Linux (AUR)</div>${codeBlock(AUR_CMD)}</div>`
+        extra = `<div class="modal-or">or legacy JVM package manager</div>`
+          + `<div><div class="opt-label">Arch Linux (AUR) · Legacy JVM (Java 21 required · x64)</div>${codeBlock(AUR_CMD)}</div>`
           + `<div style="text-align:center;margin-top:6px;"><a href="#linux" class="dl-note" style="color:var(--accent-text);text-decoration:underline;" onclick="document.getElementById('dlModal').classList.remove('open');document.body.style.overflow=''">View all Linux packages &amp; commands →</a></div>`;
       }
       return `<div><div class="opt-label">Install with one command</div>${codeBlock(cmd)}`
         + `<p class="dl-note" style="text-align:left">${note}</p></div>`
-        + `<div class="modal-or">or download the tarball</div>`
+        + `<p class="dl-note" style="text-align:left">${LINUX_BINARIES_NOTE}</p>`
+        + `<div class="modal-or">or download legacy JVM tarball</div>`
         + `<div class="sub-links">`
-        + `<a href="${esc(tarballUrl)}" rel="noopener"><small>Any distro · x64</small>.tar.gz${size}</a>`
+        + `<a href="${esc(tarballUrl)}" rel="noopener"><small>Legacy JVM · Java 21 required · x64</small>.tar.gz${size}</a>`
         + `</div>`
         + extra;
     }
     // a macOS download channel: .dmg button + Homebrew command
     function macChannel(dmgLabel, dmgUrl, note, brew){
       return primaryDownload(dmgLabel, dmgUrl, note)
+        + `<p class="dl-note">${MACOS_CLI_NOTE}</p>`
         + `<div class="modal-or">or install with Homebrew</div>`
         + `<div><div class="opt-label">Homebrew</div>${codeBlock(brew)}</div>`;
     }
@@ -1008,11 +1017,11 @@
           return tabs([
             { id:"stable", label:"Stable", panel: linuxChannel(CURL_CMD,
                 urlFor("linux-tarball", LINUX_TARBALL), sizeFor("linux-tarball"),
-                "Downloads the latest tarball, installs to <code>~/.local</code>, and links the <code>klardrop</code> binary. Uninstall later with the same command plus <code>-s -- --uninstall</code>.",
+                "Downloads the latest native release (Ubuntu 24.04 / Qt 6.4 baseline; preflight checks dependencies), installs to <code>~/.local</code> with desktop GUI, and configures the systemd user service. Uninstall later with the same command plus <code>-s -- --uninstall</code>.",
                 true, false) },
             { id:"nightly", label:"Nightly", panel: linuxChannel(CURL_NIGHTLY,
                 nurlFor("linux-tarball", NIGHTLY_TARBALL), nsizeFor("linux-tarball"),
-                "Latest tester build — newest features, less tested. Installs to <code>~/.local</code> and self-updates on the nightly channel.",
+                "Latest tester build — newest features, less tested. Installs native release to <code>~/.local</code> (Ubuntu 24.04 / Qt 6.4 baseline) and self-updates on the nightly channel.",
                 true, true) },
           ]);
         case "android": {

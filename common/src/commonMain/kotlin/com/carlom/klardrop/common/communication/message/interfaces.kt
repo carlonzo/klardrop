@@ -165,6 +165,13 @@ data class MessageAcknowledgment(
 class TransferRejectedException(val messageId: Int) :
   RuntimeException("Transfer rejected by recipient (messageId=$messageId)")
 
+/**
+ * The Nearby Share counterpart of [TransferRejectedException]: the peer refused the connection
+ * or the transfer outright. It carries no message id because the Quick Share handshake rejects
+ * before a message is minted, so Messenger classifies it from the type alone.
+ */
+class NearbyTransferRejectedException(message: String) : RuntimeException(message)
+
 interface MessageHandler<E : Message, R : SendMessageRequest> {
 
   suspend fun handleIncoming(message: E, readChannel: ByteReadChannel, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>)

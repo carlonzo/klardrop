@@ -26,10 +26,26 @@ Commands:
   reject-pair <deviceId>
   send-text <deviceId> <text>
   send-file <deviceId> <path>
+  send-clipboard <deviceId>
+  qr-share <path> [path...]
+  qr-share-stop
   accept-incoming [--device <id>|--receive <id>]
   reject-incoming --receive <id>
+  history <deviceId> [limit] [before]
+  history-read <deviceId>
+  thumbnail <messageId>
+  retry <fileTransferId>
+  clipboard <text>
+  rename-device <name>
+  settings <json>
   reset-identity
   refresh-permissions
+  notification-dismiss <id>
+  notification-pair <id>
+  incoming-dismiss <receiveId>
+  incoming-open <receiveId>
+  pairing-dialog-dismiss
+  report-problem <description> [name] [email]
 
   wait-for-device <deviceId> [timeout_s]   poll /state until the id appears
   wait-for-reachable <deviceId> [timeout_s]
@@ -60,9 +76,40 @@ ANDROID_ACTIVITY="com.carlom.klardrop.android.MainActivity"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DESKTOP_DATA_DIR="${KLARDROP_HOME:-/tmp/klardrop-e2e-desktop}"
 
+token_for() {
+  case "$1" in
+    desktop)
+      if [[ -n "${KLARDROP_TOKEN:-}" ]]; then
+        echo "$KLARDROP_TOKEN"
+        return
+      fi
+      local f="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/klardrop/control.json"
+      if [[ -f "$f" ]]; then
+        python3 -c "import json; print(json.load(open('$f')).get('token',''))" 2>/dev/null || true
+      fi
+      ;;
+    android)
+      if [[ -n "${KLARDROP_ANDROID_TOKEN:-}" ]]; then
+        echo "$KLARDROP_ANDROID_TOKEN"
+      fi
+      ;;
+  esac
+}
+
 port_for() {
   case "$1" in
-    desktop) echo "$DESKTOP_PORT" ;;
+    desktop)
+      if [[ -n "${KLARDROP_DESKTOP_PORT:-}" ]]; then
+        echo "$KLARDROP_DESKTOP_PORT"
+      else
+        local f="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/klardrop/control.json"
+        if [[ -f "$f" ]]; then
+          python3 -c "import json; print(json.load(open('$f')).get('port','8765'))" 2>/dev/null || echo "8765"
+        else
+          echo "8765"
+        fi
+      fi
+      ;;
     android) echo "$ANDROID_PORT" ;;
     *) echo "unknown target $1" >&2; exit 2 ;;
   esac
@@ -81,7 +128,13 @@ ensure_android_forward() {
 http_get() {
   local path="$1"
   ensure_android_forward
-  curl -fsS --max-time 5 "$(base_url)${path}"
+  local tok
+  tok="$(token_for "$TARGET")"
+  if [[ -n "$tok" ]]; then
+    curl -fsS --max-time 5 -H "Authorization: Bearer $tok" "$(base_url)${path}"
+  else
+    curl -fsS --max-time 5 "$(base_url)${path}"
+  fi
 }
 
 http_post() {
@@ -89,10 +142,20 @@ http_post() {
   local body='{}'
   [[ $# -ge 2 ]] && body="$2"
   ensure_android_forward
-  curl -fsS --max-time 15 -X POST \
-    -H 'Content-Type: application/json' \
-    -d "$body" \
-    "$(base_url)${path}"
+  local tok
+  tok="$(token_for "$TARGET")"
+  if [[ -n "$tok" ]]; then
+    curl -fsS --max-time 15 -X POST \
+      -H 'Content-Type: application/json' \
+      -H "Authorization: Bearer $tok" \
+      -d "$body" \
+      "$(base_url)${path}"
+  else
+    curl -fsS --max-time 15 -X POST \
+      -H 'Content-Type: application/json' \
+      -d "$body" \
+      "$(base_url)${path}"
+  fi
 }
 
 json_device() {
@@ -181,7 +244,7 @@ launch_desktop() {
   # shellcheck disable=SC2086
   ( cd "$ROOT" && ./gradlew :desktop:run --args="--debug --data-dir=${data_dir} --control-port=${DESKTOP_PORT} ${extra[*]-}" ) &
   echo $! > /tmp/klardrop-desktop.pid
-  wait_until 90 "desktop /health" bash -c "curl -fsS --max-time 2 http://127.0.0.1:${DESKTOP_PORT}/health >/dev/null"
+  wait_until 90 "desktop /health" http_get /health
 }
 
 stop_desktop() {
@@ -269,6 +332,12 @@ case "$CMD" in
     body=$(python3 -c 'import json,sys; print(json.dumps({"deviceId":sys.argv[1],"path":sys.argv[2]}))' "$1" "$2")
     http_post /send-file "$body"
     ;;
+  qr-share)
+    [[ $# -ge 1 ]] || { echo "qr-share <path> [path...]" >&2; exit 2; }
+    body=$(python3 -c 'import json,sys; print(json.dumps({"paths":sys.argv[1:]}))' "$@")
+    http_post /qr-share "$body"
+    ;;
+  qr-share-stop) http_post /qr-share/stop '{}' ;;
   accept-incoming)
     if [[ "${1:-}" == "--device" ]]; then
       http_post /accept-incoming "$(json_device "$2")"
@@ -282,8 +351,37 @@ case "$CMD" in
     [[ "${1:-}" == "--receive" ]] || { echo "reject-incoming --receive <id>" >&2; exit 2; }
     http_post /reject-incoming "$(printf '{"receiveId":%s}' "$2")"
     ;;
+  history)
+    id="${1:?deviceId}"
+    qs="device=${id}"
+    [[ -n "${2:-}" ]] && qs="${qs}&limit=${2}"
+    [[ -n "${3:-}" ]] && qs="${qs}&before=${3}"
+    http_get "/history?${qs}"
+    ;;
+  history-read) http_post /history/read "$(json_device "${1:?deviceId}")" ;;
+  thumbnail) http_get "/thumbnail?id=${1:?messageId}" ;;
+  retry) http_post /retry "$(printf '{"fileTransferId":%s}' "${1:?fileTransferId}")" ;;
+  clipboard)
+    body=$(python3 -c 'import json,sys; print(json.dumps({"text":sys.argv[1]}))' "${1:?text}")
+    http_post /clipboard "$body"
+    ;;
+  rename-device)
+    body=$(python3 -c 'import json,sys; print(json.dumps({"name":sys.argv[1]}))' "${1:?name}")
+    http_post /rename-device "$body"
+    ;;
+  settings) http_post /settings "${1:-{}}" ;;
+  send-clipboard) http_post /send-clipboard "$(json_device "${1:?deviceId}")" ;;
   reset-identity) http_post /reset-identity '{}' ;;
   refresh-permissions) http_post /refresh-permissions '{}' ;;
+  notification-dismiss) http_post /notification/dismiss "$(printf '{"id":%s}' "${1:?id}")" ;;
+  notification-pair) http_post /notification/pair "$(printf '{"id":%s}' "${1:?id}")" ;;
+  incoming-dismiss) http_post /incoming/dismiss "$(printf '{"receiveId":%s}' "${1:?receiveId}")" ;;
+  incoming-open) http_post /incoming/open "$(printf '{"receiveId":%s}' "${1:?receiveId}")" ;;
+  pairing-dialog-dismiss) http_post /pairing-dialog/dismiss '{}' ;;
+  report-problem)
+    body=$(python3 -c 'import json,sys; print(json.dumps({"description":sys.argv[1],"name":sys.argv[2] or None,"email":sys.argv[3] or None}))' "${1:?description}" "${2:-}" "${3:-}")
+    http_post /report-problem "$body"
+    ;;
   wait-for-device)
     id="${1:?deviceId}"; timeout="${2:-45}"
     wait_until "$timeout" "device $id" state_has_device "$id"

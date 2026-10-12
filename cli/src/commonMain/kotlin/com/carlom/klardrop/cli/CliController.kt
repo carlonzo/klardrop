@@ -6,15 +6,15 @@ import com.carlom.klardrop.common.Klardrop
 import com.carlom.klardrop.common.communication.Messenger
 import com.carlom.klardrop.common.discovery.DiscoveryDevice
 import com.klardrop.common.initCrashReporter
-import io.github.vinceglb.filekit.FileKit
 import kotlinx.coroutines.flow.StateFlow
-import java.io.File
 
 /**
  * System property key used to override the data directory for CLI processes.
  * When set, trust storage, identity, and FileKit dirs all resolve under this path
  * instead of ~/.klardrop / ~/Library/… so two CLI processes on the same host can
  * use completely separate identities and discover each other.
+ *
+ * On native targets this is surfaced via the KLARDROP_HOME env var directly.
  */
 const val DATA_DIR_PROPERTY = "klardrop.data.dir"
 
@@ -43,12 +43,11 @@ object CliController {
       CliLogging.isDebugMode = debug
 
       // Resolve effective data dir: explicit arg > KLARDROP_HOME env > default (null = platform default)
-      val effectiveDataDir: String? = dataDir
-        ?: System.getenv("KLARDROP_HOME")
+      val effectiveDataDir: String? = dataDir ?: cliGetEnv("KLARDROP_HOME")
 
-      // Expose data dir to InternalPlatformDependencies (desktopJvm actual reads this property)
+      // Expose data dir via platform mechanism so InternalPlatformDependencies can pick it up
       if (effectiveDataDir != null) {
-        System.setProperty(DATA_DIR_PROPERTY, effectiveDataDir)
+        cliSetDataDir(effectiveDataDir)
       }
 
       val applicationInfo = ApplicationInfo(
@@ -64,19 +63,11 @@ object CliController {
         appVersion = applicationInfo.appVersion,
         isProduction = !applicationInfo.isDebug,
       )
-      if (effectiveDataDir != null) {
-        val filesDir = File(effectiveDataDir)
-        val cacheDir = File(effectiveDataDir, "cache")
-        filesDir.mkdirs()
-        cacheDir.mkdirs()
-        FileKit.init("klardrop", filesDir, cacheDir)
-      } else {
-        FileKit.init("klardrop")
-      }
+      cliInitFileKit(effectiveDataDir)
 
       klardrop = Klardrop(
         applicationInfo = applicationInfo,
-        internalPlatformDependency = InternalPlatformDependencies(applicationInfo)
+        internalPlatformDependency = cliCreateInternalPlatformDependencies(applicationInfo)
       )
       klardrop!!.init()
       true
@@ -103,3 +94,26 @@ object CliController {
     klardrop = null
   }
 }
+
+/** Read an environment variable; returns null if not set or empty. */
+internal expect fun cliGetEnv(name: String): String?
+
+/** Expose the data dir to the platform so InternalPlatformDependencies can read it. */
+internal expect fun cliSetDataDir(dir: String)
+
+/** Initialise FileKit (and create dirs) for the given data dir. Null → platform default. */
+internal expect fun cliInitFileKit(dataDir: String?)
+
+/**
+ * Builds the engine's platform dependencies.
+ *
+ * A shared source set cannot call `InternalPlatformDependencies(applicationInfo)` directly:
+ * the common `expect class` declares no constructor, because Android's actual needs a
+ * `Context` and no single signature serves both (see the note on `presentation`'s
+ * per-platform `KlardropBootstrap`). The one-argument constructor exists on the per-target
+ * actuals, so constructing it has to happen per platform as well. Both of the CLI's targets
+ * — the JVM host and the native engine — take that one-argument form.
+ */
+internal expect fun cliCreateInternalPlatformDependencies(
+  applicationInfo: ApplicationInfo,
+): InternalPlatformDependencies

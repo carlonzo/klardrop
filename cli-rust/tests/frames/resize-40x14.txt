@@ -1,0 +1,14 @@
+klardrop | Fixture Host | daemon: connec
+┌> Devices  * reachable  + trusted  ! pa
+│> *+ Fixture Phone  reachable · trusted
+│   - Fixture Tablet  offline · untruste
+│   * Fixture Laptop  reachable · untrus
+│
+│
+│
+│
+│
+│
+│
+│
+│

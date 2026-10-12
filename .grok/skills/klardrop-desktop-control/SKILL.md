@@ -52,7 +52,7 @@ Flags (processed in Main.kt):
 | `--klardrop-only` / `--nearby-only` / `--ble-only` | Enable one transport, disable the other two |
 | `--no-persistence` | In-memory sqlite (not for pairing-across-restart tests) |
 
-Wait until `scripts/klardrop-ctl desktop health` returns `"ok":true` before any other command. The Compose window must actually come up — `DebugControl.bind` runs from `KlardropApp`'s `LaunchedEffect`.
+Wait until `scripts/klardrop-ctl desktop health` returns `"ok":true` before any other command. The Compose window must actually come up — `ControlPlane.bind` runs from `KlardropApp`'s `onDiscoveryControllerAvailable` callback.
 
 Stop with `scripts/klardrop-ctl desktop stop-desktop`.
 

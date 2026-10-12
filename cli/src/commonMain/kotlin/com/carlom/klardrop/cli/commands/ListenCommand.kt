@@ -2,6 +2,8 @@ package com.carlom.klardrop.cli.commands
 
 import com.carlom.klardrop.cli.CliController
 import com.carlom.klardrop.cli.CliLogging
+import com.carlom.klardrop.cli.cliExitProcess
+import com.carlom.klardrop.cli.cliOnShutdown
 import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
@@ -17,7 +19,8 @@ import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
-import kotlin.system.exitProcess
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 // Exit codes
 private const val EXIT_OK = 0
@@ -52,13 +55,13 @@ class ListenCommand : CliktCommand(
       )
     ) {
       CliLogging.error("Failed to initialize Klardrop")
-      exitProcess(EXIT_INIT_FAILURE)
+      cliExitProcess(EXIT_INIT_FAILURE)
     }
 
     // Shutdown hook: flush on Ctrl-C
-    Runtime.getRuntime().addShutdownHook(Thread {
+    cliOnShutdown {
       CliLogging.error("[listen] shutting down")
-    })
+    }
 
     if (!json) {
       CliLogging.info("[listen] Klardrop listener started. Waiting for incoming transfers...")
@@ -98,7 +101,7 @@ class ListenCommand : CliktCommand(
       }
     }
 
-    exitProcess(EXIT_OK)
+    cliExitProcess(EXIT_OK)
   }
 
   private fun handleUpdate(deviceId: String, update: ReceiveMessageUpdate) {
@@ -139,7 +142,7 @@ class ListenCommand : CliktCommand(
     if (status !is ReceiveMessageStatus.Completed) return
 
     // Emit structured log on Completed
-    val nowMs = System.currentTimeMillis()
+    val nowMs = Clock.System.now().toEpochMilliseconds()
     val isoTs = formatIso8601(nowMs)
     val senderName = update.device?.name ?: "unknown"
     val senderType = update.device?.deviceType?.toString() ?: "UNKNOWN"
@@ -184,7 +187,7 @@ class ListenCommand : CliktCommand(
 
   private fun escapeText(s: String): String = s.replace(" ", "_").take(120)
 
-  // Instant.toString() is ISO-8601 UTC with trailing Z, e.g. 2026-06-14T12:00:00.123Z (JVM-only CLI).
+  // Instant.toString() is ISO-8601 UTC with trailing Z, e.g. 2026-06-14T12:00:00.123Z
   private fun formatIso8601(epochMs: Long): String =
-    java.time.Instant.ofEpochMilli(epochMs).toString()
+    Instant.fromEpochMilliseconds(epochMs).toString()
 }

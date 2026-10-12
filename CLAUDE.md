@@ -114,9 +114,9 @@ Each platform provides implementations for:
 
 - After you completed your work, ensure that the project compiles and tests are passing
 
-## Autonomous device testing (DebugControl)
+## Autonomous device testing (ControlPlane)
 
-Do not tap the desktop window or the phone. Drive both apps through the loopback HTTP control plane (`DebugControl` / `LoopbackHttpServer`) via `scripts/klardrop-ctl`.
+Do not tap the desktop window or the phone. Drive both apps through the loopback HTTP control plane (`ControlPlane` / `LoopbackHttpServer` in the `:control-plane` module) via `scripts/klardrop-ctl`.
 
 How-to lives in the repo skills — load these before any desktop↔Android pairing/transfer test:
 

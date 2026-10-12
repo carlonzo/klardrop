@@ -7,10 +7,12 @@ import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOneOrNull
 import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.database.File_transfers
+import com.carlom.klardrop.common.database.Messages
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlin.uuid.ExperimentalUuidApi
@@ -92,6 +94,31 @@ interface MessageRepository {
    * FAILED, NULL/anything else -> SENT); any outbox entry appears as [DeliveryStatus.SENDING].
    */
   fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<ChatMessage>>
+
+  /**
+   * Keyset page, newest first (timestamp DESC, id DESC). [beforeMessageId], when given, must be
+   * an existing message id belonging to [remoteDeviceId] — the page then starts strictly after
+   * (older than) that row. Returns `null` when [beforeMessageId] doesn't resolve to a row of this
+   * device (unknown id, or an id belonging to another device); callers should treat that as a bad
+   * request rather than an empty page.
+   *
+   * Default ignores [beforeMessageId] and returns the newest [limit] rows — good enough for fakes
+   * that don't exercise paging; only the real, DB-backed repository implements the cursor.
+   */
+  suspend fun getMessagesForDevicePage(
+    remoteDeviceId: String,
+    limit: Long,
+    beforeMessageId: Long? = null,
+  ): List<ChatMessage>? = getMessagesForDevice(remoteDeviceId, limit).first()
+
+  /**
+   * The message row referencing [fileTransferId], if any — used by retry to find which device a
+   * failed outgoing file was headed to. Default no-op (null) for fakes that don't need it.
+   */
+  suspend fun getMessageByFileTransferId(fileTransferId: Long): ChatMessage? = null
+
+  /** Single message row by its own id, regardless of device — used by /thumbnail. Default no-op (null). */
+  suspend fun getMessageById(id: Long): ChatMessage? = null
 
   fun getFileTransferById(id: Long): Flow<File_transfers?>
 
@@ -220,28 +247,35 @@ class MessageRepositoryImpl(
       .getMessagesForDevice(remoteDeviceId, limit)
       .asFlow()
       .mapToList(ioDispatcher)
-      .map { rows ->
-        rows.map { row ->
-          val delivery = when (row.send_status) {
-            "FAILED" -> DeliveryStatus.FAILED
-            "SENDING" -> DeliveryStatus.SENDING
-            else -> DeliveryStatus.SENT
-          }
-          ChatMessage(
-            id = row.id,
-            remoteDeviceId = row.remote_device_id,
-            content = row.content,
-            timestamp = row.timestamp,
-            isSender = row.is_sender != 0L,
-            messageType = row.message_type,
-            fileTransferId = row.file_transfer_id,
-            isRead = row.is_read,
-            mimeType = row.mime_type,
-            deliveryStatus = delivery,
-          )
-        }
-      }
+      .map { rows -> rows.map { it.toChatMessage() } }
   }
+
+  override suspend fun getMessagesForDevicePage(
+    remoteDeviceId: String,
+    limit: Long,
+    beforeMessageId: Long?,
+  ): List<ChatMessage>? = withContext(ioDispatcher) {
+    val rows = if (beforeMessageId == null) {
+      database.messageQueries.getMessagesForDevice(remoteDeviceId, limit).executeAsList()
+    } else {
+      val cursor = database.messageQueries.getMessageById(beforeMessageId).executeAsOneOrNull()
+      if (cursor == null || cursor.remote_device_id != remoteDeviceId) return@withContext null
+      database.messageQueries
+        .getMessagesForDevicePageBefore(remoteDeviceId, cursor.timestamp, cursor.id, limit)
+        .executeAsList()
+    }
+    rows.map { it.toChatMessage() }
+  }
+
+  override suspend fun getMessageByFileTransferId(fileTransferId: Long): ChatMessage? =
+    withContext(ioDispatcher) {
+      database.messageQueries.getMessageByFileTransferId(fileTransferId).executeAsOneOrNull()?.toChatMessage()
+    }
+
+  override suspend fun getMessageById(id: Long): ChatMessage? =
+    withContext(ioDispatcher) {
+      database.messageQueries.getMessageById(id).executeAsOneOrNull()?.toChatMessage()
+    }
 
   override fun getFileTransferById(id: Long): Flow<File_transfers?> {
     return database.fileTransferQueries.getById(id)
@@ -280,3 +314,20 @@ class MessageRepositoryImpl(
       }
   }
 }
+
+private fun Messages.toChatMessage(): ChatMessage = ChatMessage(
+  id = id,
+  remoteDeviceId = remote_device_id,
+  content = content,
+  timestamp = timestamp,
+  isSender = is_sender != 0L,
+  messageType = message_type,
+  fileTransferId = file_transfer_id,
+  isRead = is_read,
+  mimeType = mime_type,
+  deliveryStatus = when (send_status) {
+    "FAILED" -> DeliveryStatus.FAILED
+    "SENDING" -> DeliveryStatus.SENDING
+    else -> DeliveryStatus.SENT
+  },
+)

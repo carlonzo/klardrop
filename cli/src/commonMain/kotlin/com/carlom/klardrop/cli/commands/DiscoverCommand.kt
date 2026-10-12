@@ -2,6 +2,7 @@ package com.carlom.klardrop.cli.commands
 
 import com.carlom.klardrop.cli.CliController
 import com.carlom.klardrop.cli.CliLogging
+import com.carlom.klardrop.cli.cliExitProcess
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
@@ -12,7 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
-import kotlin.system.exitProcess
+import kotlin.time.Clock
 
 private const val EXIT_OK = 0
 private const val EXIT_INIT_FAILURE = 3
@@ -36,7 +37,7 @@ class DiscoverCommand : CliktCommand(
 
     if (!controller.initialize(debug = debug, dataDir = dataDir)) {
       CliLogging.error("Failed to initialize Klardrop")
-      exitProcess(EXIT_INIT_FAILURE)
+      cliExitProcess(EXIT_INIT_FAILURE)
     }
 
     if (!json) {
@@ -49,7 +50,7 @@ class DiscoverCommand : CliktCommand(
     }
 
     val timeoutMs = (timeout?.toLongOrNull() ?: 5L) * 1000
-    val startTime = System.currentTimeMillis()
+    val startTime = Clock.System.now().toEpochMilliseconds()
     val seenDevices = mutableSetOf<String>()
 
     coroutineScope {
@@ -84,7 +85,7 @@ class DiscoverCommand : CliktCommand(
           echo(".", trailingNewline = false)
         }
         delay(1000)
-        elapsed = System.currentTimeMillis() - startTime
+        elapsed = Clock.System.now().toEpochMilliseconds() - startTime
       }
 
       discoveryJob.cancel()
@@ -103,6 +104,7 @@ class DiscoverCommand : CliktCommand(
     }
 
     controller.shutdown()
-    exitProcess(EXIT_OK)
+    cliExitProcess(EXIT_OK)
   }
 }
+

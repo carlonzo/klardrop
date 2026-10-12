@@ -1,0 +1,40 @@
+klardrop | Fixture Host | daemon: connected | 3 devices
+┌> Devices  * reachable  + trusted  ! pairing──┐┌  Conversation────────────────────────────────────────────────────────┐
+│> *+ Fixture Phone  reachable · trusted (2)   ││Select a device and press Enter                                       │
+│   - Fixture Tablet  offline · untrusted      ││                                                                      │
+│   * Fixture Laptop  reachable · untrusted    ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                       ┌Actions───────────────────────────────────────────────────────────────┐                       │
+│                       │nothing pending — Esc to go back                                      │                       │
+│                       │                                                                      │                       │
+│                       │1 start a QR share…                                                   │                       │
+│                       │2 rename this device…                                                 │                       │
+│                       │3 settings                                                            │                       │
+│                       │4 check for updates                                                   │                       │
+│                       │5 apply the staged update                                             │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       │                                                                      │                       │
+│                       └──────────────────────────────────────────────────────────────────────┘                       │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+│                                              ││                                                                      │
+└──────────────────────────────────────────────┘└──────────────────────────────────────────────────────────────────────┘
+Tab pane Up/Down select Enter open i text f files y clipboard a actions ? help q quit
+Esc quits · ? for keys · no mouse · Ctrl-Space stays off

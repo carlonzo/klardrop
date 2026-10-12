@@ -30,14 +30,56 @@ import io.sentry.kotlin.multiplatform.protocol.UserFeedback
 object CrashReporter {
 
   /**
+   * Set once [initCrashReporter] actually calls `Sentry.init` (production build with a
+   * compiled-in DSN). Every method below is a no-op until then: on Kotlin/Native, calling
+   * into the Sentry KMP SDK before init reaches for a `Dispatchers.Main` that a headless
+   * binary (e.g. `klardrop daemon`) never has, crashing the process instead of no-oping
+   * the way the JVM/Android SDKs do.
+   */
+  internal var started: Boolean = false
+
+  /**
+   * Non-null on linuxX64: the curl-based Sentry envelope sender returned by
+   * [platformCrashSender]. When set, all reporting methods use it instead of the
+   * Sentry KMP SDK, whose linuxX64 klib is a no-op stub (see [platformCrashSender]).
+   * User identity for it is kept here (not on the platform side) and passed as
+   * arguments on each call — see [setUser].
+   */
+  internal var linuxSender: ((throwable: Throwable, level: String, userId: String, userName: String, osType: String) -> Unit)? = null
+
+  /**
+   * Non-null on linuxX64: the curl-based Sentry user-feedback sender returned by
+   * [platformFeedbackSender], set alongside [linuxSender]. Used by [reportUserFeedback]
+   * instead of the Sentry KMP SDK's message-event + UserFeedback path.
+   */
+  internal var linuxFeedbackSender: ((comments: String, name: String?, email: String?, userId: String, userName: String, osType: String) -> Boolean)? = null
+
+  private var linuxUserId = ""
+  private var linuxUserName = ""
+  private var linuxOsType = ""
+
+
+  /**
    * Reports [throwable] unless it is expected protocol noise (peer reset, connect
    * refused, BLE handshake disconnect). Call-site filtering keeps behaviour identical
    * across platforms; the `beforeSend` hook in [applyCrashReporterOptions] is the
    * backstop for native-SDK auto-capture, which never passes through here.
+   *
+   * [fatal] marks an exception that is about to take the process down with it (e.g. a
+   * Kotlin/Native unhandled-exception hook, which runs right before `abort()`), so the
+   * event is reported as Sentry level `fatal` instead of `error`.
    */
-  fun notify(throwable: Throwable) {
+  fun notify(throwable: Throwable, fatal: Boolean = false) {
+    if (!started) return
     if (throwable.isExpectedNetworkNoise()) return
-    Sentry.captureException(throwable)
+    val sender = linuxSender
+    if (sender != null) {
+      sender(throwable, if (fatal) "fatal" else "error", linuxUserId, linuxUserName, linuxOsType)
+    } else if (fatal) {
+      Sentry.captureException(throwable) { scope -> scope.level = SentryLevel.FATAL }
+    } else {
+      Sentry.captureException(throwable)
+    }
   }
 
   /**
@@ -57,6 +99,18 @@ object CrashReporter {
    * sent!" to a report that went nowhere is worse than one that admits it.
    */
   fun reportUserFeedback(comments: String, name: String? = null, email: String? = null): ReportOutcome {
+    if (!started) return ReportOutcome.Disabled
+    // linuxX64: use the curl-based feedback sender instead of the Sentry KMP SDK, whose
+    // linuxX64 klib is a no-op stub (see platformCrashSender). Sentry.isEnabled() must not
+    // be called on this path either, since Sentry.init was never reached.
+    if (linuxSender != null) {
+      val fb = linuxFeedbackSender ?: return ReportOutcome.Disabled
+      return if (fb(comments, name, email, linuxUserId, linuxUserName, linuxOsType)) {
+        ReportOutcome.Sent
+      } else {
+        ReportOutcome.Failed
+      }
+    }
     if (!Sentry.isEnabled()) return ReportOutcome.Disabled
     val eventId = Sentry.captureMessage(USER_REPORT_TITLE) { scope ->
       scope.level = SentryLevel.INFO
@@ -78,6 +132,10 @@ object CrashReporter {
   }
 
   fun leaveBreadcrumb(message: String, type: BreadcrumbType = BreadcrumbType.MANUAL) {
+    if (!started) return
+    // No-op for the linux sender: it has no scope to attach breadcrumbs to, and
+    // carries the LogBuffer tail as the `log_tail` extra on the event instead.
+    if (linuxSender != null) return
     Sentry.addBreadcrumb(
       Breadcrumb().apply {
         this.message = message
@@ -94,6 +152,13 @@ object CrashReporter {
    * target) and `device.osType` (runtime).
    */
   fun setUser(deviceId: String, deviceName: String, osType: String) {
+    if (!started) return
+    if (linuxSender != null) {
+      linuxUserId = deviceId
+      linuxUserName = deviceName
+      linuxOsType = osType
+      return
+    }
     Sentry.setUser(
       User().apply {
         id = deviceId
@@ -187,10 +252,24 @@ internal expect val crashReporterPlatform: String
  * report, regardless of what [isProduction] says.
  */
 fun initCrashReporter(appVersion: String, isProduction: Boolean) {
-  if (!isProduction || CrashReporterConfig.DSN.isEmpty()) return
-  Sentry.init { options ->
-    applyCrashReporterOptions(options, appVersion)
+  initCrashReporter(appVersion, isProduction, CrashReporterConfig.DSN)
+}
+
+/** [dsn] overload for tests; production call sites always get [CrashReporterConfig.DSN]. */
+internal fun initCrashReporter(appVersion: String, isProduction: Boolean, dsn: String) {
+  if (!isProduction || dsn.isEmpty()) return
+  val sender = platformCrashSender(dsn, appVersion)
+  if (sender != null) {
+    // linuxX64: bypass Sentry.init entirely (its klib is a no-op stub there) and use
+    // the curl-based sender for every reporting method below.
+    CrashReporter.linuxSender = sender
+    CrashReporter.linuxFeedbackSender = platformFeedbackSender(dsn, appVersion)
+  } else {
+    Sentry.init { options ->
+      applyCrashReporterOptions(options, appVersion)
+    }
   }
+  CrashReporter.started = true
 }
 
 /**

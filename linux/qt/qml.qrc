@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/">
+        <file>qml/Main.qml</file>
+        <file>qml/DeviceRow.qml</file>
+        <file>qml/ChatBubble.qml</file>
+        <file>qml/TransferItem.qml</file>
+        <file>qml/QrShareDialog.qml</file>
+        <file>qml/ConfirmDialog.qml</file>
+        <file>icons/klardrop.png</file>
+    </qresource>
+</RCC>

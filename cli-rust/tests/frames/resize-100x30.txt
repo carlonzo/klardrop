@@ -1,0 +1,30 @@
+klardrop | Fixture Host | daemon: connected | 3 devices
+┌> Devices  * reachable  + trusted  ! pairing──┐┌  Conversation─────────────────────────────────────
+│> *+ Fixture Phone  reachable · trusted (2)   ││Select a device and press Enter
+│   - Fixture Tablet  offline · untrusted      ││
+│   * Fixture Laptop  reachable · untrusted    ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││
+│                                              ││

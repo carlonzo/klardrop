@@ -188,9 +188,10 @@
 -dontwarn dev.nucleusframework.composenativetray.**
 
 # -------------------------------------------------------------------------
-# Debug Control — strictly development/test infrastructure driven via klardrop-ctl.
-# Never keep com.carlom.klardrop.debug.** in release builds. ProGuard strips it
-# completely because DesktopDebugLoader accesses it only reflectively in debug runs.
+# Control plane — the loopback HTTP API every shipped build starts. Main.kt
+# references ControlPlane statically, so it is production code; keep the whole
+# package (reflection-free access still trips R8's implicit-class-removal for
+# the Kotlin object/serialization members it reaches).
 # -------------------------------------------------------------------------
--dontwarn com.carlom.klardrop.debug.**
+-keep class com.carlom.klardrop.control.** { *; }
 

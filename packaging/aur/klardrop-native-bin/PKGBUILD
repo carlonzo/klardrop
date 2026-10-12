@@ -1,0 +1,95 @@
+# Maintainer: Carlo Marinangeli <carlo.marinangeli@gmail.com>
+#
+# The release workflow renders @VERSION@, @SHA256_X64@ and @SHA256_ARM64@ from
+# the git tag and the REAL per-arch sha256 digests of the published native
+# release tarballs, then pushes this package to the AUR as `klardrop-native-bin`.
+# A placeholder left unrendered fails the release. The push itself is gated only
+# on the AUR repository existing (`git ls-remote`); a repository that does not
+# exist yet is skipped with a warning, never a failed release.
+#
+# `-bin` because this packages the prebuilt native release tarball rather than
+# compiling from source with Kotlin/Native.
+#
+# Declares native runtime dependencies: avahi, sqlite, openssl, and systemd-libs.
+#
+# Ships BOTH binaries from the tarball, under the two distinct names the project
+# now uses everywhere:
+#   /usr/bin/klardrop        — the native Rust CLI client (the user-facing `klardrop`)
+#   /usr/bin/klardrop-engine — the Kotlin/Native engine (the daemon)
+# The names are deliberately distinct: the client owns the `klardrop` name so a
+# user who types `klardrop` gets the CLI, never a second daemon.
+#
+# The system user unit points at the ENGINE (`klardrop-engine daemon`), because
+# that is the binary that speaks the daemon protocol; the client is a client.
+
+pkgname=klardrop-native-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Share files and clipboard with nearby devices over the local network (AirDrop-style) — native headless engine"
+arch=('x86_64' 'aarch64')
+url="https://github.com/carlonzo/klardrop"
+license=('Apache-2.0')
+depends=('avahi' 'sqlite' 'openssl' 'systemd-libs')
+optdepends=('curl: self-update check and download'
+            'libnotify: desktop notifications via notify-send'
+            'wl-clipboard: clipboard sharing under Wayland'
+            'libsecret: credentials storage / keyring'
+            'ffmpeg: video thumbnail extraction'
+            'qrencode: terminal and ASCII QR code generation'
+            'xdg-utils: opening received files or URLs in default applications'
+            'klardrop-omarchy: Omarchy shell bar widget and quick panel')
+provides=('klardrop')
+conflicts=('klardrop' 'klardrop-bin')
+options=('!strip')
+
+source_x86_64=("klardrop-native-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkgver}/klardrop-native-linux-x64.tar.gz")
+sha256sums_x86_64=('@SHA256_X64@')
+
+source_aarch64=("klardrop-native-${pkgver}-aarch64.tar.gz::${url}/releases/download/v${pkgver}/klardrop-native-linux-arm64.tar.gz")
+sha256sums_aarch64=('@SHA256_ARM64@')
+
+package() {
+  local tarball_arch
+  case "${CARCH}" in
+    x86_64)  tarball_arch="x64" ;;
+    aarch64) tarball_arch="arm64" ;;
+    *) error "Unsupported architecture: ${CARCH}"; return 1 ;;
+  esac
+
+  cd "${srcdir}/klardrop-native-linux-${tarball_arch}"
+
+  # Fail closed on a tarball missing either binary rather than shipping a package
+  # whose `klardrop` and `klardrop-engine` came from different versions.
+  test -f bin/klardrop || { error "missing bin/klardrop in the native tarball"; return 1; }
+  test -f bin/klardrop-engine || { error "missing bin/klardrop-engine in the native tarball"; return 1; }
+
+  # Native Rust CLI client and the Kotlin/Native engine, as a matched pair.
+  install -Dm755 bin/klardrop "${pkgdir}/usr/bin/klardrop"
+  install -Dm755 bin/klardrop-engine "${pkgdir}/usr/bin/klardrop-engine"
+
+  # System-wide user unit for systemd --user sessions
+  install -d "${pkgdir}/usr/lib/systemd/user"
+  cat > "${pkgdir}/usr/lib/systemd/user/klardrop.service" <<'EOF'
+[Unit]
+Description=Klardrop nearby sharing daemon
+
+[Service]
+ExecStart=/usr/bin/klardrop-engine daemon
+Restart=on-failure
+RestartSec=2
+
+NoNewPrivileges=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=default.target
+EOF
+  chmod 644 "${pkgdir}/usr/lib/systemd/user/klardrop.service"
+}

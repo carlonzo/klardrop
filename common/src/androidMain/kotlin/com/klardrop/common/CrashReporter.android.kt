@@ -14,4 +14,5 @@ fun initCrashReporter(context: Context, appVersion: String, isProduction: Boolea
   Sentry.init(context) { options ->
     applyCrashReporterOptions(options, appVersion)
   }
+  CrashReporter.started = true
 }
