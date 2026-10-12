@@ -44,10 +44,13 @@ jobs:
           esac
           grep -n -A3 "swiftExport {" presentation/build.gradle.kts
 
-      - name: Run swift export (iOS sim)
+      - name: Run Xcode build (drives embedSwiftExportForXcode)
         run: |
           set +e
-          ./gradlew :presentation:iosSimulatorArm64DebugSwiftExport --stacktrace --console=plain 2>&1 | tee swx.log
-          code=${PIPESTATUS[0]}
-          echo "RESULT variant=${{ matrix.variant }} exit=$code stackoverflows=$(grep -c StackOverflowError swx.log)"
+          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme iosApp \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug build CODE_SIGNING_ALLOWED=NO ARCHS=arm64 > xcb.log 2>&1
+          code=$?
+          echo "RESULT variant=${{ matrix.variant }} exit=$code stackoverflows=$(grep -c StackOverflowError xcb.log) swiftexport=$(grep -c 'SwiftExport FAILED' xcb.log)"
+          grep -E "error:|What went wrong" xcb.log | head -8
           exit 0
