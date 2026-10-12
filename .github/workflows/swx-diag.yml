@@ -45,4 +45,9 @@ jobs:
           grep -n -A3 "swiftExport {" presentation/build.gradle.kts
 
       - name: Run swift export (iOS sim)
-        run: ./gradlew :presentation:iosSimulatorArm64DebugSwiftExport --stacktrace --console=plain > swx.log 2>&1; echo "exit=$?"; grep -c "StackOverflowError" swx.log; tail -5 swx.log
+        run: |
+          set +e
+          ./gradlew :presentation:iosSimulatorArm64DebugSwiftExport --stacktrace --console=plain 2>&1 | tee swx.log
+          code=${PIPESTATUS[0]}
+          echo "RESULT variant=${{ matrix.variant }} exit=$code stackoverflows=$(grep -c StackOverflowError swx.log)"
+          exit 0
