@@ -2,7 +2,8 @@
 name: swx-diag
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [swx-diag]
 
 permissions:
   contents: read
