@@ -40,7 +40,7 @@ ureq = { version = "2", default-features = false }
 # backend is compiled — and crossterm is the single owner of raw mode, the
 # alternate screen and input decoding. A second input source would be a bug.
 ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
-crossterm = "0.28"
+crossterm = "0.29"
 # A terminal cell is a *column*, not a character: a CJK glyph or an emoji is
 # one `char` and two columns, so anything that budgets a name in `char`s
 # overflows the row it was measured for. Already in the tree through ratatui;
