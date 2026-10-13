@@ -165,15 +165,21 @@ impl Client {
     /// the loopback socket.
     fn agent(remaining: Duration) -> ureq::Agent {
         // Per-operation ceilings, so one blocking call cannot eat the whole budget.
-        let io = remaining.min(MAX_SINGLE_IO);
-        ureq::AgentBuilder::new()
-            .max_idle_connections_per_host(0)
-            .redirects(0)
-            .try_proxy_from_env(false)
-            .timeout_connect(io)
-            .timeout_read(io)
-            .timeout_write(io)
-            .build()
+        let io = Some(remaining.min(MAX_SINGLE_IO));
+        ureq::Agent::new_with_config(
+            ureq::Agent::config_builder()
+                .max_idle_connections_per_host(0)
+                .max_redirects(0)
+                .max_redirects_will_error(false)
+                .http_status_as_error(false)
+                .proxy(None)
+                .timeout_connect(io)
+                .timeout_send_request(io)
+                .timeout_send_body(io)
+                .timeout_recv_response(io)
+                .timeout_recv_body(io)
+                .build(),
+        )
     }
 
     fn debug_log(&self, message: &str) {
@@ -277,33 +283,26 @@ impl Client {
             }
         ));
 
-        let request = match method {
-            Method::Get => agent.get(&url),
-            Method::Post => agent.post(&url),
-        };
-        let request = request
-            .set("Authorization", &format!("Bearer {}", self.token))
-            .set("Connection", "close")
-            .set("Accept", "application/json");
-
         let outcome = match body {
-            Some(body) => request
-                .set("Content-Type", "application/json")
-                .set("Content-Length", &body.len().to_string())
-                .send_bytes(body),
-            None => request.call(),
+            Some(body) => with_headers(agent.post(&url), &self.token)
+                .header("Content-Type", "application/json")
+                .send(body),
+            None => with_headers(agent.get(&url), &self.token).call(),
         };
 
         match outcome {
-            Ok(response) => self.read_body(response, path).map(Some),
-            Err(ureq::Error::Status(404, _)) if allow_missing_route => {
-                self.debug_log(&format!(
-                    "GET {path} is not implemented by this daemon (404)"
-                ));
-                Ok(None)
-            }
-            Err(ureq::Error::Status(status, response)) => {
-                Err(self.map_status_error(method, status, response, path))
+            Ok(response) => {
+                let status = response.status().as_u16();
+                if status == 404 && allow_missing_route {
+                    self.debug_log(&format!(
+                        "GET {path} is not implemented by this daemon (404)"
+                    ));
+                    Ok(None)
+                } else if status >= 400 {
+                    Err(self.map_status_error(method, status, response, path))
+                } else {
+                    self.read_body(response, path).map(Some)
+                }
             }
             Err(e) => Err(self.map_transport_error(&e, path)),
         }
@@ -317,7 +316,7 @@ impl Client {
         &self,
         method: Method,
         status: u16,
-        response: ureq::Response,
+        response: ureq::http::Response<ureq::Body>,
         path: &str,
     ) -> CliError {
         if method == Method::Post && status == 404 {
@@ -354,7 +353,7 @@ impl Client {
 
     /// Best-effort human message from an error body. Falls back to a generic
     /// description rather than failing the whole command over cosmetics.
-    fn error_detail(&self, response: ureq::Response, path: &str) -> String {
+    fn error_detail(&self, response: ureq::http::Response<ureq::Body>, path: &str) -> String {
         match self.read_body(response, path) {
             Ok(body) => serde_json::from_slice::<serde_json::Value>(&body)
                 .ok()
@@ -368,8 +367,12 @@ impl Client {
         }
     }
 
-    fn read_body(&self, response: ureq::Response, path: &str) -> CliResult<Vec<u8>> {
-        let status = response.status();
+    fn read_body(
+        &self,
+        response: ureq::http::Response<ureq::Body>,
+        path: &str,
+    ) -> CliResult<Vec<u8>> {
+        let status = response.status().as_u16();
         let protocol_error = |reason: &str| {
             CliError::new(
                 ErrorCode::DaemonProtocolError,
@@ -385,7 +388,7 @@ impl Client {
                 "answered {status}; redirects are never followed"
             )));
         }
-        if let Some(encoding) = response.header("transfer-encoding") {
+        if let Some(encoding) = header_value(&response, "transfer-encoding") {
             if encoding.to_ascii_lowercase().contains("chunked") {
                 return Err(protocol_error("chunked transfer encoding is not supported"));
             }
@@ -393,15 +396,13 @@ impl Client {
 
         // Enforce the header ceilings before touching the body.
         let mut block_bytes = 0usize;
-        for name in response.headers_names() {
-            for value in response.all(&name) {
-                let line_bytes = name.len() + value.len() + 4; // ": " + CRLF
-                block_bytes = block_bytes.saturating_add(line_bytes);
-                if line_bytes > MAX_RESPONSE_HEADER_LINE_BYTES {
-                    return Err(protocol_error(&format!(
-                        "response header line exceeds {MAX_RESPONSE_HEADER_LINE_BYTES} bytes"
-                    )));
-                }
+        for (name, value) in response.headers() {
+            let line_bytes = name.as_str().len() + value.as_bytes().len() + 4; // ": " + CRLF
+            block_bytes = block_bytes.saturating_add(line_bytes);
+            if line_bytes > MAX_RESPONSE_HEADER_LINE_BYTES {
+                return Err(protocol_error(&format!(
+                    "response header line exceeds {MAX_RESPONSE_HEADER_LINE_BYTES} bytes"
+                )));
             }
         }
         if block_bytes > MAX_RESPONSE_HEADER_BLOCK_BYTES {
@@ -410,7 +411,7 @@ impl Client {
             )));
         }
 
-        if let Some(length) = response.header("content-length") {
+        if let Some(length) = header_value(&response, "content-length") {
             let declared: u64 = length
                 .trim()
                 .parse()
@@ -424,7 +425,7 @@ impl Client {
 
         let mut body = Vec::new();
         DeadlineReader {
-            inner: response.into_reader(),
+            inner: response.into_body().into_reader(),
             deadline: self.deadline,
         }
         .take((MAX_RESPONSE_BODY_BYTES + 1) as u64)
@@ -444,24 +445,12 @@ impl Client {
     }
 
     fn map_transport_error(&self, error: &ureq::Error, path: &str) -> CliError {
+        self.debug_log(&format!("transport error on {path}: {error}"));
         match error {
-            ureq::Error::Status(status, _) => self.map_status(*status, path),
-            ureq::Error::Transport(transport) => {
-                self.debug_log(&format!("transport error on {path}: {transport}"));
-                // ureq reports socket timeouts as `ErrorKind::Io` carrying the
-                // original `std::io::Error`, so classify on that.
-                match self.io_source(transport) {
-                    Some(io) => self.map_io_error(&io, path),
-                    None => self.unreachable(path, &transport.to_string()),
-                }
-            }
+            ureq::Error::Timeout(_) => self.timeout_error(),
+            ureq::Error::Io(io) => self.map_io_error(io, path),
+            _ => self.unreachable(path, &error.to_string()),
         }
-    }
-
-    fn io_source(&self, transport: &ureq::Transport) -> Option<std::io::Error> {
-        std::error::Error::source(transport)
-            .and_then(|source| source.downcast_ref::<std::io::Error>())
-            .map(|io| std::io::Error::new(io.kind(), io.to_string()))
     }
 
     fn map_io_error(&self, error: &std::io::Error, path: &str) -> CliError {
@@ -518,6 +507,20 @@ impl Client {
 
 fn internal_error(message: String) -> CliError {
     CliError::new(ErrorCode::InternalError, message)
+}
+
+fn with_headers<B>(request: ureq::RequestBuilder<B>, token: &str) -> ureq::RequestBuilder<B> {
+    request
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Connection", "close")
+        .header("Accept", "application/json")
+}
+
+fn header_value<'a>(response: &'a ureq::http::Response<ureq::Body>, name: &str) -> Option<&'a str> {
+    response
+        .headers()
+        .get(name)
+        .and_then(|value| value.to_str().ok())
 }
 
 fn remaining_until(deadline: Instant) -> CliResult<Duration> {
