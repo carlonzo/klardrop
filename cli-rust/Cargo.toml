@@ -39,7 +39,7 @@ ureq = { version = "2", default-features = false }
 # Terminal UI. Ratatui is pulled in with its crossterm backend only — no other
 # backend is compiled — and crossterm is the single owner of raw mode, the
 # alternate screen and input decoding. A second input source would be a bug.
-ratatui = { version = "0.29", default-features = false, features = ["crossterm"] }
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
 crossterm = "0.28"
 # A terminal cell is a *column*, not a character: a CJK glyph or an emoji is
 # one `char` and two columns, so anything that budgets a name in `char`s
