@@ -5,5 +5,12 @@
     ":automergeMinor",
     ":automergePatch"
   ],
-  "platformAutomerge": true
+  "platformAutomerge": true,
+  "packageRules": [
+    {
+      "description": "SKIE 0.10.15 rejects Kotlin 2.4.21; hold Kotlin at 2.4.20 until SKIE is removed",
+      "matchPackageNames": ["/^org\\.jetbrains\\.kotlin/"],
+      "ignoreVersions": ["/^2\\.4\\.21/"]
+    }
+  ]
 }

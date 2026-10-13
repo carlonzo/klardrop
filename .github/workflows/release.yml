@@ -342,10 +342,14 @@ jobs:
         include:
           - arch: x64
             target: linuxX64
+            testTask: linuxX64Test
             linkTarget: LinuxX64
             runner: ubuntu-24.04
           - arch: arm64
             target: linuxArm64
+            # No `linuxArm64Test` lifecycle task exists on the arm64 host, so this leg
+            # only compiles the test binaries; x64 runs them.
+            testTask: linuxArm64TestBinaries
             linkTarget: LinuxArm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
@@ -388,15 +392,15 @@ jobs:
           qml6-module-qtqml-workerscript
 
       # The link task is `linkReleaseExecutableLinuxX64` / `...LinuxArm64`, but
-      # the test task is `linuxX64Test` / `linuxArm64Test`. Concatenating ONE
+      # the test task is `linuxX64Test` / `linuxArm64TestBinaries`. Concatenating ONE
       # matrix value onto both produced `:cli:linkReleaseExecutablelinuxX64`,
       # which resolves to nothing and failed the whole native job with no native
-      # tarball — so `linkTarget` carries the exact task suffix instead.
+      # tarball — so `linkTarget` and `testTask` carry the exact task suffixes.
       - name: Build + test linux (${{ matrix.target }})
         run: >-
           ./gradlew
           :cli:linkReleaseExecutable${{ matrix.linkTarget }}
-          :klardrop-common:${{ matrix.target }}Test
+          :klardrop-common:${{ matrix.testTask }}
           $GRADLE_VERSION_ARGS
 
       - name: Build + test Qt frontend (${{ matrix.target }})
