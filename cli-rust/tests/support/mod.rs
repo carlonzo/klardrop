@@ -286,12 +286,12 @@ pub fn sgr_sequences(raw: &str) -> Vec<&str> {
 /// attribute such as `BOLD` or `DIM`.
 ///
 /// The sequences left out are the ones that put the terminal back to its own
-/// defaults — `CSI 0 m`, `CSI 39 m`, `CSI 49 m`, and `CSI m`, which is `0` with
-/// the parameter omitted. Those carry no styling information at all, and there
-/// is exactly one unavoidable group of them: ratatui's crossterm backend ends
-/// *every* `draw` by queueing `SetForegroundColor(Reset)`,
-/// `SetBackgroundColor(Reset)` and `SetAttribute(Reset)`, whatever the cells
-/// said. A client that drew a blank screen through that backend still puts
+/// defaults — `CSI 0 m`, `CSI 39 m`, `CSI 49 m`, `CSI 59 m`, and `CSI m`, which
+/// is `0` with the parameter omitted. Those carry no styling information at
+/// all, and there is exactly one unavoidable group of them: ratatui's crossterm
+/// backend ends *every* `draw` by queueing `SetForegroundColor(Reset)`,
+/// `SetBackgroundColor(Reset)`, `SetUnderlineColor(Reset)` and
+/// `SetAttribute(Reset)`, whatever the cells said. A client that drew a blank screen through that backend still puts
 /// them on the wire, so "no SGR sequence at all" is not a contract any
 /// full-screen draw can keep.
 ///
@@ -306,7 +306,7 @@ pub fn styling_sequences(raw: &str) -> Vec<&str> {
             let params = &sequence[2..sequence.len() - 1];
             !params
                 .split(';')
-                .all(|param| matches!(param, "" | "0" | "39" | "49"))
+                .all(|param| matches!(param, "" | "0" | "39" | "49" | "59"))
         })
         .collect()
 }
@@ -562,6 +562,7 @@ impl Tui {
         self.parser
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .screen_mut()
             .set_size(rows, cols);
     }
 
