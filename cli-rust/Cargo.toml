@@ -62,5 +62,5 @@ strip = true
 # screen back, because a TUI's contract is what it puts on the screen. Neither
 # crate reaches the shipped client: `cargo tree -e normal` must never list
 # them.
-portable-pty = "0.8"
+portable-pty = "0.9"
 vt100 = "0.16"
