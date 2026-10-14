@@ -454,8 +454,14 @@ impl Client {
     }
 
     fn map_io_error(&self, error: &std::io::Error, path: &str) -> CliError {
+        // ureq 3 surfaces its own body-read timeout as `ErrorKind::Other` wrapping `ureq::Error`.
+        let ureq_timeout = error
+            .get_ref()
+            .and_then(|inner| inner.downcast_ref::<ureq::Error>())
+            .is_some_and(|inner| matches!(inner, ureq::Error::Timeout(_)));
         match error.kind() {
             std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => self.timeout_error(),
+            _ if ureq_timeout => self.timeout_error(),
             _ => self.unreachable(path, &error.to_string()),
         }
     }
@@ -544,6 +550,21 @@ mod tests {
         let error = remaining_until(deadline).expect_err("already expired");
         assert_eq!(error.code, ErrorCode::DaemonTimeout);
         assert_eq!(error.code.exit_code(), 4);
+    }
+
+    #[test]
+    fn body_read_timeout_wrapped_by_ureq_is_a_timeout() {
+        let client = Client::new(
+            1,
+            "t",
+            Instant::now() + Duration::from_secs(5),
+            DebugLog::Off,
+        )
+        .expect("client");
+        let wrapped = ureq::Error::Timeout(ureq::Timeout::RecvBody).into_io();
+        assert_eq!(wrapped.kind(), std::io::ErrorKind::Other);
+        let error = client.map_io_error(&wrapped, "/state");
+        assert_eq!(error.code, ErrorCode::DaemonTimeout);
     }
 
     #[test]
