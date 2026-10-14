@@ -262,12 +262,15 @@ class ControlPlaneHistoryTest {
     repo.insertMessage(deviceId, "one", isSender = false, messageType = MessageType.TEXT)
 
     // Wait for the unread count to show up first, so the drop below isn't a false positive.
+    var seen: Long? = null
     for (i in 0 until POLL_ATTEMPTS) {
       registerDevice(deviceId)
       val (_, resp) = get("/state")
-      if (unreadCountFor(deviceId, resp) == 1L) break
+      seen = unreadCountFor(deviceId, resp)
+      if (seen == 1L) break
       delay(POLL_INTERVAL_MS)
     }
+    assertEquals(1L, seen)
 
     val (code, _) = post("/history/read", """{"deviceId":"$deviceId"}""")
     assertEquals(200, code)
