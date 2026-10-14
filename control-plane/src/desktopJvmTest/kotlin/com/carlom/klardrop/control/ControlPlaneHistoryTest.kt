@@ -214,8 +214,11 @@ class ControlPlaneHistoryTest {
     assertEquals(0L, unread)
   }
 
+  // The controller rebuilds `devices` from discovery whenever its sources change (including the
+  // unread-count query these tests trigger), dropping an injected row; call before every poll.
   private fun registerDevice(deviceId: String) {
     controller.screenStateFlow.update {
+      if (it.devices.any { device -> device.deviceId == deviceId }) return@update it
       it.copy(
         devices = it.devices + DeviceUi(
           deviceId = deviceId,
@@ -242,6 +245,7 @@ class ControlPlaneHistoryTest {
 
     var count: Long? = null
     for (i in 0 until POLL_ATTEMPTS) {
+      registerDevice(deviceId)
       val (code, resp) = get("/state")
       assertEquals(200, code)
       count = unreadCountFor(deviceId, resp)
@@ -259,6 +263,7 @@ class ControlPlaneHistoryTest {
 
     // Wait for the unread count to show up first, so the drop below isn't a false positive.
     for (i in 0 until POLL_ATTEMPTS) {
+      registerDevice(deviceId)
       val (_, resp) = get("/state")
       if (unreadCountFor(deviceId, resp) == 1L) break
       delay(POLL_INTERVAL_MS)
@@ -270,6 +275,7 @@ class ControlPlaneHistoryTest {
     // a beat to re-query and republish.
     var count: Long? = 1L
     for (i in 0 until POLL_ATTEMPTS) {
+      registerDevice(deviceId)
       val (_, resp) = get("/state")
       count = unreadCountFor(deviceId, resp)
       if (count == 0L) break
