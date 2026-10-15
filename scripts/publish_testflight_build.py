@@ -82,10 +82,7 @@ def wait_for_build(app_id, build_number, marketing_version, tok, timeout_minutes
 
 
 def find_group_id(app_id, group_name, tok):
-    # Top-level /v1/betaGroups, not /v1/apps/{id}/betaGroups: the app-scoped relationship
-    # endpoint rejects every filter (400 PARAMETER_ERROR.ILLEGAL on filter[name]).
-    groups = api("GET", f"/v1/betaGroups?filter[app]={app_id}"
-                 f"&filter[name]={urllib.parse.quote(group_name)}&limit=1", tok)["data"]
+    groups = api("GET", f"/v1/betaGroups?filter[app]={app_id}&filter[name]={urllib.parse.quote(group_name)}&limit=1", tok)["data"]
     if not groups:
         sys.exit(f'no beta group named "{group_name}" on this app — create it once in App Store Connect '
                   "(TestFlight > External Testing) before the next nightly run")
