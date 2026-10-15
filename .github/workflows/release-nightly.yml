@@ -696,10 +696,15 @@ jobs:
             # `linkReleaseExecutableLinuxX64` vs `linuxX64Test`: the link task
             # capitalises the arch, the test task does not. Concatenating one
             # value onto both produced a task name that resolves to nothing.
+            testTask: linuxX64Test
             linkTarget: LinuxX64
             runner: ubuntu-24.04
           - arch: arm64
             target: linuxArm64
+            # Kotlin/Native creates no `linuxArm64Test` lifecycle task on the arm64 host
+            # (the name is ambiguous between the test binary tasks), so this leg only
+            # compiles the test binaries; x64 runs them.
+            testTask: linuxArm64TestBinaries
             linkTarget: LinuxArm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
@@ -744,7 +749,7 @@ jobs:
         run: >-
           ./gradlew
           :cli:linkReleaseExecutable${{ matrix.linkTarget }}
-          :klardrop-common:${{ matrix.target }}Test
+          :klardrop-common:${{ matrix.testTask }}
           $GRADLE_VERSION_ARGS
 
       - name: Build + test Qt frontend (${{ matrix.target }})
@@ -1139,6 +1144,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
           Get-ChildItem -Path desktop/build/compose/binaries -Filter *.msi -Recurse |
             ForEach-Object { Copy-Item $_.FullName dist/ -Force }
 
