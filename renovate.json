@@ -14,8 +14,13 @@
     },
     {
       "description": "Sentry KMP 0.28 drops CocoaPods; hold at 0.27 until :klardrop-common links Sentry Cocoa via SwiftPM",
-      "matchPackageNames": ["io.sentry.kotlin.multiplatform.gradle"],
+      "matchDepNames": ["io.sentry.kotlin.multiplatform.gradle"],
       "allowedVersions": "<0.28.0"
+    },
+    {
+      "description": "The Compose Gradle plugin is published before its libraries reach Maven Central; wait so the PR resolves",
+      "matchDepNames": ["/^org\\.jetbrains\\.compose/"],
+      "minimumReleaseAge": "2 days"
     }
   ]
 }
