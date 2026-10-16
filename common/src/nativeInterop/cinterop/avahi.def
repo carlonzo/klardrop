@@ -3,10 +3,13 @@ headerFilter = avahi-client/* avahi-common/*
 package = com.carlom.klardrop.common.mdns.avahi
 # Debian/Ubuntu keep the arch-specific half of glibc (bits/*) under /usr/include/<triplet>,
 # which the interop clang never searches on its own: without these the index dies with
-# "bits/timesize.h file not found". This .def is shared by the x64 and arm64 targets, so
-# both triplets are listed: the host's own directory is always present and is searched
-# first, and the other is absent or a copy of the same file set with other arch constants.
-compilerOpts = -I/usr/include -I/usr/include/x86_64-linux-gnu -I/usr/include/aarch64-linux-gnu
+# "bits/timesize.h file not found". The triplet is per target, not "whichever directory
+# happens to exist first": linuxArm64 is cross-compiled from an x64 host (Kotlin/Native
+# has no linux-aarch64 compiler), and listing x86_64 ahead of aarch64 makes that compile
+# index the host's headers into an arm64 binary.
+compilerOpts = -I/usr/include
+compilerOpts.linux_x64 = -I/usr/include/x86_64-linux-gnu
+compilerOpts.linux_arm64 = -I/usr/include/aarch64-linux-gnu
 # --allow-shlib-undefined: this library comes from the host, and the host's glibc is newer
 # than the one Kotlin/Native links against, so it references symbol versions konan's sysroot
 # does not have. They resolve at load time against the host's libc. It lives here rather
@@ -16,5 +19,9 @@ compilerOpts = -I/usr/include -I/usr/include/x86_64-linux-gnu -I/usr/include/aar
 # Debian and Ubuntu are multiarch and put libavahi-*.so in /usr/lib/<triplet>, which
 # ld.lld's built-in search list (plain /usr/lib, /usr/lib64, /lib, /lib64) does not
 # include, so a link there fails with "unable to find library -lavahi-client". Arch and
-# Fedora use /usr/lib, which is why this only ever showed up on CI.
-linkerOpts = -L/usr/lib -L/usr/lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/lib/aarch64-linux-gnu -lavahi-client -lavahi-common --allow-shlib-undefined
+# Fedora use /usr/lib, which is why this only ever showed up on CI. Each target searches
+# only its own triplet, so an x64 host that also has the :arm64 packages installed (the
+# cross compile) cannot pick up libavahi from /usr/lib/x86_64-linux-gnu.
+linkerOpts = -L/usr/lib -L/usr/lib64 --allow-shlib-undefined
+linkerOpts.linux_x64 = -L/usr/lib/x86_64-linux-gnu -lavahi-client -lavahi-common
+linkerOpts.linux_arm64 = -L/usr/lib/aarch64-linux-gnu -lavahi-client -lavahi-common

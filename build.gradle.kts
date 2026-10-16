@@ -18,20 +18,24 @@ plugins {
 }
 
 /**
- * `true` when this host can actually build the Kotlin/Native Linux arm64 target.
+ * `true` when this build should declare the Kotlin/Native linuxArm64 target.
  *
- * The Linux native build links against the *host's* avahi/sqlite/openssl/systemd — the
- * cinterop .def files point at `/usr/include` and `-L/usr/lib64`, and the release jobs run
- * the arm64 leg on a native `ubuntu-24.04-arm`. Kotlin/Native can cross-compile linuxArm64
- * from an x64 Linux host, so nothing host-locks it out of the build there: the cinterop
- * would index x86_64 headers for an arm64 target and the link would pick up x86_64 shared
- * objects. Modules declare `linuxArm64()` only where it can really be built, so
- * `./gradlew build` on an x64 Linux host tests what it can instead of failing on a
- * cross-compile no consumer of that build wants.
+ * Kotlin/Native 2.4 ships no compiler for a linux-aarch64 *host* (supported hosts are
+ * linux x64, windows x64, and macOS). On `ubuntu-24.04-arm` the plugin disables
+ * linuxArm64, `linkReleaseExecutableLinuxArm64` is SKIPPED, and Gradle still exits 0 —
+ * which is how the nightly arm64 tarball lost its engine. The release jobs therefore
+ * cross-compile that target from ubuntu-24.04 by passing `-Pklardrop.forceLinuxArm64=true`
+ * and installing the aarch64 multiarch headers and libraries. The cinterop `.def` files
+ * select those with `compilerOpts.linux_arm64` / `linkerOpts.linux_arm64`, so the cross
+ * compile does not index the host's x86_64 headers or link its x86_64 shared objects.
+ *
+ * An ordinary x64 `./gradlew build` leaves the target off: that build does not install
+ * the aarch64 dev packages, and no consumer of it wants the cross compile.
  */
 val hostCanBuildLinuxArm64: Boolean =
-  !(System.getProperty("os.name") == "Linux" &&
-    System.getProperty("os.arch") in setOf("amd64", "x86_64"))
+  findProperty("klardrop.forceLinuxArm64")?.toString() == "true" ||
+    !(System.getProperty("os.name") == "Linux" &&
+      System.getProperty("os.arch") in setOf("amd64", "x86_64"))
 
 allprojects {
   extra["hostCanBuildLinuxArm64"] = hostCanBuildLinuxArm64

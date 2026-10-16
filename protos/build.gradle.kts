@@ -9,7 +9,7 @@ kotlin {
   iosSimulatorArm64()
   macosArm64()
   linuxX64()
-  // arm64 Linux builds only on an aarch64 host — see `hostCanBuildLinuxArm64`.
+  // Declared only when this build can produce linuxArm64 — see `hostCanBuildLinuxArm64`.
   if (rootProject.extra["hostCanBuildLinuxArm64"] as Boolean) linuxArm64()
 
   targets.all {

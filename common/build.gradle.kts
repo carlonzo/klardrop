@@ -46,11 +46,9 @@ kotlin {
         // /usr/lib/<triplet>, which that list does not include — so a link there fails
         // with "unable to find library -lsqlite3" and friends. Arch and Fedora put the
         // same libraries in /usr/lib, which is why this only ever showed up on CI.
-        // Listed for both triplets, like the include paths in openssl.def: the host's
-        // own directory is always present and is searched first, the other is simply
-        // absent and ignored.
+        // This target's triplet only. linuxArm64 lists the aarch64 dir instead:
+        // searching both would let an x64 cross-compile pick up x86_64 libraries.
         "-L/usr/lib/x86_64-linux-gnu",
-        "-L/usr/lib/aarch64-linux-gnu",
         // Kotlin/Native links against its bundled older glibc sysroot, and the host libavahi/libsqlite3 reference newer glibc symbol versions that resolve at runtime.
         "--allow-shlib-undefined",
         "-lsqlite3",
@@ -63,7 +61,7 @@ kotlin {
       )
     }
   }
-  // arm64 Linux builds only on an aarch64 host — see `hostCanBuildLinuxArm64`.
+  // Declared only when this build can produce linuxArm64 — see `hostCanBuildLinuxArm64`.
   if (rootProject.extra["hostCanBuildLinuxArm64"] as Boolean) {
     linuxArm64 {
       compilations.getByName("main") {
@@ -85,12 +83,10 @@ kotlin {
       binaries.all {
         linkerOpts(
           "-Wl,--as-needed",
-          // Same multiarch library paths as linuxX64 above; see the comment there.
-          "-L/usr/lib/x86_64-linux-gnu",
+          // aarch64 multiarch dir only — see the linuxX64 note above. The release job
+          // cross-compiles this target on ubuntu-24.04 with the :arm64 dev packages
+          // installed; a native aarch64 host has the same directory.
           "-L/usr/lib/aarch64-linux-gnu",
-          // Same bundled-sysroot arrangement as linuxX64 above. The .def files only point at
-          // /usr/include and -L/usr/lib(64), which resolve to the aarch64 headers/libs
-          // natively on an arm64 runner — no cross-linking, same as x64.
           "--allow-shlib-undefined",
           "-lsqlite3",
           "-lssl",

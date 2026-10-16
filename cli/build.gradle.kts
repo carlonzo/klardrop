@@ -43,7 +43,6 @@ kotlin {
         // search list does not include Debian/Ubuntu's multiarch /usr/lib/<triplet>, so
         // without these the engine fails to link with "unable to find library -lsqlite3".
         "-L/usr/lib/x86_64-linux-gnu",
-        "-L/usr/lib/aarch64-linux-gnu",
         // Kotlin/Native links against its bundled older glibc sysroot; host libs reference
         // newer glibc symbol versions that resolve correctly at runtime.
         "--allow-shlib-undefined",
@@ -62,7 +61,7 @@ kotlin {
     }
   }
 
-  // arm64 Linux builds only on an aarch64 host — see `hostCanBuildLinuxArm64`.
+  // Declared only when this build can produce linuxArm64 — see `hostCanBuildLinuxArm64`.
   if (rootProject.extra["hostCanBuildLinuxArm64"] as Boolean) {
     linuxArm64 {
       binaries {
@@ -77,10 +76,11 @@ kotlin {
         linkerOpts(
           "-Wl,--as-needed",
           // Same multiarch library paths as linuxX64 above; see the note there.
-          "-L/usr/lib/x86_64-linux-gnu",
+          // aarch64 multiarch dir only. The release cross-compile runs on an x64 host
+          // that also has /usr/lib/x86_64-linux-gnu; searching that first links the
+          // wrong sqlite3. Native aarch64 hosts have this directory too.
           "-L/usr/lib/aarch64-linux-gnu",
-          // Same bundled-sysroot arrangement as linuxX64 above; arm64 runners provide
-          // the aarch64 system libs at these paths natively (no cross-linking).
+          // Same bundled-sysroot arrangement as linuxX64 above.
           "--allow-shlib-undefined",
           "-lsqlite3",
           // Same clikt duplicate-symbol handling as the linuxX64 binary above.
