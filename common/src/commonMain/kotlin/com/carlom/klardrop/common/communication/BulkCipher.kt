@@ -42,7 +42,7 @@ import dev.whyoleg.cryptography.operations.IvAuthenticatedCipher
  * THREADING: [seal] advances [sendCounter] and must be called under the connection's write mutex,
  * exactly like [FrameCipher.encode]. [open] is only ever called from the single read loop.
  */
-class BulkCipher internal constructor(
+internal class BulkCipher internal constructor(
   private val sendKey: IvAuthenticatedCipher,
   private val receiveKey: IvAuthenticatedCipher,
 ) {

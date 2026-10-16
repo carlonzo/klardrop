@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
-class ConnectionInfoMessageHandler(
+internal class ConnectionInfoMessageHandler(
   private val serializer: MessageSerializer
 ) : MessageHandler<ConnectionInfoMessage, SimpleSendMessageRequest> {
 

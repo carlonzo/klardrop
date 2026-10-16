@@ -83,7 +83,7 @@ import kotlinx.serialization.protobuf.ProtoBuf
  * // Server now accepts both Klardrop and Nearby Share connections on config.port
  * ```
  */
-class Server(
+class Server internal constructor(
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,

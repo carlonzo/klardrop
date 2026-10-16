@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
  * Call [start] once when the app comes up; cancel [stop] (or let the app shut down) to
  * tear down the GATT server.
  */
-class BleServerListener(
+class BleServerListener internal constructor(
   private val coroutines: com.carlom.klardrop.common.utils.Coroutines,
   private val bleTransport: BleTransport,
   private val serializer: MessageSerializer,

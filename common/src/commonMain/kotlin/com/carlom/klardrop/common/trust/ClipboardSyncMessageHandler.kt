@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.update
  * Message handler for ClipboardSyncMessage.
  * Handles incoming clipboard sync messages and delegates to ClipboardSyncManager.
  */
-class ClipboardSyncMessageHandler(
+internal class ClipboardSyncMessageHandler(
     private val serializer: MessageSerializer,
     private val clipboardSyncManager: ClipboardSyncManager
 ) : MessageHandler<ClipboardSyncMessage, SimpleSendMessageRequest> {

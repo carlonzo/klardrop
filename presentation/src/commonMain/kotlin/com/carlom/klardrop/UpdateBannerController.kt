@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
  * into the concrete side effect (copy a command, open a download URL), and applies a
  * staged update.
  */
-class UpdateBannerController(private val commonComponent: CommonComponent) {
+class UpdateBannerController internal constructor(private val commonComponent: CommonComponent) {
 
   private val checker = commonComponent.updateChecker()
 

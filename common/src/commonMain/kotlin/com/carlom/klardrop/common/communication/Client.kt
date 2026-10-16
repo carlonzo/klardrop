@@ -143,7 +143,7 @@ internal fun Throwable.isConnectionRefused(): Boolean {
   return false
 }
 
-class ClientImpl(
+class ClientImpl internal constructor(
   private val connectionsPool: ConnectionsPool,
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,

@@ -16,7 +16,7 @@ class KlardropBootstrap {
 
     private val applicationInfo = ApplicationInfo()
 
-    val klardrop: Klardrop = Klardrop(
+    internal val klardrop: Klardrop = Klardrop(
         internalPlatformDependency = InternalPlatformDependencies(applicationInfo)
     )
 

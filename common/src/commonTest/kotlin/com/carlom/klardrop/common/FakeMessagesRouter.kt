@@ -11,7 +11,7 @@ import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.sync.Mutex
 
-open class FakeMessagesRouter: MessagesRouter {
+internal open class FakeMessagesRouter: MessagesRouter {
   override suspend fun onMessageIncoming(
     fromDeviceId: String,
     writeChannel: ByteWriteChannel,

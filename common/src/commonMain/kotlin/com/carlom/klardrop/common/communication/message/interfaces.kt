@@ -172,7 +172,7 @@ class TransferRejectedException(val messageId: Int) :
  */
 class NearbyTransferRejectedException(message: String) : RuntimeException(message)
 
-interface MessageHandler<E : Message, R : SendMessageRequest> {
+internal interface MessageHandler<E : Message, R : SendMessageRequest> {
 
   suspend fun handleIncoming(message: E, readChannel: ByteReadChannel, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>)
 

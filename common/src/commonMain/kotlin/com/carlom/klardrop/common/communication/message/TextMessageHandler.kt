@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
 
-class TextMessageHandler(
+internal class TextMessageHandler(
   private val serializer: MessageSerializer,
   private val messageRepository: MessageRepository
 ) : MessageHandler<TextMessage, SimpleSendMessageRequest> {
