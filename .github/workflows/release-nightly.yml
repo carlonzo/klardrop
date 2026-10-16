@@ -699,14 +699,11 @@ jobs:
             testTask: linuxX64Test
             linkTarget: LinuxX64
             runner: ubuntu-24.04
-          - arch: arm64
-            target: linuxArm64
-            # Kotlin/Native creates no `linuxArm64Test` lifecycle task on the arm64 host
-            # (the name is ambiguous between the test binary tasks), so this leg only
-            # compiles the test binaries; x64 runs them.
-            testTask: linuxArm64TestBinaries
-            linkTarget: LinuxArm64
-            runner: ubuntu-24.04-arm
+            # arm64 is not a matrix leg. Kotlin/Native has no linux-aarch64 host
+            # compiler, so ubuntu-24.04-arm skips linkReleaseExecutableLinuxArm64
+            # and Gradle still exits 0. linux-native-arm64-engine cross-compiles
+            # the engine on ubuntu-24.04; linux-native-arm64 packages it with the
+            # native arm64 Qt frontend and Rust client.
     runs-on: ${{ matrix.runner }}
     env:
       GRADLE_VERSION_ARGS: >-
@@ -764,10 +761,10 @@ jobs:
 
       # The native tarball ships TWO binaries: the Kotlin/Native engine linked above
       # and the native Rust CLI. packaging/linux/stage-native-tarball.sh fails closed
-      # without it, so it is built here for both matrix arches (the runners are
-      # native x64 and arm64 — no cross-compilation). cli-rust/rust-toolchain.toml
-      # pins the toolchain, which the hosted image's rustup installs on first use;
-      # --locked keeps the committed Cargo.lock authoritative.
+      # without it. This job is the x64 leg; the arm64 client is built natively in
+      # linux-native-arm64. cli-rust/rust-toolchain.toml pins the toolchain, which
+      # the hosted image's rustup installs on first use; --locked keeps the
+      # committed Cargo.lock authoritative.
       - name: Build Rust CLI client (${{ matrix.arch }})
         working-directory: cli-rust
         shell: bash
@@ -785,6 +782,130 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: nightly-linux-${{ matrix.arch }}-native
+          path: dist/*
+          if-no-files-found: error
+
+  # Cross-compile the linuxArm64 Kotlin/Native engine. The compiler does not run
+  # on ubuntu-24.04-arm (see the note on the linux-native matrix), so this job
+  # runs on the x64 runner with the aarch64 multiarch dev packages installed and
+  # -Pklardrop.forceLinuxArm64=true, which is what declares the target on an x64
+  # host. The kexe is an intermediate: linux-native-arm64 consumes it, and
+  # publish drops the raw binary so it is not attached to the GitHub release.
+  linux-native-arm64-engine:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.gate.outputs.semver }}
+        -Pklardrop.packageVersion=${{ needs.gate.outputs.base }}
+        -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
+        -Pklardrop.updateChannel=nightly
+        -Pklardrop.forceLinuxArm64=true
+      ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # The compiler downloaded here is the linux x64 one (the only Linux host
+      # Konan supports). Key it like the x64 job, not like the old arm runner,
+      # whose cache never held a usable compiler.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-x64-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-x64-
+
+      - name: Install aarch64 cross libraries
+        run: bash packaging/linux/install-arm64-cross-deps.sh
+
+      # Link only. `linuxArm64TestBinaries` does not compile: the Linux test
+      # actuals live in `linuxX64Test`, and the default hierarchy creates no
+      # shared `linuxTest` source set unless both Linux targets are declared,
+      # which an ordinary x64 build is not. x64 runs that suite. A skipped
+      # link used to exit 0 and fail only later, at tarball staging, so the
+      # next step checks the kexe exists and is aarch64.
+      - name: Cross-compile linuxArm64 engine
+        run: >-
+          ./gradlew
+          :cli:linkReleaseExecutableLinuxArm64
+          $GRADLE_VERSION_ARGS
+
+      - name: Require an aarch64 engine binary
+        run: |
+          set -euo pipefail
+          bin=cli/build/bin/linuxArm64/releaseExecutable/klardrop-engine.kexe
+          test -f "$bin"
+          machine="$(readelf -h "$bin" | awk -F: '/Machine:/ {print $2}')"
+          echo "engine ELF machine:$machine"
+          echo "$machine" | grep -qiE 'AArch64|ARM64'
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: internal-linux-arm64-engine
+          path: cli/build/bin/linuxArm64/releaseExecutable/klardrop-engine.kexe
+          if-no-files-found: error
+
+  # Package the arm64 native tarball. Qt and the Rust client are built on the
+  # arm64 runner (they are ordinary native builds). The Kotlin/Native engine
+  # comes from linux-native-arm64-engine; this runner cannot compile it.
+  linux-native-arm64:
+    needs: [gate, linux-native-arm64-engine]
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Qt build deps
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y
+          qt6-base-dev qt6-declarative-dev qmake6 libgl-dev xvfb binutils
+          qml6-module-qtquick qml6-module-qtquick-controls
+          qml6-module-qtquick-layouts qml6-module-qtquick-templates
+          qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models
+          qml6-module-qtqml-workerscript
+
+      - name: Build + test Qt frontend (linuxArm64)
+        shell: bash
+        run: |
+          mkdir -p /tmp/build-klardrop-qt
+          cd /tmp/build-klardrop-qt
+          qmake6 "KLARDROP_VERSION=${{ needs.gate.outputs.semver }}" "$GITHUB_WORKSPACE/linux/qt/klardrop-qt.pro"
+          make -j$(nproc)
+          ./klardrop-qt --check-runtime
+          python3 "$GITHUB_WORKSPACE/linux/qt/tests/test_integration.py"
+
+      - name: Build Rust CLI client (arm64)
+        working-directory: cli-rust
+        shell: bash
+        run: |
+          rustc --version
+          cargo --version
+          cargo build --locked --release
+
+      - name: Download the cross-compiled engine
+        uses: actions/download-artifact@v8
+        with:
+          name: internal-linux-arm64-engine
+          path: cli/build/bin/linuxArm64/releaseExecutable
+
+      - name: Stage native Linux tarball (arm64)
+        shell: bash
+        env:
+          KLARDROP_QT_BIN: /tmp/build-klardrop-qt/klardrop-qt
+        run: bash packaging/linux/stage-native-tarball.sh "${{ needs.gate.outputs.semver }}" arm64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-linux-arm64-native
           path: dist/*
           if-no-files-found: error
 
@@ -1159,7 +1280,7 @@ jobs:
   # succeeded. prerelease:true keeps it off `releases/latest`, so install.sh / Homebrew
   # (which track the stable release) are unaffected.
   publish:
-    needs: [gate, android, ios, linux, linux-native, macos, windows]
+    needs: [gate, android, ios, linux, linux-native, linux-native-arm64, macos, windows]
     if: needs.gate.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -1186,6 +1307,9 @@ jobs:
           set -euo pipefail
           cd artifacts
           ls -la
+          # The cross-compiled engine is an input to the arm64 tarball, not a
+          # release asset. Leaving it here would attach the raw kexe.
+          rm -f klardrop-engine.kexe
           for f in *; do
             if [ -f "$f" ] && [[ "$f" != *.sha256 ]] && [[ "$f" != "latest.json" ]]; then
               sha256sum "$f" | awk '{print $1}' > "$f.sha256"
