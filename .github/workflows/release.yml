@@ -443,7 +443,7 @@ jobs:
   # on the x64 runner. The kexe is an intermediate; publish drops it.
   build-linux-native-arm64-engine:
     needs: version
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       GRADLE_VERSION_ARGS: >-
         -Pklardrop.version=${{ needs.version.outputs.version }}
@@ -501,7 +501,7 @@ jobs:
   # on the arm64 runner. The engine comes from build-linux-native-arm64-engine.
   build-linux-native-arm64:
     needs: [version, build-linux-native-arm64-engine]
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@v7
 
