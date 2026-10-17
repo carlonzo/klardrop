@@ -120,10 +120,7 @@ public data class ReceiveMessageUpdate(
 public data class MessageProgress(
   public val message: Message,
   public val progress: Int,
-) {
-  public val first: Message get() = message
-  public val second: Int get() = progress
-}
+)
 
 public sealed interface ReceiveMessageStatus {
 

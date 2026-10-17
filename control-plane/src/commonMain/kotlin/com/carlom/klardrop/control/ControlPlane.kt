@@ -386,7 +386,7 @@ object ControlPlane : ControlPlaneService {
             }
             is ReceiveMessageStatus.Progress -> {
               val pair = s.messages.lastOrNull()
-              val file = pair?.first as? FileMessage
+              val file = pair?.message as? FileMessage
               val key = if (file != null) "rx-${file.id}" else "rx-$deviceId"
               val name = file?.fileName ?: "file"
               val total = if (s.totalBytes > 0) s.totalBytes else (file?.fileSize ?: 0L)

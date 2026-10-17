@@ -178,18 +178,15 @@ public interface TrustStorage {
      * left over from a previous identity) we would otherwise advertise one public key
      * at pairing time while signing with a non-matching private key: every peer then
      * rejects our signatures permanently, and re-pairing can't recover because we keep
-     * signing with the stale private key.
-     *
-     * To heal that state: when a stored public key is present, and either (a) the
-     * private key is missing entirely, or (b) [ecdsaKeyHalvesMatch] fails, we wipe
-     * the orphaned state and regenerate a fresh pair from scratch.
+     * handing back the same broken pair. So before reusing a stored pair we confirm the
+     * two halves actually match; on mismatch (or a missing half) we regenerate both.
      */
     public suspend fun ensureDeviceKey(crypto: TrustCrypto): TrustCrypto.ECDSAPublicKey {
         val storedPublic = getDevicePublicKey()
-        if (storedPublic != null) {
-            // Android Keystore / Apple Keychain sign in-place and don't export the private
-            // key bytes; they keep their own consistency. Only verify the desktop / software
-            // keypair path where [getDevicePrivateKey] is available. When both halves
+        if (hasDeviceKey() && storedPublic != null) {
+            // getDevicePrivateKey() returns null on secure-store platforms that don't
+            // export private bytes — but those override ensureDeviceKey(), so here a null
+            // means "no usable private key" and we fall through to regenerate. When bytes
             // are present, prove the halves are a pair before trusting them.
             val storedPrivate = getDevicePrivateKey()
             if (storedPrivate != null && ecdsaKeyHalvesMatch(crypto, storedPrivate, storedPublic)) {

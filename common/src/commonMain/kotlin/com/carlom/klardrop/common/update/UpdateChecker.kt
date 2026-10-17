@@ -33,7 +33,7 @@ import kotlin.time.Duration.Companion.hours
  * @param manifestUrl the `latest.json` URL; defaults to the stable "latest release" link.
  * @param recheckInterval how often [start]'s background loop re-checks.
  */
-public class UpdateChecker internal constructor(
+public class UpdateChecker(
   private val currentVersion: String,
   private val osType: OsType,
   private val fetcher: UpdateManifestFetcher?,
@@ -46,69 +46,6 @@ public class UpdateChecker internal constructor(
   private val assetKey: String = platformUpdateAssetKey,
   private val detectFlavorFlag: () -> String? = ::detectPlatformFlavorFlag,
 ) {
-
-  public constructor(
-    currentVersion: String,
-    osType: OsType,
-    fetcher: UpdateManifestFetcher?,
-    detectChannel: () -> InstallChannel,
-    coroutines: Coroutines,
-  ) : this(
-    currentVersion = currentVersion,
-    osType = osType,
-    fetcher = fetcher,
-    detectChannel = detectChannel,
-    coroutines = coroutines,
-    installerFactory = ::createUpdateInstaller,
-    releaseChannel = "stable",
-    manifestUrl = DEFAULT_MANIFEST_URL,
-    recheckInterval = DEFAULT_RECHECK_INTERVAL,
-    assetKey = platformUpdateAssetKey,
-    detectFlavorFlag = ::detectPlatformFlavorFlag,
-  )
-
-  public constructor(
-    currentVersion: String,
-    osType: OsType,
-    fetcher: UpdateManifestFetcher?,
-    detectChannel: () -> InstallChannel,
-    coroutines: Coroutines,
-    installerFactory: (InstallChannel) -> UpdateInstaller?,
-  ) : this(
-    currentVersion = currentVersion,
-    osType = osType,
-    fetcher = fetcher,
-    detectChannel = detectChannel,
-    coroutines = coroutines,
-    installerFactory = installerFactory,
-    releaseChannel = "stable",
-    manifestUrl = DEFAULT_MANIFEST_URL,
-    recheckInterval = DEFAULT_RECHECK_INTERVAL,
-    assetKey = platformUpdateAssetKey,
-    detectFlavorFlag = ::detectPlatformFlavorFlag,
-  )
-
-  public constructor(
-    currentVersion: String,
-    osType: OsType,
-    fetcher: UpdateManifestFetcher?,
-    detectChannel: () -> InstallChannel,
-    coroutines: Coroutines,
-    installerFactory: (InstallChannel) -> UpdateInstaller?,
-    assetKey: String,
-  ) : this(
-    currentVersion = currentVersion,
-    osType = osType,
-    fetcher = fetcher,
-    detectChannel = detectChannel,
-    coroutines = coroutines,
-    installerFactory = installerFactory,
-    releaseChannel = "stable",
-    manifestUrl = DEFAULT_MANIFEST_URL,
-    recheckInterval = DEFAULT_RECHECK_INTERVAL,
-    assetKey = assetKey,
-    detectFlavorFlag = ::detectPlatformFlavorFlag,
-  )
 
   private val scope = coroutines.newScope(coroutines.ioDispatcher)
 

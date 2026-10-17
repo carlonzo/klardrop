@@ -128,7 +128,7 @@ public class DeviceChatViewModel internal constructor(
           is ReceiveMessageStatus.Started ->
             _uiState.update { it.transferring(fraction = null, statusText = "Receiving…") }
           is ReceiveMessageStatus.Progress -> {
-            val percentage = status.messages.lastOrNull()?.second
+            val percentage = status.messages.lastOrNull()?.progress
             if (percentage != null) {
               onTransferProgress(percentage / 100f, status.bytesTransferred, status.totalBytes)
             }

@@ -32,7 +32,7 @@ public expect class InternalPlatformDependencies {
   internal suspend fun openFile(filePath: String): Boolean
 
   /**
-   * Hand [url] to the system handler — browser for http(s), mail client for
+   * Hand [url] to the system's URL handler — browser for http(s), mail client for
    * mailto:, etc. Returns false when the platform can't dispatch the URL (no handler
    * registered, runtime restriction, etc.) so callers can surface an error.
    */
