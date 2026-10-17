@@ -20,9 +20,9 @@ import kotlinx.io.files.Path
 import platform.posix.F_OK
 import platform.posix.access
 
-actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
+public actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
-  actual fun getDownloadStoragePath(): Path {
+  internal actual fun getDownloadStoragePath(): Path {
     // The JVM host gets this for free: FileKit's `downloadDir` creates the
     // directory before returning it. The native engine resolves the path itself,
     // so without this a receiver whose ~/Downloads does not exist yet fails at
@@ -34,41 +34,41 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     return Path(dir)
   }
 
-  actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns = createServiceDiscoveryMdns()
+  internal actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns = createServiceDiscoveryMdns()
 
   private val networkLifecycleMonitor by lazy { NetworkLifecycleMonitor() }
-  actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
+  internal actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
-  actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
+  internal actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
     com.carlom.klardrop.common.qrshare.PlatformLanAddressSelector()
 
   private val permissionsMonitor by lazy { PermissionsMonitor() }
-  actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
+  internal actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
 
   private val connectivityRestrictionMonitor by lazy { ConnectivityRestrictionMonitor() }
-  actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
+  internal actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
 
   private val notifier by lazy { Notifier() }
-  actual fun notifier(): Notifier = notifier
+  internal actual fun notifier(): Notifier = notifier
 
   private val foregroundState by lazy { ForegroundState() }
-  actual fun foregroundState(): ForegroundState = foregroundState
+  internal actual fun foregroundState(): ForegroundState = foregroundState
 
   private val bleTransport by lazy { BleTransport() }
-  actual fun bleTransport(): BleTransport = bleTransport
+  internal actual fun bleTransport(): BleTransport = bleTransport
 
-  actual fun clipboardReaderWriter(): ClipboardReaderWriter = ClipboardReaderWriter()
+  internal actual fun clipboardReaderWriter(): ClipboardReaderWriter = ClipboardReaderWriter()
 
-  actual fun connectionInfoJoiner(): ConnectionInfoJoiner =
+  internal actual fun connectionInfoJoiner(): ConnectionInfoJoiner =
     FallbackClipboardConnectionInfoJoiner(clipboardReaderWriter())
 
-  actual fun driverFactory(): DriverFactory =
+  internal actual fun driverFactory(): DriverFactory =
     DriverFactory(Path(LinuxPaths.databasesDir), applicationInfo.disablePersistence)
 
   private val trustStorageInstance by lazy { LinuxTrustStorage(LinuxPaths.trustDir) }
-  actual fun trustStorage(): TrustStorage = trustStorageInstance
+  internal actual fun trustStorage(): TrustStorage = trustStorageInstance
 
-  actual suspend fun openFile(filePath: String): Boolean {
+  internal actual suspend fun openFile(filePath: String): Boolean {
     if (access(filePath, F_OK) != 0) return false
     return try {
       val result = execProcess(listOf("xdg-open", filePath))
@@ -78,7 +78,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     }
   }
 
-  actual suspend fun openUrl(url: String): Boolean {
+  internal actual suspend fun openUrl(url: String): Boolean {
     return try {
       val result = execProcess(listOf("xdg-open", url))
       result.exitCode == 0
@@ -87,7 +87,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     }
   }
 
-  actual suspend fun saveMediaToGallery(
+  internal actual suspend fun saveMediaToGallery(
     tempPath: Path,
     mimeType: String,
     displayName: String,

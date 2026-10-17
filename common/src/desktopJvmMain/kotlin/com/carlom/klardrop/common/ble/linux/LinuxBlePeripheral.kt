@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
  * central subscribes to the RX characteristic. Cancelling the flow unregisters the
  * application and closes all live sessions.
  */
-class LinuxBlePeripheral(private val facade: BlueZFacade) {
+internal class LinuxBlePeripheral(private val facade: BlueZFacade) {
 
   fun serveGatt(): Flow<BleSession> = callbackFlow {
     val sessions = ConcurrentHashMap<String, LinuxBleSession>()

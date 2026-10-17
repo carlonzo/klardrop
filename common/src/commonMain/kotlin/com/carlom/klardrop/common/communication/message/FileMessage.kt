@@ -7,6 +7,7 @@ import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
+import com.carlom.klardrop.common.receiver.MessageProgress
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Clock
@@ -47,10 +48,10 @@ private const val PROGRESS_EMIT_PERCENT_DELTA = 5
  * interleave between chunks since each chunk is its own framed message on the wire.
  */
 @Serializable
-data class FileMessage(
-  val fileName: String,
-  val fileSize: Long,
-  val mimeType: String,
+public data class FileMessage(
+  public val fileName: String,
+  public val fileSize: Long,
+  public val mimeType: String,
   /**
    * SHA-256 of the file's bytes, computed by the sender before the header goes on the wire.
    * Binds the (signed) header to the content that follows so chunks can flow unsigned without
@@ -58,17 +59,16 @@ data class FileMessage(
    * marking the transfer COMPLETED. Null on legacy headers from peers that pre-date this
    * field; receivers fall back to "no integrity check" with a warn log in that case.
    */
-  val contentHash: ByteArray? = null,
+  public val contentHash: ByteArray? = null,
   override val id: Int = Random.nextInt(),
 ) : Message() {
   override val type: MessageType = MessageType.FILE
   override val hasPayload: Boolean = true
 
-  data class FileSendRequest(
+  public data class FileSendRequest(
     override val message: FileMessage,
-    val file: PlatformFile,
-    override val messageSignature: MessageSignature? = null
-  ) : SignedSendMessageRequest
+    public val file: PlatformFile,
+  ) : SendMessageRequest
 
   override fun equals(other: Any?): Boolean {
     if (this === other) return true
@@ -97,8 +97,8 @@ data class FileMessage(
   }
 }
 
-fun FileMessage.toSendRequest(file: PlatformFile, messageSignature: MessageSignature? = null): FileMessage.FileSendRequest {
-  return FileMessage.FileSendRequest(this, file, messageSignature)
+public fun FileMessage.toSendRequest(file: PlatformFile): FileMessage.FileSendRequest {
+  return FileMessage.FileSendRequest(this, file)
 }
 
 /**
@@ -111,11 +111,11 @@ fun FileMessage.toSendRequest(file: PlatformFile, messageSignature: MessageSigna
  * [isLast] tells the receiver to close the sink and finalize the transfer.
  */
 @Serializable
-data class FileChunkMessage(
-  val fileMessageId: Int,
-  val seq: Int,
-  val data: ByteArray,
-  val isLast: Boolean = false,
+internal data class FileChunkMessage(
+  internal val fileMessageId: Int,
+  internal val seq: Int,
+  internal val data: ByteArray,
+  internal val isLast: Boolean = false,
   /**
    * HMAC-SHA256 tag over `fileMessageId || seq || isLast || data`, keyed by the per-pair
    * key derived from the ECDH shared secret (see [com.carlom.klardrop.common.trust.TrustManager.computeChunkMac]).
@@ -128,7 +128,7 @@ data class FileChunkMessage(
    * "no per-chunk auth" and the file body is unauthenticated — which is fine for
    * untrusted-peer transfers (those go through manual user accept anyway).
    */
-  val mac: ByteArray? = null,
+  internal val mac: ByteArray? = null,
   override val id: Int = Random.nextInt(),
 ) : Message() {
   override val type: MessageType = MessageType.FILE_CHUNK
@@ -168,10 +168,10 @@ data class FileChunkMessage(
  * Not thread-safe: the router serializes all chunk callbacks for a given pipeline by virtue of
  * processing incoming frames one at a time on the connection's read loop.
  */
-class FileReceivePipeline internal constructor(
-  val header: FileMessage,
+internal class FileReceivePipeline internal constructor(
+  internal val header: FileMessage,
   /** Peer this transfer is coming from; the router uses it to clean up orphans on disconnect. */
-  val fromDeviceId: String,
+  internal val fromDeviceId: String,
   private val fileTransferId: Long,
   private val fileTransfer: FileTransfer,
   private val receiveFlow: MutableStateFlow<ReceiveMessageUpdate>,
@@ -265,7 +265,7 @@ class FileReceivePipeline internal constructor(
       receiveFlow.update {
         it.copy(
           status = ReceiveMessageStatus.Progress(
-            messages = listOf(header to progressValue),
+            messages = listOf(MessageProgress(header, progressValue)),
             bytesTransferred = totalReceived,
             totalBytes = header.fileSize,
           ),
@@ -411,7 +411,7 @@ class FileReceivePipeline internal constructor(
  * [handleOutgoingChunked] (outgoing) directly because the chunked wire format requires
  * per-chunk framing rather than one continuous payload write under a single mutex hold.
  */
-class FileMessageHandler(
+internal class FileMessageHandler(
   private val fileManager: FileManager,
   private val clock: Clock,
   private val coroutines: Coroutines,
@@ -471,7 +471,7 @@ class FileMessageHandler(
     receiveFlow.update {
       it.copy(
         status = ReceiveMessageStatus.Progress(
-          messages = listOf(header to 0),
+          messages = listOf(MessageProgress(header, 0)),
           bytesTransferred = 0,
           totalBytes = header.fileSize,
         ),

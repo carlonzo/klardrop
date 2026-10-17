@@ -12,6 +12,7 @@ plugins {
 }
 
 kotlin {
+  explicitApi()
 
   android {
     namespace = "com.klardrop.presentation"

@@ -18,7 +18,7 @@ package com.carlom.klardrop.common.ble
  * short local name derived from the current device's `shortDeviceId` (≤8 chars) so peers
  * can filter their scans.
  */
-object BleConstants {
+internal object BleConstants {
 
   /** Primary service UUID. Hand-picked random v4 UUID — must stay stable across releases. */
   const val SERVICE_UUID = "a5b7c3e1-7f5a-4b62-9a3c-1d8e2f4b6c8a"

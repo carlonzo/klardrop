@@ -72,7 +72,7 @@ import platform.darwin.OSStatus
  * leaves the device, and is not synchronized via iCloud Keychain.
  */
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
-class AppleTrustStorage : TrustStorage {
+internal class AppleTrustStorage : TrustStorage {
 
     companion object {
         private const val TRUST_KEY_PREFIX = "klardrop_trust_"

@@ -44,7 +44,7 @@ private const val LOG_DEBUG = true
  * don't regress it again. Not used by production code outside of bumping the
  * counter.
  */
-object NearbyDisconnectionObserver {
+internal object NearbyDisconnectionObserver {
   private var counter: Int = 0
   fun recordPeerDisconnection() { counter += 1 }
   fun observed(): Int = counter

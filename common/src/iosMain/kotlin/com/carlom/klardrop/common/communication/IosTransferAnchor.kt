@@ -27,7 +27,7 @@ import platform.UIKit.UIApplication
  * Reference-counted by transfer id so overlapping transfers (send one file, receive another) only
  * release the screen when the last of them is done.
  */
-class IosTransferAnchor : TransferAnchor {
+internal class IosTransferAnchor : TransferAnchor {
 
   /** Ids of in-flight transfers. Touched only from the main queue — see [onMain]. */
   private val active = mutableSetOf<String>()

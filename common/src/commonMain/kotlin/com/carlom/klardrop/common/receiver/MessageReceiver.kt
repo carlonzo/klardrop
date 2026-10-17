@@ -21,16 +21,16 @@ import kotlinx.coroutines.launch
 /**
  * Internal manager used to communicate received messages between servers and Messenger
  */
-interface MessageReceiver {
+public interface MessageReceiver {
 
-  fun onReceiveMessage(deviceId: String): MutableStateFlow<ReceiveMessageUpdate>
+  public fun onReceiveMessage(deviceId: String): MutableStateFlow<ReceiveMessageUpdate>
 
-  val notifier: Flow<Pair<String, StateFlow<ReceiveMessageUpdate>>> // Changed
+  public val notifier: Flow<Pair<String, StateFlow<ReceiveMessageUpdate>>> // Changed
 
   /**
    * Flow that emits updates when a message is received and the status is completed.
    */
-  val messageReceivedNotifier: Flow<ReceiveMessageUpdate>
+  public val messageReceivedNotifier: Flow<ReceiveMessageUpdate>
 
   /**
    * Aggregated, retained latest [ReceiveMessageUpdate] per device id.
@@ -43,7 +43,7 @@ interface MessageReceiver {
    *
    * Default is an empty constant for lightweight test fakes that don't exercise it.
    */
-  val latestUpdates: StateFlow<Map<String, ReceiveMessageUpdate>>
+  public val latestUpdates: StateFlow<Map<String, ReceiveMessageUpdate>>
     get() = MutableStateFlow(emptyMap())
 
 }
@@ -111,32 +111,40 @@ internal class MessageReceiverImpl(
 
 }
 
-data class ReceiveMessageUpdate(
-  val device: DeviceInfo? = null,
-  val messages: List<Message> = emptyList(),
-  val status: ReceiveMessageStatus
+public data class ReceiveMessageUpdate(
+  public val device: DeviceInfo? = null,
+  public val messages: List<Message> = emptyList(),
+  public val status: ReceiveMessageStatus
 )
 
-sealed interface ReceiveMessageStatus {
+public data class MessageProgress(
+  public val message: Message,
+  public val progress: Int,
+) {
+  public val first: Message get() = message
+  public val second: Int get() = progress
+}
 
-  data object Started : ReceiveMessageStatus
+public sealed interface ReceiveMessageStatus {
 
-  data class PendingAuthorization(val acceptTransfer: (Boolean) -> Unit) : ReceiveMessageStatus
+  public data object Started : ReceiveMessageStatus
+
+  public data class PendingAuthorization(public val acceptTransfer: (Boolean) -> Unit) : ReceiveMessageStatus
 
   /**
    * [bytesTransferred]/[totalBytes] mirror MessengerSendProgress.InProgress's counters: the raw
    * byte totals behind the per-message percentage, so the UI can derive throughput and ETA
    * without re-deriving them from a 5%-quantised percentage.
    */
-  data class Progress(
-    val messages: List<Pair<Message, Int>>,
-    val bytesTransferred: Long = 0,
-    val totalBytes: Long = 0,
+  public data class Progress(
+    public val messages: List<MessageProgress>,
+    public val bytesTransferred: Long = 0,
+    public val totalBytes: Long = 0,
   ) : ReceiveMessageStatus
 
-  data class Failed(val reason: String) : ReceiveMessageStatus
+  public data class Failed(public val reason: String) : ReceiveMessageStatus
 
-  data object Completed : ReceiveMessageStatus
+  public data object Completed : ReceiveMessageStatus
 
-  fun isFinished(): Boolean = this is Completed || this is Failed
+  public fun isFinished(): Boolean = this is Completed || this is Failed
 }

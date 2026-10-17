@@ -36,9 +36,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.io.files.Path
 
-class DeviceChatViewModel(
+public class DeviceChatViewModel internal constructor(
   private val deviceId: String,
-  val messageRepository: MessageRepository,
+  public val messageRepository: MessageRepository,
   private val messenger: Messenger,
   private val messageReceiver: MessageReceiver,
   private val client: Client,
@@ -61,15 +61,15 @@ class DeviceChatViewModel(
   private var windowStartBytes = 0L
 
   private val _uiState = MutableStateFlow(ChatUiState())
-  val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+  public val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-  val reachability: StateFlow<Reachability> =
+  public val reachability: StateFlow<Reachability> =
     reachabilitySource
       .map { it[deviceId] ?: Reachability.Unknown }
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Reachability.Unknown)
 
 
-  val messages: StateFlow<List<ChatMessage>> =
+  public val messages: StateFlow<List<ChatMessage>> =
     messageRepository.getMessagesForDevice(deviceId, limit = 100)
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -84,7 +84,7 @@ class DeviceChatViewModel(
    * screen. [latestUpdates] holds the current value, so the prompt shows here regardless
    * of whether the chat screen was already open when the transfer arrived.
    */
-  val pendingAuth: StateFlow<ReceiveMessageUpdate?> =
+  public val pendingAuth: StateFlow<ReceiveMessageUpdate?> =
     messageReceiver.latestUpdates
       .map { updates -> updates[deviceId]?.takeIf { it.status is ReceiveMessageStatus.PendingAuthorization } }
       .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -142,7 +142,7 @@ class DeviceChatViewModel(
     }
   }
 
-  fun sendTextMessage(text: String) {
+  public fun sendTextMessage(text: String): Unit {
     if (text.isBlank()) return
 
     viewModelScope.launch {
@@ -191,12 +191,12 @@ class DeviceChatViewModel(
     }
   }
 
-  fun onDispose() {
+  public fun onDispose(): Unit {
     // Cancel any coroutines started by this ViewModel
     viewModelScope.cancel()
   }
 
-  fun openFileClicked(filePath: String) {
+  public fun openFileClicked(filePath: String): Unit {
     viewModelScope.launch {
       try {
         val success = fileManager.openFile(filePath)
@@ -215,14 +215,14 @@ class DeviceChatViewModel(
     }
   }
 
-  fun copyText(text: String) {
+  public fun copyText(text: String): Unit {
     if (text.isEmpty()) return
     clipboardManager.write(text)
     _uiState.update { it.copy(notice = "Copied to clipboard") }
   }
 
   /** Send whatever text is currently on the clipboard (used by the attachment chooser's Paste action). */
-  fun pasteFromClipboard() {
+  public fun pasteFromClipboard(): Unit {
     val text = clipboardManager.read().trim()
     if (text.isEmpty()) {
       _uiState.update { it.copy(notice = "Clipboard is empty") }
@@ -231,7 +231,7 @@ class DeviceChatViewModel(
     sendTextMessage(text)
   }
 
-  fun openUrlClicked(url: String) {
+  public fun openUrlClicked(url: String): Unit {
     viewModelScope.launch {
       try {
         val success = fileManager.openUrl(url)
@@ -249,7 +249,7 @@ class DeviceChatViewModel(
     }
   }
 
-  fun sendFiles(files: List<PlatformFile>) {
+  public fun sendFiles(files: List<PlatformFile>): Unit {
     if (files.isEmpty()) return
 
     viewModelScope.launch {
@@ -327,15 +327,15 @@ class DeviceChatViewModel(
     _uiState.update { it.transferIdle() }
   }
 
-  fun clearError() {
+  public fun clearError(): Unit {
     _uiState.value = _uiState.value.copy(error = null)
   }
 
-  fun clearNotice() {
+  public fun clearNotice(): Unit {
     _uiState.update { it.copy(notice = null) }
   }
 
-  fun retryFileTransfer(failedFileTransferId: Long) {
+  public fun retryFileTransfer(failedFileTransferId: Long): Unit {
     viewModelScope.launch {
       val row = messageRepository.getFileTransferById(failedFileTransferId).first() ?: run {
         _uiState.update { it.copy(error = "Could not find the original file to retry.") }
@@ -395,9 +395,9 @@ class DeviceChatViewModel(
   }
 }
 
-data class ChatUiState(
-  val error: String? = null,
-  val notice: String? = null,
+public data class ChatUiState(
+  public val error: String? = null,
+  public val notice: String? = null,
   /**
    * Live fraction (0f..1f) of the in-flight file transfer for this device, from whichever
    * direction is currently active (send or receive). Null means "no fraction to show" — which
@@ -406,37 +406,37 @@ data class ChatUiState(
    * accept, and while the receiver opens its sink. See [DeviceChatViewModel.sendFileMessage]
    * and the receive-side collector in [DeviceChatViewModel.init].
    */
-  val fileTransferProgress: Float? = null,
+  public val fileTransferProgress: Float? = null,
   /**
    * True while a file transfer for this device is in flight in either direction, including the
    * phases that have no percentage yet. UIs render an indeterminate bar when this is true and
    * [fileTransferProgress] is null — the old behaviour (fraction-only) painted those phases as
    * a motionless 0% bar, which read as "nothing is happening".
    */
-  val fileTransferActive: Boolean = false,
+  public val fileTransferActive: Boolean = false,
   /**
    * Short human label for the current non-streaming phase ("Connecting…", "Sending…",
    * "Receiving…", "Waiting for the recipient to accept…"), or null once bytes are actually
    * flowing (files) or the send/receive has finished (text). Surfaced as a strip so there is
    * visible feedback even before the message bubble exists.
    */
-  val fileTransferStatusText: String? = null,
+  public val fileTransferStatusText: String? = null,
   /**
    * Throughput/ETA for the in-flight transfer, or null while there isn't one — or while it has
    * been running for less than [TRANSFER_STATS_MIN_ELAPSED_MS]. Small files finish inside that
    * window and never show stats, which is the point: a rate and an ETA on a transfer that is
    * already over is noise.
    */
-  val transferStats: TransferStats? = null,
+  public val transferStats: TransferStats? = null,
 )
 
 /** Live throughput figures for a file transfer. All byte counts are raw bytes. */
-data class TransferStats(
-  val bytesTransferred: Long,
-  val totalBytes: Long,
-  val bytesPerSecond: Long,
+public data class TransferStats(
+  public val bytesTransferred: Long,
+  public val totalBytes: Long,
+  public val bytesPerSecond: Long,
   /** Null when the rate is 0 (nothing has moved in the window) so no ETA can be projected. */
-  val etaSeconds: Long?,
+  public val etaSeconds: Long?,
 )
 
 /**

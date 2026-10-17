@@ -34,10 +34,10 @@ package com.carlom.klardrop.common.communication
  *   are in flight.
  * - **Desktop JVM** — [None]; desktop processes aren't killed for being idle.
  */
-interface TransferAnchor {
+public interface TransferAnchor {
 
   /** Which way the bytes are moving. Platforms use it for notification wording and icons. */
-  enum class Direction { OUTGOING, INCOMING }
+  public enum class Direction { OUTGOING, INCOMING }
 
   /**
    * A transfer identified by [transferId] is starting. [label] is a human-readable name for the
@@ -46,20 +46,20 @@ interface TransferAnchor {
    * [transferId] must be unique across both directions for the lifetime of the transfer; callers
    * build it from the peer's device id, the direction and the message id.
    */
-  fun begin(transferId: String, label: String, direction: Direction)
+  public fun begin(transferId: String, label: String, direction: Direction): Unit
 
   /** Best-effort progress for an in-flight [transferId]; [percentage] is 0..100. */
-  fun progress(transferId: String, percentage: Int)
+  public fun progress(transferId: String, percentage: Int): Unit
 
   /** The transfer reached a terminal state. Safe to call more than once for the same id. */
-  fun end(transferId: String)
+  public fun end(transferId: String): Unit
 
-  companion object {
+  public companion object {
     /** No-op anchor for platforms that don't need (or can't provide) one. */
-    val None: TransferAnchor = object : TransferAnchor {
-      override fun begin(transferId: String, label: String, direction: Direction) = Unit
-      override fun progress(transferId: String, percentage: Int) = Unit
-      override fun end(transferId: String) = Unit
+    public val None: TransferAnchor = object : TransferAnchor {
+      override fun begin(transferId: String, label: String, direction: Direction): Unit = Unit
+      override fun progress(transferId: String, percentage: Int): Unit = Unit
+      override fun end(transferId: String): Unit = Unit
     }
   }
 }
@@ -72,4 +72,4 @@ interface TransferAnchor {
  * the app manifest, so it returns [TransferAnchor.None] and the app passes the real implementation
  * to [com.carlom.klardrop.common.Klardrop] explicitly.
  */
-expect fun platformTransferAnchor(): TransferAnchor
+public expect fun platformTransferAnchor(): TransferAnchor

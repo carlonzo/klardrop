@@ -256,7 +256,7 @@ internal class ServerTestFakeFileManager : FileManager {
 }
 
 internal fun createTestServer(
-  connectionsPool: ConnectionsPool = FakeConnectionPool(),
+  connectionsPool: InternalConnectionsPool = FakeConnectionPool(),
   fileManager: FileManager = ServerTestFakeFileManager(),
   coroutines: TestCoroutines = TestCoroutines(),
   localPropertiesRepository: LocalPropertiesRepository = FakeLocalPropertiesRepository(),

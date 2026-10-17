@@ -12,7 +12,7 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 
 
-class FileManagerImpl(
+internal class FileManagerImpl(
   private val platformFileSystem: PlatformFileSystem
 ) : FileManager {
   override fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer {

@@ -13,7 +13,7 @@ private val OPENABLE_URL_REGEX = Regex(
  * mailto, or tel. Returns null otherwise. Used by the chat UI to decide whether a text
  * bubble should render as a tappable link and dispatch to the system handler on click.
  */
-fun openableUrlOrNull(text: String): String? {
+public fun openableUrlOrNull(text: String): String? {
   val trimmed = text.trim()
   if (trimmed.isEmpty() || trimmed.contains(' ')) return null
   return if (OPENABLE_URL_REGEX.matches(trimmed)) trimmed else null

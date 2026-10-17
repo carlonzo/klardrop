@@ -34,16 +34,16 @@ import kotlin.time.TimeSource
 
 private fun pipe2(fds: CPointer<IntVar>, flags: Int): Int = klardrop_pipe2(fds, flags)
 
-class ExecException(message: String) : Exception(message)
-class ExecTimeoutException(message: String) : Exception(message)
+internal class ExecException(message: String) : Exception(message)
+internal class ExecTimeoutException(message: String) : Exception(message)
 
-data class ExecResult(
-  val exitCode: Int,
-  val stdout: ByteArray,
-  val stderr: ByteArray = ByteArray(0),
+public data class ExecResult(
+  public val exitCode: Int,
+  public val stdout: ByteArray,
+  public val stderr: ByteArray = ByteArray(0),
 ) {
-  val stdoutString: String get() = stdout.decodeToString()
-  val stderrString: String get() = stderr.decodeToString()
+  public val stdoutString: String get() = stdout.decodeToString()
+  public val stderrString: String get() = stderr.decodeToString()
 }
 
 private val ignoreSigpipeOnce: Unit by lazy {
@@ -118,7 +118,7 @@ internal fun addClosefromOrFallback(
  * (a child that writes >64KB before draining stdin would deadlock). All current callers
  * pass small stdin.
  */
-fun execProcess(
+public fun execProcess(
   argv: List<String>,
   stdin: ByteArray? = null,
   timeoutMillis: Long = 10_000L,
@@ -403,7 +403,7 @@ fun execProcess(
  * When the flow collection is cancelled, the child is killed with SIGTERM
  * and reaped via waitpid (preventing zombies).
  */
-fun execStreamingLines(
+internal fun execStreamingLines(
   argv: List<String>,
   dispatcher: CoroutineDispatcher = sharedNativeIoDispatcher,
 ): Flow<String> = callbackFlow {

@@ -16,7 +16,7 @@ package com.carlom.klardrop.common.features
  *    Empty + `hasStrings` → declined this session; never read `string` again
  *    until process death (or [clearDecline] / a successful user [recordUserRead]).
  */
-class IosPasteboardSyncReadGate {
+internal class IosPasteboardSyncReadGate {
   private var lastChangeCount = -1L
   private var cached = ""
   private var declinedThisSession = false

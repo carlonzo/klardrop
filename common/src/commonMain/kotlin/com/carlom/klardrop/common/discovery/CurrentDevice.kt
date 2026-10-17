@@ -12,21 +12,21 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-data class CurrentDevice(
-  val deviceId: String,
-  val deviceName: String,
-  val deviceType: DeviceType,
-  val osType: OsType,
-){
+public data class CurrentDevice(
+  public val deviceId: String,
+  public val deviceName: String,
+  public val deviceType: DeviceType,
+  public val osType: OsType,
+) {
 
   /**
    * Device id used during discovery
    */
-  val shortDeviceId = deviceId.take(8)
+  public val shortDeviceId: String = deviceId.take(8)
 }
 
 @OptIn(ExperimentalUuidApi::class)
-class CurrentDeviceProvider(
+public class CurrentDeviceProvider(
   private val localPropertiesRepository: LocalPropertiesRepository
 ) {
 
@@ -36,7 +36,7 @@ class CurrentDeviceProvider(
   /**
    * Flow that emits CurrentDevice whenever device properties change
    */
-  val deviceInfoFlow: Flow<CurrentDevice> = localPropertiesRepository.properties.map { properties ->
+  public val deviceInfoFlow: Flow<CurrentDevice> = localPropertiesRepository.properties.map { properties ->
     val deviceId = if (properties.deviceId.isNotBlank()) {
       mutex.withLock {
         inMemoryDeviceId = properties.deviceId
@@ -62,14 +62,14 @@ class CurrentDeviceProvider(
     CurrentDevice(deviceId, deviceName, deviceType, osType)
   }
 
-  suspend fun get(): CurrentDevice {
+  public suspend fun get(): CurrentDevice {
     return deviceInfoFlow.first()
   }
 
   /**
    * Updates the custom device name in local properties
    */
-  suspend fun updateCustomDeviceName(customDeviceName: String?) {
+  public suspend fun updateCustomDeviceName(customDeviceName: String?): Unit {
     localPropertiesRepository.saveCustomDeviceName(customDeviceName)
   }
 
@@ -77,7 +77,7 @@ class CurrentDeviceProvider(
    * Replace this device's persisted id with a fresh UUID (simulates uninstall/reinstall).
    * Discovery republishes automatically via [deviceInfoFlow]. Returns the new 8-char short id.
    */
-  suspend fun rotateDeviceId(): String {
+  public suspend fun rotateDeviceId(): String {
     val id = cleanDeviceId(Uuid.random().toString())
     mutex.withLock {
       inMemoryDeviceId = id

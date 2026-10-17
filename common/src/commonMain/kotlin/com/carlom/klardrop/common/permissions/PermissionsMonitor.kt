@@ -15,8 +15,8 @@ import kotlinx.coroutines.flow.Flow
  * Platforms with no useful permission story (e.g. Linux desktop) return an
  * empty [PermissionsState] so the panel never shows.
  */
-expect class PermissionsMonitor {
-  fun observe(): Flow<PermissionsState>
+public expect class PermissionsMonitor {
+  public fun observe(): Flow<PermissionsState>
 
   /**
    * Force a re-read of the current permission state. The OS prompt the platform
@@ -26,21 +26,21 @@ expect class PermissionsMonitor {
    * after such a prompt returns so the panel reflects the new grant immediately
    * instead of going stale until the next background→foreground round-trip.
    */
-  fun refresh()
+  public fun refresh(): Unit
 }
 
-data class PermissionsState(
-  val capabilities: Map<Capability, CapabilityStatus> = emptyMap(),
-  val educationalNotes: List<EducationalNote> = emptyList(),
+public data class PermissionsState(
+  public val capabilities: Map<Capability, CapabilityStatus> = emptyMap(),
+  public val educationalNotes: List<EducationalNote> = emptyList(),
 ) {
   /** True when nothing actionable is missing — drives panel auto-hide. */
-  val isComplete: Boolean
+  public val isComplete: Boolean
     get() = capabilities.values.all {
       it == CapabilityStatus.Granted || it == CapabilityStatus.NotApplicable
     } && educationalNotes.isEmpty()
 
-  companion object {
-    val EMPTY = PermissionsState()
+  public companion object {
+    public val EMPTY: PermissionsState = PermissionsState()
   }
 }
 
@@ -50,7 +50,7 @@ data class PermissionsState(
  * platforms that don't surface a given capability as a permission (e.g. mDNS
  * on Linux JVM is unrestricted), the entry simply isn't included in the map.
  */
-enum class Capability {
+public enum class Capability {
   /** Local network / mDNS visibility. macOS, iOS. */
   LOCAL_NETWORK,
 
@@ -67,7 +67,7 @@ enum class Capability {
   LOCATION,
 }
 
-enum class CapabilityStatus {
+public enum class CapabilityStatus {
   /** Capability is granted and usable. */
   Granted,
 
@@ -89,7 +89,7 @@ enum class CapabilityStatus {
  *
  * [id] is stable so the UI can remember when the user has dismissed it.
  */
-data class EducationalNote(
-  val id: String,
-  val message: String,
+public data class EducationalNote(
+  public val id: String,
+  public val message: String,
 )

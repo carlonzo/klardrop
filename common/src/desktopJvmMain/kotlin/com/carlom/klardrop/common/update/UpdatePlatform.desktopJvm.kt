@@ -20,9 +20,9 @@ private val json = Json {
   isLenient = true
 }
 
-actual val platformUpdateAssetKey: String = UpdateChecker.ASSET_LINUX_TARBALL
+internal actual val platformUpdateAssetKey: String = UpdateChecker.ASSET_LINUX_TARBALL
 
-actual fun createUpdateManifestFetcher(): UpdateManifestFetcher? = UpdateManifestFetcher { url ->
+internal actual fun createUpdateManifestFetcher(): UpdateManifestFetcher? = UpdateManifestFetcher { url ->
   withContext(Dispatchers.IO) {
     runCatching {
       val client = HttpClient.newBuilder()
@@ -47,7 +47,7 @@ actual fun createUpdateManifestFetcher(): UpdateManifestFetcher? = UpdateManifes
   }
 }
 
-actual fun detectInstallChannel(): InstallChannel {
+internal actual fun detectInstallChannel(): InstallChannel {
   val launcher = currentLauncherPath() ?: return InstallChannel.UNKNOWN
   val os = System.getProperty("os.name", "").lowercase()
 
@@ -147,7 +147,7 @@ internal fun linuxInstallRoot(
   }
 }
 
-actual fun createUpdateInstaller(channel: InstallChannel): UpdateInstaller? {
+internal actual fun createUpdateInstaller(channel: InstallChannel): UpdateInstaller? {
   if (channel != InstallChannel.TARBALL) return null
   val launcher = currentLauncherPath() ?: return null
   val appDir = linuxInstallRoot(launcher) ?: return null
@@ -333,5 +333,5 @@ private class DesktopTarballInstaller(
   }
 }
 
-actual fun detectPlatformFlavorFlag(): String? = null
+internal actual fun detectPlatformFlavorFlag(): String? = null
 

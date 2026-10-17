@@ -54,11 +54,11 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.TimeSource
 
-expect fun testClipboardReaderWriter(): ClipboardReaderWriter
+internal expect fun testClipboardReaderWriter(): ClipboardReaderWriter
 
 expect fun createTestPlatformFile(fileName: String, data: ByteArray): PlatformFile
 
-fun FakeClipboardManager() = com.carlom.klardrop.common.features.ClipboardManager(
+internal fun FakeClipboardManager(): com.carlom.klardrop.common.features.ClipboardManager = com.carlom.klardrop.common.features.ClipboardManager(
   coroutines = TestCoroutines(),
   readerWriter = testClipboardReaderWriter()
 )

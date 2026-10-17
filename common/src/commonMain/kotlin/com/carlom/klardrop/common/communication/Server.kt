@@ -83,8 +83,8 @@ import kotlinx.serialization.protobuf.ProtoBuf
  * // Server now accepts both Klardrop and Nearby Share connections on config.port
  * ```
  */
-class Server internal constructor(
-  private val connectionsPool: ConnectionsPool,
+public class Server internal constructor(
+  private val connectionsPool: InternalConnectionsPool,
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,
@@ -103,7 +103,7 @@ class Server internal constructor(
   private val serverPort: MutableStateFlow<Int>? = null,
   private val preferredPort: Int = 0,
 ) {
-  data class ServerConfig(val host: String, val port: Int)
+  public data class ServerConfig(public val host: String, public val port: Int)
 
   internal enum class Protocol {
     KLARDROP,
@@ -160,7 +160,7 @@ class Server internal constructor(
    *
    * @return ServerConfig containing the host and port the server is listening on
    */
-  suspend fun startServer(): ServerConfig {
+  public suspend fun startServer(): ServerConfig {
     val selectorManager = SelectorManager(coroutines.ioDispatcher)
     val serverSocket = bindListener(selectorManager)
 
@@ -206,7 +206,7 @@ class Server internal constructor(
     return ServerConfig(host, actualPort)
   }
 
-  fun stopServer() {
+  public fun stopServer(): Unit {
     serverScope.cancel()
     log("Server", "Unified server stopped")
   }

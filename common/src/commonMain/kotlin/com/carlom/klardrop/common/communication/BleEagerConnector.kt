@@ -13,7 +13,7 @@ import com.carlom.klardrop.common.utils.log
  * Constructor args stay so Dagger wiring is unchanged. Identity still arrives
  * on the first real connect.
  */
-class BleEagerConnector(
+internal class BleEagerConnector(
   @Suppress("unused") private val coroutines: Coroutines,
   @Suppress("unused") private val visibleDevices: VisibleDevices,
   @Suppress("unused") private val currentDeviceProvider: CurrentDeviceProvider,

@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 // TODO should this be composable and get the dispose callback to cancel scope?
-class DiscoveryController(
+public class DiscoveryController internal constructor(
   private val coroutines: Coroutines,
   visibleDevices: VisibleDevices,
   private val messenger: Messenger,
@@ -72,7 +72,7 @@ class DiscoveryController(
   private val foregroundState: ForegroundState,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
 
-  constructor(commonComponent: CommonComponent) : this(
+  public constructor(commonComponent: CommonComponent) : this(
     commonComponent.coroutines(),
     commonComponent.visibleDevices(),
     commonComponent.messenger(),
@@ -110,7 +110,7 @@ class DiscoveryController(
     reachability,
   )
 
-  val permissionsState: StateFlow<PermissionsState> = permissionsMonitor.observe()
+  public val permissionsState: StateFlow<PermissionsState> = permissionsMonitor.observe()
     .stateIn(controllerScope, SharingStarted.Eagerly, PermissionsState.EMPTY)
 
   /**
@@ -118,12 +118,12 @@ class DiscoveryController(
    * Surfaced as a banner and used to prefix pairing-failure reasons — a connect
    * failure while restricted is this device's OS dropping packets, not the peer.
    */
-  val connectivityRestrictions: StateFlow<ConnectivityRestrictions> =
+  public val connectivityRestrictions: StateFlow<ConnectivityRestrictions> =
     connectivityRestrictionMonitor.observe()
       .stateIn(controllerScope, SharingStarted.Eagerly, ConnectivityRestrictions.EMPTY)
 
   /** Re-read restriction state on demand — called after the OS exemption prompt returns. */
-  fun refreshConnectivityRestrictions() {
+  public fun refreshConnectivityRestrictions(): Unit {
     connectivityRestrictionMonitor.refresh()
   }
 
@@ -133,27 +133,27 @@ class DiscoveryController(
    * Activity, so [permissionsState] would otherwise stay stale (showing the
    * banner for an already-granted permission) until the next foreground cycle.
    */
-  fun refreshPermissions() {
+  public fun refreshPermissions(): Unit {
     permissionsMonitor.refresh()
   }
 
   /** Whether "stay discoverable in background" is enabled (persisted). The Android app observes
    *  this same pref to start/stop its discovery foreground service. */
-  val backgroundDiscoveryEnabled: StateFlow<Boolean> = localPropertiesRepository.properties
+  public val backgroundDiscoveryEnabled: StateFlow<Boolean> = localPropertiesRepository.properties
     .map { it.backgroundDiscoveryEnabled }
     .stateIn(controllerScope, SharingStarted.Eagerly, false)
 
   /** Background discoverability is backed by a foreground service — Android-only for now. The
    *  Settings UI hides the toggle on platforms where it has no effect. */
-  val supportsBackgroundDiscovery: Boolean =
+  public val supportsBackgroundDiscovery: Boolean =
     com.carlom.klardrop.common.CommonPlatformDependencies.osType() == com.carlom.klardrop.common.utils.OsType.ANDROID
 
-  fun setBackgroundDiscoveryEnabled(enabled: Boolean) {
+  public fun setBackgroundDiscoveryEnabled(enabled: Boolean): Unit {
     controllerScope.launch { localPropertiesRepository.saveBackgroundDiscoveryEnabled(enabled) }
   }
 
   private val _outgoingTransfers = MutableSharedFlow<OutgoingTransfer>(extraBufferCapacity = 64)
-  val outgoingTransfers: SharedFlow<OutgoingTransfer> = _outgoingTransfers.asSharedFlow()
+  public val outgoingTransfers: SharedFlow<OutgoingTransfer> = _outgoingTransfers.asSharedFlow()
 
   // Live pairing requests keyed by deviceId so a notification action delivered
   // out-of-band (the user tapping Accept on a backgrounded notification) can
@@ -176,11 +176,11 @@ class DiscoveryController(
   )
   private val queuedPairingRequests = ArrayDeque<QueuedPairingRequest>()
 
-  val screenStateFlow = MutableStateFlow(DiscoveryScreenState())
+  public val screenStateFlow: MutableStateFlow<DiscoveryScreenState> = MutableStateFlow(DiscoveryScreenState())
 
   private var activeChatDeviceId: String? = null
 
-  fun setActiveChatDeviceId(deviceId: String?) {
+  public fun setActiveChatDeviceId(deviceId: String?): Unit {
     activeChatDeviceId = deviceId
   }
 
@@ -293,7 +293,7 @@ class DiscoveryController(
     }
   }
 
-  suspend fun debugSendTextAndWait(deviceId: String, text: String): String {
+  public suspend fun debugSendTextAndWait(deviceId: String, text: String): String {
     val finalStatus = messenger.send(deviceId, TextMessage(text = text).toSimpleSendRequest())
       .untilCompleted()
       .lastOrNull()
@@ -313,7 +313,7 @@ class DiscoveryController(
    * the flow has no replay, so anything that observes this transfer must already be able to
    * resolve it. [sendTextTracked] is the plain blocking variant.
    */
-  suspend fun startTrackedTextSend(
+  public suspend fun startTrackedTextSend(
     deviceId: String,
     text: String,
     register: suspend (OutgoingTransfer) -> Unit = {},
@@ -338,17 +338,17 @@ class DiscoveryController(
 
   /** Blocking variant of [startTrackedTextSend]: the same tracked send, awaited to a terminal
    *  progress value, returning the minted message id. */
-  suspend fun sendTextTracked(deviceId: String, text: String): String {
+  public suspend fun sendTextTracked(deviceId: String, text: String): String {
     val transfer = startTrackedTextSend(deviceId, text)
     transfer.flow.lastOrNull()
     return transfer.id
   }
 
-  fun sendFiles(
+  public fun sendFiles(
     deviceId: String,
     files: List<PlatformFile>,
     onProgress: ((MessengerSendProgress) -> Unit)? = null,
-  ) {
+  ): Unit {
     coroutines.appScope.launch {
       startPreparedFiles(deviceId, prepareOutgoingFiles(files), onProgress)
     }
@@ -359,7 +359,7 @@ class DiscoveryController(
    * [PreparedFile.error] for each path that cannot be resolved instead of dropping it.
    * Returns one entry per submitted file, in order. Never throws.
    */
-  fun prepareOutgoingFiles(files: List<PlatformFile>): List<PreparedFile> =
+  public fun prepareOutgoingFiles(files: List<PlatformFile>): List<PreparedFile> =
     files.map { file ->
       val resolved = runCatching { platformFileSystem.getResolvedFileData(file) }
       resolved.exceptionOrNull()?.let {
@@ -400,11 +400,11 @@ class DiscoveryController(
    * `coroutines.appScope.launch` for the historical fire-and-forget behavior). Entries whose
    * [PreparedFile.error] is set are skipped — the caller that prepared them reports them.
    */
-  suspend fun startPreparedFiles(
+  public suspend fun startPreparedFiles(
     deviceId: String,
     prepared: List<PreparedFile>,
     onProgress: ((MessengerSendProgress) -> Unit)? = null,
-  ) {
+  ): Unit {
     prepared.forEach { entry ->
       val fileMessage = entry.message ?: return@forEach
       val file = entry.file
@@ -434,7 +434,7 @@ class DiscoveryController(
     }
   }
 
-  override fun onDeviceClick(deviceUi: DeviceUi) {
+  public override fun onDeviceClick(deviceUi: DeviceUi): Unit {
     log("DiscoveryController", "on device click for chat: ${deviceUi.deviceName}")
     markDeviceRead(deviceUi.deviceId)
   }
@@ -443,7 +443,7 @@ class DiscoveryController(
    *  The DB write is fire-and-forget: the UI flag flips immediately, matching how the Compose
    *  chat screen has always behaved on a device click. Callers that need the DB write to have
    *  landed before they return (e.g. the debug HTTP API) should use [markDeviceReadAndWait]. */
-  fun markDeviceRead(deviceId: String) {
+  public fun markDeviceRead(deviceId: String): Unit {
     controllerScope.launch {
       messageRepository.markMessagesAsRead(deviceId)
     }
@@ -453,7 +453,7 @@ class DiscoveryController(
   /** Same effect as [markDeviceRead], but awaits the DB write before clearing the unread flag,
    *  so a caller that awaits this suspend fun can rely on the DB being marked read once it
    *  returns. */
-  suspend fun markDeviceReadAndWait(deviceId: String) {
+  public suspend fun markDeviceReadAndWait(deviceId: String): Unit {
     messageRepository.markMessagesAsRead(deviceId)
     clearUnreadFlag(deviceId)
   }
@@ -472,7 +472,7 @@ class DiscoveryController(
   // This method might still be used if sending is initiated from somewhere else,
   // or could be refactored if all sending now happens via chat.
   // For now, keeping it as is.
-  override fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend) {
+  public override fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend): Unit {
 
     when (onDataToSend) {
       is OnDataToSend.FilesList -> sendFiles(deviceUi.deviceId, onDataToSend.files)
@@ -517,16 +517,16 @@ class DiscoveryController(
     }
   }
 
-  fun dispose() {
+  public fun dispose(): Unit {
     // TODO implement dispose logic
     controllerScope.cancel()
   }
 
-  fun readFromClipboard(): String {
+  public fun readFromClipboard(): String {
     return clipboardManager.read()
   }
 
-  override fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate) {
+  public override fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate): Unit {
 
     if (receiveUpdate.status is ReceiveMessageStatus.Completed) {
 
@@ -541,14 +541,14 @@ class DiscoveryController(
 
   }
 
-  override fun onCardDismissed(id: Int) {
+  public override fun onCardDismissed(id: Int): Unit {
     screenStateFlow.update {
       if (id !in it.receivingMessages) it
       else it.copy(receivingMessages = it.receivingMessages - id)
     }
   }
 
-  override fun onConnectionInfoAccepted(message: ConnectionInfoMessage) {
+  public override fun onConnectionInfoAccepted(message: ConnectionInfoMessage): Unit {
     coroutines.appScope.launch {
       val joined = connectionInfoJoiner.tryJoin(message)
       log(
@@ -559,7 +559,7 @@ class DiscoveryController(
     }
   }
 
-  override fun onAddToTrusted(deviceUi: DeviceUi) {
+  public override fun onAddToTrusted(deviceUi: DeviceUi): Unit {
     log("DiscoveryController", "onAddToTrusted() called for device: ${deviceUi.deviceName} (${deviceUi.deviceId})")
     log("DiscoveryController", "Adding device ${deviceUi.deviceName} to trusted")
 
@@ -592,7 +592,7 @@ class DiscoveryController(
     }
   }
 
-  override fun onForgetDevice(deviceUi: DeviceUi) {
+  public override fun onForgetDevice(deviceUi: DeviceUi): Unit {
     log("DiscoveryController", "Forgetting trusted device ${deviceUi.deviceName}")
 
     coroutines.appScope.launch {
@@ -603,13 +603,13 @@ class DiscoveryController(
     }
   }
 
-  override fun onNotificationDismissed(notificationId: Int) {
+  public override fun onNotificationDismissed(notificationId: Int): Unit {
     screenStateFlow.update { state ->
       state.copy(notifications = state.notifications.filterNot { it.id == notificationId })
     }
   }
 
-  override fun onNotificationPair(notificationId: Int) {
+  public override fun onNotificationPair(notificationId: Int): Unit {
     val notification = screenStateFlow.value.notifications.firstOrNull { it.id == notificationId }
       ?: return
     when (notification) {
@@ -691,13 +691,13 @@ class DiscoveryController(
   }
 
   // Implementation of PairingApprovalCallback
-  override fun onPairingRequested(
+  public override fun onPairingRequested(
     deviceId: String,
     deviceName: String,
     deviceType: String,
     onAccept: suspend () -> Unit,
     onReject: suspend () -> Unit
-  ) {
+  ): Unit {
     log("DiscoveryController", "onPairingRequested for device: $deviceName ($deviceId)")
     pendingPairings[deviceId] = PendingPairing(deviceName, onAccept, onReject)
 
@@ -830,12 +830,12 @@ class DiscoveryController(
     }
   }
 
-  fun dismissPairingDialog() {
+  public fun dismissPairingDialog(): Unit {
     screenStateFlow.update { it.copy(pairingDialogState = null) }
     presentNextQueuedPairing()
   }
 
-  fun loadDeviceNames() {
+  public fun loadDeviceNames(): Unit {
     controllerScope.launch {
       val systemName = com.carlom.klardrop.common.CommonPlatformDependencies.getDeviceName()
       val properties = localPropertiesRepository.getProperty()
@@ -848,7 +848,7 @@ class DiscoveryController(
     }
   }
 
-  fun saveCustomDeviceName(customName: String?) {
+  public fun saveCustomDeviceName(customName: String?): Unit {
     controllerScope.launch {
       currentDeviceProvider.updateCustomDeviceName(customName)
       loadDeviceNames()
@@ -857,37 +857,37 @@ class DiscoveryController(
 
   // --- Debug-control entry points. Same methods the UI buttons call, keyed by device id. ---
 
-  fun debugPair(deviceId: String) {
+  public fun debugPair(deviceId: String): Unit {
     onAddToTrusted(requireDevice(deviceId))
   }
 
-  suspend fun debugUnpairAndWait(deviceId: String) {
+  public suspend fun debugUnpairAndWait(deviceId: String): Unit {
     log("DiscoveryController", "debugUnpairAndWait($deviceId)")
     pairingProtocolCoordinator.unpair(deviceId, reason = "user_unpaired")
     updateDeviceTrustStatus(deviceId, TrustStatus.Untrusted)
   }
 
-  fun debugAcceptPairing(deviceId: String) {
+  public fun debugAcceptPairing(deviceId: String): Unit {
     controllerScope.launch { acceptPairing(deviceId) }
   }
 
-  fun debugRejectPairing(deviceId: String) {
+  public fun debugRejectPairing(deviceId: String): Unit {
     controllerScope.launch { rejectPairing(deviceId) }
   }
 
-  fun debugSendFile(deviceId: String, path: String) {
+  public fun debugSendFile(deviceId: String, path: String): Unit {
     sendFiles(deviceId, listOf(platformFileFromPath(path)))
   }
 
-  fun debugAcceptIncoming(receiveId: Int) {
+  public fun debugAcceptIncoming(receiveId: Int): Unit {
     decideIncoming(receiveId, accept = true)
   }
 
-  fun debugRejectIncoming(receiveId: Int) {
+  public fun debugRejectIncoming(receiveId: Int): Unit {
     decideIncoming(receiveId, accept = false)
   }
 
-  fun debugAcceptIncomingFrom(deviceId: String) {
+  public fun debugAcceptIncomingFrom(deviceId: String): Unit {
     val match = screenStateFlow.value.receivingMessages.entries.firstOrNull { (_, update) ->
       update.status is ReceiveMessageStatus.PendingAuthorization &&
         (update.device?.deviceId == deviceId || update.device?.deviceId?.startsWith(deviceId) == true)
@@ -920,108 +920,108 @@ class DiscoveryController(
 }
 
 /** [OutgoingTransfer.kind] of a file send — the historical default. */
-const val TRANSFER_KIND_FILE = "file"
+public const val TRANSFER_KIND_FILE: String = "file"
 
 /** [OutgoingTransfer.kind] of a text or clipboard send. */
-const val TRANSFER_KIND_TEXT = "text"
+public const val TRANSFER_KIND_TEXT: String = "text"
 
 /**
  * One observed outgoing transfer. [kind] is [TRANSFER_KIND_FILE] for a file send and
  * [TRANSFER_KIND_TEXT] for a text/clipboard send; it defaults to the file case so every
  * existing construction site keeps its exact previous meaning.
  */
-data class OutgoingTransfer(
-  val id: String,
-  val deviceId: String,
-  val fileName: String,
-  val totalSize: Long,
-  val flow: Flow<MessengerSendProgress>,
-  val kind: String = TRANSFER_KIND_FILE,
+public data class OutgoingTransfer(
+  public val id: String,
+  public val deviceId: String,
+  public val fileName: String,
+  public val totalSize: Long,
+  public val flow: Flow<MessengerSendProgress>,
+  public val kind: String = TRANSFER_KIND_FILE,
 )
 
 /**
  * A submitted file resolved for sending: [message] is the minted [FileMessage], or null with a
  * human-readable [error] when the path could not be resolved. Nothing is ever dropped silently.
  */
-data class PreparedFile(
-  val file: PlatformFile,
-  val path: String,
-  val fileName: String?,
-  val message: FileMessage?,
-  val error: String?,
+public data class PreparedFile(
+  public val file: PlatformFile,
+  public val path: String,
+  public val fileName: String?,
+  public val message: FileMessage?,
+  public val error: String?,
 )
 
-data class DiscoveryScreenState(
-  val devices: List<DeviceUi> = emptyList(),
-  val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap(),
-  val pairingDialogState: PairingDialogState? = null,
-  val currentDeviceName: String? = null,
-  val systemDeviceName: String? = null,
+public data class DiscoveryScreenState(
+  public val devices: List<DeviceUi> = emptyList(),
+  public val receivingMessages: Map<Int, ReceiveMessageUpdate> = emptyMap(),
+  public val pairingDialogState: PairingDialogState? = null,
+  public val currentDeviceName: String? = null,
+  public val systemDeviceName: String? = null,
   /**
    * In-app notifications surfaced in the top banner stack. Distinct from
    * [receivingMessages] (which is purely about inbound transfers); this is the
    * generic surface for system-level events the user should see — currently
    * just peer-revoked-trust, but the seam exists for future ones.
    */
-  val notifications: List<UiNotification> = emptyList(),
+  public val notifications: List<UiNotification> = emptyList(),
 )
 
-sealed interface UiNotification {
-  val id: Int
+public sealed interface UiNotification {
+  public val id: Int
 
   /**
    * A previously-paired peer revoked us. Local trust has already been removed by the
    * time this is surfaced. The banner offers Dismiss (clear it) and Pair (re-pair).
    */
-  data class PeerRevokedTrust(
-    override val id: Int,
-    val deviceId: String,
-    val deviceName: String,
+  public data class PeerRevokedTrust(
+    public override val id: Int,
+    public val deviceId: String,
+    public val deviceName: String,
   ) : UiNotification
 }
 
-data class PairingDialogState(
-  val deviceId: String,
-  val deviceName: String,
-  val deviceType: String,
-  val onAccept: () -> Unit,
-  val onReject: () -> Unit,
-  val isError: Boolean = false,
-  val errorMessage: String? = null
+public data class PairingDialogState(
+  public val deviceId: String,
+  public val deviceName: String,
+  public val deviceType: String,
+  public val onAccept: () -> Unit,
+  public val onReject: () -> Unit,
+  public val isError: Boolean = false,
+  public val errorMessage: String? = null,
 )
 
-data class DeviceUi(
-  val deviceId: String,
-  val deviceName: String,
-  val deviceType: DeviceType,
-  val activityState: ActivityState = ActivityState.Idle,
-  val connectionTypes: List<DeviceConnection.DeviceConnectionType>,
-  val hasUnreadMessages: Boolean = false,
-  val trustStatus: TrustStatus = TrustStatus.Unknown,
-  val reachability: Reachability = Reachability.Unknown,
+public data class DeviceUi(
+  public val deviceId: String,
+  public val deviceName: String,
+  public val deviceType: DeviceType,
+  public val activityState: ActivityState = ActivityState.Idle,
+  public val connectionTypes: List<DeviceConnection.DeviceConnectionType>,
+  public val hasUnreadMessages: Boolean = false,
+  public val trustStatus: TrustStatus = TrustStatus.Unknown,
+  public val reachability: Reachability = Reachability.Unknown,
   /**
    * Transient pairing-failure message for this device, rendered as red helper text under the
    * row. Single source of truth lives in [DiscoveryController]'s error map (which survives
    * discovery-tick rebuilds of this model); cleared on the next pairing interaction.
    */
-  val pairingError: String? = null,
+  public val pairingError: String? = null,
 )
 
-sealed interface TrustStatus {
-  object Unknown : TrustStatus
-  object Untrusted : TrustStatus  
-  object Trusted : TrustStatus
-  object Pairing : TrustStatus
+public sealed interface TrustStatus {
+  public object Unknown : TrustStatus
+  public object Untrusted : TrustStatus  
+  public object Trusted : TrustStatus
+  public object Pairing : TrustStatus
 }
 
-sealed interface ActivityState {
+public sealed interface ActivityState {
 
-  data object Idle : ActivityState
+  public data object Idle : ActivityState
 
-  data class SentCompleted(val error: Boolean = false) : ActivityState
+  public data class SentCompleted(public val error: Boolean = false) : ActivityState
 //  data class ReceiveCompleted(val error: Boolean = false) : ActivityState
 
-  data class Sending(val progressPercentage: Int) : ActivityState
+  public data class Sending(public val progressPercentage: Int) : ActivityState
 
 //  data class Receiving(val progressPercentage : Int) : ActivityState
 

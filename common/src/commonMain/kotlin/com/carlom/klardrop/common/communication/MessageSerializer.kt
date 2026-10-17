@@ -20,7 +20,7 @@ import kotlinx.coroutines.invoke
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.protobuf.ProtoBuf
 
-class MessageSerializer(
+internal class MessageSerializer(
   private val proto: ProtoBuf,
   private val coroutines: Coroutines
 ) {

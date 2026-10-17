@@ -19,7 +19,7 @@ import org.freedesktop.dbus.interfaces.ObjectManager
  * connects lazily on the first role operation — so building this on hosts without
  * bluetoothd stays cheap and side-effect free.
  */
-class LinuxBlueZTransport(private val facade: BlueZFacade) {
+internal class LinuxBlueZTransport(private val facade: BlueZFacade) {
 
   /** Production constructor: both roles over one lazily-connected composite facade. */
   constructor() : this(BlueZCompositeFacade())

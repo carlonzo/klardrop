@@ -9,15 +9,15 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
 @Serializable(with = DeviceTypesSerializer::class)
-enum class DeviceType(val nearbyId: Byte) {
+public enum class DeviceType(public val nearbyId: Byte) {
   MOBILE(1), DESKTOP(2), UNKNOWN(15);
 
-  companion object {
-    fun fromId(id: Byte): DeviceType {
+  public companion object {
+    public fun fromId(id: Byte): DeviceType {
       return entries.firstOrNull { it.nearbyId == id } ?: UNKNOWN
     }
 
-    fun fromId(id: Int): DeviceType {
+    public fun fromId(id: Int): DeviceType {
       val b = id.toByte()
       return entries.firstOrNull { it.nearbyId == b } ?: UNKNOWN
     }

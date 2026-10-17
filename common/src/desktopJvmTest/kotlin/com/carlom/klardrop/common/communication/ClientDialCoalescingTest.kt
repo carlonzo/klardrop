@@ -97,8 +97,8 @@ class ClientDialCoalescingTest {
 
   /** Delegates to a real [ConnectionsPoolImpl] but counts [updateConnection] calls. */
   private class CountingConnectionsPool(
-    private val delegate: ConnectionsPool = ConnectionsPoolImpl(),
-  ) : ConnectionsPool by delegate {
+    private val delegate: InternalConnectionsPool = ConnectionsPoolImpl(),
+  ) : InternalConnectionsPool by delegate {
     val updateConnectionCalls = AtomicInteger(0)
     override suspend fun updateConnection(deviceId: String, connectionMessenger: ConnectionMessenger) {
       updateConnectionCalls.incrementAndGet()

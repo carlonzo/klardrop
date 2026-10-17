@@ -5,62 +5,62 @@ import com.carlom.klardrop.common.utils.OsType
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class DeviceInfo(
-  val deviceId: String,
-  val name: String,
-  val deviceType: DeviceType,
-  val osType: OsType = OsType.UNKNOWN,
+public data class DeviceInfo(
+  public val deviceId: String,
+  public val name: String,
+  public val deviceType: DeviceType,
+  public val osType: OsType = OsType.UNKNOWN,
 )
 
-data class DiscoveryDevice(
-  val deviceInfo: DeviceInfo,
-  val deviceConnections: List<DeviceConnection> = emptyList(),
-  val lastSeenTimestamp: Long
+public data class DiscoveryDevice(
+  public val deviceInfo: DeviceInfo,
+  public val deviceConnections: List<DeviceConnection> = emptyList(),
+  public val lastSeenTimestamp: Long
 ) {
 
-  fun hasNearbyConnection(): Boolean {
+  public fun hasNearbyConnection(): Boolean {
     return deviceConnections.any { it.deviceConnectionType == DeviceConnection.DeviceConnectionType.NEARBY }
   }
 
-  fun hasKlardropConnection(): Boolean {
+  public fun hasKlardropConnection(): Boolean {
     return deviceConnections.any { it.deviceConnectionType == DeviceConnection.DeviceConnectionType.KLARDROP }
   }
 
-  fun hasBleConnection(): Boolean {
+  public fun hasBleConnection(): Boolean {
     return deviceConnections.any { it.deviceConnectionType == DeviceConnection.DeviceConnectionType.BLE }
   }
 
-  fun getKlardropConnection(): List<DeviceConnection.KlardropConnection> {
+  public fun getKlardropConnection(): List<DeviceConnection.KlardropConnection> {
     return deviceConnections.filterIsInstance<DeviceConnection.KlardropConnection>()
   }
 
-  fun getNearbyConnection(): List<DeviceConnection.NearbyConnection> {
+  public fun getNearbyConnection(): List<DeviceConnection.NearbyConnection> {
     return deviceConnections.filterIsInstance<DeviceConnection.NearbyConnection>()
   }
 
-  fun getBleConnection(): List<DeviceConnection.BleConnection> {
+  public fun getBleConnection(): List<DeviceConnection.BleConnection> {
     return deviceConnections.filterIsInstance<DeviceConnection.BleConnection>()
   }
 }
 
-sealed interface DeviceConnection {
+public sealed interface DeviceConnection {
 
-  val deviceConnectionType: DeviceConnectionType
-  val address: String
-  val port: Int
+  public val deviceConnectionType: DeviceConnectionType
+  public val address: String
+  public val port: Int
 
-  data class NearbyConnection(
+  public data class NearbyConnection(
     override val address: String,
     override val port: Int
   ) : DeviceConnection {
-    override val deviceConnectionType = DeviceConnectionType.NEARBY
+    override val deviceConnectionType: DeviceConnectionType = DeviceConnectionType.NEARBY
   }
 
-  data class KlardropConnection(
+  public data class KlardropConnection(
     override val address: String,
     override val port: Int
   ) : DeviceConnection {
-    override val deviceConnectionType = DeviceConnectionType.KLARDROP
+    override val deviceConnectionType: DeviceConnectionType = DeviceConnectionType.KLARDROP
   }
 
   /**
@@ -68,14 +68,14 @@ sealed interface DeviceConnection {
    * BluetoothDevice MAC on Android/Linux/Windows, CBPeripheral.identifier UUID on Apple.
    * [port] is unused (always 0) — BLE does not have ports.
    */
-  data class BleConnection(
+  public data class BleConnection(
     override val address: String,
   ) : DeviceConnection {
     override val port: Int = 0
-    override val deviceConnectionType = DeviceConnectionType.BLE
+    override val deviceConnectionType: DeviceConnectionType = DeviceConnectionType.BLE
   }
 
-  enum class DeviceConnectionType {
+  public enum class DeviceConnectionType {
     NEARBY,
     KLARDROP,
     BLE,

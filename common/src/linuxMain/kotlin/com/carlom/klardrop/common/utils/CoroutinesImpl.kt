@@ -18,7 +18,7 @@ import kotlin.coroutines.CoroutineContext
 //
 internal val sharedNativeIoDispatcher: CoroutineDispatcher by lazy { Dispatchers.IO.limitedParallelism(8) }
 
-actual class CoroutinesImpl actual constructor() : Coroutines {
+internal actual class CoroutinesImpl actual constructor() : Coroutines {
 
   private val handler = nonFatalCoroutineExceptionHandler("CoroutinesImpl")
 

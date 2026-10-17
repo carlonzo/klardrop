@@ -8,10 +8,10 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
 internal data class ClaimedSlot(
-  val token: String,
-  val boundIp: String,
-  var lastHttpActivity: Instant,
-  var downloadsInFlight: Int = 0,
+  internal val token: String,
+  internal val boundIp: String,
+  internal var lastHttpActivity: Instant,
+  internal var downloadsInFlight: Int = 0,
 )
 
 internal sealed interface TokenAccessResult {

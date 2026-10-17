@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import platform.AppKit.NSPasteboard
 import platform.AppKit.NSPasteboardTypeString
 
-actual class ClipboardReaderWriter : ClipboardSource {
+internal actual class ClipboardReaderWriter : ClipboardSource {
 
   private val pasteboard by lazy { NSPasteboard.generalPasteboard }
 

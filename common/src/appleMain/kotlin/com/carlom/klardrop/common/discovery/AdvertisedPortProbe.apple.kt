@@ -5,4 +5,4 @@ package com.carlom.klardrop.common.discovery
  * yet. Returning true = "assume alive" so the watchdog never logs a false
  * WARNING.
  */
-actual fun verifyAdvertisedPortAlive(port: Int): Boolean = true
+internal actual fun verifyAdvertisedPortAlive(port: Int): Boolean = true

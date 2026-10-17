@@ -21,7 +21,7 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import kotlin.time.Duration.Companion.seconds
 
-actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
+internal actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
 
   private var context: Context? = null
 
@@ -138,4 +138,4 @@ actual class PlatformLanAddressSelector actual constructor() : LanAddressSelecto
   }
 }
 
-fun LanAddressSelector(context: Context): LanAddressSelector = PlatformLanAddressSelector(context)
+internal fun LanAddressSelector(context: Context): LanAddressSelector = PlatformLanAddressSelector(context)

@@ -26,7 +26,7 @@ import java.security.spec.ECGenParameterSpec
  * is cached in SharedPreferences for fast read; it can be rebuilt from the
  * Keystore certificate at any time.
  */
-class AndroidTrustStorage(
+internal class AndroidTrustStorage(
     context: Context
 ) : TrustStorage {
 

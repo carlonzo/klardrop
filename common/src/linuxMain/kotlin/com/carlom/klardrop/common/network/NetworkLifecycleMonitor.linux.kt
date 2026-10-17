@@ -19,7 +19,7 @@ import kotlin.time.Duration.Companion.seconds
  * ponytail: scope is never cancelled — the desktop instance is a process-lifetime singleton.
  * TODO: netlink if latency matters
  */
-actual class NetworkLifecycleMonitor(
+internal actual class NetworkLifecycleMonitor(
   /**
    * Test seam: fixed event flow instead of live NIC polling. Production call
    * sites use the default (null -> poll getifaddrs every 5 s).

@@ -7,17 +7,17 @@ import kotlinx.io.Sink
 import kotlinx.io.files.FileSystem
 import kotlinx.io.files.Path
 
-interface FileManager {
-  fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer
-  fun getReadStreamFrom(file: PlatformFile): RawSource
-  suspend fun openFile(filePath: String): Boolean // New method
-  suspend fun openUrl(url: String): Boolean
+public interface FileManager {
+  public fun prepareSaveFile(fileName: String, mimeType: String): FileTransfer
+  public fun getReadStreamFrom(file: PlatformFile): RawSource
+  public suspend fun openFile(filePath: String): Boolean // New method
+  public suspend fun openUrl(url: String): Boolean
 }
 
-interface FileTransfer {
-  val bufferedSink: Sink
-  suspend fun onTransferCompleted(): Path?
-  suspend fun onTransferFailed()
+public interface FileTransfer {
+  public val bufferedSink: Sink
+  public suspend fun onTransferCompleted(): Path?
+  public suspend fun onTransferFailed(): Unit
 }
 
 /**
@@ -40,7 +40,7 @@ internal fun sanitizeFileName(raw: String, default: String = "file"): String {
   return if (bare.isEmpty() || bare == "." || bare == "..") default else bare
 }
 
-fun getAvailableFilePath(parentPath: Path, requestedFileName: String, fileSystem: FileSystem): Path {
+internal fun getAvailableFilePath(parentPath: Path, requestedFileName: String, fileSystem: FileSystem): Path {
   val safeFileName = sanitizeFileName(requestedFileName)
   val resolvedParent = fileSystem.resolve(parentPath)
   val firstChoice = Path(resolvedParent, safeFileName)

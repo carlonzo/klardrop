@@ -217,7 +217,7 @@ class MessagesRouterReliabilityTest {
   }
 
   /** Test-only fixture mirroring KlardropTestContext but with instrumented server-side seams. */
-  inner class Ctx {
+  private inner class Ctx {
     val clientTrustStorage = InMemoryTrustStorage()
 
     // Counts inbound-TEXT handler invocations on the server. handleIncoming throws AFTER

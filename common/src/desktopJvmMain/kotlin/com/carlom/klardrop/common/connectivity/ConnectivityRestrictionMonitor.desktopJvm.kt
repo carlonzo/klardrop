@@ -9,13 +9,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * traffic, so the monitor never reports restricted. [initial] exists so JVM-side
  * tests can drive the restricted state through DiscoveryController.
  */
-actual class ConnectivityRestrictionMonitor(
+public actual class ConnectivityRestrictionMonitor(
   initial: ConnectivityRestrictions = ConnectivityRestrictions.EMPTY,
 ) {
 
   private val state = MutableStateFlow(initial)
 
-  actual fun observe(): Flow<ConnectivityRestrictions> = state.asStateFlow()
+  public actual fun observe(): Flow<ConnectivityRestrictions> = state.asStateFlow()
 
-  actual fun refresh() = Unit
+  public actual fun refresh(): Unit = Unit
 }

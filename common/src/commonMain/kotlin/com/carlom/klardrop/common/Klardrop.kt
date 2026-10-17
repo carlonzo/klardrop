@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
-class Klardrop(
+public class Klardrop(
   private val applicationInfo: ApplicationInfo = ApplicationInfo(),
   private val internalPlatformDependency: InternalPlatformDependencies,
   /**
@@ -27,11 +27,11 @@ class Klardrop(
   private val transferAnchor: TransferAnchor = platformTransferAnchor(),
 ) {
 
-  lateinit var commonComponent: CommonComponent
+  public lateinit var commonComponent: CommonComponent
   private val appScope by lazy { commonComponent.coroutines().appScope }
 
   /** How hard discovery works. See [setDiscoveryMode]. */
-  enum class DiscoveryMode {
+  public enum class DiscoveryMode {
     /** Radios idle: no browse, publish, scan, advertise or re-probe. */
     OFF,
     /** Everything on, at a battery-friendly cadence (low-power BLE, slow re-probe). */
@@ -49,7 +49,7 @@ class Klardrop(
    * while the opt-in "stay discoverable" service holds the process, and [DiscoveryMode.OFF]
    * otherwise. Other platforms never call this and stay in [DiscoveryMode.FOREGROUND].
    */
-  fun setDiscoveryMode(mode: DiscoveryMode) {
+  public fun setDiscoveryMode(mode: DiscoveryMode) {
     discoveryMode.value = mode
   }
 
@@ -57,11 +57,11 @@ class Klardrop(
    * Closes every pooled peer connection, which also stops their heartbeats. The caller must make
    * sure nothing is transferring; peers reconnect on demand (eager probe or the next send).
    */
-  suspend fun closeIdleConnections() {
+  public suspend fun closeIdleConnections() {
     commonComponent.connectionsPool().closeAllConnections()
   }
 
-  fun init() {
+  public fun init() {
     if (::commonComponent.isInitialized) throw IllegalStateException("Klardrop already initialized")
 
     // Before anything spawns a coroutine: make an uncaught failure in a scope we don't own
@@ -205,14 +205,14 @@ class Klardrop(
     commonComponent.eagerReachabilityConnector()?.stop()
   }
 
-  fun visibleDevices() = commonComponent.visibleDevices()
+  public fun visibleDevices(): com.carlom.klardrop.common.discovery.VisibleDevices = commonComponent.visibleDevices()
 
-  fun trustedDevices() = commonComponent.trustedDevicesDirectory().trustedDevices
+  public fun trustedDevices(): kotlinx.coroutines.flow.StateFlow<Map<String, com.carlom.klardrop.common.discovery.DeviceInfo>> = commonComponent.trustedDevicesDirectory().trustedDevices
 
   /** Update-check result, so the desktop tray can surface it with the window hidden. */
-  fun updateStatus() = commonComponent.updateChecker().status
+  public fun updateStatus(): kotlinx.coroutines.flow.StateFlow<com.carlom.klardrop.common.update.UpdateStatus> = commonComponent.updateChecker().status
 
   /** Self-update progress, so the tray can offer the restart that applies it. */
-  fun updateInstallProgress() = commonComponent.updateChecker().install
+  public fun updateInstallProgress(): kotlinx.coroutines.flow.StateFlow<com.carlom.klardrop.common.update.InstallProgress> = commonComponent.updateChecker().install
 
 }

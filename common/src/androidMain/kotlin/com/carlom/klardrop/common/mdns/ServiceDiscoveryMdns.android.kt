@@ -24,7 +24,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration.Companion.seconds
 
-actual class ServiceDiscoveryMdns(private val context: Context) {
+internal actual class ServiceDiscoveryMdns(private val context: Context) {
 
   private val nsdManager by lazy { context.getSystemService(Context.NSD_SERVICE) as NsdManager }
 

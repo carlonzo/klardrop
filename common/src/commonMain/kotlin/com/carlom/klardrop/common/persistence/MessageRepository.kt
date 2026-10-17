@@ -18,7 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-interface MessageRepository {
+public interface MessageRepository {
   /**
    * Inserts a message row and returns its DB autoincrement id (`last_insert_rowid()`) — the
    * only identifier [updateMessageSendStatus] should be correlated by. [messageId] (the wire
@@ -26,7 +26,7 @@ interface MessageRepository {
    * `Random.nextInt()` with no uniqueness enforcement (see `TextMessage.kt`), so it must never be
    * used as a lookup key: two outgoing rows across the whole table can collide on it.
    */
-  suspend fun insertMessage(
+  public suspend fun insertMessage(
     remoteDeviceId: String,
     content: String,
     isSender: Boolean,
@@ -49,7 +49,7 @@ interface MessageRepository {
    * bookkeeping (most of them — see the various test [MessageRepository] stubs) don't need to
    * implement it; only the real, DB-backed repository overrides it.
    */
-  suspend fun updateMessageSendStatus(messageId: Long, status: SendStatus) {
+  public suspend fun updateMessageSendStatus(messageId: Long, status: SendStatus): Unit {
     // no-op default; see kdoc above.
   }
 
@@ -63,11 +63,11 @@ interface MessageRepository {
    * Default no-op so fakes/stubs of this interface don't need to implement it; only the real,
    * DB-backed repository overrides it.
    */
-  suspend fun markStaleSendingAsFailed() {
+  public suspend fun markStaleSendingAsFailed(): Unit {
     // no-op default; see kdoc above.
   }
 
-  suspend fun insertFileTransfer(
+  public suspend fun insertFileTransfer(
     fileName: String,
     filePath: String,
     totalSize: Long,
@@ -75,7 +75,7 @@ interface MessageRepository {
     mimeType: String = "application/octet-stream"
   ): Long
 
-  suspend fun updateFileTransferStatus(id: Long, status: FileTransferStatus)
+  public suspend fun updateFileTransferStatus(id: Long, status: FileTransferStatus): Unit
 
   /**
    * Mark every transfer still flagged IN_PROGRESS as FAILED. Intended to run once at
@@ -83,7 +83,7 @@ interface MessageRepository {
    * and a row left in IN_PROGRESS from a prior crash/kill would otherwise sit on the
    * chat screen forever as a stuck "0 B of N MB" entry with no terminal status.
    */
-  suspend fun markStaleInProgressAsFailed()
+  public suspend fun markStaleInProgressAsFailed(): Unit
 
   /**
    * Returns a merged flow of [ChatMessage] for the given device.
@@ -93,7 +93,7 @@ interface MessageRepository {
    * Disk rows map send_status straight to [DeliveryStatus] ('SENDING' -> SENDING, 'FAILED' ->
    * FAILED, NULL/anything else -> SENT); any outbox entry appears as [DeliveryStatus.SENDING].
    */
-  fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<ChatMessage>>
+  public fun getMessagesForDevice(remoteDeviceId: String, limit: Long): Flow<List<ChatMessage>>
 
   /**
    * Keyset page, newest first (timestamp DESC, id DESC). [beforeMessageId], when given, must be
@@ -105,7 +105,7 @@ interface MessageRepository {
    * Default ignores [beforeMessageId] and returns the newest [limit] rows — good enough for fakes
    * that don't exercise paging; only the real, DB-backed repository implements the cursor.
    */
-  suspend fun getMessagesForDevicePage(
+  public suspend fun getMessagesForDevicePage(
     remoteDeviceId: String,
     limit: Long,
     beforeMessageId: Long? = null,
@@ -115,24 +115,24 @@ interface MessageRepository {
    * The message row referencing [fileTransferId], if any — used by retry to find which device a
    * failed outgoing file was headed to. Default no-op (null) for fakes that don't need it.
    */
-  suspend fun getMessageByFileTransferId(fileTransferId: Long): ChatMessage? = null
+  public suspend fun getMessageByFileTransferId(fileTransferId: Long): ChatMessage? = null
 
   /** Single message row by its own id, regardless of device — used by /thumbnail. Default no-op (null). */
-  suspend fun getMessageById(id: Long): ChatMessage? = null
+  public suspend fun getMessageById(id: Long): ChatMessage? = null
 
-  fun getFileTransferById(id: Long): Flow<File_transfers?>
+  public fun getFileTransferById(id: Long): Flow<File_transfers?>
 
-  suspend fun updateFileTransferFilePath(id: Long, filePath: String)
+  public suspend fun updateFileTransferFilePath(id: Long, filePath: String): Unit
 
-  suspend fun markMessagesAsRead(remoteDeviceId: String)
+  public suspend fun markMessagesAsRead(remoteDeviceId: String): Unit
 
-  suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long
+  public suspend fun getUnreadCountForDevice(remoteDeviceId: String): Long
 
-  fun getAllDevicesWithUnreadCounts(): Flow<Map<String, Long>>
+  public fun getAllDevicesWithUnreadCounts(): Flow<Map<String, Long>>
 }
 
-enum class MessageType { TEXT, FILE }
-enum class FileTransferStatus { IN_PROGRESS, COMPLETED, FAILED, REJECTED }
+public enum class MessageType { TEXT, FILE }
+public enum class FileTransferStatus { IN_PROGRESS, COMPLETED, FAILED, REJECTED }
 
 /** NULL is the legacy/default column value and reads back as SENT — see [SendStatus] kdoc. */
 private fun SendStatus.toColumnValue(): String? = when (this) {
@@ -141,7 +141,7 @@ private fun SendStatus.toColumnValue(): String? = when (this) {
   SendStatus.FAILED -> "FAILED"
 }
 
-class MessageRepositoryImpl(
+internal class MessageRepositoryImpl(
   private val database: AppDatabase,
   private val clock: Clock,
   private val ioDispatcher: CoroutineDispatcher,

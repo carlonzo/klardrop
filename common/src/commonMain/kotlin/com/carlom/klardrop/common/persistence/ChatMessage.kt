@@ -8,7 +8,7 @@ package com.carlom.klardrop.common.persistence
  * exactly once — so a crash mid-send shows SENDING/FAILED on restart, never a false SENT.
  * NULL in the database means SENT (legacy rows predate this column; kept for read-compat).
  */
-enum class SendStatus {
+public enum class SendStatus {
   SENDING,
   SENT,
   FAILED,
@@ -18,7 +18,7 @@ enum class SendStatus {
  * UI-facing delivery state for a merged chat message. Mirrors [SendStatus] read back from disk
  * (SENDING/FAILED are explicit column values; NULL/anything else reads as SENT).
  */
-enum class DeliveryStatus {
+public enum class DeliveryStatus {
   SENDING,
   SENT,
   FAILED,
@@ -30,17 +30,17 @@ enum class DeliveryStatus {
  *
  * Persisted chat row (SENDING/SENT/FAILED).
  */
-data class ChatMessage(
+public data class ChatMessage(
   /** Stable unique id — the DB row id. */
-  val id: Long,
-  val remoteDeviceId: String,
-  val content: String,
-  val timestamp: Long,
-  val isSender: Boolean,
-  val messageType: String,
-  val fileTransferId: Long?,
-  val isRead: Long,
-  val mimeType: String,
+  public val id: Long,
+  public val remoteDeviceId: String,
+  public val content: String,
+  public val timestamp: Long,
+  public val isSender: Boolean,
+  public val messageType: String,
+  public val fileTransferId: Long?,
+  public val isRead: Long,
+  public val mimeType: String,
   /** Delivery state derived from outbox (SENDING) or disk send_status (SENT/FAILED). */
-  val deliveryStatus: DeliveryStatus,
+  public val deliveryStatus: DeliveryStatus,
 )

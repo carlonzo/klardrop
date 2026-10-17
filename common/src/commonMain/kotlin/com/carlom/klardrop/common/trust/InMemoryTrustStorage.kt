@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.withLock
  *
  * Stores both ECDH and ECDSA keys for each trusted device.
  */
-class InMemoryTrustStorage : TrustStorage {
+public class InMemoryTrustStorage : TrustStorage {
 
     private val trustedDevices = mutableMapOf<String, ByteArray>()  // ECDH keys
     private val ecdsaKeys = mutableMapOf<String, ByteArray>()  // ECDSA keys for signing
@@ -101,7 +101,7 @@ class InMemoryTrustStorage : TrustStorage {
      * Simulates keychain/keystore reset where the private key was deleted
      * while preferences or storage retained the previous public key or pairings.
      */
-    suspend fun clearPrivateKeyOnly() {
+    public suspend fun clearPrivateKeyOnly(): Unit {
         mutex.withLock {
             devicePrivateKey = null
         }

@@ -12,9 +12,9 @@ import kotlinx.coroutines.flow.flowOf
  * educational notes on macOS so the panel can warn the user once instead of
  * having them get blindsided.
  */
-actual class PermissionsMonitor {
+public actual class PermissionsMonitor {
 
-  actual fun observe(): Flow<PermissionsState> {
+  public actual fun observe(): Flow<PermissionsState> {
     val isMac = System.getProperty("os.name", "")
       .lowercase()
       .let { it.contains("mac") || it.contains("darwin") }
@@ -42,5 +42,5 @@ actual class PermissionsMonitor {
 
   // Desktop permission state is static (educational notes only, no runtime
   // grants to re-read), so there is nothing to refresh.
-  actual fun refresh() = Unit
+  public actual fun refresh(): Unit = Unit
 }

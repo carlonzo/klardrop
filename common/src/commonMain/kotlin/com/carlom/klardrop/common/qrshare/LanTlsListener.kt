@@ -4,7 +4,7 @@ import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.ByteWriteChannel
 import kotlinx.coroutines.flow.Flow
 
-expect class LanTlsListener() {
+internal expect class LanTlsListener() {
   /**
    * Self-signed ECDSA P-256.
    * SAN: IPAddress = [ipv4] (GeneralName [7]).
@@ -20,11 +20,11 @@ expect class LanTlsListener() {
   fun close()
 }
 
-data class Bound(val port: Int)
+internal data class Bound(val port: Int)
 
-class TlsConnection(
-  val peerIpv4: String,
-  val input: ByteReadChannel,   // io.ktor.utils.io
-  val output: ByteWriteChannel,
-  val close: () -> Unit,
+internal class TlsConnection(
+  internal val peerIpv4: String,
+  internal val input: ByteReadChannel,   // io.ktor.utils.io
+  internal val output: ByteWriteChannel,
+  internal val close: () -> Unit,
 )

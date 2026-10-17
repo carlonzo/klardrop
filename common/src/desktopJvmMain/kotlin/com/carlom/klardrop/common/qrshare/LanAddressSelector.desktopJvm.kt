@@ -12,7 +12,7 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 import kotlin.time.Duration.Companion.seconds
 
-actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
+internal actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
 
   actual override suspend fun selectIpv4(): String? = withContext(Dispatchers.IO) {
     selectLanAddress(enumerateInterfaces())

@@ -12,12 +12,12 @@ import kotlinx.coroutines.flow.Flow
  * everyone to re-evaluate. Implementations debounce as needed to avoid
  * thrashing during transient changes.
  */
-expect class NetworkLifecycleMonitor {
+internal expect class NetworkLifecycleMonitor {
 
   fun observe(): Flow<NetworkChangeEvent>
 }
 
-sealed interface NetworkChangeEvent {
+internal sealed interface NetworkChangeEvent {
   /** The set of available network interfaces / connectivity has changed. */
   data object Changed : NetworkChangeEvent
 }

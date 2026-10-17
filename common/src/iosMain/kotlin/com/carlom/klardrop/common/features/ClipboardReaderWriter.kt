@@ -3,7 +3,7 @@ package com.carlom.klardrop.common.features
 import kotlinx.coroutines.flow.Flow
 import platform.UIKit.UIPasteboard
 
-actual class ClipboardReaderWriter : ClipboardSource {
+internal actual class ClipboardReaderWriter : ClipboardSource {
 
   private val pasteboard by lazy { UIPasteboard.generalPasteboard }
   private val gate = IosPasteboardSyncReadGate()

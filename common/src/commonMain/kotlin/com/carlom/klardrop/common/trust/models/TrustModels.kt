@@ -7,12 +7,12 @@ package com.carlom.klardrop.common.trust.models
 /**
  * Represents a trusted device relationship.
  */
-data class TrustedDeviceInfo(
-    val deviceId: String,
-    val deviceName: String,
-    val deviceType: String,
-    val publicKey: ByteArray,
-    val pairingTimestamp: Long
+internal data class TrustedDeviceInfo(
+    internal val deviceId: String,
+    internal val deviceName: String,
+    internal val deviceType: String,
+    internal val publicKey: ByteArray,
+    internal val pairingTimestamp: Long
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -38,7 +38,7 @@ data class TrustedDeviceInfo(
 /**
  * Result types for trust operations.
  */
-sealed class TrustResult<out T> {
+internal sealed class TrustResult<out T> {
     data class Success<T>(val data: T) : TrustResult<T>()
     data class Error(val message: String, val cause: Throwable? = null) : TrustResult<Nothing>()
 }
@@ -46,7 +46,7 @@ sealed class TrustResult<out T> {
 /**
  * Trust operation types for logging and monitoring.
  */
-enum class TrustOperation {
+internal enum class TrustOperation {
     PAIRING_INITIATED,
     PAIRING_REQUEST_RECEIVED,
     PAIRING_ACCEPTED,

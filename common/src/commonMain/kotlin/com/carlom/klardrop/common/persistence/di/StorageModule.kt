@@ -22,7 +22,7 @@ import okio.FileSystem.Companion.SYSTEM_TEMPORARY_DIRECTORY
 import okio.Path.Companion.toPath
 import kotlin.random.Random
 
-class StorageModule(
+internal class StorageModule(
   private val applicationInfo: ApplicationInfo,
   private val coroutines: Coroutines,
   private val platformFileSystem: PlatformFileSystem,

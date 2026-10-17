@@ -65,7 +65,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-actual class ServiceDiscoveryMdns {
+internal actual class ServiceDiscoveryMdns {
 
   private val publishMutexByServiceType = mutableMapOf<String, Mutex>()
   private val mutexMapMutex = Mutex()
@@ -253,17 +253,17 @@ private class LinuxEntryGroupListener(val serviceName: String) {
 }
 
 private class LinuxMdnsResolverContext(
-  val session: LinuxMdnsBrowserSession,
-  val serviceName: String,
-  val serviceType: String,
-  val domain: String?,
+  internal val session: LinuxMdnsBrowserSession,
+  internal val serviceName: String,
+  internal val serviceType: String,
+  internal val domain: String?,
 )
 
 private class LinuxMdnsBrowserSession(
-  val client: CPointer<AvahiClient>,
-  val poll: CPointer<AvahiThreadedPoll>,
-  val producer: ProducerScope<ServiceDiscoveryEvent>,
-  val cleanServiceType: String,
+  internal val client: CPointer<AvahiClient>,
+  internal val poll: CPointer<AvahiThreadedPoll>,
+  internal val producer: ProducerScope<ServiceDiscoveryEvent>,
+  internal val cleanServiceType: String,
 ) {
   var selfRef: StableRef<LinuxMdnsBrowserSession>? = null
   var browser: CPointer<AvahiServiceBrowser>? = null

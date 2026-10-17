@@ -8,10 +8,10 @@ import dev.whyoleg.cryptography.random.CryptographyRandom
 import kotlin.time.Clock
 
 internal data class QrTlsCertResult(
-    val certDer: ByteArray,
-    val privateKeyPkcs8Der: ByteArray,
-    val pkcs12Der: ByteArray,
-    val publicKeyRaw: ByteArray,
+    internal val certDer: ByteArray,
+    internal val privateKeyPkcs8Der: ByteArray,
+    internal val pkcs12Der: ByteArray,
+    internal val publicKeyRaw: ByteArray,
 )
 
 internal object QrTlsCertGenerator {

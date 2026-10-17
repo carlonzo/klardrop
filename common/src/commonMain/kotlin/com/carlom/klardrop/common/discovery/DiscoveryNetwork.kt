@@ -34,7 +34,7 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Service that keeps emitting pings to announce availability and discover new devices or update info of the known ones
  */
-class DiscoveryNetwork(
+internal class DiscoveryNetwork(
   coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
   private val serviceDiscoveryMdns: ServiceDiscoveryMdns,
@@ -650,5 +650,5 @@ class DiscoveryNetwork(
  * [port]? Desktop JVM opens a loopback socket; platforms without a portable
  * probe no-op (return true = assume alive, never warn).
  */
-expect fun verifyAdvertisedPortAlive(port: Int): Boolean
+internal expect fun verifyAdvertisedPortAlive(port: Int): Boolean
 

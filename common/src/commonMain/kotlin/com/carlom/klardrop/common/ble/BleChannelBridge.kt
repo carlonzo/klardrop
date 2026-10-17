@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
  *    will propagate closure to the other endpoints.
  *  - [close] is idempotent and cancels the pumps.
  */
-class BleChannelBridge(
+internal class BleChannelBridge(
   private val session: BleSession,
   private val scope: CoroutineScope,
 ) {

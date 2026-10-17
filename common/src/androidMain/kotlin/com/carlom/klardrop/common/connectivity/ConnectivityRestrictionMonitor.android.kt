@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 
-actual class ConnectivityRestrictionMonitor(
+public actual class ConnectivityRestrictionMonitor(
   context: Context,
   private val foregroundState: ForegroundState,
 ) {
@@ -48,7 +48,7 @@ actual class ConnectivityRestrictionMonitor(
    * network changing (metered <-> unmetered). Plus a foreground transition and
    * [refresh], mirroring PermissionsMonitor.
    */
-  actual fun observe(): Flow<ConnectivityRestrictions> = merge(
+  public actual fun observe(): Flow<ConnectivityRestrictions> = merge(
     foregroundState.isForeground.filter { it }.map { },
     refreshTrigger,
     callbackFlow {
@@ -88,7 +88,7 @@ actual class ConnectivityRestrictionMonitor(
     .distinctUntilChanged()
     .flowOn(Dispatchers.Default)
 
-  actual fun refresh() {
+  public actual fun refresh(): Unit {
     refreshTrigger.tryEmit(Unit)
   }
 

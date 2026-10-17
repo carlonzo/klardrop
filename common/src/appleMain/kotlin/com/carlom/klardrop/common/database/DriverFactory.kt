@@ -8,7 +8,7 @@ import co.touchlab.sqliter.DatabaseFileContext
 
 private const val DB_NAME = "AppDatabase.db"
 
-actual class DriverFactory(private val disablePersistence: Boolean = false) {
+internal actual class DriverFactory(private val disablePersistence: Boolean = false) {
   actual fun createDriver(): SqlDriver {
     return if (disablePersistence) {
       val schema = AppDatabase.Schema

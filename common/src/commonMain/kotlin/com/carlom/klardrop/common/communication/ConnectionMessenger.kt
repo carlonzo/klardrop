@@ -32,7 +32,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
 import kotlin.time.ExperimentalTime
 
-class ConnectionMessenger internal constructor(
+internal class ConnectionMessenger internal constructor(
   private val coroutines: Coroutines,
   private val connection: Connection,
   private val messagesRouter: MessagesRouter,
@@ -53,7 +53,7 @@ class ConnectionMessenger internal constructor(
    * (we were the server). [ConnectionsPool] uses this to deterministically resolve simultaneous
    * opens — both peers keep the connection initiated by the device with the smaller id.
    */
-  val initiatedByUs: Boolean = false,
+  internal val initiatedByUs: Boolean = false,
 ) {
 
   /** True when this messenger is bound to a BLE GATT session rather than a TCP socket. */

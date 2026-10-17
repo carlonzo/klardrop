@@ -5,4 +5,4 @@ package com.carlom.klardrop.common.communication
  * portable way to block display/system sleep. (The native macOS app gets a real one — see
  * `MacTransferAnchor` — because it can call `NSProcessInfo` directly.)
  */
-actual fun platformTransferAnchor(): TransferAnchor = TransferAnchor.None
+public actual fun platformTransferAnchor(): TransferAnchor = TransferAnchor.None

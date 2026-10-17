@@ -32,10 +32,10 @@ internal fun resetLinuxSenderStateForTest() {
 // ---------------------------------------------------------------------------
 
 internal data class ParsedDsn(
-  val scheme: String,
-  val originalDsn: String, // as given, for the envelope header's "dsn" field
-  val envelopeUrl: String,
-  val authHeader: String,
+  internal val scheme: String,
+  internal val originalDsn: String, // as given, for the envelope header's "dsn" field
+  internal val envelopeUrl: String,
+  internal val authHeader: String,
 )
 
 /**

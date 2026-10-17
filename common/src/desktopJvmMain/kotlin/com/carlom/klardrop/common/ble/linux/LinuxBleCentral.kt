@@ -18,7 +18,7 @@ import kotlinx.coroutines.withTimeout
  * `StartNotify` on RX). Behavioral mirror of the Apple transport: connect resolves
  * from the scan cache and refuses never-seen addresses.
  */
-class LinuxBleCentral(private val facade: BlueZFacade) {
+internal class LinuxBleCentral(private val facade: BlueZFacade) {
 
   /** Addresses reported Found by the facade; connectCentral refuses anything else. */
   private val seenAddresses: MutableSet<String> = ConcurrentHashMap.newKeySet()

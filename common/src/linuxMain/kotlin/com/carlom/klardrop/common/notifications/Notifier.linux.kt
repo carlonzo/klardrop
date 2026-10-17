@@ -19,13 +19,13 @@ import kotlinx.coroutines.sync.withLock
 import platform.posix.SIGTERM
 import platform.posix.kill
 
-actual class Notifier {
+public actual class Notifier {
 
   private val flow = MutableSharedFlow<NotificationAction>(
     extraBufferCapacity = 16,
     onBufferOverflow = BufferOverflow.DROP_OLDEST,
   )
-  actual val actions: Flow<NotificationAction> = flow.asSharedFlow()
+  public actual val actions: Flow<NotificationAction> = flow.asSharedFlow()
 
   // Raw Dispatchers.IO, NOT the shared capped pool: notify-send --wait parks this scope's
   // thread for up to 120s per lingering prompt, and two unanswered prompts would otherwise
@@ -40,7 +40,7 @@ actual class Notifier {
     var pid: Int? = null,
   )
 
-  actual fun show(notification: AppNotification) {
+  public actual fun show(notification: AppNotification): Unit {
     cancel(notification.id)
 
     when (notification) {
@@ -101,7 +101,7 @@ actual class Notifier {
     }
   }
 
-  actual fun cancel(id: String) {
+  public actual fun cancel(id: String): Unit {
     scope.launch {
       val handle = activeJobsMutex.withLock { activeJobs.remove(id) } ?: return@launch
       handle.job.cancel()

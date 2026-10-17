@@ -32,7 +32,7 @@ import platform.Photos.PHPhotoLibrary
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationDidBecomeActiveNotification
 
-actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
+public actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
   private val documentsDirectory: Path by lazy {
     val directory = NSFileManager.defaultManager.URLForDirectory(
@@ -46,7 +46,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     Path(requireNotNull(directory?.path))
   }
 
-  actual fun getDownloadStoragePath(): Path {
+  internal actual fun getDownloadStoragePath(): Path {
 
     val klardropStoragePath = Path(documentsDirectory, "Klardrop")
 
@@ -57,7 +57,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     return klardropStoragePath
   }
 
-  actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
+  internal actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns()
   }
 
@@ -77,57 +77,57 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     monitor
   }
 
-  actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
+  internal actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
-  actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
+  internal actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
     com.carlom.klardrop.common.qrshare.PlatformLanAddressSelector()
 
   private val permissionsMonitor by lazy { PermissionsMonitor() }
 
-  actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
+  internal actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
 
   private val connectivityRestrictionMonitor by lazy { ConnectivityRestrictionMonitor() }
 
-  actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
+  internal actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
 
   private val notifier by lazy { Notifier() }
 
-  actual fun notifier(): Notifier = notifier
+  internal actual fun notifier(): Notifier = notifier
 
   private val foregroundState by lazy { ForegroundState() }
 
-  actual fun foregroundState(): ForegroundState = foregroundState
+  internal actual fun foregroundState(): ForegroundState = foregroundState
 
   private val bleTransport by lazy { BleTransport() }
 
-  actual fun bleTransport(): BleTransport = bleTransport
+  internal actual fun bleTransport(): BleTransport = bleTransport
 
-  actual fun clipboardReaderWriter(): ClipboardReaderWriter {
+  internal actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter()
   }
 
-  actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
+  internal actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
     // iOS path TODO: NEHotspotConfiguration + NEHotspotConfigurationManager. For now we
     // reuse the clipboard fallback so the UX still surfaces the password cleanly.
     return FallbackClipboardConnectionInfoJoiner(clipboardReaderWriter())
   }
 
-  actual fun driverFactory(): DriverFactory {
+  internal actual fun driverFactory(): DriverFactory {
     return DriverFactory()
   }
 
-  actual fun trustStorage(): TrustStorage {
+  internal actual fun trustStorage(): TrustStorage {
     return AppleTrustStorage()
   }
 
-  actual suspend fun openFile(filePath: String): Boolean {
+  internal actual suspend fun openFile(filePath: String): Boolean {
     // iOS file opening requires UIDocumentInteractionController or similar
     // This is a simplified implementation that always returns false
     // A proper implementation would need platform-specific UI integration
     return false
   }
 
-  actual suspend fun openUrl(url: String): Boolean {
+  internal actual suspend fun openUrl(url: String): Boolean {
     val nsUrl = NSURL.URLWithString(url) ?: return false
     val app = UIApplication.sharedApplication
     if (!app.canOpenURL(nsUrl)) return false
@@ -143,7 +143,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
   // NOTE on the "ph://" scheme: moveToStorage wraps this string in kotlinx.io Path and persists
   // Path.toString(), which collapses the "//" to "/". The Swift side restores both "ph://" and
   // the collapsed "ph:/" forms — mirroring exactly how Android's "content://" URIs round-trip.
-  actual suspend fun saveMediaToGallery(
+  internal actual suspend fun saveMediaToGallery(
     tempPath: kotlinx.io.files.Path,
     mimeType: String,
     displayName: String,

@@ -51,18 +51,18 @@ private fun resolveControlPort(): Int =
  * framework the macOS app links, so `ControlPlane` sits beside this class there; see the
  * comment in MacApp.swift.
  */
-class KlardropBootstrap(controlPort: Int = resolveControlPort()) {
+public class KlardropBootstrap(controlPort: Int = resolveControlPort()) {
 
     // Kotlin default arguments are invisible to Objective-C, so without this
     // Swift sees only `init(controlPort:)` and the bare `KlardropBootstrap()`
     // call in MacApp.swift fails with "'init()' is unavailable". The iOS twin
     // takes no arguments at all, so this keeps the two entry points identical
     // from Swift's side.
-    constructor() : this(resolveControlPort())
+    public constructor() : this(resolveControlPort())
 
     private val applicationInfo = ApplicationInfo(controlPort = controlPort)
 
-    val klardrop: Klardrop = Klardrop(
+    public val klardrop: Klardrop = Klardrop(
         internalPlatformDependency = InternalPlatformDependencies(applicationInfo)
     )
 
@@ -96,12 +96,12 @@ class KlardropBootstrap(controlPort: Int = resolveControlPort()) {
      */
     private val uiDependencies: UiDependencies by lazy { UiDependencies(klardrop.commonComponent) }
 
-    fun discoveryController(): DiscoveryController = uiDependencies.discoveryController()
+    public fun discoveryController(): DiscoveryController = uiDependencies.discoveryController()
 
-    fun updateBannerController(): UpdateBannerController = uiDependencies.updateBannerController()
+    public fun updateBannerController(): UpdateBannerController = uiDependencies.updateBannerController()
 
-    fun deviceChatViewModel(deviceId: String): DeviceChatViewModel =
+    public fun deviceChatViewModel(deviceId: String): DeviceChatViewModel =
         uiDependencies.deviceChatViewModelFactory(deviceId)
 
-    fun qrShareSession() = klardrop.commonComponent.qrShareSession()
+    public fun qrShareSession(): com.carlom.klardrop.common.qrshare.QrShareSession = klardrop.commonComponent.qrShareSession()
 }

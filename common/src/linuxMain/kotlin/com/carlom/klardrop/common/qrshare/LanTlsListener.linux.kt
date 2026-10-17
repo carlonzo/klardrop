@@ -120,7 +120,7 @@ private val ignoreSigpipeOnce: Unit by lazy {
   Unit
 }
 
-actual class LanTlsListener actual constructor() {
+internal actual class LanTlsListener actual constructor() {
 
   companion object {
     private const val ACCEPT_POLL_INTERVAL_MS = 500L

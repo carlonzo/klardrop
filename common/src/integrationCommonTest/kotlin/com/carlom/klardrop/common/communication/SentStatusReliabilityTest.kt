@@ -326,7 +326,7 @@ class SentStatusReliabilityTest {
   }
 
   /** Test-only fixture: a real client+server loopback pair, mirroring MessagesRouterReliabilityTest.Ctx. */
-  inner class Ctx {
+  private inner class Ctx {
     private val driver = createTestDriver()
     private val db = AppDatabase(driver)
     private val realClientRepository = MessageRepositoryImpl(db, clock, coroutines.ioDispatcher)

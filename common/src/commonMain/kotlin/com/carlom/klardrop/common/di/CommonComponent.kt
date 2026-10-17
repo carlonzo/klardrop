@@ -21,6 +21,7 @@ import com.carlom.klardrop.common.discovery.TrustedDevicesDirectory
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.discovery.VisibleDevicesImpl
 import com.carlom.klardrop.common.features.ClipboardManager
+import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.MessageRepository
@@ -36,7 +37,7 @@ import com.carlom.klardrop.common.utils.PlatformFileSystem
 import com.carlom.klardrop.common.utils.PlatformFileSystemImpl
 import kotlinx.serialization.protobuf.ProtoBuf
 
-class CommonComponent(
+public class CommonComponent(
   private val applicationInfo: ApplicationInfo,
   private val internalPlatformDependency: InternalPlatformDependencies,
   /**
@@ -143,57 +144,57 @@ class CommonComponent(
     )
   }
 
-  fun applicationInfo() = applicationInfo
+  public fun applicationInfo(): ApplicationInfo = applicationInfo
 
-  fun discoveryNetwork() = discoveryNetwork
-  fun server() = communicationModule.server()
-  fun serverPort() = communicationModule.serverPort()
-  fun bleServerListener() = communicationModule.bleServerListener()
-  fun bleEagerConnector() = communicationModule.bleEagerConnector()
-  fun eagerReachabilityConnector() = communicationModule.eagerReachabilityConnector()
-  fun coroutines() = coroutines
-  fun visibleDevices() = visibleDevices
-  fun messenger() = communicationModule.messenger()
-  fun messageReceiver() = communicationModule.messageReceiver()
-  fun reachability() = communicationModule.reachability()
-  fun client(): Client = communicationModule.client()
-  fun connectionsPool(): ConnectionsPool = communicationModule.connectionsPool()
+  internal fun discoveryNetwork() = discoveryNetwork
+  public fun server(): com.carlom.klardrop.common.communication.Server = communicationModule.server()
+  internal fun serverPort() = communicationModule.serverPort()
+  internal fun bleServerListener() = communicationModule.bleServerListener()
+  internal fun bleEagerConnector() = communicationModule.bleEagerConnector()
+  internal fun eagerReachabilityConnector() = communicationModule.eagerReachabilityConnector()
+  public fun coroutines(): Coroutines = coroutines
+  public fun visibleDevices(): VisibleDevices = visibleDevices
+  public fun messenger(): com.carlom.klardrop.common.communication.Messenger = communicationModule.messenger()
+  public fun messageReceiver(): com.carlom.klardrop.common.receiver.MessageReceiver = communicationModule.messageReceiver()
+  public fun reachability(): kotlinx.coroutines.flow.StateFlow<Map<String, com.carlom.klardrop.common.communication.Reachability>> = communicationModule.reachability()
+  public fun client(): Client = communicationModule.client()
+  public fun connectionsPool(): ConnectionsPool = communicationModule.connectionsPool()
 
-  fun platformFileSystem() = platformFileSystem
+  public fun platformFileSystem(): PlatformFileSystem = platformFileSystem
 
-  fun clipboardManager() = clipboardManager
+  public fun clipboardManager(): ClipboardManager = clipboardManager
 
-  fun messageRepository() = messageRepository
+  public fun messageRepository(): MessageRepository = messageRepository
 
-  fun fileManager() = fileManager
+  public fun fileManager(): FileManager = fileManager
 
-  fun trustManager() = communicationModule.trustManager()
+  public fun trustManager(): com.carlom.klardrop.common.trust.TrustManager = communicationModule.trustManager()
 
-  fun incomingAuthorizer() = communicationModule.incomingAuthorizer()
+  public fun incomingAuthorizer(): com.carlom.klardrop.common.communication.router.IncomingAuthorizer = communicationModule.incomingAuthorizer()
 
-  fun pairingProtocolCoordinator() = communicationModule.pairingProtocolCoordinator()
+  public fun pairingProtocolCoordinator(): com.carlom.klardrop.common.trust.PairingProtocolCoordinator = communicationModule.pairingProtocolCoordinator()
 
-  fun trustStorage() = communicationModule.trustStorage()
+  internal fun trustStorage() = communicationModule.trustStorage()
 
-  fun trustedDevicesDirectory() = trustedDevicesDirectory
+  public fun trustedDevicesDirectory(): TrustedDevicesDirectory = trustedDevicesDirectory
 
-  fun clipboardSyncManager() = communicationModule.clipboardSyncManager()
+  internal fun clipboardSyncManager() = communicationModule.clipboardSyncManager()
 
-  fun currentDeviceProvider() = currentDeviceProvider
+  public fun currentDeviceProvider(): CurrentDeviceProvider = currentDeviceProvider
 
-  fun localPropertiesRepository() = localProperties
+  public fun localPropertiesRepository(): LocalPropertiesRepository = localProperties
 
-  fun connectionInfoJoiner() = internalPlatformDependency.connectionInfoJoiner()
+  public fun connectionInfoJoiner(): ConnectionInfoJoiner = internalPlatformDependency.connectionInfoJoiner()
 
-  fun permissionsMonitor() = internalPlatformDependency.permissionsMonitor()
+  public fun permissionsMonitor(): com.carlom.klardrop.common.permissions.PermissionsMonitor = internalPlatformDependency.permissionsMonitor()
 
-  fun connectivityRestrictionMonitor() = internalPlatformDependency.connectivityRestrictionMonitor()
+  public fun connectivityRestrictionMonitor(): com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor = internalPlatformDependency.connectivityRestrictionMonitor()
 
-  fun notifier() = internalPlatformDependency.notifier()
+  public fun notifier(): com.carlom.klardrop.common.notifications.Notifier = internalPlatformDependency.notifier()
 
-  fun foregroundState() = internalPlatformDependency.foregroundState()
+  public fun foregroundState(): com.carlom.klardrop.common.notifications.ForegroundState = internalPlatformDependency.foregroundState()
 
-  fun updateChecker() = updateChecker
+  public fun updateChecker(): UpdateChecker = updateChecker
 
   private val qrShareSession: QrShareSession by lazy {
     val server = LanHttpShareServer(
@@ -212,9 +213,9 @@ class CommonComponent(
     )
   }
 
-  fun qrShareSession(): QrShareSession = qrShareSession
+  public fun qrShareSession(): QrShareSession = qrShareSession
 
   /** Hand a URL to the system handler (browser, etc.). Used by the update banner. */
-  suspend fun openUrl(url: String) = internalPlatformDependency.openUrl(url)
+  public suspend fun openUrl(url: String): Boolean = internalPlatformDependency.openUrl(url)
 
 }

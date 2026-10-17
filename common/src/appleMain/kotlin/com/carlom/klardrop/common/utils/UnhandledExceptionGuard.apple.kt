@@ -7,7 +7,7 @@ import kotlin.native.setUnhandledExceptionHook
 private var hookInstalled = false
 
 @OptIn(ExperimentalNativeApi::class)
-actual fun installUnhandledExceptionGuard() {
+internal actual fun installUnhandledExceptionGuard() {
   if (hookInstalled) return
   hookInstalled = true
 

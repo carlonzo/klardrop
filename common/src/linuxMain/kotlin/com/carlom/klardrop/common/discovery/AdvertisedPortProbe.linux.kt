@@ -29,7 +29,7 @@ private const val INADDR_LOOPBACK_VALUE = 0x7F000001u
  * Linux native probe: open a loopback TCP connection to 127.0.0.1:<port> via POSIX socket.
  * Connection refused / timeout / any failure means nothing listens there.
  */
-actual fun verifyAdvertisedPortAlive(port: Int): Boolean = memScoped {
+internal actual fun verifyAdvertisedPortAlive(port: Int): Boolean = memScoped {
   val fd = socket(AF_INET, SOCK_STREAM, 0)
   if (fd < 0) return false
   try {

@@ -12,7 +12,7 @@ import kotlin.native.Platform
  * Single Swift-facing entry point that replaces the deleted Compose DiscoveryBridge.
  * Owns the Klardrop instance and exposes the UI controllers to SwiftUI.
  */
-class KlardropBootstrap {
+public class KlardropBootstrap {
 
     private val applicationInfo = ApplicationInfo()
 
@@ -41,12 +41,12 @@ class KlardropBootstrap {
     private val uiDependencies: UiDependencies
         get() = UiDependencies(klardrop.commonComponent)
 
-    fun discoveryController(): DiscoveryController = uiDependencies.discoveryController()
+    public fun discoveryController(): DiscoveryController = uiDependencies.discoveryController()
 
-    fun updateBannerController(): UpdateBannerController = uiDependencies.updateBannerController()
+    public fun updateBannerController(): UpdateBannerController = uiDependencies.updateBannerController()
 
-    fun deviceChatViewModel(deviceId: String): DeviceChatViewModel =
+    public fun deviceChatViewModel(deviceId: String): DeviceChatViewModel =
         uiDependencies.deviceChatViewModelFactory(deviceId)
 
-    fun qrShareSession() = klardrop.commonComponent.qrShareSession()
+    public fun qrShareSession(): com.carlom.klardrop.common.qrshare.QrShareSession = klardrop.commonComponent.qrShareSession()
 }

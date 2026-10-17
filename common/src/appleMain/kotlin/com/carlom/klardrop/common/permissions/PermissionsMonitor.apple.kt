@@ -22,7 +22,7 @@ import platform.CoreBluetooth.CBManagerAuthorizationRestricted
  *   first-use prompt, and the desktopJvm impl carries the educational note
  *   for macOS users about that specific prompt.
  */
-actual class PermissionsMonitor {
+public actual class PermissionsMonitor {
 
   // See the Android impl: the system Bluetooth prompt only pauses the app, so
   // [refresh] pings this to force a re-read of CBCentralManager.authorization.
@@ -31,12 +31,12 @@ actual class PermissionsMonitor {
     onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST,
   )
 
-  actual fun observe(): Flow<PermissionsState> = refreshTrigger
+  public actual fun observe(): Flow<PermissionsState> = refreshTrigger
     .map { snapshot() }
     .onStart { emit(snapshot()) }
     .distinctUntilChanged()
 
-  actual fun refresh() {
+  public actual fun refresh(): Unit {
     refreshTrigger.tryEmit(Unit)
   }
 

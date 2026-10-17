@@ -15,8 +15,8 @@ import kotlinx.coroutines.flow.Flow
  *
  * Platforms with no such restriction story (desktop, Apple) report [ConnectivityRestrictions.EMPTY].
  */
-expect class ConnectivityRestrictionMonitor {
-  fun observe(): Flow<ConnectivityRestrictions>
+public expect class ConnectivityRestrictionMonitor {
+  public fun observe(): Flow<ConnectivityRestrictions>
 
   /**
    * Force a re-read of the current restriction state. The battery-optimization
@@ -24,11 +24,11 @@ expect class ConnectivityRestrictionMonitor {
    * receivers hear on every OS version, so the platform app calls this right
    * after such a prompt returns — same contract as PermissionsMonitor.refresh().
    */
-  fun refresh()
+  public fun refresh(): Unit
 }
 
 /** The restrictions that can independently block Klardrop's connectivity. */
-enum class ConnectivityRestriction {
+public enum class ConnectivityRestriction {
   /** Power Save mode is ON and this app is not exempt — netd's powersave chain default-denies our uid. */
   BatterySaverBlocking,
 
@@ -39,10 +39,10 @@ enum class ConnectivityRestriction {
   MeteredNetworkDenied,
 }
 
-data class ConnectivityRestrictions(
-  val batterySaverBlocking: Boolean = false,
-  val batteryOptimizationNotExempt: Boolean = false,
-  val meteredNetworkDenied: Boolean = false,
+public data class ConnectivityRestrictions(
+  public val batterySaverBlocking: Boolean = false,
+  public val batteryOptimizationNotExempt: Boolean = false,
+  public val meteredNetworkDenied: Boolean = false,
 ) {
   /**
    * The restriction currently dropping our packets, or null when nothing is.
@@ -53,17 +53,17 @@ data class ConnectivityRestrictions(
    * while battery saver is off). It stays reported as a latent risk for callers that want
    * it; only an ACTIVE blocker earns the banner.
    */
-  val activeBlocker: ConnectivityRestriction?
+  public val activeBlocker: ConnectivityRestriction?
     get() = when {
       batterySaverBlocking -> ConnectivityRestriction.BatterySaverBlocking
       meteredNetworkDenied -> ConnectivityRestriction.MeteredNetworkDenied
       else -> null
     }
 
-  val restricted: Boolean
+  public val restricted: Boolean
     get() = activeBlocker != null
 
-  val reasons: Set<ConnectivityRestriction>
+  public val reasons: Set<ConnectivityRestriction>
     get() = buildSet {
       if (batterySaverBlocking) add(ConnectivityRestriction.BatterySaverBlocking)
       if (batteryOptimizationNotExempt) add(ConnectivityRestriction.BatteryOptimizationNotExempt)
@@ -76,21 +76,21 @@ data class ConnectivityRestrictions(
    * a peer bug when it's this device's OS doing the blocking. Only ACTIVE
    * blockers qualify: not being exempt yet never blocked anything.
    */
-  fun activeBlockerNotice(): String? = when (activeBlocker) {
+  public fun activeBlockerNotice(): String? = when (activeBlocker) {
     ConnectivityRestriction.BatterySaverBlocking -> "Battery saver is blocking Klardrop"
     ConnectivityRestriction.MeteredNetworkDenied -> "Klardrop is blocked on metered networks"
     else -> null
   }
 
-  companion object {
-    val EMPTY = ConnectivityRestrictions()
+  public companion object {
+    public val EMPTY: ConnectivityRestrictions = ConnectivityRestrictions()
 
     /**
      * Pure derivation from raw platform state so the mapping is unit-testable
      * without an OS (android/src/test). [userDeniedOnMetered] is the per-app
      * "denied on metered networks" signal; metered alone is not enough (T1 conjunct).
      */
-    fun derive(
+    public fun derive(
       powerSaveMode: Boolean,
       batteryOptimizationExempt: Boolean,
       activeNetworkMetered: Boolean,

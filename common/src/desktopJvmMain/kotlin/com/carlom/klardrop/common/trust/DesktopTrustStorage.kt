@@ -19,7 +19,7 @@ import java.util.Base64
  * libsecret via secret-tool, with an AES-GCM encrypted-file fallback for
  * Linux installs without a session keyring.
  */
-class DesktopTrustStorage internal constructor(
+internal class DesktopTrustStorage internal constructor(
     private val appDir: File,
     private val secretStore: SecretStore,
 ) : TrustStorage {

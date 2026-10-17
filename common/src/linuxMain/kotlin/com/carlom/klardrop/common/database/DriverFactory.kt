@@ -11,7 +11,7 @@ import platform.posix.unlink
 
 private const val DB_NAME = "AppDatabase.db"
 
-actual class DriverFactory(
+internal actual class DriverFactory(
   private val databaseFolderPath: Path = Path(LinuxPaths.databasesDir),
   private val disablePersistence: Boolean = false,
 ) {

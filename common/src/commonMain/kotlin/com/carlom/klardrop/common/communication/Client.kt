@@ -83,23 +83,23 @@ internal const val PUNCH_THROUGH_ATTEMPT_INTERVAL_MS = 1_000L
  * role-selection means the peer will dial *us*), so reachability is not
  * incorrectly forced to [Unreachable] for inbound-only peers.
  */
-sealed interface ConnectOutcome {
+public sealed interface ConnectOutcome {
   /** A connection was successfully established and added to the pool. */
-  data object Connected : ConnectOutcome
+  public data object Connected : ConnectOutcome
 
   /**
    * We deliberately did not initiate — e.g. BLE role-selection says the peer
    * dials us, or we are already connected. The probe is inconclusive; the peer
    * may still reach us via an inbound connection.
    */
-  data object NotInitiated : ConnectOutcome
+  public data object NotInitiated : ConnectOutcome
 
   /** Every dial attempt failed with an error. The peer is genuinely unreachable. */
-  data object Failed : ConnectOutcome
+  public data object Failed : ConnectOutcome
 }
 
-interface Client {
-  suspend fun connectTo(deviceId: String): ConnectOutcome
+public interface Client {
+  public suspend fun connectTo(deviceId: String): ConnectOutcome
 
   /**
    * Releases this client's networking resources — most importantly its [SelectorManager].
@@ -110,7 +110,7 @@ interface Client {
    * The app builds one client and keeps it, so this is a no-op there; test fixtures build dozens,
    * and without this they exhaust the pool and deadlock the whole native test binary.
    */
-  fun close() = Unit
+  public fun close(): Unit = Unit
 }
 
 /**
@@ -143,8 +143,8 @@ internal fun Throwable.isConnectionRefused(): Boolean {
   return false
 }
 
-class ClientImpl internal constructor(
-  private val connectionsPool: ConnectionsPool,
+internal class ClientImpl internal constructor(
+  private val connectionsPool: InternalConnectionsPool,
   private val coroutines: Coroutines,
   private val messagesRouter: MessagesRouter,
   private val serializer: MessageSerializer,

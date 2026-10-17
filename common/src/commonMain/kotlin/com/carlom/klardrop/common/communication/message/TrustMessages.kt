@@ -8,14 +8,14 @@ import kotlin.random.Random
  */
 
 @Serializable
-data class TrustPairingRequest(
-    val deviceId: String,
-    val deviceName: String,
-    val ecdhPublicKey: ByteArray,        // ECDH public key for key exchange
-    val ecdsaPublicKey: ByteArray,       // ECDSA public key for message signing
-    val timestamp: Long,
-    val deviceType: String,              // Android/iOS/Desktop/macOS
-    val appVersion: String,
+internal data class TrustPairingRequest(
+    internal val deviceId: String,
+    internal val deviceName: String,
+    internal val ecdhPublicKey: ByteArray,        // ECDH public key for key exchange
+    internal val ecdsaPublicKey: ByteArray,       // ECDSA public key for message signing
+    internal val timestamp: Long,
+    internal val deviceType: String,              // Android/iOS/Desktop/macOS
+    internal val appVersion: String,
     override val id: Int = Random.nextInt(),
 ) : Message() {
     override val type: MessageType = MessageType.TRUST_PAIRING_REQUEST
@@ -52,14 +52,14 @@ data class TrustPairingRequest(
 }
 
 @Serializable
-data class TrustPairingResponse(
-    val deviceId: String,
-    val deviceName: String,
-    val ecdhPublicKey: ByteArray,        // ECDH public key for key exchange
-    val ecdsaPublicKey: ByteArray,       // ECDSA public key for message signing
-    val accepted: Boolean,
-    val timestamp: Long,
-    val rejectionReason: String? = null,  // Optional reason for rejection
+internal data class TrustPairingResponse(
+    internal val deviceId: String,
+    internal val deviceName: String,
+    internal val ecdhPublicKey: ByteArray,        // ECDH public key for key exchange
+    internal val ecdsaPublicKey: ByteArray,       // ECDSA public key for message signing
+    internal val accepted: Boolean,
+    internal val timestamp: Long,
+    internal val rejectionReason: String? = null,  // Optional reason for rejection
     override val id: Int = Random.nextInt(),
 ) : Message() {
     override val type: MessageType = MessageType.TRUST_PAIRING_RESPONSE
@@ -95,12 +95,12 @@ data class TrustPairingResponse(
 }
 
 @Serializable
-data class TrustedMessage(
-    val payload: ByteArray,              // Actual message content
-    val timestamp: Long,
-    val nonce: ByteArray,               // 16 random bytes for replay protection
-    val signature: ByteArray,           // ECDSA signature over payload + timestamp + nonce
-    val senderId: String,               // Device ID of sender
+internal data class TrustedMessage(
+    internal val payload: ByteArray,              // Actual message content
+    internal val timestamp: Long,
+    internal val nonce: ByteArray,               // 16 random bytes for replay protection
+    internal val signature: ByteArray,           // ECDSA signature over payload + timestamp + nonce
+    internal val senderId: String,               // Device ID of sender
     override val id: Int = Random.nextInt(),
 ) : Message() {
     override val type: MessageType = MessageType.TRUSTED_MESSAGE
@@ -132,11 +132,11 @@ data class TrustedMessage(
 }
 
 @Serializable
-data class ClipboardSyncMessage(
-    val content: String,
-    val mimeType: String,               // text/plain, image/png, etc.
-    val timestamp: Long,
-    val signature: ByteArray,           // ECDSA signature for verification
+internal data class ClipboardSyncMessage(
+    internal val content: String,
+    internal val mimeType: String,               // text/plain, image/png, etc.
+    internal val timestamp: Long,
+    internal val signature: ByteArray,           // ECDSA signature for verification
     override val id: Int = Random.nextInt(),
 ) : Message() {
     override val type: MessageType = MessageType.CLIPBOARD_SYNC
@@ -174,13 +174,13 @@ data class ClipboardSyncMessage(
  * [nonce] + [timestamp] protect against replay (same window/check used for [TrustedMessage]).
  */
 @Serializable
-data class TrustRevocationMessage(
-    val senderId: String,               // Device sending the revocation (us)
-    val targetDeviceId: String,         // Device whose trust we are revoking (the recipient)
-    val timestamp: Long,
-    val nonce: ByteArray,               // 16 random bytes for replay protection
-    val signature: ByteArray,           // ECDSA signature from sender over (senderId||targetDeviceId||timestamp||nonce)
-    val reason: String? = null,         // Optional reason for revocation
+internal data class TrustRevocationMessage(
+    internal val senderId: String,               // Device sending the revocation (us)
+    internal val targetDeviceId: String,         // Device whose trust we are revoking (the recipient)
+    internal val timestamp: Long,
+    internal val nonce: ByteArray,               // 16 random bytes for replay protection
+    internal val signature: ByteArray,           // ECDSA signature from sender over (senderId||targetDeviceId||timestamp||nonce)
+    internal val reason: String? = null,         // Optional reason for revocation
     override val id: Int = Random.nextInt(),
 ) : Message() {
     override val type: MessageType = MessageType.TRUST_REVOCATION

@@ -20,7 +20,7 @@ package com.carlom.klardrop.common.ble
  *  - `JVM desktop`: wraps BlueZ D-Bus characteristics (Linux) or a Swift helper process (macOS).
  *  - `Tests`: a fake backed by `kotlinx.coroutines.channels.Channel<ByteArray>`.
  */
-interface BleSession {
+internal interface BleSession {
 
   /** The remote peer's short device id, negotiated during the app-level handshake. */
   val deviceId: String

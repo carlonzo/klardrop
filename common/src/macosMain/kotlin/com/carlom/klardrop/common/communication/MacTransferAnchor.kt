@@ -26,7 +26,7 @@ import platform.darwin.NSObjectProtocol
  * queue so [active] and [assertion] stay confined to one thread — the anchor is driven from IO
  * scopes.
  */
-class MacTransferAnchor : TransferAnchor {
+internal class MacTransferAnchor : TransferAnchor {
 
   /** Ids of in-flight transfers. Touched only from the main queue — see [onMain]. */
   private val active = mutableSetOf<String>()

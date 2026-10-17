@@ -7,6 +7,7 @@ plugins {
 }
 
 kotlin {
+  explicitApi()
   android {
     namespace = "com.klardrop.common"
     compileSdk = 37
@@ -295,25 +296,47 @@ val generateKlardropVersion by tasks.registering {
       package com.carlom.klardrop.common
 
       /** Generated from the `klardrop.version` Gradle property — do not edit. */
-      object KlardropVersion {
-        const val VERSION: String = "$versionValue"
-        const val UPDATE_CHANNEL: String = "$channelValue"
+      public object KlardropVersion {
+        public const val VERSION: String = "$versionValue"
+        public const val UPDATE_CHANNEL: String = "$channelValue"
 
         /**
          * True when nothing passed `klardrop.version`, i.e. this is a developer build rather
          * than one CI produced. Drives [APP_NAME] so a local build is distinguishable from an
          * installed release — in the launcher, in the tray, and in the peer list on the LAN.
          */
-        const val IS_LOCAL_BUILD: Boolean = $isLocalValue
+        public const val IS_LOCAL_BUILD: Boolean = $isLocalValue
 
         /** User-visible app name. Suffixed on local builds so two installs can't be confused. */
-        const val APP_NAME: String = "$appNameValue"
+        public const val APP_NAME: String = "$appNameValue"
 
         /** Sentry DSN, injected by CI. Empty in local and pull-request builds. */
-        const val SENTRY_DSN: String = "$sentryDsnValue"
+        public const val SENTRY_DSN: String = "$sentryDsnValue"
       }
       """.trimIndent() + "\n"
     )
+  }
+}
+
+tasks.matching { it.name == "generateCommonMainAppDatabaseInterface" }.configureEach {
+  val outputDir = layout.buildDirectory.dir("generated/sqldelight/code/AppDatabase/commonMain")
+  doLast {
+    val dir = outputDir.get().asFile
+    if (!dir.exists()) return@doLast
+    dir.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { file ->
+      val name = file.name
+      if (name == "AppDatabase.kt") {
+        val original = file.readText()
+        val rewritten = original
+          .replace("public interface ", "internal interface ")
+          .replace("public ", "")
+        if (rewritten != original) file.writeText(rewritten)
+      } else if (name.endsWith("Queries.kt") || name == "AppDatabaseImpl.kt") {
+        val original = file.readText()
+        val rewritten = original.replace("public ", "internal ")
+        if (rewritten != original) file.writeText(rewritten)
+      }
+    }
   }
 }
 

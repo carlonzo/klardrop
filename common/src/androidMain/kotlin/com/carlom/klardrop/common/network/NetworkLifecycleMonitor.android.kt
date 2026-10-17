@@ -33,7 +33,7 @@ import java.net.Inet4Address
  * the IPv4 address set are intentionally dropped. The application-level heartbeat remains the
  * backstop for sockets that die without any of these signals (e.g. a same-IP Wi-Fi roam).
  */
-actual class NetworkLifecycleMonitor(private val context: Context) {
+internal actual class NetworkLifecycleMonitor(private val context: Context) {
 
   private val connectivityManager by lazy {
     context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

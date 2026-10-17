@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.Flow
  * `VisibleDevices`, and the Klardrop Client/Server can connect to the BLE address
  * through a dedicated BLE Client impl in a follow-up.
  */
-expect class BleTransport {
+internal expect class BleTransport {
 
   /** Whether the platform + runtime actually supports BLE (permissions granted, adapter on). */
   suspend fun isSupported(): Boolean
@@ -59,7 +59,7 @@ expect class BleTransport {
 }
 
 /** Events emitted while scanning for BLE peers. */
-sealed interface BlePeerEvent {
+internal sealed interface BlePeerEvent {
 
   /**
    * A peer advertising the Klardrop service UUID was discovered.

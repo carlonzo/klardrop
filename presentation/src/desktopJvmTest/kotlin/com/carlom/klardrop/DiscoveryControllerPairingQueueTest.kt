@@ -278,7 +278,7 @@ class DiscoveryControllerPairingQueueTest {
       visibleDevices = visibleDevices,
       messenger = messenger,
       platformFileSystem = FakePlatformFileSystem(),
-      clipboardManager = ClipboardManager(coroutines, com.carlom.klardrop.common.features.ClipboardReaderWriter()),
+      clipboardManager = ClipboardManager(coroutines),
       messageRepository = QueueTestMessageRepository(),
       trustedDevicesDirectory = trustedDevicesDirectory,
       trustManager = trustManager,

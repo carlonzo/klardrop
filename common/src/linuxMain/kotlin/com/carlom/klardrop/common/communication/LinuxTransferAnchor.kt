@@ -40,7 +40,7 @@ import kotlin.concurrent.AtomicInt
  * overlap, so the lock is only released when the *last* one finishes. The release kill runs
  * outside the lock — it can block briefly (bounded ~0.5 s grace) waiting for the child to exit.
  */
-class LinuxTransferAnchor(
+internal class LinuxTransferAnchor(
   private val spawnInhibitor: () -> Int? = ::spawnSystemdInhibit,
   private val killInhibitor: (Int) -> Unit = ::killSystemdInhibit,
 ) : TransferAnchor {

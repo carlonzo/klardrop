@@ -1,15 +1,15 @@
 package com.carlom.klardrop
 
-interface OnDeviceActionListener {
-  fun onDeviceClick(deviceUi: DeviceUi) {
+public interface OnDeviceActionListener {
+  public fun onDeviceClick(deviceUi: DeviceUi): Unit {
     throw IllegalStateException("Not implemented")
   }
 
-  fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend) {
+  public fun onSendData(deviceUi: DeviceUi, onDataToSend: OnDataToSend): Unit {
     throw IllegalStateException("Not implemented")
   }
 
-  fun onAddToTrusted(deviceUi: DeviceUi) {
+  public fun onAddToTrusted(deviceUi: DeviceUi): Unit {
     throw IllegalStateException("Not implemented")
   }
 
@@ -18,17 +18,17 @@ interface OnDeviceActionListener {
    * should both remove the local trust entry AND notify the peer (signed
    * TrustRevocationMessage) so the relationship is dissolved symmetrically.
    */
-  fun onForgetDevice(deviceUi: DeviceUi) {
+  public fun onForgetDevice(deviceUi: DeviceUi): Unit {
     throw IllegalStateException("Not implemented")
   }
 
   /** User tapped Dismiss on a notification banner. */
-  fun onNotificationDismissed(notificationId: Int) {
+  public fun onNotificationDismissed(notificationId: Int): Unit {
     throw IllegalStateException("Not implemented")
   }
 
   /** User tapped Pair on a "peer revoked trust" notification — re-initiate pairing. */
-  fun onNotificationPair(notificationId: Int) {
+  public fun onNotificationPair(notificationId: Int): Unit {
     throw IllegalStateException("Not implemented")
   }
 }

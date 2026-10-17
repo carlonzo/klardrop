@@ -21,7 +21,7 @@ import kotlin.concurrent.Volatile
  * the probed adapter path) plus a message-process loop — that is the advertise
  * follow-up. Until then [startAdvertising] records intent and logs.
  */
-class SdBusAdvertiser {
+internal class SdBusAdvertiser {
 
   @Volatile private var advertising = false
 

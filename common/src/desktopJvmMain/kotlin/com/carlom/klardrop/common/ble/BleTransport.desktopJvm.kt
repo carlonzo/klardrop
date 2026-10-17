@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.map
  * that host. Future implementations will plug an OS-specific backend into the same
  * per-OS selection below.
  */
-actual class BleTransport internal constructor(
+internal actual class BleTransport internal constructor(
   private val helper: MacBleHelperProcess?,
   private val linux: LinuxBlueZTransport? = null,
 ) {
