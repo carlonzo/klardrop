@@ -24,7 +24,7 @@ struct UpdateBannerView: View {
 
     var body: some View {
         // Only show for Available status
-        switch onEnum(of: status) {
+        switch status.sealedType() {
         case .available(let available):
             if dismissedVersion == available.version {
                 EmptyView()
@@ -40,7 +40,7 @@ struct UpdateBannerView: View {
     private func bannerContent(available: UpdateStatusAvailable) -> some View {
         let action = available.action
         let fallbackLabel: String = {
-            switch onEnum(of: action) {
+            switch action.sealedType() {
             case .runCommand:
                 return copied ? "Copied!" : "Copy command"
             case .openUrl:
@@ -48,7 +48,7 @@ struct UpdateBannerView: View {
             }
         }()
         let fallbackDetail: String = {
-            switch onEnum(of: action) {
+            switch action.sealedType() {
             case .runCommand(let r):
                 return r.command
             case .openUrl:
@@ -126,10 +126,10 @@ struct UpdateBannerView: View {
         fallbackLabel: String,
         action: UpdateAction
     ) -> (String, String?, (() -> Void)?) {
-        switch onEnum(of: installProgress) {
+        switch installProgress.sealedType() {
         case .downloading(let d):
-            // d.fraction is KotlinFloat? (boxed NSNumber) — extract via floatValue.
-            let pctStr: String = d.fraction.map { " \(Int($0.floatValue * 100))%" } ?? "\u{2026}"
+            // swift-export maps Kotlin Float? directly to Swift Float? — no boxing.
+            let pctStr: String = d.fraction.map { " \(Int($0 * 100))%" } ?? "\u{2026}"
             return ("Downloading update\(pctStr)", nil, nil)
         case .ready:
             return ("Update downloaded \u{2014} restart to apply.", "Restart", onRestart)

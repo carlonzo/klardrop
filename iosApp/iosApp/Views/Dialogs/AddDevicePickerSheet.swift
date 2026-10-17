@@ -115,7 +115,7 @@ private struct AddDevicePickerContent: View {
     @ViewBuilder
     private func candidateRow(_ device: DeviceUi) -> some View {
         let isPairing: Bool = {
-            switch onEnum(of: device.trustStatus) {
+            switch device.trustStatus.sealedType() {
             case .pairing: return true
             default: return false
             }

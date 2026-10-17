@@ -42,7 +42,7 @@ import kotlin.random.Random
 /**
  *  This class handles the nearby connection request.
  */
-class NearbyReceiverConnectionHandler(
+internal class NearbyReceiverConnectionHandler(
   private val fileManager: FileManager,
   coroutines: Coroutines,
   private val incomingAuthorizer: IncomingAuthorizer,

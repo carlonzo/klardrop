@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.update
  * Message handler for TrustPairingRequest messages.
  * Handles incoming pairing requests and delegates to TrustManager.
  */
-class TrustPairingRequestHandler(
+internal class TrustPairingRequestHandler(
     private val serializer: MessageSerializer,
     private val trustManager: TrustManager
 ) : MessageHandler<TrustPairingRequest, SimpleSendMessageRequest> {
@@ -73,7 +73,7 @@ class TrustPairingRequestHandler(
  * Message handler for TrustPairingResponse messages.
  * Handles incoming pairing responses and delegates to TrustManager.
  */
-class TrustPairingResponseHandler(
+internal class TrustPairingResponseHandler(
     private val serializer: MessageSerializer,
     private val trustManager: TrustManager
 ) : MessageHandler<TrustPairingResponse, SimpleSendMessageRequest> {
@@ -121,7 +121,7 @@ class TrustPairingResponseHandler(
  * timestamp) the message is dropped silently — accepting unverifiable revocations would let
  * any LAN attacker forge "you've been unpaired" frames and tear down every pairing.
  */
-class TrustRevocationMessageHandler(
+internal class TrustRevocationMessageHandler(
     private val serializer: MessageSerializer,
     private val trustManager: TrustManager,
 ) : MessageHandler<TrustRevocationMessage, SimpleSendMessageRequest> {

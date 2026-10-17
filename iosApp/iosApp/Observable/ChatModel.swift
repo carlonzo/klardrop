@@ -11,15 +11,14 @@ import presentation
 //   - stop() cancels Tasks and calls viewModel.onDispose().
 //   - .task { model.start() } preferred driver (auto-cancels on disappear).
 //
-// StateFlow bridging:
-//   - messages: StateFlow<List<ChatMessage>> -> iterated via for-await, each
-//     element cast to NSArray then flattened to [ChatMessage] via compactMap.
-//     (was [Messages]; the repo now returns ChatMessage.)
-//   - uiState/reachability: typed SKIE StateFlow -> for-await, direct cast.
-//   - pendingAuth: Optional StateFlow -> for-await.
+// StateFlow bridging (swift-export):
+//   - messages: StateFlow<List<ChatMessage>> -> iterated via for-await over
+//     .asAsyncSequence(), each element arriving as a Swift Array.
+//   - uiState/reachability: typed flows -> for-await over .asAsyncSequence().
+//   - pendingAuth: Optional StateFlow -> for-await over .asAsyncSequence().
 //
-// Note: DeviceChatViewModel.copyText is exposed as doCopyText(text:) in
-// Swift (SKIE renames to avoid Swift keyword conflict).
+// Note: if copyText(_:) below fails to compile, check the generated Swift header —
+// `copyText` collides with a Swift keyword context and may surface renamed.
 // ---------------------------------------------------------------------------
 
 /// Kotlin default arguments do not survive the Obj-C export, so Swift has to name every field of
@@ -87,52 +86,39 @@ final class ChatModel {
         vmStorage = vm
 
         // Seed from current StateFlow values now that the VM exists (one-time).
-        uiState = vm.uiState.value as? ChatUiState ?? emptyChatUiState()
-        reachability = vm.reachability.value as? Reachability ?? ReachabilityUnknown()
-        pendingAuth = vm.pendingAuth.value as? ReceiveMessageUpdate
-        // Cast to [ChatMessage] — the repo returns ChatMessage, not the raw Messages row.
-        if let list = vm.messages.value as? [ChatMessage] {
-            messages = list
-        } else if let arr = vm.messages.value as? NSArray {
-            messages = arr.compactMap { $0 as? ChatMessage }
-        }
+        // swift-export exposes .value directly with Swift-native types.
+        uiState = vm.uiState.value
+        reachability = vm.reachability.value
+        pendingAuth = vm.pendingAuth.value
+        messages = vm.messages.value
 
         tasks = [
-            // messages: StateFlow<List<ChatMessage>> — emits Kotlin List, bridged as NSArray
+            // messages: StateFlow<List<ChatMessage>> — Kotlin List maps to Swift Array.
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.viewModel.messages {
-                    if let list = next as? [ChatMessage] {
-                        self.messages = list
-                    } else if let arr = next as? NSArray {
-                        self.messages = arr.compactMap { $0 as? ChatMessage }
-                    }
+                for await next in self.viewModel.messages.asAsyncSequence() {
+                    self.messages = next
                 }
             },
             // uiState: StateFlow<ChatUiState>
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.viewModel.uiState {
-                    if let s = next as? ChatUiState {
-                        self.uiState = s
-                    }
+                for await next in self.viewModel.uiState.asAsyncSequence() {
+                    self.uiState = next
                 }
             },
             // reachability: StateFlow<Reachability>
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.viewModel.reachability {
-                    if let r = next as? Reachability {
-                        self.reachability = r
-                    }
+                for await next in self.viewModel.reachability.asAsyncSequence() {
+                    self.reachability = next
                 }
             },
-            // pendingAuth: StateFlow<ReceiveMessageUpdate?> — optional StateFlow
+            // pendingAuth: StateFlow<ReceiveMessageUpdate?>
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.viewModel.pendingAuth {
-                    // next is ReceiveMessageUpdate? (already optional via SKIE optional StateFlow)
-                    self.pendingAuth = next as? ReceiveMessageUpdate
+                for await next in self.viewModel.pendingAuth.asAsyncSequence() {
+                    self.pendingAuth = next
                 }
             },
         ]
@@ -159,8 +145,7 @@ final class ChatModel {
     }
 
     func copyText(_ text: String) {
-        // SKIE renames copyText -> doCopyText to avoid Swift keyword collision
-        viewModel.doCopyText(text: text)
+        viewModel.copyText(text: text)
     }
 
     /// Send the clipboard's current text (attachment chooser "Paste" action).

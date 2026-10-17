@@ -55,7 +55,7 @@ struct DeviceChatScreen: View {
     // Reachability-derived flags
     private var isOffline: Bool {
         if isOwned { return false }
-        switch onEnum(of: model.reachability) {
+        switch model.reachability.sealedType() {
         case .unreachable: return true
         default: return false
         }
@@ -63,7 +63,7 @@ struct DeviceChatScreen: View {
 
     private var headerStatus: KdStatus? {
         if isOwned { return nil }
-        switch onEnum(of: model.reachability) {
+        switch model.reachability.sealedType() {
         case .reachable:   return .ok
         case .unreachable: return .err
         default:           return .warn
@@ -72,7 +72,7 @@ struct DeviceChatScreen: View {
 
     private var headerSubText: String {
         if isOwned { return "" }
-        switch onEnum(of: model.reachability) {
+        switch model.reachability.sealedType() {
         case .unreachable: return "Offline"
         case .probing:     return "Connecting\u{2026}"
         default:           return ""
@@ -324,7 +324,7 @@ private struct IncomingAuthBannerView: View {
     var body: some View {
         // Only render for PendingAuthorization status
         let status: ReceiveMessageStatusPendingAuthorization? = {
-            switch onEnum(of: update.status) {
+            switch update.status.sealedType() {
             case .pendingAuthorization(let s): return s
             default: return nil
             }

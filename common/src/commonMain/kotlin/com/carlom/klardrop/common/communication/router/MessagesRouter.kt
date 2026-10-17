@@ -39,7 +39,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.random.Random
 
-interface MessagesRouter {
+internal interface MessagesRouter {
   /**
    * [writeLock] serializes every write the router does on [writeChannel] (PONG replies,
    * ACK_READY, ACK_RECEIVED) so they don't race with outgoing sends or the heartbeat
