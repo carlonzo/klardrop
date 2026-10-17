@@ -344,11 +344,11 @@ jobs:
             target: linuxX64
             testTask: linuxX64Test
             linkTarget: LinuxX64
-            runner: ubuntu-24.04
+            runner: ubuntu-26.04
             # arm64 is not a matrix leg. Kotlin/Native has no linux-aarch64 host
-            # compiler, so ubuntu-24.04-arm skips linkReleaseExecutableLinuxArm64
+            # compiler, so ubuntu-26.04-arm skips linkReleaseExecutableLinuxArm64
             # and Gradle still exits 0. build-linux-native-arm64-engine
-            # cross-compiles the engine on ubuntu-24.04; build-linux-native-arm64
+            # cross-compiles the engine on ubuntu-26.04; build-linux-native-arm64
             # packages it with the native arm64 Qt frontend and Rust client.
     runs-on: ${{ matrix.runner }}
     env:
@@ -438,7 +438,7 @@ jobs:
           if-no-files-found: error
 
   # Cross-compile the linuxArm64 Kotlin/Native engine. Same reason as the
-  # nightly workflow: the compiler does not run on ubuntu-24.04-arm, so a
+  # nightly workflow: the compiler does not run on ubuntu-26.04-arm, so a
   # native arm64 link task is skipped and Gradle still exits 0. This job runs
   # on the x64 runner. The kexe is an intermediate; publish drops it.
   build-linux-native-arm64-engine:

@@ -4,8 +4,8 @@
 # the Kotlin/Native linuxArm64 engine.
 #
 # Kotlin/Native 2.4 has no compiler for a linux-aarch64 host, so the release
-# jobs cannot build this target on ubuntu-24.04-arm (the link task is skipped
-# and Gradle still exits 0). They cross-compile it from ubuntu-24.04 instead.
+# jobs cannot build this target on ubuntu-26.04-arm (the link task is skipped
+# and Gradle still exits 0). They cross-compile it from ubuntu-26.04 instead.
 # The cinterop .def files look in /usr/include/aarch64-linux-gnu and
 # /usr/lib/aarch64-linux-gnu for the linux_arm64 target. Those paths are the
 # multiarch layout (:arm64 packages), not the gcc-aarch64-linux-gnu sysroot
@@ -19,7 +19,7 @@
 # `dpkg --add-architecture arm64` makes `apt-get update` request binary-arm64
 # and exit 100 on the 404. arm64 packages come from ports.ubuntu.com.
 #
-# GitHub's ubuntu-24.04 image does not name archive.ubuntu.com in the source
+# GitHub's Ubuntu images do not name archive.ubuntu.com in the source
 # entry itself: deb822 URIs are `mirror+file:/etc/apt/apt-mirrors.txt`, and
 # apt walks azure.archive.ubuntu.com, then archive.ubuntu.com, then
 # security.ubuntu.com. Pin every Ubuntu archive source — legacy one-line lists

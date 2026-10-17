@@ -35,7 +35,7 @@ jobs:
       # release workflow's native x64 job install. linuxArm64 is not part of this build:
       # an x64 host only declares it with `-Pklardrop.forceLinuxArm64=true`, which the
       # release jobs use to cross-compile it (Kotlin/Native has no linux-aarch64 compiler,
-      # so a native ubuntu-24.04-arm runner cannot).
+      # so a native ubuntu-26.04-arm runner cannot).
       - name: Install native build deps
         run: >-
           sudo apt-get update &&

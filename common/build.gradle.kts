@@ -84,7 +84,7 @@ kotlin {
         linkerOpts(
           "-Wl,--as-needed",
           // aarch64 multiarch dir only — see the linuxX64 note above. The release job
-          // cross-compiles this target on ubuntu-24.04 with the :arm64 dev packages
+          // cross-compiles this target on ubuntu-26.04 with the :arm64 dev packages
           // installed; a native aarch64 host has the same directory.
           "-L/usr/lib/aarch64-linux-gnu",
           "--allow-shlib-undefined",
