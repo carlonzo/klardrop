@@ -145,6 +145,7 @@ class Klardrop(
 
     appScope.launch {
       discoveryMode.collect { mode ->
+        log("Klardrop", "Discovery mode: $mode")
         if (mode == DiscoveryMode.OFF) stopDiscovery(discoveryNetwork)
         else startDiscovery(discoveryNetwork, lowPower = mode == DiscoveryMode.BACKGROUND)
       }

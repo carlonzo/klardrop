@@ -48,7 +48,11 @@ actual class InternalPlatformDependencies(private val context: Context, private 
   actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
     com.carlom.klardrop.common.qrshare.PlatformLanAddressSelector(context)
 
-  private val foregroundState by lazy { ForegroundState(context) }
+  // Eager, not lazy: ForegroundState counts Activity starts from the moment it registers, and
+  // this class is built in Application.onCreate — before any Activity starts. Created lazily, the
+  // first read could land after MainActivity.onStart, leaving isForeground stuck false and
+  // discovery OFF for the whole session (KLARDROP-KA).
+  private val foregroundState = ForegroundState(context)
 
   actual fun foregroundState(): ForegroundState = foregroundState
 
