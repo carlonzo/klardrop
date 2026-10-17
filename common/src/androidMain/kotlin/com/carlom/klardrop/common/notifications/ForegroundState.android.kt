@@ -34,17 +34,22 @@ actual class ForegroundState(context: Context) {
         override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
         override fun onActivityStarted(activity: Activity) {
           startedCount++
-          if (startedCount == 1) flow.value = true
+          if (startedCount == 1) setForeground(true)
         }
         override fun onActivityResumed(activity: Activity) = Unit
         override fun onActivityPaused(activity: Activity) = Unit
         override fun onActivityStopped(activity: Activity) {
           startedCount = (startedCount - 1).coerceAtLeast(0)
-          if (startedCount == 0) flow.value = false
+          if (startedCount == 0) setForeground(false)
         }
         override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
         override fun onActivityDestroyed(activity: Activity) = Unit
       })
     }
+  }
+
+  private fun setForeground(value: Boolean) {
+    log("ForegroundState", "isForeground=$value")
+    flow.value = value
   }
 }
