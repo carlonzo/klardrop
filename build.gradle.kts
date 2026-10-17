@@ -21,10 +21,10 @@ plugins {
  * `true` when this build should declare the Kotlin/Native linuxArm64 target.
  *
  * Kotlin/Native 2.4 ships no compiler for a linux-aarch64 *host* (supported hosts are
- * linux x64, windows x64, and macOS). On `ubuntu-24.04-arm` the plugin disables
+ * linux x64, windows x64, and macOS). On `ubuntu-26.04-arm` the plugin disables
  * linuxArm64, `linkReleaseExecutableLinuxArm64` is SKIPPED, and Gradle still exits 0 —
  * which is how the nightly arm64 tarball lost its engine. The release jobs therefore
- * cross-compile that target from ubuntu-24.04 by passing `-Pklardrop.forceLinuxArm64=true`
+ * cross-compile that target from ubuntu-26.04 by passing `-Pklardrop.forceLinuxArm64=true`
  * and installing the aarch64 multiarch headers and libraries. The cinterop `.def` files
  * select those with `compilerOpts.linux_arm64` / `linkerOpts.linux_arm64`, so the cross
  * compile does not index the host's x86_64 headers or link its x86_64 shared objects.
