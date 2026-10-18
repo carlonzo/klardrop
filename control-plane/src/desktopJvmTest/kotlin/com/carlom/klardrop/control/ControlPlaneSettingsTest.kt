@@ -21,6 +21,7 @@ class ControlPlaneSettingsTest {
 
   private lateinit var dataDir: File
   private lateinit var app: Klardrop
+  private lateinit var discovery: DiscoveryController
 
   @BeforeTest
   fun setUp() = runBlocking {
@@ -34,6 +35,10 @@ class ControlPlaneSettingsTest {
       enableNearbyServer = false,
       disablePersistence = true,
       disableSystemClipboard = true,
+      // Every rename republishes discovery; with BLE on, each republish probes and registers
+      // over the shared BlueZ D-Bus connection with blocking calls on the IO pool, which on CI
+      // starved the next test's controller. Neither test needs BLE.
+      enableBle = false,
       // 0 = ephemeral port, the release desktop default.
       controlPort = 0,
     )
@@ -43,13 +48,14 @@ class ControlPlaneSettingsTest {
     )
     app.init()
     ControlPlane.start(app)
-    val discovery = DiscoveryController(app.commonComponent)
+    discovery = DiscoveryController(app.commonComponent)
     ControlPlane.bind(discovery, app)
   }
 
   @AfterTest
   fun tearDown() {
     ControlPlane.stop()
+    if (::discovery.isInitialized) discovery.dispose()
     System.clearProperty("klardrop.data.dir")
     dataDir.deleteRecursively()
   }
