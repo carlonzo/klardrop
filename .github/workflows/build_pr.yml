@@ -128,7 +128,7 @@ jobs:
       # Keep -derivedDataPath OFF this step — a custom path only the resolve step
       # knows about leaves the plugin searching the default location and failing.
       # The bare project.pbxproj now carries the sentry-cocoa package reference
-      # (XCRemoteSwiftPackageReference, exact 8.58.2), so resolve downloads and
+      # (XCRemoteSwiftPackageReference, exact 9.29.2), so resolve downloads and
       # extracts the xcframework without any framework/code change in the app.
       - name: Resolve Sentry SPM (DerivedData for sentry-kmp)
         run: |

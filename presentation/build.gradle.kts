@@ -1,3 +1,4 @@
+import io.sentry.kotlin.multiplatform.gradle.AppleDependencyProvider
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -86,7 +87,7 @@ kotlin {
   //
   // Sentry: with no `kotlin("native.cocoapods")` plugin applied, the sentry-kmp
   // plugin links sentry-cocoa from Xcode's SwiftPM integration instead (exact
-  // 8.58.2 in the iosApp.xcodeproj package reference, to match the kmp 0.27.0
+  // 9.29.2 in the iosApp.xcodeproj package reference, to match the kmp 0.28.0
   // cinterop). It finds
   // Sentry.xcframework in DerivedData via `sentryKmp.linker.xcodeprojPath`
   // below, and adds `-F`/`-rpath` itself for both framework and
@@ -98,6 +99,7 @@ kotlin {
   // was built against). Gradle-run
   // Apple test executables link against that same framework copy.
   sentryKmp {
+    autoInstall.apple.provider.set(AppleDependencyProvider.NONE)
     linker {
       xcodeprojPath.set(rootProject.file("iosApp/iosApp.xcodeproj").absolutePath)
     }
