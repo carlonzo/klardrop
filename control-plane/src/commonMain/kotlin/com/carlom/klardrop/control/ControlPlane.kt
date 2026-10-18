@@ -738,7 +738,7 @@ object ControlPlane : ControlPlaneService {
       request.method == "POST" && path == "/rename-device" -> {
         val ctrl = controller ?: error("DiscoveryController not bound")
         val name = body.string("name") ?: body.string("deviceName") ?: body.string("customName")
-        ctrl.saveCustomDeviceName(name?.ifBlank { null })
+        ctrl.saveCustomDeviceNameAndWait(name?.ifBlank { null })
         stateVersionFlow.update { it + 1 }
         HttpResponse(200, jsonOk(""" "name":${jsonString(name ?: "")} """))
       }
@@ -751,7 +751,7 @@ object ControlPlane : ControlPlaneService {
         }
         val name = body.string("name") ?: body.string("deviceName") ?: body.string("customName")
         if (name != null) {
-          ctrl.saveCustomDeviceName(name.ifBlank { null })
+          ctrl.saveCustomDeviceNameAndWait(name.ifBlank { null })
         }
         stateVersionFlow.update { it + 1 }
         HttpResponse(200, jsonOk(""" "action":"settings" """))

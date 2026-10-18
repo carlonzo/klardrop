@@ -97,6 +97,7 @@ public final class com/carlom/klardrop/DiscoveryController : com/carlom/klardrop
 	public final fun refreshConnectivityRestrictions ()V
 	public final fun refreshPermissions ()V
 	public final fun saveCustomDeviceName (Ljava/lang/String;)V
+	public final fun saveCustomDeviceNameAndWait (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun sendFiles (Ljava/lang/String;Ljava/util/List;Lkotlin/jvm/functions/Function1;)V
 	public static synthetic fun sendFiles$default (Lcom/carlom/klardrop/DiscoveryController;Ljava/lang/String;Ljava/util/List;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)V
 	public final fun sendTextTracked (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
