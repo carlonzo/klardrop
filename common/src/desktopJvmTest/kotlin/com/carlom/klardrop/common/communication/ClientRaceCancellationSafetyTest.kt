@@ -101,9 +101,9 @@ class ClientRaceCancellationSafetyTest {
    * `updateConnection`, after flipping `winnerGate`, when the watcher's cancellation sweep runs.
    */
   private class SlowRegistrationConnectionsPool(
-    private val delegate: ConnectionsPool = ConnectionsPoolImpl(),
+    private val delegate: InternalConnectionsPool = ConnectionsPoolImpl(),
     private val registrationDelayMs: Long,
-  ) : ConnectionsPool by delegate {
+  ) : InternalConnectionsPool by delegate {
     override suspend fun updateConnection(deviceId: String, connectionMessenger: ConnectionMessenger) {
       delay(registrationDelayMs)
       delegate.updateConnection(deviceId, connectionMessenger)

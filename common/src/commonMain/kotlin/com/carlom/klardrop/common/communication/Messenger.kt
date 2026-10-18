@@ -44,15 +44,15 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Messenger used to send messages
  */
-interface Messenger {
-  fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress>
+public interface Messenger {
+  public fun send(deviceId: String, messageRequest: SendMessageRequest): Flow<MessengerSendProgress>
 
-  fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>>
+  public fun receive(): Flow<Pair<String, Flow<ReceiveMessageUpdate>>>
 }
 
-class MessengerImpl(
+internal class MessengerImpl(
   private val visibleDevices: VisibleDevices,
-  private val connectionsPool: ConnectionsPool,
+  private val connectionsPool: InternalConnectionsPool,
   private val client: Client,
   private val coroutines: Coroutines,
   private val currentDeviceProvider: CurrentDeviceProvider,
@@ -725,7 +725,7 @@ private fun transportPreferenceFor(request: SendMessageRequest): List<TransportC
 /** How often, while waiting, we re-check the pool for an inbound connection before re-dialing. */
 private val RECONNECT_PROBE_INTERVAL = 1.5.seconds
 
-fun Flow<MessengerSendProgress>.untilCompleted(): Flow<MessengerSendProgress> {
+public fun Flow<MessengerSendProgress>.untilCompleted(): Flow<MessengerSendProgress> {
   return this
     // send a closed after completed or error. this is to close the collection
     .transformWhile {
@@ -749,18 +749,18 @@ internal fun linkMayNeedAuthUpgrade(
   alreadyAttempted: Boolean,
 ): Boolean = isLinkEncrypted && !isLinkAuthenticated && !alreadyAttempted
 
-sealed interface MessengerSendProgress {
-  data object Pending : MessengerSendProgress
+public sealed interface MessengerSendProgress {
+  public data object Pending : MessengerSendProgress
   /**
    * [bytesTransferred]/[totalBytes] are the raw byte counters behind [percentage]. The UI needs
    * them (not the rounded percent) to derive throughput and ETA — a 5%-quantised percentage over
    * a multi-GB file is far too coarse to differentiate for a rate. Both default to 0 for
    * non-file sends, which have no meaningful byte count.
    */
-  data class InProgress(
-    val percentage: Int,
-    val bytesTransferred: Long = 0,
-    val totalBytes: Long = 0,
+  public data class InProgress(
+    public val percentage: Int,
+    public val bytesTransferred: Long = 0,
+    public val totalBytes: Long = 0,
   ) : MessengerSendProgress
 
   /**
@@ -770,8 +770,8 @@ sealed interface MessengerSendProgress {
    *
    * Not terminal: [isCompleted] stays false so `untilCompleted()` keeps collecting.
    */
-  data object AwaitingRecipient : MessengerSendProgress
-  data object Completed : MessengerSendProgress
+  public data object AwaitingRecipient : MessengerSendProgress
+  public data object Completed : MessengerSendProgress
 
   /**
    * [message] is the human-readable text; [reason] is the machine-readable failure class for
@@ -783,7 +783,7 @@ sealed interface MessengerSendProgress {
    *     not a transport failure)
    * Null for legacy failure sites that have no classified cause.
    */
-  data class Error(val message: String = "", val reason: String? = null) : MessengerSendProgress
+  public data class Error(public val message: String = "", public val reason: String? = null) : MessengerSendProgress
 
-  fun isCompleted(): Boolean = this is Completed || this is Error
+  public fun isCompleted(): Boolean = this is Completed || this is Error
 }

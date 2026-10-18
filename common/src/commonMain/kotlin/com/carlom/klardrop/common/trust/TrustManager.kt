@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.communication.message.TrustRevocationMessage
 import com.carlom.klardrop.common.communication.message.TrustedMessage
 import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
+import com.carlom.klardrop.common.discovery.TrustChangeEvent
 import com.carlom.klardrop.common.utils.Clock
 import com.carlom.klardrop.common.utils.log
 import com.carlom.klardrop.common.utils.nonFatalCoroutineExceptionHandler
@@ -29,7 +30,7 @@ import kotlin.time.Duration.Companion.seconds
  * Pure domain component focused on trust logic, cryptography, and state management.
  * Does not handle communication - that's delegated to PairingProtocolCoordinator.
  */
-class TrustManager(
+public class TrustManager internal constructor(
   private val crypto: TrustCrypto,
   private val storage: TrustStorage,
   private val clock: Clock,
@@ -37,7 +38,14 @@ class TrustManager(
   private val nonceManager: NonceManager = NonceManager()
 ) {
 
-  companion object {
+  public constructor(
+    crypto: TrustCrypto,
+    storage: TrustStorage,
+    clock: Clock,
+    currentDeviceProvider: CurrentDeviceProvider,
+  ) : this(crypto, storage, clock, currentDeviceProvider, NonceManager())
+
+  internal companion object {
     private const val PAIRING_TIMEOUT_SECONDS = 30
     private const val MAX_TIME_DIFF_SECONDS = 300 // 5 minutes
 
@@ -98,14 +106,14 @@ class TrustManager(
   // replay = 5: a request emitted before a coordinator subscribes (early-start race) is
   // still delivered; stale replays are deduped downstream by deviceId (pendingPairings).
   private val _pairingEvents = MutableSharedFlow<PairingEvent>(replay = 5, extraBufferCapacity = 10)
-  val pairingEvents: SharedFlow<PairingEvent> = _pairingEvents.asSharedFlow()
+  internal val pairingEvents: SharedFlow<PairingEvent> = _pairingEvents.asSharedFlow()
 
   // Fires after the set of trusted devices changes (pairing stored, trust removed).
   // [TrustStorage] is a plain key-value store with no change notification of its own, so
   // this is the only signal consumers (the trusted-device list) have to re-read it. Emitted
   // after the write lands, so a collector that reads back sees the new state.
-  private val _trustChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 10)
-  val trustChanges: SharedFlow<Unit> = _trustChanges.asSharedFlow()
+  private val _trustChanges = MutableSharedFlow<TrustChangeEvent>(extraBufferCapacity = 10)
+  internal val trustChanges: SharedFlow<TrustChangeEvent> = _trustChanges.asSharedFlow()
 
   /**
    * Initialize the trust manager and load or generate device signing keys.
@@ -115,7 +123,7 @@ class TrustManager(
    * generated on first run. Both halves are persisted; the private half goes
    * to a platform-secure store on production platforms.
    */
-  suspend fun initialize() {
+  internal suspend fun initialize() {
     if (deviceECDSAPublicKey != null) return
     val storedPublic = storage.getDevicePublicKey()
     val hadPrivateKey = storage.hasDeviceKey()
@@ -130,25 +138,25 @@ class TrustManager(
       log("🔐 TrustManager", "Device identity was lost or regenerated; invalidating stale pairings and rotating deviceId")
       storage.clearAllTrustedDevices()
       currentDeviceProvider.rotateDeviceId()
-      _trustChanges.tryEmit(Unit)
+      _trustChanges.tryEmit(TrustChangeEvent)
     }
     log("🔐 TrustManager", "Device identity ready")
   }
 
   /** True while [createPairingRequest] has stored a session that [finalizePairing] has not yet consumed. */
-  fun hasOpenPairingSession(deviceId: String): Boolean = pairingSessions.containsKey(deviceId)
+  internal fun hasOpenPairingSession(deviceId: String): Boolean = pairingSessions.containsKey(deviceId)
 
   /**
    * Wipe every stored pairing and this device's signing identity, then generate a fresh
    * keypair. Combined with [CurrentDeviceProvider.rotateDeviceId] this is the in-process
    * stand-in for "uninstall and reinstall the app".
    */
-  suspend fun resetIdentity() {
+  public suspend fun resetIdentity() {
     storage.clearAllTrustedDevices()
     storage.deleteDevicePrivateKey()
     deviceECDSAPublicKey = null
     pairingSessions.clear()
-    _trustChanges.tryEmit(Unit)
+    _trustChanges.tryEmit(TrustChangeEvent)
     initialize()
     log("🔐 TrustManager", "Device identity reset")
   }
@@ -159,7 +167,7 @@ class TrustManager(
    * @param targetDeviceId Device ID to pair with
    * @return Result containing the TrustPairingRequest or failure
    */
-  suspend fun createPairingRequest(targetDeviceId: String): Result<TrustPairingRequest> = withContext(Dispatchers.Default) {
+  internal suspend fun createPairingRequest(targetDeviceId: String): Result<TrustPairingRequest> = withContext(Dispatchers.Default) {
     log("🔐 TrustManager", " createPairingRequest() called for deviceId: $targetDeviceId")
     return@withContext try {
       // Ensure we have ECDSA keys
@@ -220,7 +228,7 @@ class TrustManager(
    * Called when a pairing request has been successfully sent.
    * Used for tracking and logging purposes.
    */
-  fun onPairingRequestSent(targetDeviceId: String) {
+  internal fun onPairingRequestSent(targetDeviceId: String) {
     log("🔐 TrustManager", " Pairing request confirmed sent to $targetDeviceId")
   }
 
@@ -228,7 +236,7 @@ class TrustManager(
    * Called when a pairing request failed to send.
    * Cleans up the pairing session and surfaces the failure to the UI.
    */
-  fun onPairingRequestFailed(targetDeviceId: String, reason: String) {
+  internal fun onPairingRequestFailed(targetDeviceId: String, reason: String) {
     log("🔐 TrustManager", " Pairing request failed for $targetDeviceId (reason=$reason), cleaning up session")
     pairingSessions.remove(targetDeviceId)
     _pairingEvents.tryEmit(PairingEvent.PairingFailed(targetDeviceId, reason))
@@ -239,7 +247,7 @@ class TrustManager(
    * already stored trust, but the initiator will never finalize without the response —
    * surface the delivery failure so the UI can tell the user to retry.
    */
-  fun onPairingResponseDeliveryFailed(targetDeviceId: String, reason: String) {
+  internal fun onPairingResponseDeliveryFailed(targetDeviceId: String, reason: String) {
     log("🔐 TrustManager", " Pairing response delivery failed for $targetDeviceId (reason=$reason)")
     _pairingEvents.tryEmit(PairingEvent.PairingFailed(targetDeviceId, reason))
   }
@@ -248,7 +256,7 @@ class TrustManager(
    * Handle incoming pairing request from another device.
    * Validates the request and emits an event for external coordinators.
    */
-  suspend fun handleIncomingPairingRequest(
+  internal suspend fun handleIncomingPairingRequest(
     request: TrustPairingRequest,
     senderAddress: String
   ) = withContext(Dispatchers.Default) {
@@ -299,7 +307,7 @@ class TrustManager(
    * Validates the request and returns a decision object for approval.
    * @return PairingDecision if request is valid, null if invalid/expired
    */
-  suspend fun processPairingRequest(
+  internal suspend fun processPairingRequest(
     request: TrustPairingRequest,
     senderAddress: String
   ): PairingDecision? = withContext(Dispatchers.Default) {
@@ -338,7 +346,7 @@ class TrustManager(
    * Generates keys and stores trust relationship.
    * @return Result containing the TrustPairingResponse or failure
    */
-  suspend fun createPairingAcceptance(
+  internal suspend fun createPairingAcceptance(
     request: TrustPairingRequest
   ): Result<TrustPairingResponse> = withContext(Dispatchers.Default) {
     try {
@@ -366,7 +374,7 @@ class TrustManager(
       storage.storeTrustedDevice(request.deviceId, request.ecdhPublicKey)  // ECDH key
       storage.storeECDSAKey(request.deviceId, request.ecdsaPublicKey)  // ECDSA key for verification
       storage.storeSharedSecret(request.deviceId, sharedSecret)
-      _trustChanges.tryEmit(Unit)
+      _trustChanges.tryEmit(TrustChangeEvent)
 
       // Create response
       val response = TrustPairingResponse(
@@ -390,7 +398,7 @@ class TrustManager(
    * Create a rejection response for a pairing request.
    * @return TrustPairingResponse with rejection
    */
-  suspend fun createPairingRejection(deviceId: String): TrustPairingResponse = withContext(Dispatchers.Default) {
+  internal suspend fun createPairingRejection(deviceId: String): TrustPairingResponse = withContext(Dispatchers.Default) {
     val currentDevice = currentDeviceProvider.get()
     TrustPairingResponse(
       deviceId = currentDevice.shortDeviceId,
@@ -407,7 +415,7 @@ class TrustManager(
    * Finalize pairing after receiving response from target device.
    * Completes the key exchange and stores trust relationship.
    */
-  suspend fun finalizePairing(response: TrustPairingResponse) = withContext(Dispatchers.Default) {
+  internal suspend fun finalizePairing(response: TrustPairingResponse) = withContext(Dispatchers.Default) {
     log(
       "🔐 TrustManager",
       " finalizePairing() called for device: ${response.deviceId} (${response.deviceName}), accepted: ${response.accepted}"
@@ -445,7 +453,7 @@ class TrustManager(
       storage.storeTrustedDevice(response.deviceId, response.ecdhPublicKey)  // ECDH key
       storage.storeECDSAKey(response.deviceId, response.ecdsaPublicKey)  // ECDSA key for verification
       storage.storeSharedSecret(response.deviceId, sharedSecret)
-      _trustChanges.tryEmit(Unit)
+      _trustChanges.tryEmit(TrustChangeEvent)
 
       // DIAGNOSTIC: Log what public key we're storing for the peer
       log("🔐 TrustManager", " Device ${response.deviceId} is now trusted")
@@ -470,14 +478,14 @@ class TrustManager(
   /**
    * Check if a device is trusted.
    */
-  suspend fun isTrusted(deviceId: String): Boolean {
+  public suspend fun isTrusted(deviceId: String): Boolean {
     return storage.isTrusted(deviceId)
   }
 
   /**
    * Get list of all trusted devices.
    */
-  suspend fun getTrustedDevices(): List<TrustedDevice> {
+  public suspend fun getTrustedDevices(): List<TrustedDevice> {
     return storage.getAllTrustedDevices()
       .map { (deviceId, publicKey) ->
         TrustedDevice(deviceId, publicKey)
@@ -487,9 +495,9 @@ class TrustManager(
   /**
    * Remove trust relationship with a device.
    */
-  suspend fun removeTrust(deviceId: String) {
+  public suspend fun removeTrust(deviceId: String) {
     storage.removeTrustedDevice(deviceId)
-    _trustChanges.tryEmit(Unit)
+    _trustChanges.tryEmit(TrustChangeEvent)
   }
 
   /**
@@ -501,7 +509,7 @@ class TrustManager(
    * @return signed revocation, or null if the device's signing identity is unavailable
    *         (shouldn't happen post-initialize but we degrade silently).
    */
-  suspend fun createRevocationMessage(
+  internal suspend fun createRevocationMessage(
     targetDeviceId: String,
     reason: String? = null,
   ): TrustRevocationMessage? = withContext(Dispatchers.Default) {
@@ -541,7 +549,7 @@ class TrustManager(
    *
    * Uses bitwise `and` over individual checks to keep timing roughly uniform across paths.
    */
-  suspend fun verifyRevocationMessage(message: TrustRevocationMessage): Boolean {
+  internal suspend fun verifyRevocationMessage(message: TrustRevocationMessage): Boolean {
     return try {
       val senderEcdsaKey = storage.getECDSAKey(message.senderId) ?: return false
 
@@ -571,9 +579,9 @@ class TrustManager(
    * [PairingEvent.PeerRevokedTrust] so coordinators / UI can react. Caller is responsible
    * for verifying the signature first via [verifyRevocationMessage].
    */
-  suspend fun applyVerifiedRevocation(message: TrustRevocationMessage) {
+  internal suspend fun applyVerifiedRevocation(message: TrustRevocationMessage) {
     storage.removeTrustedDevice(message.senderId)
-    _trustChanges.tryEmit(Unit)
+    _trustChanges.tryEmit(TrustChangeEvent)
     log("🔐 TrustManager", "Trust revoked by ${message.senderId}; local pairing removed")
     _pairingEvents.tryEmit(PairingEvent.PeerRevokedTrust(message.senderId, message.reason))
   }
@@ -624,7 +632,7 @@ class TrustManager(
    * standalone signed payloads.
    * @return Signed TrustedMessage, or null if no identity is available
    */
-  suspend fun signMessage(message: ByteArray, id: Int = kotlin.random.Random.nextInt()): TrustedMessage? {
+  internal suspend fun signMessage(message: ByteArray, id: Int = kotlin.random.Random.nextInt()): TrustedMessage? {
     return try {
       initialize()
       val timestamp = clock.currentTimeMillis()
@@ -656,7 +664,7 @@ class TrustManager(
    * @param trustedMessage Message to verify
    * @return true if signature is valid and from trusted device
    */
-  suspend fun verifyMessage(trustedMessage: TrustedMessage): Boolean {
+  internal suspend fun verifyMessage(trustedMessage: TrustedMessage): Boolean {
     try {
       // Get sender's ECDSA public key for verification
       val senderECDSAKey = storage.getECDSAKey(trustedMessage.senderId)
@@ -702,7 +710,7 @@ class TrustManager(
    *
    * @return RAW 64-byte P-256/SHA-256 signature, or null if no device identity is available.
    */
-  suspend fun signUkey2Binding(verificationString: ByteArray): ByteArray? = withContext(Dispatchers.Default) {
+  internal suspend fun signUkey2Binding(verificationString: ByteArray): ByteArray? = withContext(Dispatchers.Default) {
     try {
       initialize()
       storage.signWithDeviceKey(UKEY2_BIND_CONTEXT + verificationString, crypto)
@@ -717,7 +725,7 @@ class TrustManager(
    * peer's stored ECDSA public key. Returns false if we hold no key for [peerDeviceId] (the
    * caller decides whether to treat that as trust-on-first-use) or the signature is invalid.
    */
-  suspend fun verifyUkey2Binding(
+  internal suspend fun verifyUkey2Binding(
     peerDeviceId: String,
     verificationString: ByteArray,
     signature: ByteArray,
@@ -738,7 +746,7 @@ class TrustManager(
    * Set callback for pairing approval dialogs. Any requests retained while no callback was
    * registered are delivered (oldest first) through the same event path the live flow uses.
    */
-  fun setPairingApprovalCallback(callback: PairingApprovalCallback) {
+  public fun setPairingApprovalCallback(callback: PairingApprovalCallback) {
     this.pairingApprovalCallback = callback
     // Claim the whole backlog in one atomic swap: a request appended concurrently either
     // lands in this batch or stays queued for the next registration, never half-applied.
@@ -758,7 +766,7 @@ class TrustManager(
    * Both peers derive the same 32-byte key because they hold the same shared secret and
    * use the same HKDF salt + info string.
    */
-  suspend fun macKeyFor(deviceId: String): ByteArray? {
+  internal suspend fun macKeyFor(deviceId: String): ByteArray? {
     val sharedSecret = storage.getSharedSecret(deviceId) ?: return null
     return crypto.hkdfSha256(
       sharedSecret = sharedSecret,
@@ -775,7 +783,7 @@ class TrustManager(
    * then writes the chunk unwrapped, falling back to whatever the receiver's contentHash
    * check will catch at completion time.
    */
-  suspend fun computeChunkMac(
+  internal suspend fun computeChunkMac(
     deviceId: String,
     fileMessageId: Int,
     seq: Int,
@@ -787,7 +795,7 @@ class TrustManager(
   }
 
   /** Verify [tag] over the same framed input that the sender produced. */
-  suspend fun verifyChunkMac(
+  internal suspend fun verifyChunkMac(
     deviceId: String,
     fileMessageId: Int,
     seq: Int,
@@ -826,9 +834,9 @@ class TrustManager(
 /**
  * Represents a trusted device.
  */
-data class TrustedDevice(
-  val deviceId: String,
-  val publicKey: ByteArray
+public data class TrustedDevice(
+  public val deviceId: String,
+  public val publicKey: ByteArray
 ) {
   override fun equals(other: Any?): Boolean {
     if (this === other) return true
@@ -848,7 +856,7 @@ data class TrustedDevice(
 /**
  * Events emitted by TrustManager that external coordinators can listen to.
  */
-sealed interface PairingEvent {
+internal sealed interface PairingEvent {
   data class SendPairingRequest(val targetDeviceId: String, val request: TrustPairingRequest) : PairingEvent
   data class SendPairingResponse(val targetDeviceId: String, val response: TrustPairingResponse) : PairingEvent
   data class PairingRequestReceived(val request: TrustPairingRequest, val senderAddress: String, val decision: PairingDecision?) :
@@ -880,13 +888,13 @@ sealed interface PairingEvent {
  * Represents a pairing decision that needs user approval.
  * Encapsulates the approval callback mechanism.
  */
-data class PairingDecision(
-  val deviceId: String,
-  val deviceName: String,
-  val deviceType: String,
+internal data class PairingDecision(
+  internal val deviceId: String,
+  internal val deviceName: String,
+  internal val deviceType: String,
   private val approvalCallback: PairingApprovalCallback?
 ) {
-  fun showApprovalDialog(onAccept: suspend () -> Unit, onReject: suspend () -> Unit) {
+  internal fun showApprovalDialog(onAccept: suspend () -> Unit, onReject: suspend () -> Unit) {
     approvalCallback?.onPairingRequested(
       deviceId = deviceId,
       deviceName = deviceName,
@@ -900,8 +908,8 @@ data class PairingDecision(
 /**
  * Callback interface for pairing approval UI.
  */
-interface PairingApprovalCallback {
-  fun onPairingRequested(
+public interface PairingApprovalCallback {
+  public fun onPairingRequested(
     deviceId: String,
     deviceName: String,
     deviceType: String,
@@ -914,7 +922,7 @@ interface PairingApprovalCallback {
  * Internal class to track pairing sessions.
  */
 private data class PairingSession(
-  val targetDeviceId: String,
-  val ecdhKeyPair: TrustCrypto.ECDHKeyPair,
-  val timestamp: Long
+  internal val targetDeviceId: String,
+  internal val ecdhKeyPair: TrustCrypto.ECDHKeyPair,
+  internal val timestamp: Long
 )

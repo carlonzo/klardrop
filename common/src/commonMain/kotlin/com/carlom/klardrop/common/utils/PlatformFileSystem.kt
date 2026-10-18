@@ -21,12 +21,12 @@ import kotlinx.io.buffered
 import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 
-interface PlatformFileSystem {
-  fun getReadStreamFrom(platformFile: PlatformFile): RawSource
+public interface PlatformFileSystem {
+  public fun getReadStreamFrom(platformFile: PlatformFile): RawSource
 
-  fun getWriteStreamTo(path: Path): RawSink
+  public fun getWriteStreamTo(path: Path): RawSink
 
-  fun getResolvedFileData(platformFile: PlatformFile): ResolvedFileData
+  public fun getResolvedFileData(platformFile: PlatformFile): ResolvedFileData
 
   /**
    * Copy [platformFile] into a stable, app-private cache file and return a handle to the copy
@@ -40,19 +40,19 @@ interface PlatformFileSystem {
    * sheet is gone), we materialize a local copy up-front. The returned file is backed by a real
    * on-disk path, so it streams fine after the grant is gone and survives transfer retries.
    */
-  suspend fun prepareFileForSending(platformFile: PlatformFile): PreparedSendFile
+  public suspend fun prepareFileForSending(platformFile: PlatformFile): PreparedSendFile
 
-  suspend fun delete(path: Path)
+  public suspend fun delete(path: Path): Unit
 
-  suspend fun moveToStorage(path: Path, mimeType: String): Path?
+  public suspend fun moveToStorage(path: Path, mimeType: String): Path?
 
-  fun getTempStoragePath(): Path
+  public fun getTempStoragePath(): Path
 
-  fun getInternalStoragePath(): Path
+  public fun getInternalStoragePath(): Path
 
-  suspend fun openFile(filePath: String): Boolean
+  public suspend fun openFile(filePath: String): Boolean
 
-  suspend fun openUrl(url: String): Boolean
+  public suspend fun openUrl(url: String): Boolean
 }
 
 internal class PlatformFileSystemImpl(
@@ -164,17 +164,17 @@ internal class PlatformFileSystemImpl(
 
 internal expect fun PlatformFile.mimeType(): String
 
-data class ResolvedFileData(
-  val fileName: String,
-  val mimeType: String,
-  val fileSize: Long
+public data class ResolvedFileData(
+  public val fileName: String,
+  public val mimeType: String,
+  public val fileSize: Long,
 )
 
 /** A shared file copied to app-private storage, ready to stream regardless of the original
  *  source's lifecycle. See [PlatformFileSystem.prepareFileForSending]. */
-data class PreparedSendFile(
-  val file: PlatformFile,
-  val data: ResolvedFileData,
+public data class PreparedSendFile(
+  public val file: PlatformFile,
+  public val data: ResolvedFileData,
 )
 
 internal fun PlatformFile.mimeTypeFromExtension(): String {

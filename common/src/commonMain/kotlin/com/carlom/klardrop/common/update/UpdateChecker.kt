@@ -33,7 +33,7 @@ import kotlin.time.Duration.Companion.hours
  * @param manifestUrl the `latest.json` URL; defaults to the stable "latest release" link.
  * @param recheckInterval how often [start]'s background loop re-checks.
  */
-class UpdateChecker(
+public class UpdateChecker(
   private val currentVersion: String,
   private val osType: OsType,
   private val fetcher: UpdateManifestFetcher?,
@@ -50,23 +50,23 @@ class UpdateChecker(
   private val scope = coroutines.newScope(coroutines.ioDispatcher)
 
   private val _status = MutableStateFlow<UpdateStatus>(UpdateStatus.Unknown)
-  val status: StateFlow<UpdateStatus> = _status.asStateFlow()
+  public val status: StateFlow<UpdateStatus> = _status.asStateFlow()
 
   private val _install = MutableStateFlow<InstallProgress>(InstallProgress.Idle)
   /** Progress of the in-app self-update, when one is possible. See [InstallProgress]. */
-  val install: StateFlow<InstallProgress> = _install.asStateFlow()
+  public val install: StateFlow<InstallProgress> = _install.asStateFlow()
 
   /** This build's version, for the settings sheet. */
-  val version: String get() = currentVersion
+  public val version: String get() = currentVersion
 
   /** The update track this build follows ("stable" / "nightly"), for the settings sheet. */
-  val channel: String get() = releaseChannel
+  public val channel: String get() = releaseChannel
 
   /**
    * Whether this platform checks for updates at all. False on Android/iOS, where
    * the store owns updates — the UI hides its whole Updates section there.
    */
-  val supported: Boolean get() = fetcher != null
+  public val supported: Boolean get() = fetcher != null
 
   /** The staged self-updater, kept so [applyUpdate] can swap + relaunch. */
   private var installer: UpdateInstaller? = null
@@ -80,7 +80,7 @@ class UpdateChecker(
    * Check now, then keep re-checking every [recheckInterval] until [stop]. Idempotent:
    * a second call while the loop is running is a no-op. No-op without a [fetcher].
    */
-  fun start() {
+  public fun start() {
     if (fetcher == null || periodicJob?.isActive == true) return
     periodicJob = scope.launch {
       while (isActive) {
@@ -91,7 +91,7 @@ class UpdateChecker(
   }
 
   /** Stop the background re-check loop started by [start]. */
-  fun stop() {
+  public fun stop() {
     periodicJob?.cancel()
     periodicJob = null
   }
@@ -101,7 +101,7 @@ class UpdateChecker(
    * a no-op while another check is already in flight. A previously failed self-install
    * is reset so an explicit re-check retries the download.
    */
-  fun checkNow() {
+  public fun checkNow() {
     val f = fetcher ?: return
     if (_install.value is InstallProgress.Failed) _install.value = InstallProgress.Idle
     scope.launch { runCheck(f) }
@@ -179,7 +179,7 @@ class UpdateChecker(
   }
 
   /** Swap in the staged update and relaunch. No-op unless [install] is [InstallProgress.Ready]. */
-  fun applyUpdate() {
+  public fun applyUpdate(): Unit {
     if (!_install.compareAndSet(InstallProgress.Ready, InstallProgress.Applying)) return
     runCatching {
       val inst = installer ?: error("No installer available to apply update")
@@ -286,43 +286,43 @@ class UpdateChecker(
     return asset?.url ?: manifest.notes ?: RELEASES_PAGE
   }
 
-  companion object {
-    const val DEFAULT_MANIFEST_URL =
+  public companion object {
+    public const val DEFAULT_MANIFEST_URL: String =
       "https://github.com/carlonzo/klardrop/releases/latest/download/latest.json"
     // The rolling `nightly` prerelease serves its own latest.json from a fixed tag URL
     // (prereleases are excluded from /releases/latest, so the stable URL never sees it).
-    const val NIGHTLY_MANIFEST_URL =
+    public const val NIGHTLY_MANIFEST_URL: String =
       "https://github.com/carlonzo/klardrop/releases/download/nightly/latest.json"
-    const val RELEASES_PAGE = "https://github.com/carlonzo/klardrop/releases/latest"
+    public const val RELEASES_PAGE: String = "https://github.com/carlonzo/klardrop/releases/latest"
 
     /** How often [start]'s loop re-checks. Long enough to be invisible, short enough
      * that a machine left running for days still learns about a release the same day. */
-    val DEFAULT_RECHECK_INTERVAL: Duration = 6.hours
+    public val DEFAULT_RECHECK_INTERVAL: Duration = 6.hours
 
     /** `latest.json` platform keys, written by the release workflow. */
-    const val ASSET_MACOS = "macos"
+    public const val ASSET_MACOS: String = "macos"
     /** Standalone native Rust CLI for macOS. The Linux CLI needs no key of its own:
      * it ships inside the `linux-native-*` tarballs, next to the engine it drives. */
-    const val ASSET_MACOS_CLI = "macos-cli"
-    const val ASSET_WINDOWS = "windows"
-    const val ASSET_LINUX_TARBALL = "linux-tarball"
-    const val ASSET_LINUX_NATIVE_X64 = "linux-native-x64"
-    const val ASSET_LINUX_NATIVE_ARM64 = "linux-native-arm64"
-    const val ASSET_LINUX_DEB = "linux-deb"
-    const val ASSET_LINUX_RPM = "linux-rpm"
+    public const val ASSET_MACOS_CLI: String = "macos-cli"
+    public const val ASSET_WINDOWS: String = "windows"
+    public const val ASSET_LINUX_TARBALL: String = "linux-tarball"
+    public const val ASSET_LINUX_NATIVE_X64: String = "linux-native-x64"
+    public const val ASSET_LINUX_NATIVE_ARM64: String = "linux-native-arm64"
+    public const val ASSET_LINUX_DEB: String = "linux-deb"
+    public const val ASSET_LINUX_RPM: String = "linux-rpm"
 
     /** The AUR package name published by the release workflow. */
-    const val AUR_PACKAGE = "klardrop-bin"
+    public const val AUR_PACKAGE: String = "klardrop-bin"
 
     /** Flatpak application id, matching packaging/linux/com.carlom.Klardrop.metainfo.xml. */
-    const val FLATPAK_APP_ID = "com.carlom.Klardrop"
+    public const val FLATPAK_APP_ID: String = "com.carlom.Klardrop"
 
     /** The latest.json URL for a build's update channel ("nightly" vs stable default). */
-    fun manifestUrlForChannel(channel: String): String =
+    public fun manifestUrlForChannel(channel: String): String =
       if (channel == "nightly") NIGHTLY_MANIFEST_URL else DEFAULT_MANIFEST_URL
 
     /** One-line Linux installer; re-running it upgrades in place. */
-    const val INSTALL_SCRIPT_URL =
+    public const val INSTALL_SCRIPT_URL: String =
       "https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh"
   }
 }

@@ -29,11 +29,11 @@ import kotlinx.coroutines.sync.withLock
  * status which the UI banner / chat already render — we just emit it on the device's
  * receive flow and suspend until the UI invokes the embedded `acceptTransfer` callback.
  */
-open class IncomingAuthorizer(
+public open class IncomingAuthorizer internal constructor(
   private val trustManager: TrustManager,
 ) {
 
-  enum class TransferKind { FILE, TEXT }
+  internal enum class TransferKind { FILE, TEXT }
 
   /**
    * Remote device IDs that have accepted at least one transfer from us this process
@@ -55,7 +55,7 @@ open class IncomingAuthorizer(
    * On reject, sets the flow to [ReceiveMessageStatus.Failed] so the banner card
    * naturally completes and clears.
    */
-  open suspend fun authorize(
+  internal open suspend fun authorize(
     fromDeviceId: String,
     kind: TransferKind,
     headers: List<Message>,
@@ -113,7 +113,7 @@ open class IncomingAuthorizer(
   }
 
   /** Drop the process-scoped first-contact set. Used when this device rotates identity. */
-  suspend fun clearFirstContact() {
+  public suspend fun clearFirstContact(): Unit {
     setMutex.withLock { firstContactAccepted.clear() }
   }
 }

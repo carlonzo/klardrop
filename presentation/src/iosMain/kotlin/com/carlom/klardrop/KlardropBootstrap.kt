@@ -12,11 +12,11 @@ import kotlin.native.Platform
  * Single Swift-facing entry point that replaces the deleted Compose DiscoveryBridge.
  * Owns the Klardrop instance and exposes the UI controllers to SwiftUI.
  */
-class KlardropBootstrap {
+public class KlardropBootstrap {
 
     private val applicationInfo = ApplicationInfo()
 
-    val klardrop: Klardrop = Klardrop(
+    internal val klardrop: Klardrop = Klardrop(
         internalPlatformDependency = InternalPlatformDependencies(applicationInfo)
     )
 
@@ -24,7 +24,7 @@ class KlardropBootstrap {
         // Started here rather than from iOSApp.swift, which is where Bugsnag used to be
         // started. Keeping SDK startup on the Kotlin side means the Swift entry point
         // has no crash-reporter import at all — one less thing tied to how the Apple
-        // targets get their frameworks when CocoaPods goes away.
+        // targets get their frameworks (direct Xcode integration + SwiftPM for Sentry).
         // NOT `applicationInfo.isDebug`: that flag comes from the desktop/CLI `--debug`
         // argument and is always false on Apple, so it would let a debug build report.
         // `Platform.isDebugBinary` reflects how this framework was actually compiled,
@@ -41,12 +41,12 @@ class KlardropBootstrap {
     private val uiDependencies: UiDependencies
         get() = UiDependencies(klardrop.commonComponent)
 
-    fun discoveryController(): DiscoveryController = uiDependencies.discoveryController()
+    public fun discoveryController(): DiscoveryController = uiDependencies.discoveryController()
 
-    fun updateBannerController(): UpdateBannerController = uiDependencies.updateBannerController()
+    public fun updateBannerController(): UpdateBannerController = uiDependencies.updateBannerController()
 
-    fun deviceChatViewModel(deviceId: String): DeviceChatViewModel =
+    public fun deviceChatViewModel(deviceId: String): DeviceChatViewModel =
         uiDependencies.deviceChatViewModelFactory(deviceId)
 
-    fun qrShareSession() = klardrop.commonComponent.qrShareSession()
+    public fun qrShareSession(): com.carlom.klardrop.common.qrshare.QrShareSession = klardrop.commonComponent.qrShareSession()
 }

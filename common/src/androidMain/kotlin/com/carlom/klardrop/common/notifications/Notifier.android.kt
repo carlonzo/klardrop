@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.asSharedFlow
  * lands at the receiver but [actions] has no live collectors — that decision
  * is dropped. Acceptable for v1; the user can re-issue from the app.
  */
-actual class Notifier(context: Context) {
+public actual class Notifier(context: Context) {
 
   private val appContext = context.applicationContext
   private val notificationManager =
@@ -36,20 +36,20 @@ actual class Notifier(context: Context) {
     extraBufferCapacity = 16,
     onBufferOverflow = BufferOverflow.DROP_OLDEST,
   )
-  actual val actions: Flow<NotificationAction> = flow.asSharedFlow()
+  public actual val actions: Flow<NotificationAction> = flow.asSharedFlow()
 
   init {
     ensurePairingChannel()
     registerActionReceiver()
   }
 
-  actual fun show(notification: AppNotification) {
+  public actual fun show(notification: AppNotification): Unit {
     when (notification) {
       is AppNotification.IncomingPairing -> showIncomingPairing(notification)
     }
   }
 
-  actual fun cancel(id: String) {
+  public actual fun cancel(id: String): Unit {
     notificationManager.cancel(id, NOTIFICATION_TAG_ID)
   }
 

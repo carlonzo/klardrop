@@ -16,7 +16,7 @@ package com.carlom.klardrop.common.utils
  * unavailable in iOS/Apple). Platform-specific overrides can wrap this with extra
  * `is`-checks for compile-time precision if needed.
  */
-fun Throwable.isExpectedNetworkNoise(): Boolean {
+internal fun Throwable.isExpectedNetworkNoise(): Boolean {
   // Walk the cause chain — Ktor wraps lower-level IOException in ClosedByteChannelException
   // and event grouping latches onto whichever frame is closest to user code.
   var current: Throwable? = this

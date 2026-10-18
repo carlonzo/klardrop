@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 
-actual class PermissionsMonitor(
+public actual class PermissionsMonitor(
   private val context: Context,
   private val foregroundState: ForegroundState,
 ) {
@@ -36,7 +36,7 @@ actual class PermissionsMonitor(
    * is covered by [refresh]). The initial emission comes from [onStart]; the
    * [distinctUntilChanged] keeps redundant snapshots from churning the UI.
    */
-  actual fun observe(): Flow<PermissionsState> = merge(
+  public actual fun observe(): Flow<PermissionsState> = merge(
     foregroundState.isForeground.filter { it }.map { },
     refreshTrigger,
   )
@@ -45,7 +45,7 @@ actual class PermissionsMonitor(
     .distinctUntilChanged()
     .flowOn(Dispatchers.Default)
 
-  actual fun refresh() {
+  public actual fun refresh(): Unit {
     refreshTrigger.tryEmit(Unit)
   }
 

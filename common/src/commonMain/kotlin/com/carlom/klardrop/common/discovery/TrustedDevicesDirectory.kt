@@ -33,12 +33,14 @@ import kotlinx.coroutines.launch
  * snapshot existed are backfilled the first time they are seen again; until then they fall
  * back to a short form of their device id.
  */
-class TrustedDevicesDirectory(
+public data object TrustChangeEvent
+
+public class TrustedDevicesDirectory(
   private val visibleDevices: VisibleDevices,
   private val knownDevicesRepository: KnownDevicesRepository,
   private val trustStorage: TrustStorage,
   /** Fires whenever the trust store is written; see [TrustManager.trustChanges]. */
-  trustChanges: Flow<Unit>,
+  trustChanges: Flow<TrustChangeEvent>,
   coroutines: Coroutines,
 ) {
 
@@ -59,7 +61,7 @@ class TrustedDevicesDirectory(
    * Callers that need to know whether a device is reachable should consult
    * [VisibleDevices] / reachability separately — presence here only means "paired".
    */
-  val trustedDevices: StateFlow<Map<String, DeviceInfo>> = _trustedDevices.asStateFlow()
+  public val trustedDevices: StateFlow<Map<String, DeviceInfo>> = _trustedDevices.asStateFlow()
 
   init {
     scope.launch {
@@ -87,7 +89,7 @@ class TrustedDevicesDirectory(
    * Wired to [TrustManager.trustChanges] already; exposed for callers that mutate trust
    * storage by some other route, and so tests can force a pass.
    */
-  fun refresh() {
+  public fun refresh(): Unit {
     refreshes.update { it + 1 }
   }
 

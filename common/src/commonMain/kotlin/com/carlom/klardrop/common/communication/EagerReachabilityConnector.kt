@@ -40,7 +40,7 @@ import kotlin.time.Duration.Companion.seconds
  * is re-dialed periodically instead of staying Offline until some unrelated
  * discovery churn happens to re-emit the device list.
  */
-class EagerReachabilityConnector(
+internal class EagerReachabilityConnector(
   private val coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
   private val currentDeviceProvider: CurrentDeviceProvider,

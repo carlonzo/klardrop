@@ -16,16 +16,16 @@ package com.carlom.klardrop.common.ble
  * sides must agree on which AD type carries the UUID — this descriptor pins
  * that decision once.
  */
-data class BleAdvertisePayload(
+internal data class BleAdvertisePayload(
   /** AD records that go in the primary advertisement packet (≤31 bytes total). */
-  val primary: AdRecords,
+  internal val primary: AdRecords,
   /**
    * AD records that go in the scan response (≤31 bytes total). Null when the
    * platform does not allow a scan response or when nothing extra needs to be
    * advertised. iOS / macOS CoreBluetooth chooses this automatically; Android
    * must opt in by passing both buffers to `BluetoothLeAdvertiser.startAdvertising`.
    */
-  val scanResponse: AdRecords?,
+  internal val scanResponse: AdRecords?,
 ) {
 
   data class AdRecords(
@@ -79,9 +79,9 @@ data class BleAdvertisePayload(
  * fills that gap).
  */
 /** Maximum length for the shortDeviceId carried in scan-response service-data. */
-const val MAX_SHORT_DEVICE_ID_LEN = 8
+internal const val MAX_SHORT_DEVICE_ID_LEN = 8
 
-fun klardropAdvertisePayload(shortDeviceId: String): BleAdvertisePayload {
+internal fun klardropAdvertisePayload(shortDeviceId: String): BleAdvertisePayload {
   require(shortDeviceId.length <= MAX_SHORT_DEVICE_ID_LEN) {
     "shortDeviceId '$shortDeviceId' exceeds $MAX_SHORT_DEVICE_ID_LEN chars; " +
       "would overflow the BLE scan-response budget"

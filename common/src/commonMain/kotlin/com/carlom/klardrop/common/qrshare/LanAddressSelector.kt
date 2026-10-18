@@ -3,17 +3,17 @@ package com.carlom.klardrop.common.qrshare
 import com.carlom.klardrop.common.discovery.isCgnatIpv4
 import kotlinx.coroutines.flow.Flow
 
-interface LanAddressSelector {
+internal interface LanAddressSelector {
   suspend fun selectIpv4(): String?
   fun observeChanges(): Flow<String?>
 }
 
-expect class PlatformLanAddressSelector() : LanAddressSelector {
+internal expect class PlatformLanAddressSelector() : LanAddressSelector {
   override suspend fun selectIpv4(): String?
   override fun observeChanges(): Flow<String?>
 }
 
-fun LanAddressSelector(): LanAddressSelector = PlatformLanAddressSelector()
+internal fun LanAddressSelector(): LanAddressSelector = PlatformLanAddressSelector()
 
 /**
  * Selects the best IPv4 address for QR LAN sharing from candidate interfaces.
@@ -23,7 +23,7 @@ fun LanAddressSelector(): LanAddressSelector = PlatformLanAddressSelector()
  * 2. Ethernet RFC1918
  * 3. Else null (no generic RFC1918 fallback)
  */
-fun selectLanAddress(candidates: Iterable<Pair<String, String>>): String? {
+internal fun selectLanAddress(candidates: Iterable<Pair<String, String>>): String? {
   var staWifi: String? = null
   var hotspot: String? = null
   var ethernet: String? = null
@@ -50,7 +50,7 @@ fun selectLanAddress(candidates: Iterable<Pair<String, String>>): String? {
   return staWifi ?: hotspot ?: ethernet
 }
 
-fun selectLanIpv4(candidates: Iterable<Pair<String, String>>): String? = selectLanAddress(candidates)
+internal fun selectLanIpv4(candidates: Iterable<Pair<String, String>>): String? = selectLanAddress(candidates)
 
 internal fun isDroppedAddress(address: String): Boolean {
   if (address.isBlank() || address.contains(':') || address == "0.0.0.0" || address.startsWith("127.")) {

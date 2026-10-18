@@ -7,7 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlin.coroutines.CoroutineContext
 
-actual class CoroutinesImpl actual constructor() : Coroutines {
+internal actual class CoroutinesImpl actual constructor() : Coroutines {
 
   // CEH is the terminal sink for uncaught coroutine failures. Do NOT rethrow —
   // rethrowing can take down the process / main scope. log() already reports

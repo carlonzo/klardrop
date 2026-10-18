@@ -18,11 +18,11 @@ private val json = Json {
   isLenient = true
 }
 
-actual val platformUpdateAssetKey: String =
+internal actual val platformUpdateAssetKey: String =
   if (Platform.cpuArchitecture == CpuArchitecture.ARM64) UpdateChecker.ASSET_LINUX_NATIVE_ARM64
   else UpdateChecker.ASSET_LINUX_NATIVE_X64
 
-actual fun createUpdateManifestFetcher(): UpdateManifestFetcher? = UpdateManifestFetcher { url ->
+internal actual fun createUpdateManifestFetcher(): UpdateManifestFetcher? = UpdateManifestFetcher { url ->
   if (!url.startsWith("https://", ignoreCase = true)) {
     log("UpdateChecker", "manifest fetch refused non-https url: $url")
     return@UpdateManifestFetcher null
@@ -42,7 +42,7 @@ actual fun createUpdateManifestFetcher(): UpdateManifestFetcher? = UpdateManifes
   }.getOrNull()
 }
 
-class SecurityException(message: String) : RuntimeException(message)
+internal class SecurityException(message: String) : RuntimeException(message)
 
 @OptIn(ExperimentalForeignApi::class)
 internal fun currentExecutablePath(): String? {
@@ -103,10 +103,10 @@ internal fun tarballInstallPaths(home: String): List<String> = listOf(
   "$home/.local/bin/klardrop",
 )
 
-actual fun detectInstallChannel(): InstallChannel =
+internal actual fun detectInstallChannel(): InstallChannel =
   detectLinuxInstallChannel(currentExecutablePath())
 
-enum class LinuxFlavor {
+internal enum class LinuxFlavor {
   NATIVE,
   OMARCHY,
   QT,
@@ -192,7 +192,7 @@ internal fun detectLinuxFlavor(
   return LinuxFlavor.NATIVE
 }
 
-actual fun detectPlatformFlavorFlag(): String? =
+internal actual fun detectPlatformFlavorFlag(): String? =
   when (detectLinuxFlavor()) {
     LinuxFlavor.QT -> "--qt"
     LinuxFlavor.OMARCHY -> "--omarchy"
@@ -224,7 +224,7 @@ internal fun isReplaceableBinary(path: String): Boolean {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-actual fun createUpdateInstaller(channel: InstallChannel): UpdateInstaller? {
+internal actual fun createUpdateInstaller(channel: InstallChannel): UpdateInstaller? {
   if (channel != InstallChannel.TARBALL) return null
   val home = getenv("HOME")?.toKString()?.ifBlank { null } ?: return null
   val binDir = "$home/.local/bin"
@@ -412,7 +412,7 @@ internal fun isStartedBySystemd(): Boolean {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-class LinuxNativeTarballInstaller(
+internal class LinuxNativeTarballInstaller(
   private val homeDir: String,
   private val restartCommand: List<String> = DEFAULT_RESTART_COMMAND,
   private val downloader: (suspend (url: String, destFile: String, onProgress: (Float?) -> Unit) -> Unit)? = null,

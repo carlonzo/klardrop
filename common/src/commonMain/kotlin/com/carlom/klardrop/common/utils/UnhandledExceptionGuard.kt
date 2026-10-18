@@ -14,4 +14,4 @@ package com.carlom.klardrop.common.utils
  * process keeps running. Idempotent, and a no-op on the JVM targets, where the platform default is
  * already "log and carry on".
  */
-expect fun installUnhandledExceptionGuard()
+internal expect fun installUnhandledExceptionGuard()

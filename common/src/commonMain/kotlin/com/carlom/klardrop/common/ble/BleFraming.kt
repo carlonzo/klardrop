@@ -10,7 +10,7 @@ package com.carlom.klardrop.common.ble
  * only deal in raw bytes — turning serialized messages into chunks and back into frames.
  * Deserialization is the caller's responsibility, so this stays a pure utility.
  */
-object BleFraming {
+internal object BleFraming {
 
   const val LENGTH_PREFIX_SIZE = 4
 
@@ -59,7 +59,7 @@ object BleFraming {
  * The implementation is split-agnostic: it doesn't matter whether the length prefix is
  * delivered across multiple chunks, or whether one chunk contains multiple complete frames.
  */
-class BleReassembler {
+internal class BleReassembler {
 
   // Rolling buffer of unprocessed bytes. We avoid repeated allocations by appending and
   // only compacting when we consume a full frame.

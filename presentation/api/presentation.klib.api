@@ -1,0 +1,456 @@
+// Klib ABI Dump
+// Targets: [iosArm64, iosSimulatorArm64, linuxX64, macosArm64]
+// Alias: apple => [iosArm64, iosSimulatorArm64, macosArm64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <klardrop:presentation>
+abstract interface com.carlom.klardrop/OnDeviceActionListener { // com.carlom.klardrop/OnDeviceActionListener|null[0]
+    open fun onAddToTrusted(com.carlom.klardrop/DeviceUi) // com.carlom.klardrop/OnDeviceActionListener.onAddToTrusted|onAddToTrusted(com.carlom.klardrop.DeviceUi){}[0]
+    open fun onDeviceClick(com.carlom.klardrop/DeviceUi) // com.carlom.klardrop/OnDeviceActionListener.onDeviceClick|onDeviceClick(com.carlom.klardrop.DeviceUi){}[0]
+    open fun onForgetDevice(com.carlom.klardrop/DeviceUi) // com.carlom.klardrop/OnDeviceActionListener.onForgetDevice|onForgetDevice(com.carlom.klardrop.DeviceUi){}[0]
+    open fun onNotificationDismissed(kotlin/Int) // com.carlom.klardrop/OnDeviceActionListener.onNotificationDismissed|onNotificationDismissed(kotlin.Int){}[0]
+    open fun onNotificationPair(kotlin/Int) // com.carlom.klardrop/OnDeviceActionListener.onNotificationPair|onNotificationPair(kotlin.Int){}[0]
+    open fun onSendData(com.carlom.klardrop/DeviceUi, com.carlom.klardrop/OnDataToSend) // com.carlom.klardrop/OnDeviceActionListener.onSendData|onSendData(com.carlom.klardrop.DeviceUi;com.carlom.klardrop.OnDataToSend){}[0]
+}
+
+abstract interface com.carlom.klardrop/ReceiveNotificationsCallbacks { // com.carlom.klardrop/ReceiveNotificationsCallbacks|null[0]
+    abstract fun onCardDismissed(kotlin/Int) // com.carlom.klardrop/ReceiveNotificationsCallbacks.onCardDismissed|onCardDismissed(kotlin.Int){}[0]
+    abstract fun onReceivedCardClicked(com.carlom.klardrop.common.receiver/ReceiveMessageUpdate) // com.carlom.klardrop/ReceiveNotificationsCallbacks.onReceivedCardClicked|onReceivedCardClicked(com.carlom.klardrop.common.receiver.ReceiveMessageUpdate){}[0]
+    open fun onConnectionInfoAccepted(com.carlom.klardrop.common.communication.message/ConnectionInfoMessage) // com.carlom.klardrop/ReceiveNotificationsCallbacks.onConnectionInfoAccepted|onConnectionInfoAccepted(com.carlom.klardrop.common.communication.message.ConnectionInfoMessage){}[0]
+}
+
+sealed interface com.carlom.klardrop/ActivityState { // com.carlom.klardrop/ActivityState|null[0]
+    final class Sending : com.carlom.klardrop/ActivityState { // com.carlom.klardrop/ActivityState.Sending|null[0]
+        constructor <init>(kotlin/Int) // com.carlom.klardrop/ActivityState.Sending.<init>|<init>(kotlin.Int){}[0]
+
+        final val progressPercentage // com.carlom.klardrop/ActivityState.Sending.progressPercentage|{}progressPercentage[0]
+            final fun <get-progressPercentage>(): kotlin/Int // com.carlom.klardrop/ActivityState.Sending.progressPercentage.<get-progressPercentage>|<get-progressPercentage>(){}[0]
+
+        final fun component1(): kotlin/Int // com.carlom.klardrop/ActivityState.Sending.component1|component1(){}[0]
+        final fun copy(kotlin/Int = ...): com.carlom.klardrop/ActivityState.Sending // com.carlom.klardrop/ActivityState.Sending.copy|copy(kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/ActivityState.Sending.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop/ActivityState.Sending.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop/ActivityState.Sending.toString|toString(){}[0]
+    }
+
+    final class SentCompleted : com.carlom.klardrop/ActivityState { // com.carlom.klardrop/ActivityState.SentCompleted|null[0]
+        constructor <init>(kotlin/Boolean = ...) // com.carlom.klardrop/ActivityState.SentCompleted.<init>|<init>(kotlin.Boolean){}[0]
+
+        final val error // com.carlom.klardrop/ActivityState.SentCompleted.error|{}error[0]
+            final fun <get-error>(): kotlin/Boolean // com.carlom.klardrop/ActivityState.SentCompleted.error.<get-error>|<get-error>(){}[0]
+
+        final fun component1(): kotlin/Boolean // com.carlom.klardrop/ActivityState.SentCompleted.component1|component1(){}[0]
+        final fun copy(kotlin/Boolean = ...): com.carlom.klardrop/ActivityState.SentCompleted // com.carlom.klardrop/ActivityState.SentCompleted.copy|copy(kotlin.Boolean){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/ActivityState.SentCompleted.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop/ActivityState.SentCompleted.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop/ActivityState.SentCompleted.toString|toString(){}[0]
+    }
+
+    final object Idle : com.carlom.klardrop/ActivityState { // com.carlom.klardrop/ActivityState.Idle|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/ActivityState.Idle.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop/ActivityState.Idle.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop/ActivityState.Idle.toString|toString(){}[0]
+    }
+}
+
+sealed interface com.carlom.klardrop/OnDataToSend { // com.carlom.klardrop/OnDataToSend|null[0]
+    final class FilesList : com.carlom.klardrop/OnDataToSend { // com.carlom.klardrop/OnDataToSend.FilesList|null[0]
+        constructor <init>(kotlin.collections/List<io.github.vinceglb.filekit/PlatformFile>) // com.carlom.klardrop/OnDataToSend.FilesList.<init>|<init>(kotlin.collections.List<io.github.vinceglb.filekit.PlatformFile>){}[0]
+
+        final val files // com.carlom.klardrop/OnDataToSend.FilesList.files|{}files[0]
+            final fun <get-files>(): kotlin.collections/List<io.github.vinceglb.filekit/PlatformFile> // com.carlom.klardrop/OnDataToSend.FilesList.files.<get-files>|<get-files>(){}[0]
+
+        final fun component1(): kotlin.collections/List<io.github.vinceglb.filekit/PlatformFile> // com.carlom.klardrop/OnDataToSend.FilesList.component1|component1(){}[0]
+        final fun copy(kotlin.collections/List<io.github.vinceglb.filekit/PlatformFile> = ...): com.carlom.klardrop/OnDataToSend.FilesList // com.carlom.klardrop/OnDataToSend.FilesList.copy|copy(kotlin.collections.List<io.github.vinceglb.filekit.PlatformFile>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/OnDataToSend.FilesList.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop/OnDataToSend.FilesList.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop/OnDataToSend.FilesList.toString|toString(){}[0]
+    }
+
+    final class Text : com.carlom.klardrop/OnDataToSend { // com.carlom.klardrop/OnDataToSend.Text|null[0]
+        constructor <init>(kotlin/String) // com.carlom.klardrop/OnDataToSend.Text.<init>|<init>(kotlin.String){}[0]
+
+        final val text // com.carlom.klardrop/OnDataToSend.Text.text|{}text[0]
+            final fun <get-text>(): kotlin/String // com.carlom.klardrop/OnDataToSend.Text.text.<get-text>|<get-text>(){}[0]
+
+        final fun component1(): kotlin/String // com.carlom.klardrop/OnDataToSend.Text.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): com.carlom.klardrop/OnDataToSend.Text // com.carlom.klardrop/OnDataToSend.Text.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/OnDataToSend.Text.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop/OnDataToSend.Text.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop/OnDataToSend.Text.toString|toString(){}[0]
+    }
+}
+
+sealed interface com.carlom.klardrop/TrustStatus { // com.carlom.klardrop/TrustStatus|null[0]
+    final object Pairing : com.carlom.klardrop/TrustStatus // com.carlom.klardrop/TrustStatus.Pairing|null[0]
+
+    final object Trusted : com.carlom.klardrop/TrustStatus // com.carlom.klardrop/TrustStatus.Trusted|null[0]
+
+    final object Unknown : com.carlom.klardrop/TrustStatus // com.carlom.klardrop/TrustStatus.Unknown|null[0]
+
+    final object Untrusted : com.carlom.klardrop/TrustStatus // com.carlom.klardrop/TrustStatus.Untrusted|null[0]
+}
+
+sealed interface com.carlom.klardrop/UiNotification { // com.carlom.klardrop/UiNotification|null[0]
+    abstract val id // com.carlom.klardrop/UiNotification.id|{}id[0]
+        abstract fun <get-id>(): kotlin/Int // com.carlom.klardrop/UiNotification.id.<get-id>|<get-id>(){}[0]
+
+    final class PeerRevokedTrust : com.carlom.klardrop/UiNotification { // com.carlom.klardrop/UiNotification.PeerRevokedTrust|null[0]
+        constructor <init>(kotlin/Int, kotlin/String, kotlin/String) // com.carlom.klardrop/UiNotification.PeerRevokedTrust.<init>|<init>(kotlin.Int;kotlin.String;kotlin.String){}[0]
+
+        final val deviceId // com.carlom.klardrop/UiNotification.PeerRevokedTrust.deviceId|{}deviceId[0]
+            final fun <get-deviceId>(): kotlin/String // com.carlom.klardrop/UiNotification.PeerRevokedTrust.deviceId.<get-deviceId>|<get-deviceId>(){}[0]
+        final val deviceName // com.carlom.klardrop/UiNotification.PeerRevokedTrust.deviceName|{}deviceName[0]
+            final fun <get-deviceName>(): kotlin/String // com.carlom.klardrop/UiNotification.PeerRevokedTrust.deviceName.<get-deviceName>|<get-deviceName>(){}[0]
+        final val id // com.carlom.klardrop/UiNotification.PeerRevokedTrust.id|{}id[0]
+            final fun <get-id>(): kotlin/Int // com.carlom.klardrop/UiNotification.PeerRevokedTrust.id.<get-id>|<get-id>(){}[0]
+
+        final fun component1(): kotlin/Int // com.carlom.klardrop/UiNotification.PeerRevokedTrust.component1|component1(){}[0]
+        final fun component2(): kotlin/String // com.carlom.klardrop/UiNotification.PeerRevokedTrust.component2|component2(){}[0]
+        final fun component3(): kotlin/String // com.carlom.klardrop/UiNotification.PeerRevokedTrust.component3|component3(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin/String = ..., kotlin/String = ...): com.carlom.klardrop/UiNotification.PeerRevokedTrust // com.carlom.klardrop/UiNotification.PeerRevokedTrust.copy|copy(kotlin.Int;kotlin.String;kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/UiNotification.PeerRevokedTrust.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop/UiNotification.PeerRevokedTrust.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop/UiNotification.PeerRevokedTrust.toString|toString(){}[0]
+    }
+}
+
+final class com.carlom.klardrop.chat/ChatUiState { // com.carlom.klardrop.chat/ChatUiState|null[0]
+    constructor <init>(kotlin/String? = ..., kotlin/String? = ..., kotlin/Float? = ..., kotlin/Boolean = ..., kotlin/String? = ..., com.carlom.klardrop.chat/TransferStats? = ...) // com.carlom.klardrop.chat/ChatUiState.<init>|<init>(kotlin.String?;kotlin.String?;kotlin.Float?;kotlin.Boolean;kotlin.String?;com.carlom.klardrop.chat.TransferStats?){}[0]
+
+    final val error // com.carlom.klardrop.chat/ChatUiState.error|{}error[0]
+        final fun <get-error>(): kotlin/String? // com.carlom.klardrop.chat/ChatUiState.error.<get-error>|<get-error>(){}[0]
+    final val fileTransferActive // com.carlom.klardrop.chat/ChatUiState.fileTransferActive|{}fileTransferActive[0]
+        final fun <get-fileTransferActive>(): kotlin/Boolean // com.carlom.klardrop.chat/ChatUiState.fileTransferActive.<get-fileTransferActive>|<get-fileTransferActive>(){}[0]
+    final val fileTransferProgress // com.carlom.klardrop.chat/ChatUiState.fileTransferProgress|{}fileTransferProgress[0]
+        final fun <get-fileTransferProgress>(): kotlin/Float? // com.carlom.klardrop.chat/ChatUiState.fileTransferProgress.<get-fileTransferProgress>|<get-fileTransferProgress>(){}[0]
+    final val fileTransferStatusText // com.carlom.klardrop.chat/ChatUiState.fileTransferStatusText|{}fileTransferStatusText[0]
+        final fun <get-fileTransferStatusText>(): kotlin/String? // com.carlom.klardrop.chat/ChatUiState.fileTransferStatusText.<get-fileTransferStatusText>|<get-fileTransferStatusText>(){}[0]
+    final val notice // com.carlom.klardrop.chat/ChatUiState.notice|{}notice[0]
+        final fun <get-notice>(): kotlin/String? // com.carlom.klardrop.chat/ChatUiState.notice.<get-notice>|<get-notice>(){}[0]
+    final val transferStats // com.carlom.klardrop.chat/ChatUiState.transferStats|{}transferStats[0]
+        final fun <get-transferStats>(): com.carlom.klardrop.chat/TransferStats? // com.carlom.klardrop.chat/ChatUiState.transferStats.<get-transferStats>|<get-transferStats>(){}[0]
+
+    final fun component1(): kotlin/String? // com.carlom.klardrop.chat/ChatUiState.component1|component1(){}[0]
+    final fun component2(): kotlin/String? // com.carlom.klardrop.chat/ChatUiState.component2|component2(){}[0]
+    final fun component3(): kotlin/Float? // com.carlom.klardrop.chat/ChatUiState.component3|component3(){}[0]
+    final fun component4(): kotlin/Boolean // com.carlom.klardrop.chat/ChatUiState.component4|component4(){}[0]
+    final fun component5(): kotlin/String? // com.carlom.klardrop.chat/ChatUiState.component5|component5(){}[0]
+    final fun component6(): com.carlom.klardrop.chat/TransferStats? // com.carlom.klardrop.chat/ChatUiState.component6|component6(){}[0]
+    final fun copy(kotlin/String? = ..., kotlin/String? = ..., kotlin/Float? = ..., kotlin/Boolean = ..., kotlin/String? = ..., com.carlom.klardrop.chat/TransferStats? = ...): com.carlom.klardrop.chat/ChatUiState // com.carlom.klardrop.chat/ChatUiState.copy|copy(kotlin.String?;kotlin.String?;kotlin.Float?;kotlin.Boolean;kotlin.String?;com.carlom.klardrop.chat.TransferStats?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.chat/ChatUiState.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop.chat/ChatUiState.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop.chat/ChatUiState.toString|toString(){}[0]
+}
+
+final class com.carlom.klardrop.chat/DeviceChatViewModel { // com.carlom.klardrop.chat/DeviceChatViewModel|null[0]
+    final val messageRepository // com.carlom.klardrop.chat/DeviceChatViewModel.messageRepository|{}messageRepository[0]
+        final fun <get-messageRepository>(): com.carlom.klardrop.common.persistence/MessageRepository // com.carlom.klardrop.chat/DeviceChatViewModel.messageRepository.<get-messageRepository>|<get-messageRepository>(){}[0]
+    final val messages // com.carlom.klardrop.chat/DeviceChatViewModel.messages|{}messages[0]
+        final fun <get-messages>(): kotlinx.coroutines.flow/StateFlow<kotlin.collections/List<com.carlom.klardrop.common.persistence/ChatMessage>> // com.carlom.klardrop.chat/DeviceChatViewModel.messages.<get-messages>|<get-messages>(){}[0]
+    final val pendingAuth // com.carlom.klardrop.chat/DeviceChatViewModel.pendingAuth|{}pendingAuth[0]
+        final fun <get-pendingAuth>(): kotlinx.coroutines.flow/StateFlow<com.carlom.klardrop.common.receiver/ReceiveMessageUpdate?> // com.carlom.klardrop.chat/DeviceChatViewModel.pendingAuth.<get-pendingAuth>|<get-pendingAuth>(){}[0]
+    final val reachability // com.carlom.klardrop.chat/DeviceChatViewModel.reachability|{}reachability[0]
+        final fun <get-reachability>(): kotlinx.coroutines.flow/StateFlow<com.carlom.klardrop.common.communication/Reachability> // com.carlom.klardrop.chat/DeviceChatViewModel.reachability.<get-reachability>|<get-reachability>(){}[0]
+    final val uiState // com.carlom.klardrop.chat/DeviceChatViewModel.uiState|{}uiState[0]
+        final fun <get-uiState>(): kotlinx.coroutines.flow/StateFlow<com.carlom.klardrop.chat/ChatUiState> // com.carlom.klardrop.chat/DeviceChatViewModel.uiState.<get-uiState>|<get-uiState>(){}[0]
+
+    final fun clearError() // com.carlom.klardrop.chat/DeviceChatViewModel.clearError|clearError(){}[0]
+    final fun clearNotice() // com.carlom.klardrop.chat/DeviceChatViewModel.clearNotice|clearNotice(){}[0]
+    final fun copyText(kotlin/String) // com.carlom.klardrop.chat/DeviceChatViewModel.copyText|copyText(kotlin.String){}[0]
+    final fun onDispose() // com.carlom.klardrop.chat/DeviceChatViewModel.onDispose|onDispose(){}[0]
+    final fun openFileClicked(kotlin/String) // com.carlom.klardrop.chat/DeviceChatViewModel.openFileClicked|openFileClicked(kotlin.String){}[0]
+    final fun openUrlClicked(kotlin/String) // com.carlom.klardrop.chat/DeviceChatViewModel.openUrlClicked|openUrlClicked(kotlin.String){}[0]
+    final fun pasteFromClipboard() // com.carlom.klardrop.chat/DeviceChatViewModel.pasteFromClipboard|pasteFromClipboard(){}[0]
+    final fun retryFileTransfer(kotlin/Long) // com.carlom.klardrop.chat/DeviceChatViewModel.retryFileTransfer|retryFileTransfer(kotlin.Long){}[0]
+    final fun sendFiles(kotlin.collections/List<io.github.vinceglb.filekit/PlatformFile>) // com.carlom.klardrop.chat/DeviceChatViewModel.sendFiles|sendFiles(kotlin.collections.List<io.github.vinceglb.filekit.PlatformFile>){}[0]
+    final fun sendTextMessage(kotlin/String) // com.carlom.klardrop.chat/DeviceChatViewModel.sendTextMessage|sendTextMessage(kotlin.String){}[0]
+}
+
+final class com.carlom.klardrop.chat/TransferStats { // com.carlom.klardrop.chat/TransferStats|null[0]
+    constructor <init>(kotlin/Long, kotlin/Long, kotlin/Long, kotlin/Long?) // com.carlom.klardrop.chat/TransferStats.<init>|<init>(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Long?){}[0]
+
+    final val bytesPerSecond // com.carlom.klardrop.chat/TransferStats.bytesPerSecond|{}bytesPerSecond[0]
+        final fun <get-bytesPerSecond>(): kotlin/Long // com.carlom.klardrop.chat/TransferStats.bytesPerSecond.<get-bytesPerSecond>|<get-bytesPerSecond>(){}[0]
+    final val bytesTransferred // com.carlom.klardrop.chat/TransferStats.bytesTransferred|{}bytesTransferred[0]
+        final fun <get-bytesTransferred>(): kotlin/Long // com.carlom.klardrop.chat/TransferStats.bytesTransferred.<get-bytesTransferred>|<get-bytesTransferred>(){}[0]
+    final val etaSeconds // com.carlom.klardrop.chat/TransferStats.etaSeconds|{}etaSeconds[0]
+        final fun <get-etaSeconds>(): kotlin/Long? // com.carlom.klardrop.chat/TransferStats.etaSeconds.<get-etaSeconds>|<get-etaSeconds>(){}[0]
+    final val totalBytes // com.carlom.klardrop.chat/TransferStats.totalBytes|{}totalBytes[0]
+        final fun <get-totalBytes>(): kotlin/Long // com.carlom.klardrop.chat/TransferStats.totalBytes.<get-totalBytes>|<get-totalBytes>(){}[0]
+
+    final fun component1(): kotlin/Long // com.carlom.klardrop.chat/TransferStats.component1|component1(){}[0]
+    final fun component2(): kotlin/Long // com.carlom.klardrop.chat/TransferStats.component2|component2(){}[0]
+    final fun component3(): kotlin/Long // com.carlom.klardrop.chat/TransferStats.component3|component3(){}[0]
+    final fun component4(): kotlin/Long? // com.carlom.klardrop.chat/TransferStats.component4|component4(){}[0]
+    final fun copy(kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Long? = ...): com.carlom.klardrop.chat/TransferStats // com.carlom.klardrop.chat/TransferStats.copy|copy(kotlin.Long;kotlin.Long;kotlin.Long;kotlin.Long?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.chat/TransferStats.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop.chat/TransferStats.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop.chat/TransferStats.toString|toString(){}[0]
+}
+
+final class com.carlom.klardrop/DeviceUi { // com.carlom.klardrop/DeviceUi|null[0]
+    constructor <init>(kotlin/String, kotlin/String, com.carlom.klardrop.common.utils/DeviceType, com.carlom.klardrop/ActivityState = ..., kotlin.collections/List<com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType>, kotlin/Boolean = ..., com.carlom.klardrop/TrustStatus = ..., com.carlom.klardrop.common.communication/Reachability = ..., kotlin/String? = ...) // com.carlom.klardrop/DeviceUi.<init>|<init>(kotlin.String;kotlin.String;com.carlom.klardrop.common.utils.DeviceType;com.carlom.klardrop.ActivityState;kotlin.collections.List<com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType>;kotlin.Boolean;com.carlom.klardrop.TrustStatus;com.carlom.klardrop.common.communication.Reachability;kotlin.String?){}[0]
+
+    final val activityState // com.carlom.klardrop/DeviceUi.activityState|{}activityState[0]
+        final fun <get-activityState>(): com.carlom.klardrop/ActivityState // com.carlom.klardrop/DeviceUi.activityState.<get-activityState>|<get-activityState>(){}[0]
+    final val connectionTypes // com.carlom.klardrop/DeviceUi.connectionTypes|{}connectionTypes[0]
+        final fun <get-connectionTypes>(): kotlin.collections/List<com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType> // com.carlom.klardrop/DeviceUi.connectionTypes.<get-connectionTypes>|<get-connectionTypes>(){}[0]
+    final val deviceId // com.carlom.klardrop/DeviceUi.deviceId|{}deviceId[0]
+        final fun <get-deviceId>(): kotlin/String // com.carlom.klardrop/DeviceUi.deviceId.<get-deviceId>|<get-deviceId>(){}[0]
+    final val deviceName // com.carlom.klardrop/DeviceUi.deviceName|{}deviceName[0]
+        final fun <get-deviceName>(): kotlin/String // com.carlom.klardrop/DeviceUi.deviceName.<get-deviceName>|<get-deviceName>(){}[0]
+    final val deviceType // com.carlom.klardrop/DeviceUi.deviceType|{}deviceType[0]
+        final fun <get-deviceType>(): com.carlom.klardrop.common.utils/DeviceType // com.carlom.klardrop/DeviceUi.deviceType.<get-deviceType>|<get-deviceType>(){}[0]
+    final val hasUnreadMessages // com.carlom.klardrop/DeviceUi.hasUnreadMessages|{}hasUnreadMessages[0]
+        final fun <get-hasUnreadMessages>(): kotlin/Boolean // com.carlom.klardrop/DeviceUi.hasUnreadMessages.<get-hasUnreadMessages>|<get-hasUnreadMessages>(){}[0]
+    final val pairingError // com.carlom.klardrop/DeviceUi.pairingError|{}pairingError[0]
+        final fun <get-pairingError>(): kotlin/String? // com.carlom.klardrop/DeviceUi.pairingError.<get-pairingError>|<get-pairingError>(){}[0]
+    final val reachability // com.carlom.klardrop/DeviceUi.reachability|{}reachability[0]
+        final fun <get-reachability>(): com.carlom.klardrop.common.communication/Reachability // com.carlom.klardrop/DeviceUi.reachability.<get-reachability>|<get-reachability>(){}[0]
+    final val trustStatus // com.carlom.klardrop/DeviceUi.trustStatus|{}trustStatus[0]
+        final fun <get-trustStatus>(): com.carlom.klardrop/TrustStatus // com.carlom.klardrop/DeviceUi.trustStatus.<get-trustStatus>|<get-trustStatus>(){}[0]
+
+    final fun component1(): kotlin/String // com.carlom.klardrop/DeviceUi.component1|component1(){}[0]
+    final fun component2(): kotlin/String // com.carlom.klardrop/DeviceUi.component2|component2(){}[0]
+    final fun component3(): com.carlom.klardrop.common.utils/DeviceType // com.carlom.klardrop/DeviceUi.component3|component3(){}[0]
+    final fun component4(): com.carlom.klardrop/ActivityState // com.carlom.klardrop/DeviceUi.component4|component4(){}[0]
+    final fun component5(): kotlin.collections/List<com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType> // com.carlom.klardrop/DeviceUi.component5|component5(){}[0]
+    final fun component6(): kotlin/Boolean // com.carlom.klardrop/DeviceUi.component6|component6(){}[0]
+    final fun component7(): com.carlom.klardrop/TrustStatus // com.carlom.klardrop/DeviceUi.component7|component7(){}[0]
+    final fun component8(): com.carlom.klardrop.common.communication/Reachability // com.carlom.klardrop/DeviceUi.component8|component8(){}[0]
+    final fun component9(): kotlin/String? // com.carlom.klardrop/DeviceUi.component9|component9(){}[0]
+    final fun copy(kotlin/String = ..., kotlin/String = ..., com.carlom.klardrop.common.utils/DeviceType = ..., com.carlom.klardrop/ActivityState = ..., kotlin.collections/List<com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType> = ..., kotlin/Boolean = ..., com.carlom.klardrop/TrustStatus = ..., com.carlom.klardrop.common.communication/Reachability = ..., kotlin/String? = ...): com.carlom.klardrop/DeviceUi // com.carlom.klardrop/DeviceUi.copy|copy(kotlin.String;kotlin.String;com.carlom.klardrop.common.utils.DeviceType;com.carlom.klardrop.ActivityState;kotlin.collections.List<com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType>;kotlin.Boolean;com.carlom.klardrop.TrustStatus;com.carlom.klardrop.common.communication.Reachability;kotlin.String?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/DeviceUi.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop/DeviceUi.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop/DeviceUi.toString|toString(){}[0]
+}
+
+final class com.carlom.klardrop/DiscoveryController : com.carlom.klardrop.common.trust/PairingApprovalCallback, com.carlom.klardrop/OnDeviceActionListener, com.carlom.klardrop/ReceiveNotificationsCallbacks { // com.carlom.klardrop/DiscoveryController|null[0]
+    constructor <init>(com.carlom.klardrop.common.di/CommonComponent) // com.carlom.klardrop/DiscoveryController.<init>|<init>(com.carlom.klardrop.common.di.CommonComponent){}[0]
+
+    final val backgroundDiscoveryEnabled // com.carlom.klardrop/DiscoveryController.backgroundDiscoveryEnabled|{}backgroundDiscoveryEnabled[0]
+        final fun <get-backgroundDiscoveryEnabled>(): kotlinx.coroutines.flow/StateFlow<kotlin/Boolean> // com.carlom.klardrop/DiscoveryController.backgroundDiscoveryEnabled.<get-backgroundDiscoveryEnabled>|<get-backgroundDiscoveryEnabled>(){}[0]
+    final val connectivityRestrictions // com.carlom.klardrop/DiscoveryController.connectivityRestrictions|{}connectivityRestrictions[0]
+        final fun <get-connectivityRestrictions>(): kotlinx.coroutines.flow/StateFlow<com.carlom.klardrop.common.connectivity/ConnectivityRestrictions> // com.carlom.klardrop/DiscoveryController.connectivityRestrictions.<get-connectivityRestrictions>|<get-connectivityRestrictions>(){}[0]
+    final val outgoingTransfers // com.carlom.klardrop/DiscoveryController.outgoingTransfers|{}outgoingTransfers[0]
+        final fun <get-outgoingTransfers>(): kotlinx.coroutines.flow/SharedFlow<com.carlom.klardrop/OutgoingTransfer> // com.carlom.klardrop/DiscoveryController.outgoingTransfers.<get-outgoingTransfers>|<get-outgoingTransfers>(){}[0]
+    final val permissionsState // com.carlom.klardrop/DiscoveryController.permissionsState|{}permissionsState[0]
+        final fun <get-permissionsState>(): kotlinx.coroutines.flow/StateFlow<com.carlom.klardrop.common.permissions/PermissionsState> // com.carlom.klardrop/DiscoveryController.permissionsState.<get-permissionsState>|<get-permissionsState>(){}[0]
+    final val screenStateFlow // com.carlom.klardrop/DiscoveryController.screenStateFlow|{}screenStateFlow[0]
+        final fun <get-screenStateFlow>(): kotlinx.coroutines.flow/MutableStateFlow<com.carlom.klardrop/DiscoveryScreenState> // com.carlom.klardrop/DiscoveryController.screenStateFlow.<get-screenStateFlow>|<get-screenStateFlow>(){}[0]
+    final val supportsBackgroundDiscovery // com.carlom.klardrop/DiscoveryController.supportsBackgroundDiscovery|{}supportsBackgroundDiscovery[0]
+        final fun <get-supportsBackgroundDiscovery>(): kotlin/Boolean // com.carlom.klardrop/DiscoveryController.supportsBackgroundDiscovery.<get-supportsBackgroundDiscovery>|<get-supportsBackgroundDiscovery>(){}[0]
+
+    final fun debugAcceptIncoming(kotlin/Int) // com.carlom.klardrop/DiscoveryController.debugAcceptIncoming|debugAcceptIncoming(kotlin.Int){}[0]
+    final fun debugAcceptIncomingFrom(kotlin/String) // com.carlom.klardrop/DiscoveryController.debugAcceptIncomingFrom|debugAcceptIncomingFrom(kotlin.String){}[0]
+    final fun debugAcceptPairing(kotlin/String) // com.carlom.klardrop/DiscoveryController.debugAcceptPairing|debugAcceptPairing(kotlin.String){}[0]
+    final fun debugPair(kotlin/String) // com.carlom.klardrop/DiscoveryController.debugPair|debugPair(kotlin.String){}[0]
+    final fun debugRejectIncoming(kotlin/Int) // com.carlom.klardrop/DiscoveryController.debugRejectIncoming|debugRejectIncoming(kotlin.Int){}[0]
+    final fun debugRejectPairing(kotlin/String) // com.carlom.klardrop/DiscoveryController.debugRejectPairing|debugRejectPairing(kotlin.String){}[0]
+    final fun debugSendFile(kotlin/String, kotlin/String) // com.carlom.klardrop/DiscoveryController.debugSendFile|debugSendFile(kotlin.String;kotlin.String){}[0]
+    final fun dismissPairingDialog() // com.carlom.klardrop/DiscoveryController.dismissPairingDialog|dismissPairingDialog(){}[0]
+    final fun dispose() // com.carlom.klardrop/DiscoveryController.dispose|dispose(){}[0]
+    final fun loadDeviceNames() // com.carlom.klardrop/DiscoveryController.loadDeviceNames|loadDeviceNames(){}[0]
+    final fun markDeviceRead(kotlin/String) // com.carlom.klardrop/DiscoveryController.markDeviceRead|markDeviceRead(kotlin.String){}[0]
+    final fun onAddToTrusted(com.carlom.klardrop/DeviceUi) // com.carlom.klardrop/DiscoveryController.onAddToTrusted|onAddToTrusted(com.carlom.klardrop.DeviceUi){}[0]
+    final fun onCardDismissed(kotlin/Int) // com.carlom.klardrop/DiscoveryController.onCardDismissed|onCardDismissed(kotlin.Int){}[0]
+    final fun onConnectionInfoAccepted(com.carlom.klardrop.common.communication.message/ConnectionInfoMessage) // com.carlom.klardrop/DiscoveryController.onConnectionInfoAccepted|onConnectionInfoAccepted(com.carlom.klardrop.common.communication.message.ConnectionInfoMessage){}[0]
+    final fun onDeviceClick(com.carlom.klardrop/DeviceUi) // com.carlom.klardrop/DiscoveryController.onDeviceClick|onDeviceClick(com.carlom.klardrop.DeviceUi){}[0]
+    final fun onForgetDevice(com.carlom.klardrop/DeviceUi) // com.carlom.klardrop/DiscoveryController.onForgetDevice|onForgetDevice(com.carlom.klardrop.DeviceUi){}[0]
+    final fun onNotificationDismissed(kotlin/Int) // com.carlom.klardrop/DiscoveryController.onNotificationDismissed|onNotificationDismissed(kotlin.Int){}[0]
+    final fun onNotificationPair(kotlin/Int) // com.carlom.klardrop/DiscoveryController.onNotificationPair|onNotificationPair(kotlin.Int){}[0]
+    final fun onPairingRequested(kotlin/String, kotlin/String, kotlin/String, kotlin.coroutines/SuspendFunction0<kotlin/Unit>, kotlin.coroutines/SuspendFunction0<kotlin/Unit>) // com.carlom.klardrop/DiscoveryController.onPairingRequested|onPairingRequested(kotlin.String;kotlin.String;kotlin.String;kotlin.coroutines.SuspendFunction0<kotlin.Unit>;kotlin.coroutines.SuspendFunction0<kotlin.Unit>){}[0]
+    final fun onReceivedCardClicked(com.carlom.klardrop.common.receiver/ReceiveMessageUpdate) // com.carlom.klardrop/DiscoveryController.onReceivedCardClicked|onReceivedCardClicked(com.carlom.klardrop.common.receiver.ReceiveMessageUpdate){}[0]
+    final fun onSendData(com.carlom.klardrop/DeviceUi, com.carlom.klardrop/OnDataToSend) // com.carlom.klardrop/DiscoveryController.onSendData|onSendData(com.carlom.klardrop.DeviceUi;com.carlom.klardrop.OnDataToSend){}[0]
+    final fun prepareOutgoingFiles(kotlin.collections/List<io.github.vinceglb.filekit/PlatformFile>): kotlin.collections/List<com.carlom.klardrop/PreparedFile> // com.carlom.klardrop/DiscoveryController.prepareOutgoingFiles|prepareOutgoingFiles(kotlin.collections.List<io.github.vinceglb.filekit.PlatformFile>){}[0]
+    final fun readFromClipboard(): kotlin/String // com.carlom.klardrop/DiscoveryController.readFromClipboard|readFromClipboard(){}[0]
+    final fun refreshConnectivityRestrictions() // com.carlom.klardrop/DiscoveryController.refreshConnectivityRestrictions|refreshConnectivityRestrictions(){}[0]
+    final fun refreshPermissions() // com.carlom.klardrop/DiscoveryController.refreshPermissions|refreshPermissions(){}[0]
+    final fun saveCustomDeviceName(kotlin/String?) // com.carlom.klardrop/DiscoveryController.saveCustomDeviceName|saveCustomDeviceName(kotlin.String?){}[0]
+    final fun sendFiles(kotlin/String, kotlin.collections/List<io.github.vinceglb.filekit/PlatformFile>, kotlin/Function1<com.carlom.klardrop.common.communication/MessengerSendProgress, kotlin/Unit>? = ...) // com.carlom.klardrop/DiscoveryController.sendFiles|sendFiles(kotlin.String;kotlin.collections.List<io.github.vinceglb.filekit.PlatformFile>;kotlin.Function1<com.carlom.klardrop.common.communication.MessengerSendProgress,kotlin.Unit>?){}[0]
+    final fun setActiveChatDeviceId(kotlin/String?) // com.carlom.klardrop/DiscoveryController.setActiveChatDeviceId|setActiveChatDeviceId(kotlin.String?){}[0]
+    final fun setBackgroundDiscoveryEnabled(kotlin/Boolean) // com.carlom.klardrop/DiscoveryController.setBackgroundDiscoveryEnabled|setBackgroundDiscoveryEnabled(kotlin.Boolean){}[0]
+    final suspend fun debugSendTextAndWait(kotlin/String, kotlin/String): kotlin/String // com.carlom.klardrop/DiscoveryController.debugSendTextAndWait|debugSendTextAndWait(kotlin.String;kotlin.String){}[0]
+    final suspend fun debugUnpairAndWait(kotlin/String) // com.carlom.klardrop/DiscoveryController.debugUnpairAndWait|debugUnpairAndWait(kotlin.String){}[0]
+    final suspend fun markDeviceReadAndWait(kotlin/String) // com.carlom.klardrop/DiscoveryController.markDeviceReadAndWait|markDeviceReadAndWait(kotlin.String){}[0]
+    final suspend fun sendTextTracked(kotlin/String, kotlin/String): kotlin/String // com.carlom.klardrop/DiscoveryController.sendTextTracked|sendTextTracked(kotlin.String;kotlin.String){}[0]
+    final suspend fun startPreparedFiles(kotlin/String, kotlin.collections/List<com.carlom.klardrop/PreparedFile>, kotlin/Function1<com.carlom.klardrop.common.communication/MessengerSendProgress, kotlin/Unit>? = ...) // com.carlom.klardrop/DiscoveryController.startPreparedFiles|startPreparedFiles(kotlin.String;kotlin.collections.List<com.carlom.klardrop.PreparedFile>;kotlin.Function1<com.carlom.klardrop.common.communication.MessengerSendProgress,kotlin.Unit>?){}[0]
+    final suspend fun startTrackedTextSend(kotlin/String, kotlin/String, kotlin.coroutines/SuspendFunction1<com.carlom.klardrop/OutgoingTransfer, kotlin/Unit> = ...): com.carlom.klardrop/OutgoingTransfer // com.carlom.klardrop/DiscoveryController.startTrackedTextSend|startTrackedTextSend(kotlin.String;kotlin.String;kotlin.coroutines.SuspendFunction1<com.carlom.klardrop.OutgoingTransfer,kotlin.Unit>){}[0]
+}
+
+final class com.carlom.klardrop/DiscoveryScreenState { // com.carlom.klardrop/DiscoveryScreenState|null[0]
+    constructor <init>(kotlin.collections/List<com.carlom.klardrop/DeviceUi> = ..., kotlin.collections/Map<kotlin/Int, com.carlom.klardrop.common.receiver/ReceiveMessageUpdate> = ..., com.carlom.klardrop/PairingDialogState? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin.collections/List<com.carlom.klardrop/UiNotification> = ...) // com.carlom.klardrop/DiscoveryScreenState.<init>|<init>(kotlin.collections.List<com.carlom.klardrop.DeviceUi>;kotlin.collections.Map<kotlin.Int,com.carlom.klardrop.common.receiver.ReceiveMessageUpdate>;com.carlom.klardrop.PairingDialogState?;kotlin.String?;kotlin.String?;kotlin.collections.List<com.carlom.klardrop.UiNotification>){}[0]
+
+    final val currentDeviceName // com.carlom.klardrop/DiscoveryScreenState.currentDeviceName|{}currentDeviceName[0]
+        final fun <get-currentDeviceName>(): kotlin/String? // com.carlom.klardrop/DiscoveryScreenState.currentDeviceName.<get-currentDeviceName>|<get-currentDeviceName>(){}[0]
+    final val devices // com.carlom.klardrop/DiscoveryScreenState.devices|{}devices[0]
+        final fun <get-devices>(): kotlin.collections/List<com.carlom.klardrop/DeviceUi> // com.carlom.klardrop/DiscoveryScreenState.devices.<get-devices>|<get-devices>(){}[0]
+    final val notifications // com.carlom.klardrop/DiscoveryScreenState.notifications|{}notifications[0]
+        final fun <get-notifications>(): kotlin.collections/List<com.carlom.klardrop/UiNotification> // com.carlom.klardrop/DiscoveryScreenState.notifications.<get-notifications>|<get-notifications>(){}[0]
+    final val pairingDialogState // com.carlom.klardrop/DiscoveryScreenState.pairingDialogState|{}pairingDialogState[0]
+        final fun <get-pairingDialogState>(): com.carlom.klardrop/PairingDialogState? // com.carlom.klardrop/DiscoveryScreenState.pairingDialogState.<get-pairingDialogState>|<get-pairingDialogState>(){}[0]
+    final val receivingMessages // com.carlom.klardrop/DiscoveryScreenState.receivingMessages|{}receivingMessages[0]
+        final fun <get-receivingMessages>(): kotlin.collections/Map<kotlin/Int, com.carlom.klardrop.common.receiver/ReceiveMessageUpdate> // com.carlom.klardrop/DiscoveryScreenState.receivingMessages.<get-receivingMessages>|<get-receivingMessages>(){}[0]
+    final val systemDeviceName // com.carlom.klardrop/DiscoveryScreenState.systemDeviceName|{}systemDeviceName[0]
+        final fun <get-systemDeviceName>(): kotlin/String? // com.carlom.klardrop/DiscoveryScreenState.systemDeviceName.<get-systemDeviceName>|<get-systemDeviceName>(){}[0]
+
+    final fun component1(): kotlin.collections/List<com.carlom.klardrop/DeviceUi> // com.carlom.klardrop/DiscoveryScreenState.component1|component1(){}[0]
+    final fun component2(): kotlin.collections/Map<kotlin/Int, com.carlom.klardrop.common.receiver/ReceiveMessageUpdate> // com.carlom.klardrop/DiscoveryScreenState.component2|component2(){}[0]
+    final fun component3(): com.carlom.klardrop/PairingDialogState? // com.carlom.klardrop/DiscoveryScreenState.component3|component3(){}[0]
+    final fun component4(): kotlin/String? // com.carlom.klardrop/DiscoveryScreenState.component4|component4(){}[0]
+    final fun component5(): kotlin/String? // com.carlom.klardrop/DiscoveryScreenState.component5|component5(){}[0]
+    final fun component6(): kotlin.collections/List<com.carlom.klardrop/UiNotification> // com.carlom.klardrop/DiscoveryScreenState.component6|component6(){}[0]
+    final fun copy(kotlin.collections/List<com.carlom.klardrop/DeviceUi> = ..., kotlin.collections/Map<kotlin/Int, com.carlom.klardrop.common.receiver/ReceiveMessageUpdate> = ..., com.carlom.klardrop/PairingDialogState? = ..., kotlin/String? = ..., kotlin/String? = ..., kotlin.collections/List<com.carlom.klardrop/UiNotification> = ...): com.carlom.klardrop/DiscoveryScreenState // com.carlom.klardrop/DiscoveryScreenState.copy|copy(kotlin.collections.List<com.carlom.klardrop.DeviceUi>;kotlin.collections.Map<kotlin.Int,com.carlom.klardrop.common.receiver.ReceiveMessageUpdate>;com.carlom.klardrop.PairingDialogState?;kotlin.String?;kotlin.String?;kotlin.collections.List<com.carlom.klardrop.UiNotification>){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/DiscoveryScreenState.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop/DiscoveryScreenState.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop/DiscoveryScreenState.toString|toString(){}[0]
+}
+
+final class com.carlom.klardrop/OutgoingTransfer { // com.carlom.klardrop/OutgoingTransfer|null[0]
+    constructor <init>(kotlin/String, kotlin/String, kotlin/String, kotlin/Long, kotlinx.coroutines.flow/Flow<com.carlom.klardrop.common.communication/MessengerSendProgress>, kotlin/String = ...) // com.carlom.klardrop/OutgoingTransfer.<init>|<init>(kotlin.String;kotlin.String;kotlin.String;kotlin.Long;kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.communication.MessengerSendProgress>;kotlin.String){}[0]
+
+    final val deviceId // com.carlom.klardrop/OutgoingTransfer.deviceId|{}deviceId[0]
+        final fun <get-deviceId>(): kotlin/String // com.carlom.klardrop/OutgoingTransfer.deviceId.<get-deviceId>|<get-deviceId>(){}[0]
+    final val fileName // com.carlom.klardrop/OutgoingTransfer.fileName|{}fileName[0]
+        final fun <get-fileName>(): kotlin/String // com.carlom.klardrop/OutgoingTransfer.fileName.<get-fileName>|<get-fileName>(){}[0]
+    final val flow // com.carlom.klardrop/OutgoingTransfer.flow|{}flow[0]
+        final fun <get-flow>(): kotlinx.coroutines.flow/Flow<com.carlom.klardrop.common.communication/MessengerSendProgress> // com.carlom.klardrop/OutgoingTransfer.flow.<get-flow>|<get-flow>(){}[0]
+    final val id // com.carlom.klardrop/OutgoingTransfer.id|{}id[0]
+        final fun <get-id>(): kotlin/String // com.carlom.klardrop/OutgoingTransfer.id.<get-id>|<get-id>(){}[0]
+    final val kind // com.carlom.klardrop/OutgoingTransfer.kind|{}kind[0]
+        final fun <get-kind>(): kotlin/String // com.carlom.klardrop/OutgoingTransfer.kind.<get-kind>|<get-kind>(){}[0]
+    final val totalSize // com.carlom.klardrop/OutgoingTransfer.totalSize|{}totalSize[0]
+        final fun <get-totalSize>(): kotlin/Long // com.carlom.klardrop/OutgoingTransfer.totalSize.<get-totalSize>|<get-totalSize>(){}[0]
+
+    final fun component1(): kotlin/String // com.carlom.klardrop/OutgoingTransfer.component1|component1(){}[0]
+    final fun component2(): kotlin/String // com.carlom.klardrop/OutgoingTransfer.component2|component2(){}[0]
+    final fun component3(): kotlin/String // com.carlom.klardrop/OutgoingTransfer.component3|component3(){}[0]
+    final fun component4(): kotlin/Long // com.carlom.klardrop/OutgoingTransfer.component4|component4(){}[0]
+    final fun component5(): kotlinx.coroutines.flow/Flow<com.carlom.klardrop.common.communication/MessengerSendProgress> // com.carlom.klardrop/OutgoingTransfer.component5|component5(){}[0]
+    final fun component6(): kotlin/String // com.carlom.klardrop/OutgoingTransfer.component6|component6(){}[0]
+    final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/Long = ..., kotlinx.coroutines.flow/Flow<com.carlom.klardrop.common.communication/MessengerSendProgress> = ..., kotlin/String = ...): com.carlom.klardrop/OutgoingTransfer // com.carlom.klardrop/OutgoingTransfer.copy|copy(kotlin.String;kotlin.String;kotlin.String;kotlin.Long;kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.communication.MessengerSendProgress>;kotlin.String){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/OutgoingTransfer.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop/OutgoingTransfer.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop/OutgoingTransfer.toString|toString(){}[0]
+}
+
+final class com.carlom.klardrop/PairingDialogState { // com.carlom.klardrop/PairingDialogState|null[0]
+    constructor <init>(kotlin/String, kotlin/String, kotlin/String, kotlin/Function0<kotlin/Unit>, kotlin/Function0<kotlin/Unit>, kotlin/Boolean = ..., kotlin/String? = ...) // com.carlom.klardrop/PairingDialogState.<init>|<init>(kotlin.String;kotlin.String;kotlin.String;kotlin.Function0<kotlin.Unit>;kotlin.Function0<kotlin.Unit>;kotlin.Boolean;kotlin.String?){}[0]
+
+    final val deviceId // com.carlom.klardrop/PairingDialogState.deviceId|{}deviceId[0]
+        final fun <get-deviceId>(): kotlin/String // com.carlom.klardrop/PairingDialogState.deviceId.<get-deviceId>|<get-deviceId>(){}[0]
+    final val deviceName // com.carlom.klardrop/PairingDialogState.deviceName|{}deviceName[0]
+        final fun <get-deviceName>(): kotlin/String // com.carlom.klardrop/PairingDialogState.deviceName.<get-deviceName>|<get-deviceName>(){}[0]
+    final val deviceType // com.carlom.klardrop/PairingDialogState.deviceType|{}deviceType[0]
+        final fun <get-deviceType>(): kotlin/String // com.carlom.klardrop/PairingDialogState.deviceType.<get-deviceType>|<get-deviceType>(){}[0]
+    final val errorMessage // com.carlom.klardrop/PairingDialogState.errorMessage|{}errorMessage[0]
+        final fun <get-errorMessage>(): kotlin/String? // com.carlom.klardrop/PairingDialogState.errorMessage.<get-errorMessage>|<get-errorMessage>(){}[0]
+    final val isError // com.carlom.klardrop/PairingDialogState.isError|{}isError[0]
+        final fun <get-isError>(): kotlin/Boolean // com.carlom.klardrop/PairingDialogState.isError.<get-isError>|<get-isError>(){}[0]
+    final val onAccept // com.carlom.klardrop/PairingDialogState.onAccept|{}onAccept[0]
+        final fun <get-onAccept>(): kotlin/Function0<kotlin/Unit> // com.carlom.klardrop/PairingDialogState.onAccept.<get-onAccept>|<get-onAccept>(){}[0]
+    final val onReject // com.carlom.klardrop/PairingDialogState.onReject|{}onReject[0]
+        final fun <get-onReject>(): kotlin/Function0<kotlin/Unit> // com.carlom.klardrop/PairingDialogState.onReject.<get-onReject>|<get-onReject>(){}[0]
+
+    final fun component1(): kotlin/String // com.carlom.klardrop/PairingDialogState.component1|component1(){}[0]
+    final fun component2(): kotlin/String // com.carlom.klardrop/PairingDialogState.component2|component2(){}[0]
+    final fun component3(): kotlin/String // com.carlom.klardrop/PairingDialogState.component3|component3(){}[0]
+    final fun component4(): kotlin/Function0<kotlin/Unit> // com.carlom.klardrop/PairingDialogState.component4|component4(){}[0]
+    final fun component5(): kotlin/Function0<kotlin/Unit> // com.carlom.klardrop/PairingDialogState.component5|component5(){}[0]
+    final fun component6(): kotlin/Boolean // com.carlom.klardrop/PairingDialogState.component6|component6(){}[0]
+    final fun component7(): kotlin/String? // com.carlom.klardrop/PairingDialogState.component7|component7(){}[0]
+    final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/Function0<kotlin/Unit> = ..., kotlin/Function0<kotlin/Unit> = ..., kotlin/Boolean = ..., kotlin/String? = ...): com.carlom.klardrop/PairingDialogState // com.carlom.klardrop/PairingDialogState.copy|copy(kotlin.String;kotlin.String;kotlin.String;kotlin.Function0<kotlin.Unit>;kotlin.Function0<kotlin.Unit>;kotlin.Boolean;kotlin.String?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/PairingDialogState.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop/PairingDialogState.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop/PairingDialogState.toString|toString(){}[0]
+}
+
+final class com.carlom.klardrop/PreparedFile { // com.carlom.klardrop/PreparedFile|null[0]
+    constructor <init>(io.github.vinceglb.filekit/PlatformFile, kotlin/String, kotlin/String?, com.carlom.klardrop.common.communication.message/FileMessage?, kotlin/String?) // com.carlom.klardrop/PreparedFile.<init>|<init>(io.github.vinceglb.filekit.PlatformFile;kotlin.String;kotlin.String?;com.carlom.klardrop.common.communication.message.FileMessage?;kotlin.String?){}[0]
+
+    final val error // com.carlom.klardrop/PreparedFile.error|{}error[0]
+        final fun <get-error>(): kotlin/String? // com.carlom.klardrop/PreparedFile.error.<get-error>|<get-error>(){}[0]
+    final val file // com.carlom.klardrop/PreparedFile.file|{}file[0]
+        final fun <get-file>(): io.github.vinceglb.filekit/PlatformFile // com.carlom.klardrop/PreparedFile.file.<get-file>|<get-file>(){}[0]
+    final val fileName // com.carlom.klardrop/PreparedFile.fileName|{}fileName[0]
+        final fun <get-fileName>(): kotlin/String? // com.carlom.klardrop/PreparedFile.fileName.<get-fileName>|<get-fileName>(){}[0]
+    final val message // com.carlom.klardrop/PreparedFile.message|{}message[0]
+        final fun <get-message>(): com.carlom.klardrop.common.communication.message/FileMessage? // com.carlom.klardrop/PreparedFile.message.<get-message>|<get-message>(){}[0]
+    final val path // com.carlom.klardrop/PreparedFile.path|{}path[0]
+        final fun <get-path>(): kotlin/String // com.carlom.klardrop/PreparedFile.path.<get-path>|<get-path>(){}[0]
+
+    final fun component1(): io.github.vinceglb.filekit/PlatformFile // com.carlom.klardrop/PreparedFile.component1|component1(){}[0]
+    final fun component2(): kotlin/String // com.carlom.klardrop/PreparedFile.component2|component2(){}[0]
+    final fun component3(): kotlin/String? // com.carlom.klardrop/PreparedFile.component3|component3(){}[0]
+    final fun component4(): com.carlom.klardrop.common.communication.message/FileMessage? // com.carlom.klardrop/PreparedFile.component4|component4(){}[0]
+    final fun component5(): kotlin/String? // com.carlom.klardrop/PreparedFile.component5|component5(){}[0]
+    final fun copy(io.github.vinceglb.filekit/PlatformFile = ..., kotlin/String = ..., kotlin/String? = ..., com.carlom.klardrop.common.communication.message/FileMessage? = ..., kotlin/String? = ...): com.carlom.klardrop/PreparedFile // com.carlom.klardrop/PreparedFile.copy|copy(io.github.vinceglb.filekit.PlatformFile;kotlin.String;kotlin.String?;com.carlom.klardrop.common.communication.message.FileMessage?;kotlin.String?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/PreparedFile.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop/PreparedFile.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop/PreparedFile.toString|toString(){}[0]
+}
+
+final class com.carlom.klardrop/ShowDevicesControllerHelper { // com.carlom.klardrop/ShowDevicesControllerHelper|null[0]
+    constructor <init>(kotlinx.coroutines/CoroutineScope, kotlinx.coroutines.flow/StateFlow<kotlin.collections/Map<kotlin/String, com.carlom.klardrop.common.discovery/DiscoveryDevice>>, com.carlom.klardrop.common.persistence/MessageRepository, kotlinx.coroutines.flow/StateFlow<kotlin.collections/Map<kotlin/String, com.carlom.klardrop.common.discovery/DeviceInfo>>, kotlinx.coroutines.flow/StateFlow<kotlin.collections/Map<kotlin/String, com.carlom.klardrop.common.communication/Reachability>>) // com.carlom.klardrop/ShowDevicesControllerHelper.<init>|<init>(kotlinx.coroutines.CoroutineScope;kotlinx.coroutines.flow.StateFlow<kotlin.collections.Map<kotlin.String,com.carlom.klardrop.common.discovery.DiscoveryDevice>>;com.carlom.klardrop.common.persistence.MessageRepository;kotlinx.coroutines.flow.StateFlow<kotlin.collections.Map<kotlin.String,com.carlom.klardrop.common.discovery.DeviceInfo>>;kotlinx.coroutines.flow.StateFlow<kotlin.collections.Map<kotlin.String,com.carlom.klardrop.common.communication.Reachability>>){}[0]
+
+    final val devicesFlow // com.carlom.klardrop/ShowDevicesControllerHelper.devicesFlow|{}devicesFlow[0]
+        final fun <get-devicesFlow>(): kotlinx.coroutines.flow/Flow<kotlin.collections/Collection<com.carlom.klardrop/DeviceUi>> // com.carlom.klardrop/ShowDevicesControllerHelper.devicesFlow.<get-devicesFlow>|<get-devicesFlow>(){}[0]
+
+    final suspend fun collectProgress(kotlinx.coroutines.flow/Flow<com.carlom.klardrop.common.communication/MessengerSendProgress>, kotlin/String) // com.carlom.klardrop/ShowDevicesControllerHelper.collectProgress|collectProgress(kotlinx.coroutines.flow.Flow<com.carlom.klardrop.common.communication.MessengerSendProgress>;kotlin.String){}[0]
+}
+
+final class com.carlom.klardrop/UiDependencies { // com.carlom.klardrop/UiDependencies|null[0]
+    constructor <init>(com.carlom.klardrop.common.di/CommonComponent) // com.carlom.klardrop/UiDependencies.<init>|<init>(com.carlom.klardrop.common.di.CommonComponent){}[0]
+
+    final fun deviceChatViewModelFactory(kotlin/String): com.carlom.klardrop.chat/DeviceChatViewModel // com.carlom.klardrop/UiDependencies.deviceChatViewModelFactory|deviceChatViewModelFactory(kotlin.String){}[0]
+    final fun discoveryController(): com.carlom.klardrop/DiscoveryController // com.carlom.klardrop/UiDependencies.discoveryController|discoveryController(){}[0]
+    final fun updateBannerController(): com.carlom.klardrop/UpdateBannerController // com.carlom.klardrop/UiDependencies.updateBannerController|updateBannerController(){}[0]
+}
+
+final class com.carlom.klardrop/UpdateBannerController { // com.carlom.klardrop/UpdateBannerController|null[0]
+    final val currentVersion // com.carlom.klardrop/UpdateBannerController.currentVersion|{}currentVersion[0]
+        final fun <get-currentVersion>(): kotlin/String // com.carlom.klardrop/UpdateBannerController.currentVersion.<get-currentVersion>|<get-currentVersion>(){}[0]
+    final val installProgress // com.carlom.klardrop/UpdateBannerController.installProgress|{}installProgress[0]
+        final fun <get-installProgress>(): kotlinx.coroutines.flow/StateFlow<com.carlom.klardrop.common.update/InstallProgress> // com.carlom.klardrop/UpdateBannerController.installProgress.<get-installProgress>|<get-installProgress>(){}[0]
+    final val releaseChannel // com.carlom.klardrop/UpdateBannerController.releaseChannel|{}releaseChannel[0]
+        final fun <get-releaseChannel>(): kotlin/String // com.carlom.klardrop/UpdateBannerController.releaseChannel.<get-releaseChannel>|<get-releaseChannel>(){}[0]
+    final val status // com.carlom.klardrop/UpdateBannerController.status|{}status[0]
+        final fun <get-status>(): kotlinx.coroutines.flow/StateFlow<com.carlom.klardrop.common.update/UpdateStatus> // com.carlom.klardrop/UpdateBannerController.status.<get-status>|<get-status>(){}[0]
+    final val updatesSupported // com.carlom.klardrop/UpdateBannerController.updatesSupported|{}updatesSupported[0]
+        final fun <get-updatesSupported>(): kotlin/Boolean // com.carlom.klardrop/UpdateBannerController.updatesSupported.<get-updatesSupported>|<get-updatesSupported>(){}[0]
+
+    final fun onAction(com.carlom.klardrop.common.update/UpdateAction): kotlin/Boolean // com.carlom.klardrop/UpdateBannerController.onAction|onAction(com.carlom.klardrop.common.update.UpdateAction){}[0]
+    final fun onRestart() // com.carlom.klardrop/UpdateBannerController.onRestart|onRestart(){}[0]
+    final fun openUrl(kotlin/String) // com.carlom.klardrop/UpdateBannerController.openUrl|openUrl(kotlin.String){}[0]
+    final fun recheck() // com.carlom.klardrop/UpdateBannerController.recheck|recheck(){}[0]
+}
+
+final const val com.carlom.klardrop/TRANSFER_KIND_FILE // com.carlom.klardrop/TRANSFER_KIND_FILE|{}TRANSFER_KIND_FILE[0]
+    final fun <get-TRANSFER_KIND_FILE>(): kotlin/String // com.carlom.klardrop/TRANSFER_KIND_FILE.<get-TRANSFER_KIND_FILE>|<get-TRANSFER_KIND_FILE>(){}[0]
+final const val com.carlom.klardrop/TRANSFER_KIND_TEXT // com.carlom.klardrop/TRANSFER_KIND_TEXT|{}TRANSFER_KIND_TEXT[0]
+    final fun <get-TRANSFER_KIND_TEXT>(): kotlin/String // com.carlom.klardrop/TRANSFER_KIND_TEXT.<get-TRANSFER_KIND_TEXT>|<get-TRANSFER_KIND_TEXT>(){}[0]
+
+final fun com.carlom.klardrop.chat/openableUrlOrNull(kotlin/String): kotlin/String? // com.carlom.klardrop.chat/openableUrlOrNull|openableUrlOrNull(kotlin.String){}[0]
+final fun com.carlom.klardrop/platformFileFromPath(kotlin/String): io.github.vinceglb.filekit/PlatformFile // com.carlom.klardrop/platformFileFromPath|platformFileFromPath(kotlin.String){}[0]
+final fun com.carlom.klardrop/sharedFileFromPlatformFile(io.github.vinceglb.filekit/PlatformFile): com.carlom.klardrop.common.qrshare/SharedFile // com.carlom.klardrop/sharedFileFromPlatformFile|sharedFileFromPlatformFile(io.github.vinceglb.filekit.PlatformFile){}[0]
+
+// Targets: [apple]
+final class com.carlom.klardrop/KlardropBootstrap { // com.carlom.klardrop/KlardropBootstrap|null[0]
+    constructor <init>() // com.carlom.klardrop/KlardropBootstrap.<init>|<init>(){}[0]
+
+    final fun deviceChatViewModel(kotlin/String): com.carlom.klardrop.chat/DeviceChatViewModel // com.carlom.klardrop/KlardropBootstrap.deviceChatViewModel|deviceChatViewModel(kotlin.String){}[0]
+    final fun discoveryController(): com.carlom.klardrop/DiscoveryController // com.carlom.klardrop/KlardropBootstrap.discoveryController|discoveryController(){}[0]
+    final fun qrShareSession(): com.carlom.klardrop.common.qrshare/QrShareSession // com.carlom.klardrop/KlardropBootstrap.qrShareSession|qrShareSession(){}[0]
+    final fun updateBannerController(): com.carlom.klardrop/UpdateBannerController // com.carlom.klardrop/KlardropBootstrap.updateBannerController|updateBannerController(){}[0]
+
+    // Targets: [macosArm64]
+    constructor <init>(kotlin/Int = ...) // com.carlom.klardrop/KlardropBootstrap.<init>|<init>(kotlin.Int){}[0]
+
+    // Targets: [macosArm64]
+    final val klardrop // com.carlom.klardrop/KlardropBootstrap.klardrop|{}klardrop[0]
+        final fun <get-klardrop>(): com.carlom.klardrop.common/Klardrop // com.carlom.klardrop/KlardropBootstrap.klardrop.<get-klardrop>|<get-klardrop>(){}[0]
+}

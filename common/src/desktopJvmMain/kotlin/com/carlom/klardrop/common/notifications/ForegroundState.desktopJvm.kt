@@ -10,6 +10,6 @@ import kotlinx.coroutines.flow.asStateFlow
  * Hard-code [isForeground] = true to make the gate a no-op until we add a
  * real notifier.
  */
-actual class ForegroundState {
-  actual val isForeground: StateFlow<Boolean> = MutableStateFlow(true).asStateFlow()
+public actual class ForegroundState {
+  public actual val isForeground: StateFlow<Boolean> = MutableStateFlow(true).asStateFlow()
 }

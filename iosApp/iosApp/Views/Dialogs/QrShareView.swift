@@ -7,7 +7,8 @@ import presentation
 //
 // Displays a LAN HTTPS share session with a QR code generated via CoreImage
 // CIFilter(name: "CIQRCodeGenerator"), error correction M, quiet zone, and
-// always dark-on-light rendering. Collects session.state via SKIE StateFlow.
+// always dark-on-light rendering. Collects session.state via the swift-export
+// StateFlow bridge (.asAsyncSequence()).
 //
 // Mirrors components/QrShareSheet.kt.
 // ---------------------------------------------------------------------------
@@ -34,64 +35,64 @@ struct QrShareView: View {
     }
 
     private var currentUrl: String? {
-        switch onEnum(of: state) {
+        switch state.sealedType() {
         case .qrVisible(let s):
-            return s.url
+            return s.value.url
         case .serving(let s):
-            return s.qrStillVisible ? s.url : nil
+            return s.value.qrStillVisible ? s.value.url : nil
         default:
             return nil
         }
     }
 
     private var payloadSummary: String? {
-        switch onEnum(of: state) {
+        switch state.sealedType() {
         case .qrVisible(let s):
-            return s.payloadSummary.isEmpty ? nil : s.payloadSummary
+            return s.value.payloadSummary.isEmpty ? nil : s.value.payloadSummary
         default:
             return nil
         }
     }
 
     private var downloads: [QrDownloadProgress] {
-        switch onEnum(of: state) {
+        switch state.sealedType() {
         case .serving(let s):
-            return s.downloads
+            return s.value.downloads
         default:
             return []
         }
     }
 
     private var errorMessage: String? {
-        switch onEnum(of: state) {
+        switch state.sealedType() {
         case .failed(let s):
-            return s.message
+            return s.value.message
         default:
             return nil
         }
     }
 
     private var isFailed: Bool {
-        if case .failed = onEnum(of: state) { return true }
+        if case .failed = state.sealedType() { return true }
         return false
     }
 
     private var isStarting: Bool {
-        if case .starting = onEnum(of: state) { return true }
+        if case .starting = state.sealedType() { return true }
         return false
     }
 
     private var isIdle: Bool {
-        if case .idle = onEnum(of: state) { return true }
+        if case .idle = state.sealedType() { return true }
         return false
     }
 
     private var buttonLabel: String {
-        switch onEnum(of: state) {
+        switch state.sealedType() {
         case .failed:
             return "Dismiss"
         case .serving(let s):
-            if !s.downloads.isEmpty || !s.qrStillVisible {
+            if !s.value.downloads.isEmpty || !s.value.qrStillVisible {
                 return "Hide — keeps sending"
             }
             return "Dismiss"
@@ -200,7 +201,7 @@ struct QrShareView: View {
 
             // Primary CTA
             Button(action: {
-                if case .failed = onEnum(of: state) {
+                if case .failed = state.sealedType() {
                     session.cancel()
                 } else {
                     session.dismissQrSheet()
@@ -232,9 +233,11 @@ struct QrShareView: View {
             Spacer().frame(height: KdSpacing.s7)
         }
         .task {
-            for await next in session.state {
-                self.state = next
-            }
+            do {
+                for try await next in session.state.asAsyncSequence() {
+                    self.state = next
+                }
+            } catch {}
         }
         .task(id: currentUrl) {
             if let currentUrl, !currentUrl.isEmpty {

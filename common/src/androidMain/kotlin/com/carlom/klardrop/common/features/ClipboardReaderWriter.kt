@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.Context.CLIPBOARD_SERVICE
 import kotlinx.coroutines.flow.Flow
 
-actual class ClipboardReaderWriter(private val context: Context) : ClipboardSource {
+internal actual class ClipboardReaderWriter(private val context: Context) : ClipboardSource {
 
   private val clipManager by lazy { context.getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager }
 

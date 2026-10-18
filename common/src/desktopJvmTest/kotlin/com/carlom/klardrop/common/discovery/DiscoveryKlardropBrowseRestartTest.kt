@@ -271,7 +271,7 @@ class DiscoveryKlardropBrowseRestartTest {
  *  - the klardrop browse subscription count ([klardropBrowseSubscriptions]), and
  *  - a controllable [VisibleDevicesStub] for simulating silent-peer churn.
  */
-interface DiscoveryHarness {
+internal interface DiscoveryHarness {
   val discoveryNetwork: DiscoveryNetwork
   val visibleDevices: VisibleDevicesStub
 
@@ -299,7 +299,7 @@ interface DiscoveryHarness {
  *  - [BleTransport] is real and unsupported on this host (helper == null), so
  *    BLE advertise/scan are no-ops.
  */
-fun newDiscoveryHarness(testScope: TestScope): DiscoveryHarness {
+internal fun newDiscoveryHarness(testScope: TestScope): DiscoveryHarness {
   val coroutines = TestScopeCoroutines(testScope)
   val visible = VisibleDevicesStub()
 

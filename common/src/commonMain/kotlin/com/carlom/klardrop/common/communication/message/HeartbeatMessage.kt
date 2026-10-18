@@ -14,7 +14,7 @@ import kotlin.random.Random
  * connections far faster than the OS keep-alive default.
  */
 @Serializable
-data class PingMessage(
+internal data class PingMessage(
   override val id: Int = Random.nextInt(),
 ) : Message() {
   override val type: MessageType = MessageType.PING
@@ -22,8 +22,8 @@ data class PingMessage(
 }
 
 @Serializable
-data class PongMessage(
-  val pingId: Int,
+internal data class PongMessage(
+  internal val pingId: Int,
   override val id: Int = Random.nextInt(),
 ) : Message() {
   override val type: MessageType = MessageType.PONG

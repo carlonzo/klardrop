@@ -32,7 +32,7 @@ import kotlin.time.Duration.Companion.seconds
  * - Manage communication errors and retries
  * - Isolate TrustManager from networking concerns
  */
-class PairingProtocolCoordinator(
+public class PairingProtocolCoordinator public constructor(
     private val trustManager: TrustManager,
     private val messenger: Messenger
 ) {
@@ -45,14 +45,14 @@ class PairingProtocolCoordinator(
     )
 
     // Callback for when pairing is completed (for UI updates)
-    var onPairingCompleted: ((deviceId: String, deviceName: String, success: Boolean) -> Unit)? = null
+    public var onPairingCompleted: ((deviceId: String, deviceName: String, success: Boolean) -> Unit)? = null
 
     /**
      * Callback for when a pairing attempt failed, with the machine-readable reason from
      * [PairingEvent.PairingFailed]. Consumers (DiscoveryController) surface it to the user
      * as a per-device error message.
      */
-    var onPairingFailed: ((deviceId: String, reason: String) -> Unit)? = null
+    public var onPairingFailed: ((deviceId: String, reason: String) -> Unit)? = null
 
     /**
      * Emits whenever a verified peer revocation has been applied locally — typically because
@@ -61,9 +61,9 @@ class PairingProtocolCoordinator(
      * surface this to the user as a banner with Dismiss / Pair actions.
      */
     private val _peerRevokedTrust = MutableSharedFlow<PeerRevokedTrust>(extraBufferCapacity = 8)
-    val peerRevokedTrust: SharedFlow<PeerRevokedTrust> = _peerRevokedTrust.asSharedFlow()
+    public val peerRevokedTrust: SharedFlow<PeerRevokedTrust> = _peerRevokedTrust.asSharedFlow()
 
-    data class PeerRevokedTrust(val deviceId: String, val reason: String?)
+    public data class PeerRevokedTrust(public val deviceId: String, public val reason: String?)
 
     init {
         // Listen to pairing events from TrustManager
@@ -127,7 +127,7 @@ class PairingProtocolCoordinator(
      * verify, the reactive mismatch path in [MessagesRouter] will send them a fresh
      * revocation and heal the asymmetry.
      */
-    suspend fun unpair(targetDeviceId: String, reason: String? = null) {
+    public suspend fun unpair(targetDeviceId: String, reason: String? = null): Unit {
         log("PairingProtocolCoordinator", "unpair($targetDeviceId)")
         val revocation = trustManager.createRevocationMessage(targetDeviceId, reason)
         if (revocation != null) {
@@ -151,7 +151,7 @@ class PairingProtocolCoordinator(
      * Initiate pairing with a target device.
      * Delegates request creation to TrustManager and handles sending.
      */
-    suspend fun initiatePairing(targetDeviceId: String): Result<Unit> {
+    public suspend fun initiatePairing(targetDeviceId: String): Result<Unit> {
         println("🔐 [PairingProtocolCoordinator] initiatePairing() called for deviceId: $targetDeviceId")
         
         return try {

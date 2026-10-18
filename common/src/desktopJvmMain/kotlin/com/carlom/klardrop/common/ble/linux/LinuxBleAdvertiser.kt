@@ -8,7 +8,7 @@ import com.carlom.klardrop.common.discovery.CurrentDevice
  * re-registers, a stop without a start is a no-op, and a start/stop/start cycle
  * re-registers cleanly (the facade owns the exported object's lifecycle).
  */
-class LinuxBleAdvertiser(private val facade: BlueZFacade) {
+internal class LinuxBleAdvertiser(private val facade: BlueZFacade) {
 
   @Volatile private var advertising = false
 

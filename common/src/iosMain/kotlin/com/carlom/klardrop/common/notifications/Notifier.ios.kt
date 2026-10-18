@@ -40,13 +40,13 @@ import platform.darwin.NSObject
  * collected by the Kotlin/Native runtime.
  */
 @OptIn(ExperimentalForeignApi::class)
-actual class Notifier {
+public actual class Notifier {
 
   private val flow = MutableSharedFlow<NotificationAction>(
     extraBufferCapacity = 16,
     onBufferOverflow = BufferOverflow.DROP_OLDEST,
   )
-  actual val actions: Flow<NotificationAction> = flow.asSharedFlow()
+  public actual val actions: Flow<NotificationAction> = flow.asSharedFlow()
 
   private val center = UNUserNotificationCenter.currentNotificationCenter()
 
@@ -89,13 +89,13 @@ actual class Notifier {
     requestAuthorizationIfNeeded()
   }
 
-  actual fun show(notification: AppNotification) {
+  public actual fun show(notification: AppNotification): Unit {
     when (notification) {
       is AppNotification.IncomingPairing -> showIncomingPairing(notification)
     }
   }
 
-  actual fun cancel(id: String) {
+  public actual fun cancel(id: String): Unit {
     center.removeDeliveredNotificationsWithIdentifiers(listOf(id))
     center.removePendingNotificationRequestsWithIdentifiers(listOf(id))
   }

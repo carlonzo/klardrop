@@ -11,7 +11,7 @@ import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
  * propose a Wi-Fi join, and as a temporary fallback on iOS until NEHotspotConfiguration
  * lands.
  */
-class FallbackClipboardConnectionInfoJoiner(
+internal class FallbackClipboardConnectionInfoJoiner(
   private val clipboard: ClipboardReaderWriter,
 ) : ConnectionInfoJoiner {
   override suspend fun tryJoin(message: ConnectionInfoMessage): Boolean {

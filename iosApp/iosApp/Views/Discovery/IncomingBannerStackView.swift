@@ -37,7 +37,7 @@ struct IncomingBannerStackView: View {
             let hasConnectionInfo = update.messages.contains { $0 is ConnectionInfoMessage }
 
             let isPendingWithHeader: Bool
-            switch onEnum(of: update.status) {
+            switch update.status.sealedType() {
             case .pendingAuthorization:
                 isPendingWithHeader = hasRealHeader
             default:
@@ -52,7 +52,7 @@ struct IncomingBannerStackView: View {
 
     private var filteredNotifications: [UiNotification] {
         state.notifications.compactMap { n -> UiNotification? in
-            switch onEnum(of: n) {
+            switch n.sealedType() {
             case .peerRevokedTrust:
                 return n
             }
@@ -87,15 +87,15 @@ struct IncomingBannerStackView: View {
 
     @ViewBuilder
     private func systemNotificationView(_ notification: UiNotification) -> some View {
-        switch onEnum(of: notification) {
+        switch notification.sealedType() {
         case .peerRevokedTrust(let p):
             SystemNotificationCardView(
-                title: p.deviceName,
+                title: p.value.deviceName,
                 bodyText: "removed this device. You\u{2019}re no longer paired.",
                 primaryAction: "Pair",
-                onPrimary: { model.onNotificationPair(p.id) },
+                onPrimary: { model.onNotificationPair(p.value.id) },
                 secondaryAction: "Dismiss",
-                onSecondary: { model.onNotificationDismissed(p.id) }
+                onSecondary: { model.onNotificationDismissed(p.value.id) }
             )
         }
     }
@@ -126,7 +126,7 @@ private struct ReceiveCardView: View {
 
     @ViewBuilder
     private var cardContent: some View {
-        switch onEnum(of: update.status) {
+        switch update.status.sealedType() {
         case .pendingAuthorization(let pending):
             let firstFile = update.messages.compactMap { $0 as? FileMessage }.first
             let isText = firstFile == nil && update.messages.contains { $0 is TextMessage }
@@ -138,18 +138,18 @@ private struct ReceiveCardView: View {
                 subtitle: isText ? "wants to send you a message" : "wants to send you a file",
                 onAccept: {
                     // acceptTransfer is (PresentationBoolean *) -> Void — Bool auto-bridges.
-                    pending.acceptTransfer(true)
+                    pending.value.acceptTransfer(true)
                     model.onReceivedCardClicked(update)
                 },
                 onDecline: {
-                    pending.acceptTransfer(false)
+                    pending.value.acceptTransfer(false)
                     model.onCardDismissed(id)
                     withAnimation(.easeOut(duration: 0.2)) { visible = false }
                 }
             )
             .swipeActions(edge: .trailing) {
                 Button(role: .destructive) {
-                    pending.acceptTransfer(false)
+                    pending.value.acceptTransfer(false)
                     model.onCardDismissed(id)
                     withAnimation(.easeOut(duration: 0.2)) { visible = false }
                 } label: {
@@ -188,7 +188,7 @@ private struct ReceiveCardView: View {
     private let statusChangeTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     private func checkAutoHide() {
-        switch onEnum(of: update.status) {
+        switch update.status.sealedType() {
         case .completed, .failed:
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 withAnimation(.easeOut(duration: 0.2)) { visible = false }

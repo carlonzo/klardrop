@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.seconds
 
-actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
+internal actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
 
   actual override suspend fun selectIpv4(): String? = withContext(sharedNativeIoDispatcher) {
     selectLanAddress(enumerateInterfaces())

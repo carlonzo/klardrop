@@ -21,56 +21,56 @@ import kotlinx.io.files.Path
 import java.io.File
 
 
-actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
+public actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
-  actual fun getDownloadStoragePath(): Path {
+  internal actual fun getDownloadStoragePath(): Path {
     return FileKit.downloadDir.toKotlinxIoPath()
   }
 
-  actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
+  internal actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns()
   }
 
   private val networkLifecycleMonitor by lazy { NetworkLifecycleMonitor() }
 
-  actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
+  internal actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
-  actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
+  internal actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
     com.carlom.klardrop.common.qrshare.PlatformLanAddressSelector()
 
   private val permissionsMonitor by lazy { PermissionsMonitor() }
 
-  actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
+  internal actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
 
   private val connectivityRestrictionMonitor by lazy { ConnectivityRestrictionMonitor() }
 
-  actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
+  internal actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
 
   private val notifier by lazy { Notifier() }
 
-  actual fun notifier(): Notifier = notifier
+  internal actual fun notifier(): Notifier = notifier
 
   private val foregroundState by lazy { ForegroundState() }
 
-  actual fun foregroundState(): ForegroundState = foregroundState
+  internal actual fun foregroundState(): ForegroundState = foregroundState
 
   private val bleTransport by lazy { BleTransport() }
 
-  actual fun bleTransport(): BleTransport = bleTransport
+  internal actual fun bleTransport(): BleTransport = bleTransport
 
-  actual fun clipboardReaderWriter(): ClipboardReaderWriter {
+  internal actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter(useInMemory = applicationInfo.disableSystemClipboard)
   }
 
-  actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
+  internal actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
     return FallbackClipboardConnectionInfoJoiner(clipboardReaderWriter())
   }
 
-  actual fun driverFactory(): DriverFactory {
+  internal actual fun driverFactory(): DriverFactory {
     return DriverFactory(FileKit.databasesDir.toKotlinxIoPath(), applicationInfo.disablePersistence)
   }
 
-  actual fun trustStorage(): TrustStorage {
+  internal actual fun trustStorage(): TrustStorage {
     // When KLARDROP_HOME env or klardrop.data.dir system property is set (e.g. by the CLI
     // --data-dir flag), root trust storage there so each process gets an isolated identity.
     // Otherwise fall back to the traditional ~/.klardrop directory.
@@ -85,7 +85,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     return DesktopTrustStorage(appDir)
   }
 
-  actual suspend fun openFile(filePath: String): Boolean {
+  internal actual suspend fun openFile(filePath: String): Boolean {
     return try {
       val file = File(filePath)
       if (file.exists()) {
@@ -103,7 +103,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     }
   }
 
-  actual suspend fun openUrl(url: String): Boolean {
+  internal actual suspend fun openUrl(url: String): Boolean {
     return try {
       if (!java.awt.Desktop.isDesktopSupported()) return false
       val desktop = java.awt.Desktop.getDesktop()
@@ -119,7 +119,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
   }
 
   // Desktop has no "media gallery" concept; rely on the regular Downloads-folder save.
-  actual suspend fun saveMediaToGallery(
+  internal actual suspend fun saveMediaToGallery(
     tempPath: Path,
     mimeType: String,
     displayName: String,

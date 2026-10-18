@@ -29,17 +29,17 @@ import kotlin.time.Duration.Companion.seconds
  * stuck writer, NOT a per-transfer budget: a transfer that keeps making progress
  * resets the counter every tick and is never closed regardless of its duration.
  */
-data class HeartbeatConfig(
-  val interval: Duration = 15.seconds,
-  val timeout: Duration = 5.seconds,
-  val enabled: Boolean = true,
+internal data class HeartbeatConfig(
+  internal val interval: Duration = 15.seconds,
+  internal val timeout: Duration = 5.seconds,
+  internal val enabled: Boolean = true,
   /**
    * Maximum number of consecutive heartbeat ticks during which the write lock is
    * held *continuously* (through the whole per-tick probe window) before the
    * connection is forcibly closed as wedged. A value ≤ 0 disables the bound
    * (legacy behaviour, not recommended).
    */
-  val maxConsecutiveSkips: Int = 12,
+  internal val maxConsecutiveSkips: Int = 12,
 ) {
   companion object {
     val DEFAULT = HeartbeatConfig()

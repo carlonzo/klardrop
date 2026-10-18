@@ -8,8 +8,8 @@ import kotlinx.coroutines.flow.emptyFlow
  * (`:desktopJvmMain`), so this only matters if `macosArm64()` is ever
  * re-enabled in `common/build.gradle.kts`. Until then, no-op.
  */
-actual class Notifier {
-  actual fun show(notification: AppNotification) = Unit
-  actual fun cancel(id: String) = Unit
-  actual val actions: Flow<NotificationAction> = emptyFlow()
+public actual class Notifier {
+  public actual fun show(notification: AppNotification): Unit = Unit
+  public actual fun cancel(id: String): Unit = Unit
+  public actual val actions: Flow<NotificationAction> = emptyFlow()
 }

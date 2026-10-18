@@ -19,15 +19,15 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-interface VisibleDevices {
+public interface VisibleDevices {
 
-  val visibleDevices: StateFlow<Map<String, DiscoveryDevice>>
+  public val visibleDevices: StateFlow<Map<String, DiscoveryDevice>>
 
-  suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection)
+  public suspend fun onNewDeviceVisible(deviceInfo: DeviceInfo, deviceConnection: DeviceConnection): Unit
 
-  fun isDeviceVisible(deviceId: String): Boolean
+  public fun isDeviceVisible(deviceId: String): Boolean
 
-  fun getDevice(deviceId: String): DiscoveryDevice?
+  public fun getDevice(deviceId: String): DiscoveryDevice?
 
   /**
    * Best-effort lookup of a previously-seen friendly name for [deviceId], even if the
@@ -36,7 +36,7 @@ interface VisibleDevices {
    * have never learned a real name (e.g. only a placeholder shortId snapshot, or the cache
    * is cold). Caller is expected to fall back to the deviceId or a generic label.
    */
-  fun cachedNameFor(deviceId: String): String?
+  public fun cachedNameFor(deviceId: String): String?
 
   /**
    * Refresh [DiscoveryDevice.lastSeenTimestamp] for [deviceId] so the periodic stale-
@@ -47,12 +47,12 @@ interface VisibleDevices {
    *
    * No-op if [deviceId] isn't in the visible map.
    */
-  fun touchLastSeen(deviceId: String)
+  public fun touchLastSeen(deviceId: String): Unit
 
-  fun onDeviceLost(deviceId: String)
-  fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection)
+  public fun onDeviceLost(deviceId: String): Unit
+  public fun onDeviceLost(deviceId: String, deviceConnectionToRemove: DeviceConnection): Unit
 
-  fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice?
+  public fun findDeviceByAddress(address: InetSocketAddress): DiscoveryDevice?
 
   /**
    * Remove a specific [KlardropConnection] endpoint (address+port) from the cached device
@@ -64,11 +64,11 @@ interface VisibleDevices {
    *
    * No-op when [deviceId] is unknown or the endpoint is not cached.
    */
-  fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int)
+  public fun invalidateKlardropEndpoint(deviceId: String, address: String, port: Int): Unit
 
 }
 
-class VisibleDevicesImpl(
+internal class VisibleDevicesImpl(
   private val coroutines: Coroutines,
   private val clock: Clock,
   /**

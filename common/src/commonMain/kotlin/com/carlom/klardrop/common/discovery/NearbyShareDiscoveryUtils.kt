@@ -14,7 +14,7 @@ import com.google.security.cryptauth.lib.securegcm.DeviceType.UNKNOWN
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
-class NearbyShareDiscoveryUtils {
+internal class NearbyShareDiscoveryUtils {
 
   fun getRegisterServiceInfo(port: Int, currentDevice: CurrentDevice): RegisterServiceInfo {
 
@@ -147,7 +147,7 @@ class NearbyShareDiscoveryUtils {
 
 // internal: keep the ukey2 `securegcm.DeviceType` out of the exported Obj-C/Swift API.
 // A public extension on it would drag the receiver type into the framework, colliding with
-// the project's own `DeviceType` and making SKIE namespace (hide) the whole module's enums.
+// the project's own `DeviceType` and forcing the exporter to namespace (hide) the module's enums.
 internal fun com.google.security.cryptauth.lib.securegcm.DeviceType?.toDeviceType(): DeviceType {
   return when (this) {
     ANDROID, IOS -> DeviceType.MOBILE
@@ -226,7 +226,7 @@ internal fun String.isCgnatIpv4(): Boolean {
  *
  * From "Izc3Nzf8n14AAA (2)" to "Izc3Nzf8n14AAA"
  */
-fun ServiceInfo.serviceNameClean(): String {
+internal fun ServiceInfo.serviceNameClean(): String {
   val name = serviceName
 
   return if (name.endsWith(")")) {

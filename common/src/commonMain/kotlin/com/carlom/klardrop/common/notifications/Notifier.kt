@@ -19,10 +19,10 @@ import kotlinx.coroutines.flow.Flow
  * Platforms with no notification surface wire up no-op implementations and
  * an empty [actions] flow.
  */
-expect class Notifier {
-  fun show(notification: AppNotification)
-  fun cancel(id: String)
-  val actions: Flow<NotificationAction>
+public expect class Notifier {
+  public fun show(notification: AppNotification): Unit
+  public fun cancel(id: String): Unit
+  public val actions: Flow<NotificationAction>
 }
 
 /**
@@ -30,18 +30,18 @@ expect class Notifier {
  * shape so platform code can pick the right category / channel / sound and
  * the right set of action buttons without parsing free-form text.
  */
-sealed interface AppNotification {
-  val id: String
+public sealed interface AppNotification {
+  public val id: String
 
   /**
    * Another device is asking to pair (trust handshake). Only fired while the
    * app is backgrounded — the in-app [com.carlom.klardrop.PairingApprovalDialog]
    * handles foreground requests.
    */
-  data class IncomingPairing(
+  public data class IncomingPairing(
     override val id: String,
-    val deviceId: String,
-    val deviceName: String,
+    public val deviceId: String,
+    public val deviceName: String,
   ) : AppNotification
 }
 
@@ -51,21 +51,21 @@ sealed interface AppNotification {
  * through [Notifier.actions]; the consumer matches by [notificationId] to
  * the [AppNotification] that produced it.
  */
-sealed interface NotificationAction {
-  val notificationId: String
+public sealed interface NotificationAction {
+  public val notificationId: String
 
   /** User tapped the notification body. Open the app to the relevant screen. */
-  data class Opened(override val notificationId: String) : NotificationAction
+  public data class Opened(override val notificationId: String) : NotificationAction
 
   /** User accepted a pairing request from the notification. */
-  data class PairingAccepted(
+  public data class PairingAccepted(
     override val notificationId: String,
-    val deviceId: String,
+    public val deviceId: String,
   ) : NotificationAction
 
   /** User rejected a pairing request from the notification. */
-  data class PairingRejected(
+  public data class PairingRejected(
     override val notificationId: String,
-    val deviceId: String,
+    public val deviceId: String,
   ) : NotificationAction
 }

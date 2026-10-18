@@ -12,6 +12,6 @@ import kotlinx.coroutines.flow.StateFlow
  *  - iOS: [platform.UIKit.UIApplication.applicationState] == active.
  *  - Desktop JVM: any window has focus (or always-true if we don't care).
  */
-expect class ForegroundState {
-  val isForeground: StateFlow<Boolean>
+public expect class ForegroundState {
+  public val isForeground: StateFlow<Boolean>
 }

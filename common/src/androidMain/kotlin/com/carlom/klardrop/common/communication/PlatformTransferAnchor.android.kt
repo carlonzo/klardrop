@@ -6,4 +6,4 @@ package com.carlom.klardrop.common.communication
  * from `common` alone (a bare wake lock without a foreground component wouldn't stop the process
  * from being frozen), so this stays a no-op.
  */
-actual fun platformTransferAnchor(): TransferAnchor = TransferAnchor.None
+public actual fun platformTransferAnchor(): TransferAnchor = TransferAnchor.None

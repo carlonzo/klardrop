@@ -12,12 +12,12 @@ import com.carlom.klardrop.common.communication.message.FileMessage
 import com.carlom.klardrop.common.communication.message.SendMessageRequest
 import com.carlom.klardrop.common.database.File_transfers
 import com.carlom.klardrop.common.features.ClipboardManager
-import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.persistence.ChatMessage
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageType
 import com.carlom.klardrop.common.persistence.SendStatus
+import com.carlom.klardrop.common.receiver.MessageProgress
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
@@ -111,8 +111,6 @@ class DeviceChatViewModelTest {
   private class FakeConnectionsPool(private val available: Boolean) : ConnectionsPool {
     override val reachability: StateFlow<Map<String, Reachability>> = MutableStateFlow(emptyMap())
     override suspend fun isAvailable(deviceId: String): Boolean = available
-    override suspend fun updateConnection(deviceId: String, connectionMessenger: com.carlom.klardrop.common.communication.ConnectionMessenger) = error("not used by this test")
-    override suspend fun getConnection(deviceId: String): com.carlom.klardrop.common.communication.ConnectionMessenger? = error("not used by this test")
     override suspend fun closeAllConnections() = error("not used by this test")
     override suspend fun closeConnection(deviceId: String) = error("not used by this test")
     override fun markProbing(deviceId: String) = error("not used by this test")
@@ -208,7 +206,7 @@ class DeviceChatViewModelTest {
     coroutines = testCoroutines,
     fileManager = FakeFileManager(),
     platformFileSystem = FakePlatformFileSystem(fileSize = 1_000L),
-    clipboardManager = ClipboardManager(testCoroutines, ClipboardReaderWriter()),
+    clipboardManager = ClipboardManager(testCoroutines),
     reachabilitySource = MutableStateFlow(emptyMap()),
   )
 
@@ -270,11 +268,11 @@ class DeviceChatViewModelTest {
 
     val header = FileMessage(fileName = "photo.jpg", fileSize = 1_000L, mimeType = "image/jpeg")
 
-    messageReceiver.push(deviceId, ReceiveMessageUpdate(status = ReceiveMessageStatus.Progress(listOf(header to 40))))
+    messageReceiver.push(deviceId, ReceiveMessageUpdate(status = ReceiveMessageStatus.Progress(listOf(MessageProgress(header, 40)))))
     advanceUntilIdle()
     assertEquals(0.4f, vm.uiState.value.fileTransferProgress)
 
-    messageReceiver.push(deviceId, ReceiveMessageUpdate(status = ReceiveMessageStatus.Progress(listOf(header to 90))))
+    messageReceiver.push(deviceId, ReceiveMessageUpdate(status = ReceiveMessageStatus.Progress(listOf(MessageProgress(header, 90)))))
     advanceUntilIdle()
     assertEquals(0.9f, vm.uiState.value.fileTransferProgress)
 
@@ -346,7 +344,7 @@ class DeviceChatViewModelTest {
       coroutines = testCoroutines,
       fileManager = FakeFileManager(),
       platformFileSystem = ThrowingPlatformFileSystem(),
-      clipboardManager = ClipboardManager(testCoroutines, ClipboardReaderWriter()),
+      clipboardManager = ClipboardManager(testCoroutines),
       reachabilitySource = MutableStateFlow(emptyMap()),
     )
 
@@ -365,7 +363,7 @@ class DeviceChatViewModelTest {
     advanceUntilIdle()
 
     val header = FileMessage(fileName = "photo.jpg", fileSize = 1_000L, mimeType = "image/jpeg")
-    messageReceiver.push("some-other-device", ReceiveMessageUpdate(status = ReceiveMessageStatus.Progress(listOf(header to 40))))
+    messageReceiver.push("some-other-device", ReceiveMessageUpdate(status = ReceiveMessageStatus.Progress(listOf(MessageProgress(header, 40)))))
     advanceUntilIdle()
 
     assertNull(vm.uiState.value.fileTransferProgress)

@@ -10,7 +10,7 @@ import io.ktor.network.sockets.InetSocketAddress
  * Accessing `.hostname` triggers reverse DNS and returns the peer's local hostname (e.g. "omarchy"),
  * which other devices on the LAN cannot resolve via standard unicast DNS.
  */
-fun InetSocketAddress.extractNumericHost(): String {
+internal fun InetSocketAddress.extractNumericHost(): String {
   val str = toString()
   val withoutSlash = if ("/" in str) str.substringAfter("/") else str
   val host = if (":" in withoutSlash) withoutSlash.substringBeforeLast(":") else withoutSlash

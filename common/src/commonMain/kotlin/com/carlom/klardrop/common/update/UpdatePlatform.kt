@@ -8,9 +8,9 @@ package com.carlom.klardrop.common.update
  * The implementation parses with the explicit `LatestManifest.serializer()` so
  * minified release builds fail loudly at keep-time, not silently at runtime.
  */
-fun interface UpdateManifestFetcher {
+public fun interface UpdateManifestFetcher {
   /** GET + parse [url]; returns null on any network/parse failure. */
-  suspend fun fetch(url: String): LatestManifest?
+  public suspend fun fetch(url: String): LatestManifest?
 }
 
 /**
@@ -18,25 +18,25 @@ fun interface UpdateManifestFetcher {
  * the system package DBs; mobile always returns [InstallChannel.UNKNOWN].
  * May run short-lived subprocesses, so callers should invoke it off the main thread.
  */
-expect fun detectInstallChannel(): InstallChannel
+internal expect fun detectInstallChannel(): InstallChannel
 
 /**
  * The platform's manifest fetcher, or null on platforms that don't support
  * in-app update checks (Android/iOS update through their stores).
  */
-expect fun createUpdateManifestFetcher(): UpdateManifestFetcher?
+internal expect fun createUpdateManifestFetcher(): UpdateManifestFetcher?
 
 /**
  * The platform's release asset key in latest.json ("linux-tarball" on JVM,
  * "linux-native-x64"/"linux-native-arm64" on native linux, per runtime arch).
  */
-expect val platformUpdateAssetKey: String
+internal expect val platformUpdateAssetKey: String
 
 /**
  * Detect the platform's installation flavor flag for fallback reinstall commands
  * (e.g. "--qt", "--omarchy", or "--native" on native Linux). Returns null when
  * not applicable (JVM / mobile).
  */
-expect fun detectPlatformFlavorFlag(): String?
+internal expect fun detectPlatformFlavorFlag(): String?
 
 

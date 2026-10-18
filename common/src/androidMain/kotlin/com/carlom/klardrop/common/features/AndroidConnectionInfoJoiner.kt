@@ -19,7 +19,7 @@ import com.carlom.klardrop.common.utils.log
  * Requires `ACCESS_WIFI_STATE` and `CHANGE_WIFI_STATE` permissions (declared in
  * androidMain/AndroidManifest.xml).
  */
-class AndroidConnectionInfoJoiner(
+internal class AndroidConnectionInfoJoiner(
   private val context: Context,
   private val clipboardReaderWriter: ClipboardReaderWriter,
 ) : ConnectionInfoJoiner {

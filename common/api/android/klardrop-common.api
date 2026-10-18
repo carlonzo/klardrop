@@ -1,0 +1,1839 @@
+public final class com/carlom/klardrop/common/ApplicationInfo {
+	public fun <init> ()V
+	public fun <init> (ZZZZZZLjava/lang/Integer;Ljava/lang/String;)V
+	public synthetic fun <init> (ZZZZZZLjava/lang/Integer;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun component7 ()Ljava/lang/Integer;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun copy (ZZZZZZLjava/lang/Integer;Ljava/lang/String;)Lcom/carlom/klardrop/common/ApplicationInfo;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/ApplicationInfo;ZZZZZZLjava/lang/Integer;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/ApplicationInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAppVersion ()Ljava/lang/String;
+	public final fun getControlPort ()Ljava/lang/Integer;
+	public final fun getDisablePersistence ()Z
+	public final fun getDisableSystemClipboard ()Z
+	public final fun getEnableBle ()Z
+	public final fun getEnableKlardropServer ()Z
+	public final fun getEnableNearbyServer ()Z
+	public fun hashCode ()I
+	public final fun isDebug ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/CommonPlatformDependencies {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/CommonPlatformDependencies;
+	public final fun deviceType ()Lcom/carlom/klardrop/common/utils/DeviceType;
+	public final fun getDeviceName ()Ljava/lang/String;
+	public final fun osType ()Lcom/carlom/klardrop/common/utils/OsType;
+}
+
+public abstract interface class com/carlom/klardrop/common/FileManager {
+	public abstract fun getReadStreamFrom (Lio/github/vinceglb/filekit/PlatformFile;)Lkotlinx/io/RawSource;
+	public abstract fun openFile (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun openUrl (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun prepareSaveFile (Ljava/lang/String;Ljava/lang/String;)Lcom/carlom/klardrop/common/FileTransfer;
+}
+
+public abstract interface class com/carlom/klardrop/common/FileTransfer {
+	public abstract fun getBufferedSink ()Lkotlinx/io/Sink;
+	public abstract fun onTransferCompleted (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun onTransferFailed (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/InternalPlatformDependencies {
+	public fun <init> (Landroid/content/Context;Lcom/carlom/klardrop/common/ApplicationInfo;)V
+}
+
+public final class com/carlom/klardrop/common/Klardrop {
+	public field commonComponent Lcom/carlom/klardrop/common/di/CommonComponent;
+	public fun <init> (Lcom/carlom/klardrop/common/ApplicationInfo;Lcom/carlom/klardrop/common/InternalPlatformDependencies;Lcom/carlom/klardrop/common/communication/TransferAnchor;)V
+	public synthetic fun <init> (Lcom/carlom/klardrop/common/ApplicationInfo;Lcom/carlom/klardrop/common/InternalPlatformDependencies;Lcom/carlom/klardrop/common/communication/TransferAnchor;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun closeIdleConnections (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getCommonComponent ()Lcom/carlom/klardrop/common/di/CommonComponent;
+	public final fun init ()V
+	public final fun setCommonComponent (Lcom/carlom/klardrop/common/di/CommonComponent;)V
+	public final fun setDiscoveryMode (Lcom/carlom/klardrop/common/Klardrop$DiscoveryMode;)V
+	public final fun trustedDevices ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun updateInstallProgress ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun updateStatus ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun visibleDevices ()Lcom/carlom/klardrop/common/discovery/VisibleDevices;
+}
+
+public final class com/carlom/klardrop/common/Klardrop$DiscoveryMode : java/lang/Enum {
+	public static final field BACKGROUND Lcom/carlom/klardrop/common/Klardrop$DiscoveryMode;
+	public static final field FOREGROUND Lcom/carlom/klardrop/common/Klardrop$DiscoveryMode;
+	public static final field OFF Lcom/carlom/klardrop/common/Klardrop$DiscoveryMode;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/Klardrop$DiscoveryMode;
+	public static fun values ()[Lcom/carlom/klardrop/common/Klardrop$DiscoveryMode;
+}
+
+public final class com/carlom/klardrop/common/KlardropVersion {
+	public static final field APP_NAME Ljava/lang/String;
+	public static final field INSTANCE Lcom/carlom/klardrop/common/KlardropVersion;
+	public static final field IS_LOCAL_BUILD Z
+	public static final field SENTRY_DSN Ljava/lang/String;
+	public static final field UPDATE_CHANNEL Ljava/lang/String;
+	public static final field VERSION Ljava/lang/String;
+}
+
+public abstract interface class com/carlom/klardrop/common/communication/Client {
+	public fun close ()V
+	public abstract fun connectTo (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/communication/Client$DefaultImpls {
+	public static fun close (Lcom/carlom/klardrop/common/communication/Client;)V
+}
+
+public abstract interface class com/carlom/klardrop/common/communication/ConnectOutcome {
+}
+
+public final class com/carlom/klardrop/common/communication/ConnectOutcome$Connected : com/carlom/klardrop/common/communication/ConnectOutcome {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/ConnectOutcome$Connected;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/ConnectOutcome$Failed : com/carlom/klardrop/common/communication/ConnectOutcome {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/ConnectOutcome$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/ConnectOutcome$NotInitiated : com/carlom/klardrop/common/communication/ConnectOutcome {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/ConnectOutcome$NotInitiated;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/carlom/klardrop/common/communication/ConnectionsPool {
+	public abstract fun closeAllConnections (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun closeConnection (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getReachability ()Lkotlinx/coroutines/flow/StateFlow;
+	public abstract fun isAvailable (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun markProbing (Ljava/lang/String;)V
+	public abstract fun markUnreachable (Ljava/lang/String;)V
+}
+
+public abstract interface class com/carlom/klardrop/common/communication/Messenger {
+	public abstract fun receive ()Lkotlinx/coroutines/flow/Flow;
+	public abstract fun send (Ljava/lang/String;Lcom/carlom/klardrop/common/communication/message/SendMessageRequest;)Lkotlinx/coroutines/flow/Flow;
+}
+
+public final class com/carlom/klardrop/common/communication/MessengerKt {
+	public static final fun untilCompleted (Lkotlinx/coroutines/flow/Flow;)Lkotlinx/coroutines/flow/Flow;
+}
+
+public abstract interface class com/carlom/klardrop/common/communication/MessengerSendProgress {
+	public fun isCompleted ()Z
+}
+
+public final class com/carlom/klardrop/common/communication/MessengerSendProgress$AwaitingRecipient : com/carlom/klardrop/common/communication/MessengerSendProgress {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/MessengerSendProgress$AwaitingRecipient;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun isCompleted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/MessengerSendProgress$Completed : com/carlom/klardrop/common/communication/MessengerSendProgress {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/MessengerSendProgress$Completed;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun isCompleted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/MessengerSendProgress$DefaultImpls {
+	public static fun isCompleted (Lcom/carlom/klardrop/common/communication/MessengerSendProgress;)Z
+}
+
+public final class com/carlom/klardrop/common/communication/MessengerSendProgress$Error : com/carlom/klardrop/common/communication/MessengerSendProgress {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lcom/carlom/klardrop/common/communication/MessengerSendProgress$Error;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/communication/MessengerSendProgress$Error;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/communication/MessengerSendProgress$Error;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun isCompleted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/MessengerSendProgress$InProgress : com/carlom/klardrop/common/communication/MessengerSendProgress {
+	public fun <init> (IJJ)V
+	public synthetic fun <init> (IJJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun copy (IJJ)Lcom/carlom/klardrop/common/communication/MessengerSendProgress$InProgress;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/communication/MessengerSendProgress$InProgress;IJJILjava/lang/Object;)Lcom/carlom/klardrop/common/communication/MessengerSendProgress$InProgress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBytesTransferred ()J
+	public final fun getPercentage ()I
+	public final fun getTotalBytes ()J
+	public fun hashCode ()I
+	public fun isCompleted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/MessengerSendProgress$Pending : com/carlom/klardrop/common/communication/MessengerSendProgress {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/MessengerSendProgress$Pending;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun isCompleted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/PlatformTransferAnchor_androidKt {
+	public static final fun platformTransferAnchor ()Lcom/carlom/klardrop/common/communication/TransferAnchor;
+}
+
+public abstract interface class com/carlom/klardrop/common/communication/Reachability {
+}
+
+public final class com/carlom/klardrop/common/communication/Reachability$Probing : com/carlom/klardrop/common/communication/Reachability {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/Reachability$Probing;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/Reachability$Reachable : com/carlom/klardrop/common/communication/Reachability {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/Reachability$Reachable;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/Reachability$Unknown : com/carlom/klardrop/common/communication/Reachability {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/Reachability$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/Reachability$Unreachable : com/carlom/klardrop/common/communication/Reachability {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/Reachability$Unreachable;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/Server {
+	public final fun startServer (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun stopServer ()V
+}
+
+public final class com/carlom/klardrop/common/communication/Server$ServerConfig {
+	public fun <init> (Ljava/lang/String;I)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun copy (Ljava/lang/String;I)Lcom/carlom/klardrop/common/communication/Server$ServerConfig;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/communication/Server$ServerConfig;Ljava/lang/String;IILjava/lang/Object;)Lcom/carlom/klardrop/common/communication/Server$ServerConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHost ()Ljava/lang/String;
+	public final fun getPort ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/carlom/klardrop/common/communication/TransferAnchor {
+	public static final field Companion Lcom/carlom/klardrop/common/communication/TransferAnchor$Companion;
+	public abstract fun begin (Ljava/lang/String;Ljava/lang/String;Lcom/carlom/klardrop/common/communication/TransferAnchor$Direction;)V
+	public abstract fun end (Ljava/lang/String;)V
+	public abstract fun progress (Ljava/lang/String;I)V
+}
+
+public final class com/carlom/klardrop/common/communication/TransferAnchor$Companion {
+	public final fun getNone ()Lcom/carlom/klardrop/common/communication/TransferAnchor;
+}
+
+public final class com/carlom/klardrop/common/communication/TransferAnchor$Direction : java/lang/Enum {
+	public static final field INCOMING Lcom/carlom/klardrop/common/communication/TransferAnchor$Direction;
+	public static final field OUTGOING Lcom/carlom/klardrop/common/communication/TransferAnchor$Direction;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/communication/TransferAnchor$Direction;
+	public static fun values ()[Lcom/carlom/klardrop/common/communication/TransferAnchor$Direction;
+}
+
+public final class com/carlom/klardrop/common/communication/message/ConnectionInfoMessage : com/carlom/klardrop/common/communication/message/Message {
+	public static final field Companion Lcom/carlom/klardrop/common/communication/message/ConnectionInfoMessage$Companion;
+	public fun <init> (Lcom/carlom/klardrop/common/communication/message/ConnectionKind;Ljava/lang/String;Ljava/lang/String;ZI)V
+	public synthetic fun <init> (Lcom/carlom/klardrop/common/communication/message/ConnectionKind;Ljava/lang/String;Ljava/lang/String;ZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Z
+	public final fun component5 ()I
+	public final fun copy (Lcom/carlom/klardrop/common/communication/message/ConnectionKind;Ljava/lang/String;Ljava/lang/String;ZI)Lcom/carlom/klardrop/common/communication/message/ConnectionInfoMessage;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/communication/message/ConnectionInfoMessage;Lcom/carlom/klardrop/common/communication/message/ConnectionKind;Ljava/lang/String;Ljava/lang/String;ZIILjava/lang/Object;)Lcom/carlom/klardrop/common/communication/message/ConnectionInfoMessage;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getHasPayload ()Z
+	public final fun getHidden ()Z
+	public fun getId ()I
+	public final fun getKind ()Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+	public final fun getPassword ()Ljava/lang/String;
+	public final fun getSsid ()Ljava/lang/String;
+	public fun getType ()Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/carlom/klardrop/common/communication/message/ConnectionInfoMessage$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/message/ConnectionInfoMessage$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/carlom/klardrop/common/communication/message/ConnectionInfoMessage;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/carlom/klardrop/common/communication/message/ConnectionInfoMessage;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/communication/message/ConnectionInfoMessage$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/communication/message/ConnectionKind : java/lang/Enum {
+	public static final field Companion Lcom/carlom/klardrop/common/communication/message/ConnectionKind$Companion;
+	public static final field WIFI_OPEN Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+	public static final field WIFI_WEP Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+	public static final field WIFI_WPA Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+	public static final field WIFI_WPA2 Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+	public static final field WIFI_WPA3 Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+	public static final field WIFI_WPA_ENTERPRISE Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+	public static fun values ()[Lcom/carlom/klardrop/common/communication/message/ConnectionKind;
+}
+
+public final class com/carlom/klardrop/common/communication/message/ConnectionKind$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/communication/message/FileMessage : com/carlom/klardrop/common/communication/message/Message {
+	public static final field Companion Lcom/carlom/klardrop/common/communication/message/FileMessage$Companion;
+	public fun <init> (Ljava/lang/String;JLjava/lang/String;[BI)V
+	public synthetic fun <init> (Ljava/lang/String;JLjava/lang/String;[BIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()[B
+	public final fun component5 ()I
+	public final fun copy (Ljava/lang/String;JLjava/lang/String;[BI)Lcom/carlom/klardrop/common/communication/message/FileMessage;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/communication/message/FileMessage;Ljava/lang/String;JLjava/lang/String;[BIILjava/lang/Object;)Lcom/carlom/klardrop/common/communication/message/FileMessage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContentHash ()[B
+	public final fun getFileName ()Ljava/lang/String;
+	public final fun getFileSize ()J
+	public fun getHasPayload ()Z
+	public fun getId ()I
+	public final fun getMimeType ()Ljava/lang/String;
+	public fun getType ()Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/carlom/klardrop/common/communication/message/FileMessage$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/message/FileMessage$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/carlom/klardrop/common/communication/message/FileMessage;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/carlom/klardrop/common/communication/message/FileMessage;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/communication/message/FileMessage$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/communication/message/FileMessage$FileSendRequest : com/carlom/klardrop/common/communication/message/SendMessageRequest {
+	public fun <init> (Lcom/carlom/klardrop/common/communication/message/FileMessage;Lio/github/vinceglb/filekit/PlatformFile;)V
+	public final fun component1 ()Lcom/carlom/klardrop/common/communication/message/FileMessage;
+	public final fun component2 ()Lio/github/vinceglb/filekit/PlatformFile;
+	public final fun copy (Lcom/carlom/klardrop/common/communication/message/FileMessage;Lio/github/vinceglb/filekit/PlatformFile;)Lcom/carlom/klardrop/common/communication/message/FileMessage$FileSendRequest;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/communication/message/FileMessage$FileSendRequest;Lcom/carlom/klardrop/common/communication/message/FileMessage;Lio/github/vinceglb/filekit/PlatformFile;ILjava/lang/Object;)Lcom/carlom/klardrop/common/communication/message/FileMessage$FileSendRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFile ()Lio/github/vinceglb/filekit/PlatformFile;
+	public fun getMessage ()Lcom/carlom/klardrop/common/communication/message/FileMessage;
+	public synthetic fun getMessage ()Lcom/carlom/klardrop/common/communication/message/Message;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/communication/message/FileMessageKt {
+	public static final fun toSendRequest (Lcom/carlom/klardrop/common/communication/message/FileMessage;Lio/github/vinceglb/filekit/PlatformFile;)Lcom/carlom/klardrop/common/communication/message/FileMessage$FileSendRequest;
+}
+
+public final class com/carlom/klardrop/common/communication/message/InterfacesKt {
+	public static final fun toSimpleSendRequest (Lcom/carlom/klardrop/common/communication/message/Message;)Lcom/carlom/klardrop/common/communication/message/SendMessageRequest;
+}
+
+public abstract class com/carlom/klardrop/common/communication/message/Message {
+	public abstract fun getHasPayload ()Z
+	public fun getId ()I
+	public abstract fun getType ()Lcom/carlom/klardrop/common/communication/message/MessageType;
+}
+
+public final class com/carlom/klardrop/common/communication/message/MessageType : java/lang/Enum {
+	public static final field ACK_AWAITING_USER Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field ACK_READY Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field ACK_RECEIVED Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field ACK_REJECTED Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field CLIPBOARD_SYNC Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field CONNECTION_INFO Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field FILE Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field FILE_CHUNK Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field HANDSHAKE Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field PING Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field PONG Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field TEXT Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field TRUSTED_MESSAGE Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field TRUST_PAIRING_REQUEST Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field TRUST_PAIRING_RESPONSE Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static final field TRUST_REVOCATION Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getId ()B
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public static fun values ()[Lcom/carlom/klardrop/common/communication/message/MessageType;
+}
+
+public abstract interface class com/carlom/klardrop/common/communication/message/SendMessageRequest {
+	public abstract fun getMessage ()Lcom/carlom/klardrop/common/communication/message/Message;
+}
+
+public final class com/carlom/klardrop/common/communication/message/TextMessage : com/carlom/klardrop/common/communication/message/Message {
+	public static final field Companion Lcom/carlom/klardrop/common/communication/message/TextMessage$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;I)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;I)Lcom/carlom/klardrop/common/communication/message/TextMessage;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/communication/message/TextMessage;Ljava/lang/String;Ljava/lang/String;IILjava/lang/Object;)Lcom/carlom/klardrop/common/communication/message/TextMessage;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getHasPayload ()Z
+	public fun getId ()I
+	public final fun getText ()Ljava/lang/String;
+	public final fun getTitle ()Ljava/lang/String;
+	public fun getType ()Lcom/carlom/klardrop/common/communication/message/MessageType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/carlom/klardrop/common/communication/message/TextMessage$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/communication/message/TextMessage$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/carlom/klardrop/common/communication/message/TextMessage;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/carlom/klardrop/common/communication/message/TextMessage;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/communication/message/TextMessage$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public class com/carlom/klardrop/common/communication/router/IncomingAuthorizer {
+	public final fun clearFirstContact (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/connectivity/ConnectivityRestriction : java/lang/Enum {
+	public static final field BatteryOptimizationNotExempt Lcom/carlom/klardrop/common/connectivity/ConnectivityRestriction;
+	public static final field BatterySaverBlocking Lcom/carlom/klardrop/common/connectivity/ConnectivityRestriction;
+	public static final field MeteredNetworkDenied Lcom/carlom/klardrop/common/connectivity/ConnectivityRestriction;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/connectivity/ConnectivityRestriction;
+	public static fun values ()[Lcom/carlom/klardrop/common/connectivity/ConnectivityRestriction;
+}
+
+public final class com/carlom/klardrop/common/connectivity/ConnectivityRestrictionMonitor {
+	public fun <init> (Landroid/content/Context;Lcom/carlom/klardrop/common/notifications/ForegroundState;)V
+	public final fun observe ()Lkotlinx/coroutines/flow/Flow;
+	public final fun refresh ()V
+}
+
+public final class com/carlom/klardrop/common/connectivity/ConnectivityRestrictions {
+	public static final field Companion Lcom/carlom/klardrop/common/connectivity/ConnectivityRestrictions$Companion;
+	public fun <init> ()V
+	public fun <init> (ZZZ)V
+	public synthetic fun <init> (ZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun activeBlockerNotice ()Ljava/lang/String;
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun copy (ZZZ)Lcom/carlom/klardrop/common/connectivity/ConnectivityRestrictions;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/connectivity/ConnectivityRestrictions;ZZZILjava/lang/Object;)Lcom/carlom/klardrop/common/connectivity/ConnectivityRestrictions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActiveBlocker ()Lcom/carlom/klardrop/common/connectivity/ConnectivityRestriction;
+	public final fun getBatteryOptimizationNotExempt ()Z
+	public final fun getBatterySaverBlocking ()Z
+	public final fun getMeteredNetworkDenied ()Z
+	public final fun getReasons ()Ljava/util/Set;
+	public final fun getRestricted ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/connectivity/ConnectivityRestrictions$Companion {
+	public final fun derive (ZZZZ)Lcom/carlom/klardrop/common/connectivity/ConnectivityRestrictions;
+	public final fun getEMPTY ()Lcom/carlom/klardrop/common/connectivity/ConnectivityRestrictions;
+}
+
+public final class com/carlom/klardrop/common/database/File_transfers {
+	public fun <init> (JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;JJLjava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()J
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()J
+	public final fun component6 ()J
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun copy (JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;JJLjava/lang/String;Ljava/lang/String;)Lcom/carlom/klardrop/common/database/File_transfers;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/database/File_transfers;JLjava/lang/String;Ljava/lang/String;Ljava/lang/String;JJLjava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/database/File_transfers;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFile_name ()Ljava/lang/String;
+	public final fun getFile_path ()Ljava/lang/String;
+	public final fun getId ()J
+	public final fun getMime_type ()Ljava/lang/String;
+	public final fun getStatus ()Ljava/lang/String;
+	public final fun getTotal_size ()J
+	public final fun getTransferred_size ()J
+	public final fun getUuid ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/database/GetAllDevicesWithUnreadCounts {
+	public fun <init> (Ljava/lang/String;J)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()J
+	public final fun copy (Ljava/lang/String;J)Lcom/carlom/klardrop/common/database/GetAllDevicesWithUnreadCounts;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/database/GetAllDevicesWithUnreadCounts;Ljava/lang/String;JILjava/lang/Object;)Lcom/carlom/klardrop/common/database/GetAllDevicesWithUnreadCounts;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRemote_device_id ()Ljava/lang/String;
+	public final fun getUnread_count ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/database/Messages {
+	public fun <init> (JLjava/lang/String;Ljava/lang/String;JJLjava/lang/String;Ljava/lang/Long;JLjava/lang/String;Ljava/lang/String;Ljava/lang/Long;)V
+	public final fun component1 ()J
+	public final fun component10 ()Ljava/lang/String;
+	public final fun component11 ()Ljava/lang/Long;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()J
+	public final fun component5 ()J
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/Long;
+	public final fun component8 ()J
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (JLjava/lang/String;Ljava/lang/String;JJLjava/lang/String;Ljava/lang/Long;JLjava/lang/String;Ljava/lang/String;Ljava/lang/Long;)Lcom/carlom/klardrop/common/database/Messages;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/database/Messages;JLjava/lang/String;Ljava/lang/String;JJLjava/lang/String;Ljava/lang/Long;JLjava/lang/String;Ljava/lang/String;Ljava/lang/Long;ILjava/lang/Object;)Lcom/carlom/klardrop/common/database/Messages;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/String;
+	public final fun getFile_transfer_id ()Ljava/lang/Long;
+	public final fun getId ()J
+	public final fun getMessage_id ()Ljava/lang/Long;
+	public final fun getMessage_type ()Ljava/lang/String;
+	public final fun getMime_type ()Ljava/lang/String;
+	public final fun getRemote_device_id ()Ljava/lang/String;
+	public final fun getSend_status ()Ljava/lang/String;
+	public final fun getTimestamp ()J
+	public fun hashCode ()I
+	public final fun is_read ()J
+	public final fun is_sender ()J
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/di/CommonComponent {
+	public fun <init> (Lcom/carlom/klardrop/common/ApplicationInfo;Lcom/carlom/klardrop/common/InternalPlatformDependencies;Lcom/carlom/klardrop/common/communication/TransferAnchor;)V
+	public synthetic fun <init> (Lcom/carlom/klardrop/common/ApplicationInfo;Lcom/carlom/klardrop/common/InternalPlatformDependencies;Lcom/carlom/klardrop/common/communication/TransferAnchor;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun applicationInfo ()Lcom/carlom/klardrop/common/ApplicationInfo;
+	public final fun client ()Lcom/carlom/klardrop/common/communication/Client;
+	public final fun clipboardManager ()Lcom/carlom/klardrop/common/features/ClipboardManager;
+	public final fun connectionInfoJoiner ()Lcom/carlom/klardrop/common/features/ConnectionInfoJoiner;
+	public final fun connectionsPool ()Lcom/carlom/klardrop/common/communication/ConnectionsPool;
+	public final fun connectivityRestrictionMonitor ()Lcom/carlom/klardrop/common/connectivity/ConnectivityRestrictionMonitor;
+	public final fun coroutines ()Lcom/carlom/klardrop/common/utils/Coroutines;
+	public final fun currentDeviceProvider ()Lcom/carlom/klardrop/common/discovery/CurrentDeviceProvider;
+	public final fun fileManager ()Lcom/carlom/klardrop/common/FileManager;
+	public final fun foregroundState ()Lcom/carlom/klardrop/common/notifications/ForegroundState;
+	public final fun incomingAuthorizer ()Lcom/carlom/klardrop/common/communication/router/IncomingAuthorizer;
+	public final fun localPropertiesRepository ()Lcom/carlom/klardrop/common/persistence/LocalPropertiesRepository;
+	public final fun messageReceiver ()Lcom/carlom/klardrop/common/receiver/MessageReceiver;
+	public final fun messageRepository ()Lcom/carlom/klardrop/common/persistence/MessageRepository;
+	public final fun messenger ()Lcom/carlom/klardrop/common/communication/Messenger;
+	public final fun notifier ()Lcom/carlom/klardrop/common/notifications/Notifier;
+	public final fun openUrl (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun pairingProtocolCoordinator ()Lcom/carlom/klardrop/common/trust/PairingProtocolCoordinator;
+	public final fun permissionsMonitor ()Lcom/carlom/klardrop/common/permissions/PermissionsMonitor;
+	public final fun platformFileSystem ()Lcom/carlom/klardrop/common/utils/PlatformFileSystem;
+	public final fun qrShareSession ()Lcom/carlom/klardrop/common/qrshare/QrShareSession;
+	public final fun reachability ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun server ()Lcom/carlom/klardrop/common/communication/Server;
+	public final fun trustManager ()Lcom/carlom/klardrop/common/trust/TrustManager;
+	public final fun trustedDevicesDirectory ()Lcom/carlom/klardrop/common/discovery/TrustedDevicesDirectory;
+	public final fun updateChecker ()Lcom/carlom/klardrop/common/update/UpdateChecker;
+	public final fun visibleDevices ()Lcom/carlom/klardrop/common/discovery/VisibleDevices;
+}
+
+public final class com/carlom/klardrop/common/discovery/CurrentDevice {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/carlom/klardrop/common/utils/DeviceType;Lcom/carlom/klardrop/common/utils/OsType;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lcom/carlom/klardrop/common/utils/DeviceType;
+	public final fun component4 ()Lcom/carlom/klardrop/common/utils/OsType;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lcom/carlom/klardrop/common/utils/DeviceType;Lcom/carlom/klardrop/common/utils/OsType;)Lcom/carlom/klardrop/common/discovery/CurrentDevice;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/CurrentDevice;Ljava/lang/String;Ljava/lang/String;Lcom/carlom/klardrop/common/utils/DeviceType;Lcom/carlom/klardrop/common/utils/OsType;ILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/CurrentDevice;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceId ()Ljava/lang/String;
+	public final fun getDeviceName ()Ljava/lang/String;
+	public final fun getDeviceType ()Lcom/carlom/klardrop/common/utils/DeviceType;
+	public final fun getOsType ()Lcom/carlom/klardrop/common/utils/OsType;
+	public final fun getShortDeviceId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/CurrentDeviceProvider {
+	public fun <init> (Lcom/carlom/klardrop/common/persistence/LocalPropertiesRepository;)V
+	public final fun get (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getDeviceInfoFlow ()Lkotlinx/coroutines/flow/Flow;
+	public final fun rotateDeviceId (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun updateCustomDeviceName (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class com/carlom/klardrop/common/discovery/DeviceConnection {
+	public abstract fun getAddress ()Ljava/lang/String;
+	public abstract fun getDeviceConnectionType ()Lcom/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType;
+	public abstract fun getPort ()I
+}
+
+public final class com/carlom/klardrop/common/discovery/DeviceConnection$BleConnection : com/carlom/klardrop/common/discovery/DeviceConnection {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/discovery/DeviceConnection$BleConnection;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/DeviceConnection$BleConnection;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/DeviceConnection$BleConnection;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getAddress ()Ljava/lang/String;
+	public fun getDeviceConnectionType ()Lcom/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType;
+	public fun getPort ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType : java/lang/Enum {
+	public static final field BLE Lcom/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType;
+	public static final field KLARDROP Lcom/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType;
+	public static final field NEARBY Lcom/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType;
+	public static fun values ()[Lcom/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType;
+}
+
+public final class com/carlom/klardrop/common/discovery/DeviceConnection$KlardropConnection : com/carlom/klardrop/common/discovery/DeviceConnection {
+	public fun <init> (Ljava/lang/String;I)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun copy (Ljava/lang/String;I)Lcom/carlom/klardrop/common/discovery/DeviceConnection$KlardropConnection;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/DeviceConnection$KlardropConnection;Ljava/lang/String;IILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/DeviceConnection$KlardropConnection;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getAddress ()Ljava/lang/String;
+	public fun getDeviceConnectionType ()Lcom/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType;
+	public fun getPort ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/DeviceConnection$NearbyConnection : com/carlom/klardrop/common/discovery/DeviceConnection {
+	public fun <init> (Ljava/lang/String;I)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun copy (Ljava/lang/String;I)Lcom/carlom/klardrop/common/discovery/DeviceConnection$NearbyConnection;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/DeviceConnection$NearbyConnection;Ljava/lang/String;IILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/DeviceConnection$NearbyConnection;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getAddress ()Ljava/lang/String;
+	public fun getDeviceConnectionType ()Lcom/carlom/klardrop/common/discovery/DeviceConnection$DeviceConnectionType;
+	public fun getPort ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/DeviceInfo {
+	public static final field Companion Lcom/carlom/klardrop/common/discovery/DeviceInfo$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/carlom/klardrop/common/utils/DeviceType;Lcom/carlom/klardrop/common/utils/OsType;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/carlom/klardrop/common/utils/DeviceType;Lcom/carlom/klardrop/common/utils/OsType;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lcom/carlom/klardrop/common/utils/DeviceType;
+	public final fun component4 ()Lcom/carlom/klardrop/common/utils/OsType;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lcom/carlom/klardrop/common/utils/DeviceType;Lcom/carlom/klardrop/common/utils/OsType;)Lcom/carlom/klardrop/common/discovery/DeviceInfo;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/DeviceInfo;Ljava/lang/String;Ljava/lang/String;Lcom/carlom/klardrop/common/utils/DeviceType;Lcom/carlom/klardrop/common/utils/OsType;ILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/DeviceInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceId ()Ljava/lang/String;
+	public final fun getDeviceType ()Lcom/carlom/klardrop/common/utils/DeviceType;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getOsType ()Lcom/carlom/klardrop/common/utils/OsType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/carlom/klardrop/common/discovery/DeviceInfo$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/discovery/DeviceInfo$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/carlom/klardrop/common/discovery/DeviceInfo;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/carlom/klardrop/common/discovery/DeviceInfo;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/discovery/DeviceInfo$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/discovery/DiscoveryDevice {
+	public fun <init> (Lcom/carlom/klardrop/common/discovery/DeviceInfo;Ljava/util/List;J)V
+	public synthetic fun <init> (Lcom/carlom/klardrop/common/discovery/DeviceInfo;Ljava/util/List;JILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/carlom/klardrop/common/discovery/DeviceInfo;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()J
+	public final fun copy (Lcom/carlom/klardrop/common/discovery/DeviceInfo;Ljava/util/List;J)Lcom/carlom/klardrop/common/discovery/DiscoveryDevice;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/DiscoveryDevice;Lcom/carlom/klardrop/common/discovery/DeviceInfo;Ljava/util/List;JILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/DiscoveryDevice;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBleConnection ()Ljava/util/List;
+	public final fun getDeviceConnections ()Ljava/util/List;
+	public final fun getDeviceInfo ()Lcom/carlom/klardrop/common/discovery/DeviceInfo;
+	public final fun getKlardropConnection ()Ljava/util/List;
+	public final fun getLastSeenTimestamp ()J
+	public final fun getNearbyConnection ()Ljava/util/List;
+	public final fun hasBleConnection ()Z
+	public final fun hasKlardropConnection ()Z
+	public final fun hasNearbyConnection ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/TrustChangeEvent {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/discovery/TrustChangeEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/TrustedDevicesDirectory {
+	public fun <init> (Lcom/carlom/klardrop/common/discovery/VisibleDevices;Lcom/carlom/klardrop/common/persistence/KnownDevicesRepository;Lcom/carlom/klardrop/common/trust/TrustStorage;Lkotlinx/coroutines/flow/Flow;Lcom/carlom/klardrop/common/utils/Coroutines;)V
+	public final fun getTrustedDevices ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun refresh ()V
+}
+
+public abstract interface class com/carlom/klardrop/common/discovery/VisibleDevices {
+	public abstract fun cachedNameFor (Ljava/lang/String;)Ljava/lang/String;
+	public abstract fun findDeviceByAddress (Lio/ktor/network/sockets/InetSocketAddress;)Lcom/carlom/klardrop/common/discovery/DiscoveryDevice;
+	public abstract fun getDevice (Ljava/lang/String;)Lcom/carlom/klardrop/common/discovery/DiscoveryDevice;
+	public abstract fun getVisibleDevices ()Lkotlinx/coroutines/flow/StateFlow;
+	public abstract fun invalidateKlardropEndpoint (Ljava/lang/String;Ljava/lang/String;I)V
+	public abstract fun isDeviceVisible (Ljava/lang/String;)Z
+	public abstract fun onDeviceLost (Ljava/lang/String;)V
+	public abstract fun onDeviceLost (Ljava/lang/String;Lcom/carlom/klardrop/common/discovery/DeviceConnection;)V
+	public abstract fun onNewDeviceVisible (Lcom/carlom/klardrop/common/discovery/DeviceInfo;Lcom/carlom/klardrop/common/discovery/DeviceConnection;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun touchLastSeen (Ljava/lang/String;)V
+}
+
+public final class com/carlom/klardrop/common/features/ClipboardManager : com/carlom/klardrop/common/features/ClipboardAccess {
+	public fun <init> (Lcom/carlom/klardrop/common/utils/Coroutines;)V
+	public fun getFlow ()Lkotlinx/coroutines/flow/Flow;
+	public fun read ()Ljava/lang/String;
+	public fun write (Ljava/lang/String;)V
+}
+
+public abstract interface class com/carlom/klardrop/common/features/ConnectionInfoJoiner {
+	public abstract fun tryJoin (Lcom/carlom/klardrop/common/communication/message/ConnectionInfoMessage;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class com/carlom/klardrop/common/notifications/AppNotification {
+	public abstract fun getId ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/notifications/AppNotification$IncomingPairing : com/carlom/klardrop/common/notifications/AppNotification {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/carlom/klardrop/common/notifications/AppNotification$IncomingPairing;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/notifications/AppNotification$IncomingPairing;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/notifications/AppNotification$IncomingPairing;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceId ()Ljava/lang/String;
+	public final fun getDeviceName ()Ljava/lang/String;
+	public fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/notifications/ForegroundState {
+	public fun <init> (Landroid/content/Context;)V
+	public final fun isForeground ()Lkotlinx/coroutines/flow/StateFlow;
+}
+
+public abstract interface class com/carlom/klardrop/common/notifications/NotificationAction {
+	public abstract fun getNotificationId ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/notifications/NotificationAction$Opened : com/carlom/klardrop/common/notifications/NotificationAction {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/notifications/NotificationAction$Opened;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/notifications/NotificationAction$Opened;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/notifications/NotificationAction$Opened;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getNotificationId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/notifications/NotificationAction$PairingAccepted : com/carlom/klardrop/common/notifications/NotificationAction {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lcom/carlom/klardrop/common/notifications/NotificationAction$PairingAccepted;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/notifications/NotificationAction$PairingAccepted;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/notifications/NotificationAction$PairingAccepted;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceId ()Ljava/lang/String;
+	public fun getNotificationId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/notifications/NotificationAction$PairingRejected : com/carlom/klardrop/common/notifications/NotificationAction {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lcom/carlom/klardrop/common/notifications/NotificationAction$PairingRejected;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/notifications/NotificationAction$PairingRejected;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/notifications/NotificationAction$PairingRejected;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceId ()Ljava/lang/String;
+	public fun getNotificationId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/notifications/Notifier {
+	public fun <init> (Landroid/content/Context;)V
+	public final fun cancel (Ljava/lang/String;)V
+	public final fun getActions ()Lkotlinx/coroutines/flow/Flow;
+	public final fun show (Lcom/carlom/klardrop/common/notifications/AppNotification;)V
+}
+
+public final class com/carlom/klardrop/common/permissions/Capability : java/lang/Enum {
+	public static final field BLUETOOTH Lcom/carlom/klardrop/common/permissions/Capability;
+	public static final field LOCAL_NETWORK Lcom/carlom/klardrop/common/permissions/Capability;
+	public static final field LOCATION Lcom/carlom/klardrop/common/permissions/Capability;
+	public static final field NEARBY_WIFI_DEVICES Lcom/carlom/klardrop/common/permissions/Capability;
+	public static final field NOTIFICATIONS Lcom/carlom/klardrop/common/permissions/Capability;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/permissions/Capability;
+	public static fun values ()[Lcom/carlom/klardrop/common/permissions/Capability;
+}
+
+public final class com/carlom/klardrop/common/permissions/CapabilityStatus : java/lang/Enum {
+	public static final field Denied Lcom/carlom/klardrop/common/permissions/CapabilityStatus;
+	public static final field Granted Lcom/carlom/klardrop/common/permissions/CapabilityStatus;
+	public static final field NotApplicable Lcom/carlom/klardrop/common/permissions/CapabilityStatus;
+	public static final field Unknown Lcom/carlom/klardrop/common/permissions/CapabilityStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/permissions/CapabilityStatus;
+	public static fun values ()[Lcom/carlom/klardrop/common/permissions/CapabilityStatus;
+}
+
+public final class com/carlom/klardrop/common/permissions/EducationalNote {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lcom/carlom/klardrop/common/permissions/EducationalNote;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/permissions/EducationalNote;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/permissions/EducationalNote;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/permissions/PermissionsMonitor {
+	public fun <init> (Landroid/content/Context;Lcom/carlom/klardrop/common/notifications/ForegroundState;)V
+	public final fun observe ()Lkotlinx/coroutines/flow/Flow;
+	public final fun refresh ()V
+}
+
+public final class com/carlom/klardrop/common/permissions/PermissionsState {
+	public static final field Companion Lcom/carlom/klardrop/common/permissions/PermissionsState$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/util/Map;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/Map;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/Map;
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (Ljava/util/Map;Ljava/util/List;)Lcom/carlom/klardrop/common/permissions/PermissionsState;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/permissions/PermissionsState;Ljava/util/Map;Ljava/util/List;ILjava/lang/Object;)Lcom/carlom/klardrop/common/permissions/PermissionsState;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCapabilities ()Ljava/util/Map;
+	public final fun getEducationalNotes ()Ljava/util/List;
+	public fun hashCode ()I
+	public final fun isComplete ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/permissions/PermissionsState$Companion {
+	public final fun getEMPTY ()Lcom/carlom/klardrop/common/permissions/PermissionsState;
+}
+
+public final class com/carlom/klardrop/common/persistence/ChatMessage {
+	public fun <init> (JLjava/lang/String;Ljava/lang/String;JZLjava/lang/String;Ljava/lang/Long;JLjava/lang/String;Lcom/carlom/klardrop/common/persistence/DeliveryStatus;)V
+	public final fun component1 ()J
+	public final fun component10 ()Lcom/carlom/klardrop/common/persistence/DeliveryStatus;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()J
+	public final fun component5 ()Z
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/Long;
+	public final fun component8 ()J
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (JLjava/lang/String;Ljava/lang/String;JZLjava/lang/String;Ljava/lang/Long;JLjava/lang/String;Lcom/carlom/klardrop/common/persistence/DeliveryStatus;)Lcom/carlom/klardrop/common/persistence/ChatMessage;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/persistence/ChatMessage;JLjava/lang/String;Ljava/lang/String;JZLjava/lang/String;Ljava/lang/Long;JLjava/lang/String;Lcom/carlom/klardrop/common/persistence/DeliveryStatus;ILjava/lang/Object;)Lcom/carlom/klardrop/common/persistence/ChatMessage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/String;
+	public final fun getDeliveryStatus ()Lcom/carlom/klardrop/common/persistence/DeliveryStatus;
+	public final fun getFileTransferId ()Ljava/lang/Long;
+	public final fun getId ()J
+	public final fun getMessageType ()Ljava/lang/String;
+	public final fun getMimeType ()Ljava/lang/String;
+	public final fun getRemoteDeviceId ()Ljava/lang/String;
+	public final fun getTimestamp ()J
+	public fun hashCode ()I
+	public final fun isRead ()J
+	public final fun isSender ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/persistence/DeliveryStatus : java/lang/Enum {
+	public static final field FAILED Lcom/carlom/klardrop/common/persistence/DeliveryStatus;
+	public static final field SENDING Lcom/carlom/klardrop/common/persistence/DeliveryStatus;
+	public static final field SENT Lcom/carlom/klardrop/common/persistence/DeliveryStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/persistence/DeliveryStatus;
+	public static fun values ()[Lcom/carlom/klardrop/common/persistence/DeliveryStatus;
+}
+
+public final class com/carlom/klardrop/common/persistence/FileTransferStatus : java/lang/Enum {
+	public static final field COMPLETED Lcom/carlom/klardrop/common/persistence/FileTransferStatus;
+	public static final field FAILED Lcom/carlom/klardrop/common/persistence/FileTransferStatus;
+	public static final field IN_PROGRESS Lcom/carlom/klardrop/common/persistence/FileTransferStatus;
+	public static final field REJECTED Lcom/carlom/klardrop/common/persistence/FileTransferStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/persistence/FileTransferStatus;
+	public static fun values ()[Lcom/carlom/klardrop/common/persistence/FileTransferStatus;
+}
+
+public final class com/carlom/klardrop/common/persistence/KlardropProperties {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Z)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Z)Lcom/carlom/klardrop/common/persistence/KlardropProperties;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/persistence/KlardropProperties;Ljava/lang/String;Ljava/lang/String;ZILjava/lang/Object;)Lcom/carlom/klardrop/common/persistence/KlardropProperties;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBackgroundDiscoveryEnabled ()Z
+	public final fun getCustomDeviceName ()Ljava/lang/String;
+	public final fun getDeviceId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/carlom/klardrop/common/persistence/KnownDevicesRepository {
+	public abstract fun addKnownDevice (Lcom/carlom/klardrop/common/discovery/DeviceInfo;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getKnownDevices ()Lkotlinx/coroutines/flow/Flow;
+	public abstract fun removeKnownDevice (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class com/carlom/klardrop/common/persistence/LocalPropertiesRepository {
+	public abstract fun getProperties ()Lkotlinx/coroutines/flow/Flow;
+	public abstract fun getProperty (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun save (Lcom/carlom/klardrop/common/persistence/KlardropProperties;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun saveBackgroundDiscoveryEnabled (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun saveCustomDeviceName (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class com/carlom/klardrop/common/persistence/MessageRepository {
+	public abstract fun getAllDevicesWithUnreadCounts ()Lkotlinx/coroutines/flow/Flow;
+	public abstract fun getFileTransferById (J)Lkotlinx/coroutines/flow/Flow;
+	public fun getMessageByFileTransferId (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getMessageById (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getMessagesForDevice (Ljava/lang/String;J)Lkotlinx/coroutines/flow/Flow;
+	public fun getMessagesForDevicePage (Ljava/lang/String;JLjava/lang/Long;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun getMessagesForDevicePage$default (Lcom/carlom/klardrop/common/persistence/MessageRepository;Ljava/lang/String;JLjava/lang/Long;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun getUnreadCountForDevice (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun insertFileTransfer (Ljava/lang/String;Ljava/lang/String;JLcom/carlom/klardrop/common/persistence/FileTransferStatus;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun insertFileTransfer$default (Lcom/carlom/klardrop/common/persistence/MessageRepository;Ljava/lang/String;Ljava/lang/String;JLcom/carlom/klardrop/common/persistence/FileTransferStatus;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun insertMessage (Ljava/lang/String;Ljava/lang/String;ZLcom/carlom/klardrop/common/persistence/MessageType;Ljava/lang/Long;ZLjava/lang/String;Ljava/lang/Long;Lcom/carlom/klardrop/common/persistence/SendStatus;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun insertMessage$default (Lcom/carlom/klardrop/common/persistence/MessageRepository;Ljava/lang/String;Ljava/lang/String;ZLcom/carlom/klardrop/common/persistence/MessageType;Ljava/lang/Long;ZLjava/lang/String;Ljava/lang/Long;Lcom/carlom/klardrop/common/persistence/SendStatus;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public abstract fun markMessagesAsRead (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun markStaleInProgressAsFailed (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun markStaleSendingAsFailed (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun updateFileTransferFilePath (JLjava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun updateFileTransferStatus (JLcom/carlom/klardrop/common/persistence/FileTransferStatus;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun updateMessageSendStatus (JLcom/carlom/klardrop/common/persistence/SendStatus;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/persistence/MessageRepository$DefaultImpls {
+	public static fun getMessageByFileTransferId (Lcom/carlom/klardrop/common/persistence/MessageRepository;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun getMessageById (Lcom/carlom/klardrop/common/persistence/MessageRepository;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun getMessagesForDevicePage (Lcom/carlom/klardrop/common/persistence/MessageRepository;Ljava/lang/String;JLjava/lang/Long;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun getMessagesForDevicePage$default (Lcom/carlom/klardrop/common/persistence/MessageRepository;Ljava/lang/String;JLjava/lang/Long;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun insertFileTransfer$default (Lcom/carlom/klardrop/common/persistence/MessageRepository;Ljava/lang/String;Ljava/lang/String;JLcom/carlom/klardrop/common/persistence/FileTransferStatus;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static synthetic fun insertMessage$default (Lcom/carlom/klardrop/common/persistence/MessageRepository;Ljava/lang/String;Ljava/lang/String;ZLcom/carlom/klardrop/common/persistence/MessageType;Ljava/lang/Long;ZLjava/lang/String;Ljava/lang/Long;Lcom/carlom/klardrop/common/persistence/SendStatus;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public static fun markStaleSendingAsFailed (Lcom/carlom/klardrop/common/persistence/MessageRepository;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun updateMessageSendStatus (Lcom/carlom/klardrop/common/persistence/MessageRepository;JLcom/carlom/klardrop/common/persistence/SendStatus;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/persistence/MessageType : java/lang/Enum {
+	public static final field FILE Lcom/carlom/klardrop/common/persistence/MessageType;
+	public static final field TEXT Lcom/carlom/klardrop/common/persistence/MessageType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/persistence/MessageType;
+	public static fun values ()[Lcom/carlom/klardrop/common/persistence/MessageType;
+}
+
+public final class com/carlom/klardrop/common/persistence/SendStatus : java/lang/Enum {
+	public static final field FAILED Lcom/carlom/klardrop/common/persistence/SendStatus;
+	public static final field SENDING Lcom/carlom/klardrop/common/persistence/SendStatus;
+	public static final field SENT Lcom/carlom/klardrop/common/persistence/SendStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/persistence/SendStatus;
+	public static fun values ()[Lcom/carlom/klardrop/common/persistence/SendStatus;
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrDownloadProgress {
+	public fun <init> (Ljava/lang/String;IJJ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()I
+	public final fun component3 ()J
+	public final fun component4 ()J
+	public final fun copy (Ljava/lang/String;IJJ)Lcom/carlom/klardrop/common/qrshare/QrDownloadProgress;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/qrshare/QrDownloadProgress;Ljava/lang/String;IJJILjava/lang/Object;)Lcom/carlom/klardrop/common/qrshare/QrDownloadProgress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBytesTransferred ()J
+	public final fun getFileName ()Ljava/lang/String;
+	public final fun getPercentage ()I
+	public final fun getTotalBytes ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/carlom/klardrop/common/qrshare/QrSharePayload {
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrSharePayload$Files : com/carlom/klardrop/common/qrshare/QrSharePayload {
+	public fun <init> (Ljava/util/List;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun copy (Ljava/util/List;)Lcom/carlom/klardrop/common/qrshare/QrSharePayload$Files;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/qrshare/QrSharePayload$Files;Ljava/util/List;ILjava/lang/Object;)Lcom/carlom/klardrop/common/qrshare/QrSharePayload$Files;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFiles ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrSharePayload$Text : com/carlom/klardrop/common/qrshare/QrSharePayload {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/qrshare/QrSharePayload$Text;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/qrshare/QrSharePayload$Text;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/qrshare/QrSharePayload$Text;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getText ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrShareSession {
+	public static final field Companion Lcom/carlom/klardrop/common/qrshare/QrShareSession$Companion;
+	public final fun cancel ()V
+	public final fun dismissQrSheet ()V
+	public final fun getHasClaimed ()Z
+	public final fun getState ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun start (Lcom/carlom/klardrop/common/qrshare/QrSharePayload;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrShareSession$Companion {
+}
+
+public abstract interface class com/carlom/klardrop/common/qrshare/QrShareState {
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrShareState$Failed : com/carlom/klardrop/common/qrshare/QrShareState {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/qrshare/QrShareState$Failed;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/qrshare/QrShareState$Failed;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/qrshare/QrShareState$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrShareState$Idle : com/carlom/klardrop/common/qrshare/QrShareState {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/qrshare/QrShareState$Idle;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrShareState$QrVisible : com/carlom/klardrop/common/qrshare/QrShareState {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)Lcom/carlom/klardrop/common/qrshare/QrShareState$QrVisible;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/qrshare/QrShareState$QrVisible;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/qrshare/QrShareState$QrVisible;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getIpv4 ()Ljava/lang/String;
+	public final fun getPayloadSummary ()Ljava/lang/String;
+	public final fun getPort ()I
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrShareState$Serving : com/carlom/klardrop/common/qrshare/QrShareState {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ILjava/util/List;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ILjava/util/List;Z)Lcom/carlom/klardrop/common/qrshare/QrShareState$Serving;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/qrshare/QrShareState$Serving;Ljava/lang/String;Ljava/lang/String;ILjava/util/List;ZILjava/lang/Object;)Lcom/carlom/klardrop/common/qrshare/QrShareState$Serving;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDownloads ()Ljava/util/List;
+	public final fun getIpv4 ()Ljava/lang/String;
+	public final fun getPort ()I
+	public final fun getQrStillVisible ()Z
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/qrshare/QrShareState$Starting : com/carlom/klardrop/common/qrshare/QrShareState {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/qrshare/QrShareState$Starting;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/qrshare/SharedFile {
+	public fun <init> (Lio/github/vinceglb/filekit/PlatformFile;)V
+	public fun <init> (Lio/github/vinceglb/filekit/PlatformFile;Ljava/lang/String;Ljava/lang/String;J)V
+	public final fun component1 ()Lio/github/vinceglb/filekit/PlatformFile;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()J
+	public final fun copy (Lio/github/vinceglb/filekit/PlatformFile;Ljava/lang/String;Ljava/lang/String;J)Lcom/carlom/klardrop/common/qrshare/SharedFile;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/qrshare/SharedFile;Lio/github/vinceglb/filekit/PlatformFile;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Lcom/carlom/klardrop/common/qrshare/SharedFile;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFile ()Lio/github/vinceglb/filekit/PlatformFile;
+	public final fun getFileName ()Ljava/lang/String;
+	public final fun getFileSize ()J
+	public final fun getMimeType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/receiver/MessageProgress {
+	public fun <init> (Lcom/carlom/klardrop/common/communication/message/Message;I)V
+	public final fun component1 ()Lcom/carlom/klardrop/common/communication/message/Message;
+	public final fun component2 ()I
+	public final fun copy (Lcom/carlom/klardrop/common/communication/message/Message;I)Lcom/carlom/klardrop/common/receiver/MessageProgress;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/receiver/MessageProgress;Lcom/carlom/klardrop/common/communication/message/Message;IILjava/lang/Object;)Lcom/carlom/klardrop/common/receiver/MessageProgress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Lcom/carlom/klardrop/common/communication/message/Message;
+	public final fun getProgress ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/carlom/klardrop/common/receiver/MessageReceiver {
+	public fun getLatestUpdates ()Lkotlinx/coroutines/flow/StateFlow;
+	public abstract fun getMessageReceivedNotifier ()Lkotlinx/coroutines/flow/Flow;
+	public abstract fun getNotifier ()Lkotlinx/coroutines/flow/Flow;
+	public abstract fun onReceiveMessage (Ljava/lang/String;)Lkotlinx/coroutines/flow/MutableStateFlow;
+}
+
+public final class com/carlom/klardrop/common/receiver/MessageReceiver$DefaultImpls {
+	public static fun getLatestUpdates (Lcom/carlom/klardrop/common/receiver/MessageReceiver;)Lkotlinx/coroutines/flow/StateFlow;
+}
+
+public abstract interface class com/carlom/klardrop/common/receiver/ReceiveMessageStatus {
+	public fun isFinished ()Z
+}
+
+public final class com/carlom/klardrop/common/receiver/ReceiveMessageStatus$Completed : com/carlom/klardrop/common/receiver/ReceiveMessageStatus {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$Completed;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun isFinished ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/receiver/ReceiveMessageStatus$DefaultImpls {
+	public static fun isFinished (Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus;)Z
+}
+
+public final class com/carlom/klardrop/common/receiver/ReceiveMessageStatus$Failed : com/carlom/klardrop/common/receiver/ReceiveMessageStatus {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$Failed;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$Failed;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun isFinished ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/receiver/ReceiveMessageStatus$PendingAuthorization : com/carlom/klardrop/common/receiver/ReceiveMessageStatus {
+	public fun <init> (Lkotlin/jvm/functions/Function1;)V
+	public final fun component1 ()Lkotlin/jvm/functions/Function1;
+	public final fun copy (Lkotlin/jvm/functions/Function1;)Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$PendingAuthorization;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$PendingAuthorization;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$PendingAuthorization;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAcceptTransfer ()Lkotlin/jvm/functions/Function1;
+	public fun hashCode ()I
+	public fun isFinished ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/receiver/ReceiveMessageStatus$Progress : com/carlom/klardrop/common/receiver/ReceiveMessageStatus {
+	public fun <init> (Ljava/util/List;JJ)V
+	public synthetic fun <init> (Ljava/util/List;JJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun copy (Ljava/util/List;JJ)Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$Progress;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$Progress;Ljava/util/List;JJILjava/lang/Object;)Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$Progress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBytesTransferred ()J
+	public final fun getMessages ()Ljava/util/List;
+	public final fun getTotalBytes ()J
+	public fun hashCode ()I
+	public fun isFinished ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/receiver/ReceiveMessageStatus$Started : com/carlom/klardrop/common/receiver/ReceiveMessageStatus {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus$Started;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun isFinished ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/receiver/ReceiveMessageUpdate {
+	public fun <init> (Lcom/carlom/klardrop/common/discovery/DeviceInfo;Ljava/util/List;Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus;)V
+	public synthetic fun <init> (Lcom/carlom/klardrop/common/discovery/DeviceInfo;Ljava/util/List;Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/carlom/klardrop/common/discovery/DeviceInfo;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus;
+	public final fun copy (Lcom/carlom/klardrop/common/discovery/DeviceInfo;Ljava/util/List;Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus;)Lcom/carlom/klardrop/common/receiver/ReceiveMessageUpdate;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/receiver/ReceiveMessageUpdate;Lcom/carlom/klardrop/common/discovery/DeviceInfo;Ljava/util/List;Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus;ILjava/lang/Object;)Lcom/carlom/klardrop/common/receiver/ReceiveMessageUpdate;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDevice ()Lcom/carlom/klardrop/common/discovery/DeviceInfo;
+	public final fun getMessages ()Ljava/util/List;
+	public final fun getStatus ()Lcom/carlom/klardrop/common/receiver/ReceiveMessageStatus;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/share/ShareSheetDismissPolicy {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/share/ShareSheetDismissPolicy;
+	public final fun connecting ()Lcom/carlom/klardrop/common/communication/MessengerSendProgress;
+	public final fun shouldDismiss (Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;Lcom/carlom/klardrop/common/communication/MessengerSendProgress;Z)Z
+	public static synthetic fun shouldDismiss$default (Lcom/carlom/klardrop/common/share/ShareSheetDismissPolicy;Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;Lcom/carlom/klardrop/common/communication/MessengerSendProgress;ZILjava/lang/Object;)Z
+}
+
+public final class com/carlom/klardrop/common/share/ShareSheetDismissTrigger : java/lang/Enum {
+	public static final field Completed Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;
+	public static final field EmptyPayload Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;
+	public static final field SelectDevice Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;
+	public static final field SendTap Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;
+	public static final field SwipeAway Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;
+	public static final field UserHide Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;
+	public static fun values ()[Lcom/carlom/klardrop/common/share/ShareSheetDismissTrigger;
+}
+
+public final class com/carlom/klardrop/common/trust/InMemoryTrustStorage : com/carlom/klardrop/common/trust/TrustStorage {
+	public fun <init> ()V
+	public fun clearAllTrustedDevices (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun clearPrivateKeyOnly (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun deleteDevicePrivateKey (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun ensureDeviceKey (Lcom/carlom/klardrop/common/trust/TrustCrypto;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getAllTrustedDevices (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getDevicePrivateKey (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getDevicePublicKey (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getECDSAKey (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getSharedSecret (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getTrustedDeviceKey (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun hasDeviceKey (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun isTrusted (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun removeTrustedDevice (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun signWithDeviceKey ([BLcom/carlom/klardrop/common/trust/TrustCrypto;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun storeDevicePrivateKey ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun storeDevicePublicKey ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun storeECDSAKey (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun storeSharedSecret (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun storeTrustedDevice (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class com/carlom/klardrop/common/trust/PairingApprovalCallback {
+	public abstract fun onPairingRequested (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)V
+}
+
+public final class com/carlom/klardrop/common/trust/PairingProtocolCoordinator {
+	public fun <init> (Lcom/carlom/klardrop/common/trust/TrustManager;Lcom/carlom/klardrop/common/communication/Messenger;)V
+	public final fun getOnPairingCompleted ()Lkotlin/jvm/functions/Function3;
+	public final fun getOnPairingFailed ()Lkotlin/jvm/functions/Function2;
+	public final fun getPeerRevokedTrust ()Lkotlinx/coroutines/flow/SharedFlow;
+	public final fun initiatePairing-gIAlu-s (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun setOnPairingCompleted (Lkotlin/jvm/functions/Function3;)V
+	public final fun setOnPairingFailed (Lkotlin/jvm/functions/Function2;)V
+	public final fun unpair (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun unpair$default (Lcom/carlom/klardrop/common/trust/PairingProtocolCoordinator;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/trust/PairingProtocolCoordinator$PeerRevokedTrust {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lcom/carlom/klardrop/common/trust/PairingProtocolCoordinator$PeerRevokedTrust;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/trust/PairingProtocolCoordinator$PeerRevokedTrust;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/trust/PairingProtocolCoordinator$PeerRevokedTrust;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceId ()Ljava/lang/String;
+	public final fun getReason ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/trust/TrustCrypto {
+	public fun <init> ()V
+	public final fun generateECDSAKeyPair (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun signWithECDSA (Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun verifyECDSA ([B[B[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/trust/TrustCrypto$ECDSAKeyPair {
+	public fun <init> (Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPublicKey;Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey;)V
+	public final fun component1 ()Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPublicKey;
+	public final fun component2 ()Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey;
+	public final fun copy (Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPublicKey;Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey;)Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAKeyPair;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAKeyPair;Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPublicKey;Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey;ILjava/lang/Object;)Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAKeyPair;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPrivateKey ()Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey;
+	public final fun getPublicKey ()Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPublicKey;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey {
+	public fun <init> ([B)V
+	public final fun clear ()V
+	public final fun component1 ()[B
+	public final fun copy ([B)Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey;[BILjava/lang/Object;)Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPrivateKey;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getData ()[B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/trust/TrustCrypto$ECDSAPublicKey {
+	public fun <init> ([B)V
+	public final fun component1 ()[B
+	public final fun copy ([B)Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPublicKey;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPublicKey;[BILjava/lang/Object;)Lcom/carlom/klardrop/common/trust/TrustCrypto$ECDSAPublicKey;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getData ()[B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/trust/TrustManager {
+	public fun <init> (Lcom/carlom/klardrop/common/trust/TrustCrypto;Lcom/carlom/klardrop/common/trust/TrustStorage;Lcom/carlom/klardrop/common/utils/Clock;Lcom/carlom/klardrop/common/discovery/CurrentDeviceProvider;)V
+	public final fun getTrustedDevices (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun isTrusted (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun removeTrust (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun resetIdentity (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun setPairingApprovalCallback (Lcom/carlom/klardrop/common/trust/PairingApprovalCallback;)V
+}
+
+public abstract interface class com/carlom/klardrop/common/trust/TrustStorage {
+	public abstract fun clearAllTrustedDevices (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun deleteDevicePrivateKey (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun ensureDeviceKey (Lcom/carlom/klardrop/common/trust/TrustCrypto;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getAllTrustedDevices (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getDevicePrivateKey (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getDevicePublicKey (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getECDSAKey (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun getSharedSecret (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getTrustedDeviceKey (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun hasDeviceKey (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun isTrusted (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun removeTrustedDevice (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun signWithDeviceKey ([BLcom/carlom/klardrop/common/trust/TrustCrypto;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun storeDevicePrivateKey ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun storeDevicePublicKey ([BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun storeECDSAKey (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun storeSharedSecret (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun storeTrustedDevice (Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/trust/TrustStorage$DefaultImpls {
+	public static fun ensureDeviceKey (Lcom/carlom/klardrop/common/trust/TrustStorage;Lcom/carlom/klardrop/common/trust/TrustCrypto;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun getSharedSecret (Lcom/carlom/klardrop/common/trust/TrustStorage;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun hasDeviceKey (Lcom/carlom/klardrop/common/trust/TrustStorage;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun isTrusted (Lcom/carlom/klardrop/common/trust/TrustStorage;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun signWithDeviceKey (Lcom/carlom/klardrop/common/trust/TrustStorage;[BLcom/carlom/klardrop/common/trust/TrustCrypto;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static fun storeSharedSecret (Lcom/carlom/klardrop/common/trust/TrustStorage;Ljava/lang/String;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/trust/TrustedDevice {
+	public fun <init> (Ljava/lang/String;[B)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()[B
+	public final fun copy (Ljava/lang/String;[B)Lcom/carlom/klardrop/common/trust/TrustedDevice;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/trust/TrustedDevice;Ljava/lang/String;[BILjava/lang/Object;)Lcom/carlom/klardrop/common/trust/TrustedDevice;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceId ()Ljava/lang/String;
+	public final fun getPublicKey ()[B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/InstallChannel : java/lang/Enum {
+	public static final field APPIMAGE Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field BREW Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field DEB Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field DMG Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field FLATPAK Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field MANUAL Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field MSI Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field NIX Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field PACMAN Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field RPM Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field SNAP Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field TARBALL Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static final field UNKNOWN Lcom/carlom/klardrop/common/update/InstallChannel;
+	public final fun getDisplayName ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/update/InstallChannel;
+	public static fun values ()[Lcom/carlom/klardrop/common/update/InstallChannel;
+}
+
+public abstract interface class com/carlom/klardrop/common/update/InstallProgress {
+}
+
+public final class com/carlom/klardrop/common/update/InstallProgress$Applying : com/carlom/klardrop/common/update/InstallProgress {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/update/InstallProgress$Applying;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/InstallProgress$Downloading : com/carlom/klardrop/common/update/InstallProgress {
+	public fun <init> (Ljava/lang/Float;)V
+	public final fun component1 ()Ljava/lang/Float;
+	public final fun copy (Ljava/lang/Float;)Lcom/carlom/klardrop/common/update/InstallProgress$Downloading;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/update/InstallProgress$Downloading;Ljava/lang/Float;ILjava/lang/Object;)Lcom/carlom/klardrop/common/update/InstallProgress$Downloading;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFraction ()Ljava/lang/Float;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/InstallProgress$Failed : com/carlom/klardrop/common/update/InstallProgress {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/update/InstallProgress$Failed;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/update/InstallProgress$Failed;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/update/InstallProgress$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/InstallProgress$Idle : com/carlom/klardrop/common/update/InstallProgress {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/update/InstallProgress$Idle;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/InstallProgress$Ready : com/carlom/klardrop/common/update/InstallProgress {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/update/InstallProgress$Ready;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/LatestManifest {
+	public static final field Companion Lcom/carlom/klardrop/common/update/LatestManifest$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/util/Map;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;)Lcom/carlom/klardrop/common/update/LatestManifest;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/update/LatestManifest;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Map;ILjava/lang/Object;)Lcom/carlom/klardrop/common/update/LatestManifest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getNotes ()Ljava/lang/String;
+	public final fun getPlatforms ()Ljava/util/Map;
+	public final fun getPublishedAt ()Ljava/lang/String;
+	public final fun getTag ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/carlom/klardrop/common/update/LatestManifest$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/update/LatestManifest$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/carlom/klardrop/common/update/LatestManifest;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/carlom/klardrop/common/update/LatestManifest;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/update/LatestManifest$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/update/ReleaseAsset {
+	public static final field Companion Lcom/carlom/klardrop/common/update/ReleaseAsset$Companion;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/Long;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;)Lcom/carlom/klardrop/common/update/ReleaseAsset;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/update/ReleaseAsset;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Long;ILjava/lang/Object;)Lcom/carlom/klardrop/common/update/ReleaseAsset;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getSha256 ()Ljava/lang/String;
+	public final fun getSize ()Ljava/lang/Long;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final synthetic class com/carlom/klardrop/common/update/ReleaseAsset$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/update/ReleaseAsset$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Lcom/carlom/klardrop/common/update/ReleaseAsset;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Lcom/carlom/klardrop/common/update/ReleaseAsset;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/update/ReleaseAsset$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public abstract interface class com/carlom/klardrop/common/update/UpdateAction {
+}
+
+public final class com/carlom/klardrop/common/update/UpdateAction$OpenUrl : com/carlom/klardrop/common/update/UpdateAction {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/update/UpdateAction$OpenUrl;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/update/UpdateAction$OpenUrl;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/update/UpdateAction$OpenUrl;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/UpdateAction$RunCommand : com/carlom/klardrop/common/update/UpdateAction {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/update/UpdateAction$RunCommand;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/update/UpdateAction$RunCommand;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/update/UpdateAction$RunCommand;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCommand ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/UpdateChecker {
+	public static final field ASSET_LINUX_DEB Ljava/lang/String;
+	public static final field ASSET_LINUX_NATIVE_ARM64 Ljava/lang/String;
+	public static final field ASSET_LINUX_NATIVE_X64 Ljava/lang/String;
+	public static final field ASSET_LINUX_RPM Ljava/lang/String;
+	public static final field ASSET_LINUX_TARBALL Ljava/lang/String;
+	public static final field ASSET_MACOS Ljava/lang/String;
+	public static final field ASSET_MACOS_CLI Ljava/lang/String;
+	public static final field ASSET_WINDOWS Ljava/lang/String;
+	public static final field AUR_PACKAGE Ljava/lang/String;
+	public static final field Companion Lcom/carlom/klardrop/common/update/UpdateChecker$Companion;
+	public static final field DEFAULT_MANIFEST_URL Ljava/lang/String;
+	public static final field FLATPAK_APP_ID Ljava/lang/String;
+	public static final field INSTALL_SCRIPT_URL Ljava/lang/String;
+	public static final field NIGHTLY_MANIFEST_URL Ljava/lang/String;
+	public static final field RELEASES_PAGE Ljava/lang/String;
+	public synthetic fun <init> (Ljava/lang/String;Lcom/carlom/klardrop/common/utils/OsType;Lcom/carlom/klardrop/common/update/UpdateManifestFetcher;Lkotlin/jvm/functions/Function0;Lcom/carlom/klardrop/common/utils/Coroutines;Lkotlin/jvm/functions/Function1;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/carlom/klardrop/common/utils/OsType;Lcom/carlom/klardrop/common/update/UpdateManifestFetcher;Lkotlin/jvm/functions/Function0;Lcom/carlom/klardrop/common/utils/Coroutines;Lkotlin/jvm/functions/Function1;Ljava/lang/String;Ljava/lang/String;JLjava/lang/String;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun applyUpdate ()V
+	public final fun checkNow ()V
+	public final fun getChannel ()Ljava/lang/String;
+	public final fun getInstall ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun getStatus ()Lkotlinx/coroutines/flow/StateFlow;
+	public final fun getSupported ()Z
+	public final fun getVersion ()Ljava/lang/String;
+	public final fun start ()V
+	public final fun stop ()V
+}
+
+public final class com/carlom/klardrop/common/update/UpdateChecker$Companion {
+	public final fun getDEFAULT_RECHECK_INTERVAL-UwyO8pc ()J
+	public final fun manifestUrlForChannel (Ljava/lang/String;)Ljava/lang/String;
+}
+
+public abstract interface class com/carlom/klardrop/common/update/UpdateInstaller {
+	public abstract fun applyAndRestart ()V
+	public abstract fun downloadAndStage (Lcom/carlom/klardrop/common/update/ReleaseAsset;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class com/carlom/klardrop/common/update/UpdateManifestFetcher {
+	public abstract fun fetch (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public abstract interface class com/carlom/klardrop/common/update/UpdateStatus {
+}
+
+public final class com/carlom/klardrop/common/update/UpdateStatus$Available : com/carlom/klardrop/common/update/UpdateStatus {
+	public fun <init> (Ljava/lang/String;Lcom/carlom/klardrop/common/update/InstallChannel;Lcom/carlom/klardrop/common/update/UpdateAction;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/carlom/klardrop/common/update/InstallChannel;Lcom/carlom/klardrop/common/update/UpdateAction;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/carlom/klardrop/common/update/InstallChannel;
+	public final fun component3 ()Lcom/carlom/klardrop/common/update/UpdateAction;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Lcom/carlom/klardrop/common/update/InstallChannel;Lcom/carlom/klardrop/common/update/UpdateAction;Ljava/lang/String;)Lcom/carlom/klardrop/common/update/UpdateStatus$Available;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/update/UpdateStatus$Available;Ljava/lang/String;Lcom/carlom/klardrop/common/update/InstallChannel;Lcom/carlom/klardrop/common/update/UpdateAction;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/update/UpdateStatus$Available;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAction ()Lcom/carlom/klardrop/common/update/UpdateAction;
+	public final fun getChannel ()Lcom/carlom/klardrop/common/update/InstallChannel;
+	public final fun getNotesUrl ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/UpdateStatus$Checking : com/carlom/klardrop/common/update/UpdateStatus {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/update/UpdateStatus$Checking;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/UpdateStatus$Failed : com/carlom/klardrop/common/update/UpdateStatus {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/update/UpdateStatus$Failed;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/update/UpdateStatus$Failed;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/update/UpdateStatus$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/UpdateStatus$Unknown : com/carlom/klardrop/common/update/UpdateStatus {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/update/UpdateStatus$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/update/UpdateStatus$UpToDate : com/carlom/klardrop/common/update/UpdateStatus {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/update/UpdateStatus$UpToDate;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/utils/Clock {
+	public fun <init> ()V
+	public final fun currentTimeMillis ()J
+}
+
+public abstract interface class com/carlom/klardrop/common/utils/Coroutines {
+	public abstract fun getAppScope ()Lkotlinx/coroutines/CoroutineScope;
+	public abstract fun getCpuDispatcher ()Lkotlinx/coroutines/CoroutineDispatcher;
+	public abstract fun getIoDispatcher ()Lkotlinx/coroutines/CoroutineDispatcher;
+	public abstract fun getMainDispatcher ()Lkotlinx/coroutines/CoroutineDispatcher;
+	public abstract fun newScope ()Lkotlinx/coroutines/CoroutineScope;
+	public abstract fun newScope (Lkotlin/coroutines/CoroutineContext;)Lkotlinx/coroutines/CoroutineScope;
+}
+
+public final class com/carlom/klardrop/common/utils/DeviceType : java/lang/Enum {
+	public static final field Companion Lcom/carlom/klardrop/common/utils/DeviceType$Companion;
+	public static final field DESKTOP Lcom/carlom/klardrop/common/utils/DeviceType;
+	public static final field MOBILE Lcom/carlom/klardrop/common/utils/DeviceType;
+	public static final field UNKNOWN Lcom/carlom/klardrop/common/utils/DeviceType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getNearbyId ()B
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/utils/DeviceType;
+	public static fun values ()[Lcom/carlom/klardrop/common/utils/DeviceType;
+}
+
+public final class com/carlom/klardrop/common/utils/DeviceType$Companion {
+	public final fun fromId (B)Lcom/carlom/klardrop/common/utils/DeviceType;
+	public final fun fromId (I)Lcom/carlom/klardrop/common/utils/DeviceType;
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class com/carlom/klardrop/common/utils/FileTypeUtils {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/utils/FileTypeUtils;
+	public final fun getMimeTypeFromExtension (Ljava/lang/String;)Ljava/lang/String;
+	public final fun isAudioMimeType (Ljava/lang/String;)Z
+	public final fun isImageMimeType (Ljava/lang/String;)Z
+	public final fun isImageOrVideoMimeType (Ljava/lang/String;)Z
+	public final fun isVideo (Ljava/lang/String;)Z
+	public final fun isVideoMimeType (Ljava/lang/String;)Z
+}
+
+public final class com/carlom/klardrop/common/utils/LogBuffer {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/utils/LogBuffer;
+	public final fun append (Ljava/lang/String;)V
+	public final fun clear ()V
+	public final fun snapshot (I)Ljava/util/List;
+	public static synthetic fun snapshot$default (Lcom/carlom/klardrop/common/utils/LogBuffer;IILjava/lang/Object;)Ljava/util/List;
+}
+
+public final class com/carlom/klardrop/common/utils/LoggerKt {
+	public static final fun log (Ljava/lang/String;)V
+	public static final fun log (Ljava/lang/String;Ljava/lang/String;)V
+	public static final fun log (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;Z)V
+	public static final fun log (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public static synthetic fun log$default (Ljava/lang/String;Ljava/lang/String;Ljava/lang/Throwable;ZILjava/lang/Object;)V
+}
+
+public final class com/carlom/klardrop/common/utils/OsType : java/lang/Enum {
+	public static final field ANDROID Lcom/carlom/klardrop/common/utils/OsType;
+	public static final field APPLE Lcom/carlom/klardrop/common/utils/OsType;
+	public static final field Companion Lcom/carlom/klardrop/common/utils/OsType$Companion;
+	public static final field LINUX Lcom/carlom/klardrop/common/utils/OsType;
+	public static final field UNKNOWN Lcom/carlom/klardrop/common/utils/OsType;
+	public static final field WINDOWS Lcom/carlom/klardrop/common/utils/OsType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getNearbyId ()B
+	public static fun valueOf (Ljava/lang/String;)Lcom/carlom/klardrop/common/utils/OsType;
+	public static fun values ()[Lcom/carlom/klardrop/common/utils/OsType;
+}
+
+public final class com/carlom/klardrop/common/utils/OsType$Companion {
+	public final fun fromId (B)Lcom/carlom/klardrop/common/utils/OsType;
+	public final fun fromId (I)Lcom/carlom/klardrop/common/utils/OsType;
+}
+
+public abstract interface class com/carlom/klardrop/common/utils/PlatformFileSystem {
+	public abstract fun delete (Lkotlinx/io/files/Path;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun getInternalStoragePath ()Lkotlinx/io/files/Path;
+	public abstract fun getReadStreamFrom (Lio/github/vinceglb/filekit/PlatformFile;)Lkotlinx/io/RawSource;
+	public abstract fun getResolvedFileData (Lio/github/vinceglb/filekit/PlatformFile;)Lcom/carlom/klardrop/common/utils/ResolvedFileData;
+	public abstract fun getTempStoragePath ()Lkotlinx/io/files/Path;
+	public abstract fun getWriteStreamTo (Lkotlinx/io/files/Path;)Lkotlinx/io/RawSink;
+	public abstract fun moveToStorage (Lkotlinx/io/files/Path;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun openFile (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun openUrl (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun prepareFileForSending (Lio/github/vinceglb/filekit/PlatformFile;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/carlom/klardrop/common/utils/PreparedSendFile {
+	public fun <init> (Lio/github/vinceglb/filekit/PlatformFile;Lcom/carlom/klardrop/common/utils/ResolvedFileData;)V
+	public final fun component1 ()Lio/github/vinceglb/filekit/PlatformFile;
+	public final fun component2 ()Lcom/carlom/klardrop/common/utils/ResolvedFileData;
+	public final fun copy (Lio/github/vinceglb/filekit/PlatformFile;Lcom/carlom/klardrop/common/utils/ResolvedFileData;)Lcom/carlom/klardrop/common/utils/PreparedSendFile;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/utils/PreparedSendFile;Lio/github/vinceglb/filekit/PlatformFile;Lcom/carlom/klardrop/common/utils/ResolvedFileData;ILjava/lang/Object;)Lcom/carlom/klardrop/common/utils/PreparedSendFile;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getData ()Lcom/carlom/klardrop/common/utils/ResolvedFileData;
+	public final fun getFile ()Lio/github/vinceglb/filekit/PlatformFile;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/utils/ResolvedFileData {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;J)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()J
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;J)Lcom/carlom/klardrop/common/utils/ResolvedFileData;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/utils/ResolvedFileData;Ljava/lang/String;Ljava/lang/String;JILjava/lang/Object;)Lcom/carlom/klardrop/common/utils/ResolvedFileData;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFileName ()Ljava/lang/String;
+	public final fun getFileSize ()J
+	public final fun getMimeType ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/klardrop/common/CrashReporter {
+	public static final field INSTANCE Lcom/klardrop/common/CrashReporter;
+	public final fun notify (Ljava/lang/Throwable;Z)V
+	public static synthetic fun notify$default (Lcom/klardrop/common/CrashReporter;Ljava/lang/Throwable;ZILjava/lang/Object;)V
+	public final fun reportUserFeedback (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/klardrop/common/ReportOutcome;
+	public static synthetic fun reportUserFeedback$default (Lcom/klardrop/common/CrashReporter;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/klardrop/common/ReportOutcome;
+}
+
+public final class com/klardrop/common/CrashReporterKt {
+	public static final fun initCrashReporter (Ljava/lang/String;Z)V
+}
+
+public final class com/klardrop/common/CrashReporter_androidKt {
+	public static final fun initCrashReporter (Landroid/content/Context;Ljava/lang/String;Z)V
+}
+
+public final class com/klardrop/common/ReportOutcome : java/lang/Enum {
+	public static final field Disabled Lcom/klardrop/common/ReportOutcome;
+	public static final field Failed Lcom/klardrop/common/ReportOutcome;
+	public static final field Sent Lcom/klardrop/common/ReportOutcome;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/klardrop/common/ReportOutcome;
+	public static fun values ()[Lcom/klardrop/common/ReportOutcome;
+}
+

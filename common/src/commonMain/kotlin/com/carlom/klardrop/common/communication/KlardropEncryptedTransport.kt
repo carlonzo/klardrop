@@ -25,7 +25,7 @@ import io.ktor.utils.io.writeByteArray
  * [decode] mutates the receive sequence number and is only ever called from the single-threaded
  * read loop, so it needs no extra synchronization.
  */
-sealed interface FrameCipher {
+internal sealed interface FrameCipher {
   /**
    * True only when the encrypted channel has been bound to the peer's persistent device identity
    * (their stored ECDSA key signed the UKEY2 verification string). Drives whether the redundant
@@ -89,7 +89,7 @@ sealed interface FrameCipher {
  * trust-on-first-use (encrypted but unauthenticated — [FrameCipher.Encrypted.authenticated] is
  * `false`).
  */
-object KlardropEncryptedTransport {
+internal object KlardropEncryptedTransport {
 
   private const val TAG = "KlardropEncryptedTransport"
   private const val VERIFICATION_STRING_LENGTH = 32

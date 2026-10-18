@@ -20,7 +20,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 
-class QrShareSession(
+public class QrShareSession internal constructor(
   private val coroutines: Coroutines,
   private val fileManager: FileManager,
   private val transferAnchor: TransferAnchor,
@@ -28,14 +28,14 @@ class QrShareSession(
   private val clock: Clock,
   private val server: LanHttpShareServer,
 ) {
-  companion object {
-    val POST_ARRIVAL_GRACE: Duration = 2.minutes
-    val QR_WAIT_TIMEOUT: Duration = 3.minutes
+  public companion object {
+    internal val POST_ARRIVAL_GRACE: Duration = 2.minutes
+    internal val QR_WAIT_TIMEOUT: Duration = 3.minutes
     internal val TICKER_INTERVAL: Duration = 500.milliseconds
   }
 
   private val _state = MutableStateFlow<QrShareState>(QrShareState.Idle)
-  val state: StateFlow<QrShareState> = _state.asStateFlow()
+  public val state: StateFlow<QrShareState> = _state.asStateFlow()
 
   private var sessionScope: CoroutineScope? = null
   private var sessionId: String = ""
@@ -45,7 +45,7 @@ class QrShareSession(
   private var currentUrl: String = ""
 
   private var qrSheetVisible: Boolean = false
-  var hasClaimed: Boolean = false
+  public var hasClaimed: Boolean = false
     private set
 
   private var sessionStartTime: Instant? = null
@@ -72,7 +72,7 @@ class QrShareSession(
     )
   }
 
-  suspend fun start(payload: QrSharePayload): QrShareState {
+  public suspend fun start(payload: QrSharePayload): QrShareState {
     cancel()
 
     _state.value = QrShareState.Starting
@@ -157,7 +157,7 @@ class QrShareSession(
     }
   }
 
-  fun dismissQrSheet() {
+  public fun dismissQrSheet(): Unit {
     val currentState = _state.value
     if (currentState is QrShareState.Idle || currentState is QrShareState.Failed) {
       return
@@ -204,7 +204,7 @@ class QrShareSession(
     }
   }
 
-  fun cancel() {
+  public fun cancel(): Unit {
     if (_state.value is QrShareState.Idle) return
     log("QrShareSession", "Session cancelled")
     stopInternal()

@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
  * resume. The iosMain InternalPlatformDependencies wires UIApplicationDidBecomeActive to
  * call [trigger] so DiscoveryNetwork's existing rebuildMdnsState path re-publishes.
  */
-actual class NetworkLifecycleMonitor {
+internal actual class NetworkLifecycleMonitor {
 
   // extraBufferCapacity=8 so a quick burst of triggers doesn't drop emissions; consumers
   // (DiscoveryNetwork) only react to "something changed" anyway, so collapsing dups is fine.

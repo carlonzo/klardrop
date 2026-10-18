@@ -35,5 +35,5 @@ internal fun reportUncaughtException(tag: String, throwable: Throwable, fatal: B
  * The handler runs on the failing coroutine's own thread and deliberately does NOT rethrow — see
  * [reportUncaughtException] for the reporting contract.
  */
-fun nonFatalCoroutineExceptionHandler(tag: String): CoroutineExceptionHandler =
+internal fun nonFatalCoroutineExceptionHandler(tag: String): CoroutineExceptionHandler =
   CoroutineExceptionHandler { _, throwable -> reportUncaughtException(tag, throwable) }

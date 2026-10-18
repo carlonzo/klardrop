@@ -30,7 +30,7 @@ import org.freedesktop.dbus.types.Variant
  * two centrals connected at once, subscribe attribution degrades to "unknown" — Klardrop
  * pairs 1:1, per-central CCCD tracking would need Device1 signal plumbing.
  */
-class BlueZPeripheralFacade(
+internal class BlueZPeripheralFacade(
   private val connection: DBusConnection,
   private val adapterPath: String,
 ) : BlueZFacade {

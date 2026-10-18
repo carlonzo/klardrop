@@ -5,8 +5,8 @@ import com.carlom.klardrop.common.utils.OsType
 import java.io.File
 import java.net.InetAddress
 
-actual object CommonPlatformDependencies {
-  actual fun osType(): OsType {
+public actual object CommonPlatformDependencies {
+  public actual fun osType(): OsType {
     val os = System.getProperty("os.name", "generic").lowercase()
     return when {
       os.contains("mac") || os.contains("darwin") -> OsType.APPLE
@@ -21,7 +21,7 @@ actual object CommonPlatformDependencies {
     }
   }
 
-  actual fun deviceType(): DeviceType {
+  public actual fun deviceType(): DeviceType {
     return DeviceType.DESKTOP
   }
 
@@ -34,7 +34,7 @@ actual object CommonPlatformDependencies {
    * `CurrentDevice.deviceInfoFlow`'s map, so the device never advertised itself at all.
    * Resolved once and cached: the flow re-collects on every property change.
    */
-  actual fun getDeviceName(): String = hostname
+  public actual fun getDeviceName(): String = hostname
 }
 
 private val hostname: String by lazy {

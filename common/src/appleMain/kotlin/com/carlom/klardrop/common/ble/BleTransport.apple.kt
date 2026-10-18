@@ -60,7 +60,7 @@ import platform.darwin.dispatch_queue_create
  * [BleFraming] above the [BleSession] returned here.
  */
 @OptIn(ExperimentalForeignApi::class)
-actual class BleTransport {
+internal actual class BleTransport {
 
   private val cbQueue = dispatch_queue_create("com.carlom.klardrop.ble", null)
   // The handler is mandatory, not decorative: without it an uncaught throw from a chunk pump

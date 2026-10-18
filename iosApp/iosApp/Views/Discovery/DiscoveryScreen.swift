@@ -34,7 +34,7 @@ struct DiscoveryScreen: View {
 
     private var trustedDevices: [DeviceUi] {
         model.state.devices.filter { d in
-            switch onEnum(of: d.trustStatus) {
+            switch d.trustStatus.sealedType() {
             case .trusted: return true
             default:       return false
             }
@@ -43,7 +43,7 @@ struct DiscoveryScreen: View {
 
     private var nearbyDevices: [DeviceUi] {
         model.state.devices.filter { d in
-            switch onEnum(of: d.trustStatus) {
+            switch d.trustStatus.sealedType() {
             case .trusted: return false
             default:       return true
             }
@@ -321,7 +321,7 @@ private struct NearbySectionView: View {
                         ) {
                             // Show Pair button for untrusted / unknown
                             let showPair: Bool = {
-                                switch onEnum(of: device.trustStatus) {
+                                switch device.trustStatus.sealedType() {
                                 case .untrusted, .unknown:
                                     return true
                                 default:

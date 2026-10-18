@@ -31,7 +31,7 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
 
-actual class LanTlsListener actual constructor() {
+internal actual class LanTlsListener actual constructor() {
 
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var serverSocket: SSLServerSocket? = null

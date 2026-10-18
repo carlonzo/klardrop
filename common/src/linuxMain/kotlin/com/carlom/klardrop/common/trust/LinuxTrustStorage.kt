@@ -23,8 +23,8 @@ import kotlin.io.encoding.Base64
  * (SecretToolSecretStore or EncryptedFileSecretStore fallback).
  * All properties files are stored with permissions 0600 and directories with 0700.
  */
-class LinuxTrustStorage internal constructor(
-  val appDir: String,
+internal class LinuxTrustStorage internal constructor(
+  internal val appDir: String,
   private val secretStore: SecretStore,
 ) : TrustStorage {
 

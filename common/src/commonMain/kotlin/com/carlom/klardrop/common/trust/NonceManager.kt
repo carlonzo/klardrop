@@ -11,7 +11,7 @@ import kotlin.time.Instant
  * Manages nonce validation to prevent replay attacks.
  * Tracks seen nonces per sender device to ensure uniqueness within the time window.
  */
-class NonceManager(
+internal class NonceManager(
   // Make lifetime slightly longer than the message time window to handle clock skew
   private val nonceLifetime: Duration = 6.minutes
 ) {

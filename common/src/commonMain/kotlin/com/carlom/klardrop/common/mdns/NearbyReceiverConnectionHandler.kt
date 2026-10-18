@@ -13,6 +13,7 @@ import com.carlom.klardrop.common.discovery.toDeviceType
 import com.carlom.klardrop.common.persistence.FileTransferStatus
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.MessageType as PersistenceMessageType
+import com.carlom.klardrop.common.receiver.MessageProgress
 import com.carlom.klardrop.common.receiver.ReceiveMessageStatus
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 import com.carlom.klardrop.common.utils.Coroutines
@@ -42,7 +43,7 @@ import kotlin.random.Random
 /**
  *  This class handles the nearby connection request.
  */
-class NearbyReceiverConnectionHandler(
+internal class NearbyReceiverConnectionHandler(
   private val fileManager: FileManager,
   coroutines: Coroutines,
   private val incomingAuthorizer: IncomingAuthorizer,
@@ -537,7 +538,7 @@ class NearbyReceiverConnectionHandler(
   private fun updateReceiveProgress() {
 
     val messagesProgress = receiveProgress.map {
-      messagesToReceive[it.key]!! to it.value
+      MessageProgress(messagesToReceive[it.key]!!, it.value)
     }
 
     receiveFlow.update {

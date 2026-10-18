@@ -21,17 +21,17 @@ import platform.linux.ifaddrs
 import platform.posix.sockaddr_in
 
 internal data class LinuxInterfaceInfo(
-  val name: String,
-  val isUp: Boolean,
-  val isLoopback: Boolean,
-  val ipv4Addresses: List<String>,
+  internal val name: String,
+  internal val isUp: Boolean,
+  internal val isLoopback: Boolean,
+  internal val ipv4Addresses: List<String>,
 )
 
 private class MutableInterfaceInfo(
-  val name: String,
-  val isUp: Boolean,
-  val isLoopback: Boolean,
-  val ipv4Addresses: MutableList<String> = mutableListOf(),
+  internal val name: String,
+  internal val isUp: Boolean,
+  internal val isLoopback: Boolean,
+  internal val ipv4Addresses: MutableList<String> = mutableListOf(),
 )
 
 internal fun getLinuxNetworkInterfaces(): List<LinuxInterfaceInfo> = memScoped {

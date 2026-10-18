@@ -24,7 +24,7 @@ import platform.darwin.ifaddrs
 import platform.posix.sockaddr_in
 import kotlin.time.Duration.Companion.seconds
 
-actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
+internal actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
 
   actual override suspend fun selectIpv4(): String? =
     selectLanAddress(enumerateAppleInterfaces())

@@ -19,7 +19,7 @@ import platform.AppKit.NSWorkspace
 import platform.AppKit.NSWorkspaceDidWakeNotification
 import platform.Foundation.*
 
-actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
+public actual class InternalPlatformDependencies(private val applicationInfo: ApplicationInfo) {
 
   private val documentsDirectory: Path by lazy {
     val directory = NSFileManager.defaultManager.URLForDirectory(
@@ -33,7 +33,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     Path(requireNotNull(directory?.path))
   }
 
-  actual fun getDownloadStoragePath(): Path {
+  internal actual fun getDownloadStoragePath(): Path {
     // Drop received files straight into the user's ~/Downloads (no "Klardrop" subfolder).
     // Downloads always exists, so there's nothing to create — which also avoids the sandbox
     // `mkdir` that the downloads entitlement now permits but we no longer need.
@@ -48,7 +48,7 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     return Path(requireNotNull(downloadDirectory?.path))
   }
 
-  actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
+  internal actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns()
   }
 
@@ -77,63 +77,63 @@ actual class InternalPlatformDependencies(private val applicationInfo: Applicati
     monitor
   }
 
-  actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
+  internal actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
-  actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
+  internal actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
     com.carlom.klardrop.common.qrshare.PlatformLanAddressSelector()
 
   private val permissionsMonitor by lazy { PermissionsMonitor() }
 
-  actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
+  internal actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
 
   private val connectivityRestrictionMonitor by lazy { ConnectivityRestrictionMonitor() }
 
-  actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
+  internal actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
 
   private val notifier by lazy { Notifier() }
 
-  actual fun notifier(): Notifier = notifier
+  internal actual fun notifier(): Notifier = notifier
 
   private val foregroundState by lazy { ForegroundState() }
 
-  actual fun foregroundState(): ForegroundState = foregroundState
+  internal actual fun foregroundState(): ForegroundState = foregroundState
 
   private val bleTransport by lazy { BleTransport() }
 
-  actual fun bleTransport(): BleTransport = bleTransport
+  internal actual fun bleTransport(): BleTransport = bleTransport
 
-  actual fun clipboardReaderWriter(): ClipboardReaderWriter {
+  internal actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter()
   }
 
-  actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
+  internal actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
     return FallbackClipboardConnectionInfoJoiner(clipboardReaderWriter())
   }
 
-  actual fun driverFactory(): DriverFactory {
+  internal actual fun driverFactory(): DriverFactory {
     return DriverFactory()
   }
 
-  actual fun trustStorage(): TrustStorage {
+  internal actual fun trustStorage(): TrustStorage {
     // iOS and macOS share the AppleTrustStorage impl from appleMain — peer keys
     // in NSUserDefaults, the device's own private key in the Keychain.
     return AppleTrustStorage()
   }
 
-  actual suspend fun openFile(filePath: String): Boolean {
+  internal actual suspend fun openFile(filePath: String): Boolean {
     // Open the file in the user's default app for its type.
     val fileUrl = NSURL.fileURLWithPath(filePath)
     return NSWorkspace.sharedWorkspace.openURL(fileUrl)
   }
 
-  actual suspend fun openUrl(url: String): Boolean {
+  internal actual suspend fun openUrl(url: String): Boolean {
     val nsUrl = NSURL.URLWithString(url) ?: return false
     return NSWorkspace.sharedWorkspace.openURL(nsUrl)
   }
 
   // Native macOS has no "media gallery" concept distinct from Downloads; rely on the
   // regular Downloads-folder save.
-  actual suspend fun saveMediaToGallery(
+  internal actual suspend fun saveMediaToGallery(
     tempPath: kotlinx.io.files.Path,
     mimeType: String,
     displayName: String,

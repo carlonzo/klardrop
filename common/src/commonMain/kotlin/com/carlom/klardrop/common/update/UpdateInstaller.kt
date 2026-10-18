@@ -11,7 +11,7 @@ package com.carlom.klardrop.common.update
  * system `/opt` install without privileges, mobile, …). In that case the UI falls
  * back to the channel's [UpdateAction] (a command to copy or a URL to open).
  */
-interface UpdateInstaller {
+public interface UpdateInstaller {
 
   /**
    * Download [asset], verify its [ReleaseAsset.sha256] (when present), and stage
@@ -20,14 +20,14 @@ interface UpdateInstaller {
    * @param onProgress download fraction in 0..1, or null while indeterminate
    *   (e.g. during extraction). Called on a background dispatcher.
    */
-  suspend fun downloadAndStage(asset: ReleaseAsset, onProgress: (Float?) -> Unit)
+  public suspend fun downloadAndStage(asset: ReleaseAsset, onProgress: (Float?) -> Unit): Unit
 
   /**
    * Apply the staged update: swap the new app-image in and relaunch. Spawns a
    * short-lived detached helper that waits for this process to exit, then exits
    * the current process — so this call does not return normally.
    */
-  fun applyAndRestart()
+  public fun applyAndRestart(): Unit
 }
 
 /**
@@ -35,4 +35,4 @@ interface UpdateInstaller {
  * (see [UpdateInstaller]). Desktop implements it for the Linux script install;
  * mobile always returns null.
  */
-expect fun createUpdateInstaller(channel: InstallChannel): UpdateInstaller?
+internal expect fun createUpdateInstaller(channel: InstallChannel): UpdateInstaller?

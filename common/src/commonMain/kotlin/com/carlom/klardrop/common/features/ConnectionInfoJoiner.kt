@@ -13,6 +13,6 @@ import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
  * the clipboard fallback was used (caller should show a toast / snackbar indicating the
  * password is now on the clipboard).
  */
-interface ConnectionInfoJoiner {
-  suspend fun tryJoin(message: ConnectionInfoMessage): Boolean
+public interface ConnectionInfoJoiner {
+  public suspend fun tryJoin(message: ConnectionInfoMessage): Boolean
 }

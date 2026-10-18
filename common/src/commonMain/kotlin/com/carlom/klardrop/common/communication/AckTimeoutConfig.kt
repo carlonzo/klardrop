@@ -9,16 +9,16 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Configuration for ACK timeout handling
  */
-data class AckTimeoutConfig(
+internal data class AckTimeoutConfig(
   /**
    * Timeout for ACK_RECEIVED when sending messages without payload (TextMessage)
    */
-  val noPayloadAckTimeout: Duration = 5.seconds,
+  internal val noPayloadAckTimeout: Duration = 5.seconds,
 
   /**
    * Timeout for ACK_READY when sending message headers with payload (FileMessage)
    */
-  val readyAckTimeout: Duration = 5.seconds,
+  internal val readyAckTimeout: Duration = 5.seconds,
 
   /**
    * Timeout for ACK_RECEIVED when sending payload completion.
@@ -28,7 +28,7 @@ data class AckTimeoutConfig(
    * drained, hashed and finalized. 10s was tight enough to fire on a slow receiver and trigger
    * a pointless retry of an already-delivered file.
    */
-  val receivedAckTimeout: Duration = 30.seconds,
+  internal val receivedAckTimeout: Duration = 30.seconds,
 
   /**
    * Time to wait for ACK_READY / ACK_RECEIVED / ACK_REJECTED after the receiver has
@@ -36,17 +36,17 @@ data class AckTimeoutConfig(
    * Long enough to give the user time to glance at their phone; short enough that a
    * dropped peer eventually surfaces as a transfer failure instead of hanging forever.
    */
-  val userResponseTimeout: Duration = 5.minutes,
+  internal val userResponseTimeout: Duration = 5.minutes,
 
   /**
    * Maximum number of retry attempts for no-payload messages and payload headers
    */
-  val maxRetries: Int = 2,
+  internal val maxRetries: Int = 2,
 
   /**
    * Backoff multiplier for retry delays
    */
-  val retryBackoffMultiplier: Double = 1.5,
+  internal val retryBackoffMultiplier: Double = 1.5,
 
   /**
    * How long a single send attempt stays pending waiting for a connection to appear (our
@@ -54,7 +54,7 @@ data class AckTimeoutConfig(
    * and the retry loop moves on. One exhausted budget must NOT abort the whole send —
    * the loop keeps retrying until [maxRetries] is consumed.
    */
-  val connectionWaitTimeout: Duration = 15.seconds,
+  internal val connectionWaitTimeout: Duration = 15.seconds,
 ) {
   fun timeoutFor(ackType: AckType, hasPayload: Boolean): Duration = when (ackType) {
     AckType.READY -> readyAckTimeout

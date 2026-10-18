@@ -19,7 +19,7 @@ import platform.posix.getenv
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
-actual class ClipboardReaderWriter : ClipboardSource {
+internal actual class ClipboardReaderWriter : ClipboardSource {
 
   actual override fun read(): String {
     return try {

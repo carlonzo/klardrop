@@ -20,7 +20,7 @@ private val processStart = TimeSource.Monotonic.markNow()
  * increment or race a flush; these numbers are a diagnostic, not accounting. Use atomics if a
  * report ever needs to be exact.
  */
-class TransferLog(
+internal class TransferLog(
   private val windowMs: Long = 10_000,
   private val nowMs: () -> Long = { processStart.elapsedNow().inWholeMilliseconds },
   private val sink: (String) -> Unit = { log("TransferLog", it) },
@@ -66,4 +66,4 @@ class TransferLog(
 }
 
 /** Shared across every connection: one report per window for the whole process, not per peer. */
-val transferLog = TransferLog()
+internal val transferLog = TransferLog()

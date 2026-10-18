@@ -10,7 +10,7 @@ import java.awt.datatransfer.StringSelection
  * clipboard — used by tests (via [com.carlom.klardrop.common.ApplicationInfo.disableSystemClipboard])
  * so they never touch the developer's actual desktop clipboard.
  */
-actual class ClipboardReaderWriter(private val useInMemory: Boolean = false) : ClipboardSource {
+internal actual class ClipboardReaderWriter(private val useInMemory: Boolean = false) : ClipboardSource {
 
   private var inMemoryValue: String = ""
   private val clip by lazy { Toolkit.getDefaultToolkit().systemClipboard }

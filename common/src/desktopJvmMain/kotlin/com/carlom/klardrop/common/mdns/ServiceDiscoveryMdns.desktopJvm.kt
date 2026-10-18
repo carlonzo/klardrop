@@ -16,7 +16,7 @@ internal interface ServiceDiscoveryMdnsBackend {
   suspend fun restart()
 }
 
-actual class ServiceDiscoveryMdns internal constructor(
+internal actual class ServiceDiscoveryMdns internal constructor(
   /**
    * Test seam: inject a [ServiceDiscoveryMdnsBackend] instead of the OS-chosen
    * one. Production call sites use the default (null -> jmDNS on Linux/Windows,

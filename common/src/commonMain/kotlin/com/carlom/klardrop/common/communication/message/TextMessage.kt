@@ -4,14 +4,14 @@ import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
 @Serializable
-data class TextMessage(
-  val title: String = "",
-  val text: String,
+public data class TextMessage(
+  public val title: String = "",
+  public val text: String,
   override val id: Int = Random.nextInt(),
 ) : Message() {
 
-  override val type = MessageType.TEXT
+  override val type: MessageType = MessageType.TEXT
   override val hasPayload: Boolean = false
 }
 
-fun TextMessage.Companion.create(title: String = "", text: String) = TextMessage(title, text)
+internal fun TextMessage.Companion.create(title: String = "", text: String): TextMessage = TextMessage(title, text)

@@ -27,7 +27,7 @@ import io.sentry.kotlin.multiplatform.protocol.UserFeedback
  * the Android SDK needs an application [android.content.Context]. See
  * [initCrashReporter] in each source set.
  */
-object CrashReporter {
+public object CrashReporter {
 
   /**
    * Set once [initCrashReporter] actually calls `Sentry.init` (production build with a
@@ -69,7 +69,7 @@ object CrashReporter {
    * Kotlin/Native unhandled-exception hook, which runs right before `abort()`), so the
    * event is reported as Sentry level `fatal` instead of `error`.
    */
-  fun notify(throwable: Throwable, fatal: Boolean = false) {
+  public fun notify(throwable: Throwable, fatal: Boolean = false): Unit {
     if (!started) return
     if (throwable.isExpectedNetworkNoise()) return
     val sender = linuxSender
@@ -98,7 +98,7 @@ object CrashReporter {
    * silently swallowed: local and pull-request builds have no DSN, and a UI that says "thanks,
    * sent!" to a report that went nowhere is worse than one that admits it.
    */
-  fun reportUserFeedback(comments: String, name: String? = null, email: String? = null): ReportOutcome {
+  public fun reportUserFeedback(comments: String, name: String? = null, email: String? = null): ReportOutcome {
     if (!started) return ReportOutcome.Disabled
     // linuxX64: use the curl-based feedback sender instead of the Sentry KMP SDK, whose
     // linuxX64 klib is a no-op stub (see platformCrashSender). Sentry.isEnabled() must not
@@ -131,7 +131,7 @@ object CrashReporter {
     return ReportOutcome.Sent
   }
 
-  fun leaveBreadcrumb(message: String, type: BreadcrumbType = BreadcrumbType.MANUAL) {
+  internal fun leaveBreadcrumb(message: String, type: BreadcrumbType = BreadcrumbType.MANUAL) {
     if (!started) return
     // No-op for the linux sender: it has no scope to attach breadcrumbs to, and
     // carries the LogBuffer tail as the `log_tail` extra on the event instead.
@@ -151,7 +151,7 @@ object CrashReporter {
    * SDKs already capture OS/model; this adds our own `device.platform` (compile-time
    * target) and `device.osType` (runtime).
    */
-  fun setUser(deviceId: String, deviceName: String, osType: String) {
+  internal fun setUser(deviceId: String, deviceName: String, osType: String) {
     if (!started) return
     if (linuxSender != null) {
       linuxUserId = deviceId
@@ -177,7 +177,7 @@ object CrashReporter {
 }
 
 /** Result of [CrashReporter.reportUserFeedback], so the UI can tell the user the truth. */
-enum class ReportOutcome {
+public enum class ReportOutcome {
   Sent,
 
   /** No DSN was compiled in (local or pull-request build), or the SDK never started. */
@@ -192,7 +192,7 @@ enum class ReportOutcome {
  * the same thing as a free-form `category` plus a level, so each entry carries both and
  * the call sites in `logger.kt` stay unchanged.
  */
-enum class BreadcrumbType(
+internal enum class BreadcrumbType(
   internal val category: String,
   internal val level: SentryLevel,
 ) {
@@ -206,7 +206,7 @@ enum class BreadcrumbType(
   USER("user", SentryLevel.INFO),
 }
 
-object CrashReporterConfig {
+internal object CrashReporterConfig {
   /**
    * Sentry DSN, baked in at compile time from the `klardropSentryDsn` Gradle property
    * (see `common/build.gradle.kts`). Deliberately not checked in: this repository is
@@ -251,7 +251,7 @@ internal expect val crashReporterPlatform: String
  * `klardropSentryDsn`, so a locally built or pull-request binary physically cannot
  * report, regardless of what [isProduction] says.
  */
-fun initCrashReporter(appVersion: String, isProduction: Boolean) {
+public fun initCrashReporter(appVersion: String, isProduction: Boolean): Unit {
   initCrashReporter(appVersion, isProduction, CrashReporterConfig.DSN)
 }
 

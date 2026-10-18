@@ -6,60 +6,60 @@ package com.carlom.klardrop.common.trust
  *
  * Stores both ECDH keys (for key exchange) and ECDSA keys (for message signing).
  */
-interface TrustStorage {
+public interface TrustStorage {
 
     /**
      * Store a trusted device's ECDH public key.
      * @param deviceId Unique device identifier
      * @param publicKey ECDH public key for key exchange
      */
-    suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray)
+    public suspend fun storeTrustedDevice(deviceId: String, publicKey: ByteArray): Unit
 
     /**
      * Store a trusted device's ECDSA public key for message signing.
      * @param deviceId Unique device identifier
      * @param ecdsaPublicKey ECDSA public key for signature verification
      */
-    suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray)
+    public suspend fun storeECDSAKey(deviceId: String, ecdsaPublicKey: ByteArray): Unit
 
     /**
      * Retrieve a trusted device's ECDH public key.
      * @param deviceId Device identifier
      * @return ECDH public key bytes, or null if device is not trusted
      */
-    suspend fun getTrustedDeviceKey(deviceId: String): ByteArray?
+    public suspend fun getTrustedDeviceKey(deviceId: String): ByteArray?
 
     /**
      * Retrieve a trusted device's ECDSA public key for signature verification.
      * @param deviceId Device identifier
      * @return ECDSA public key bytes, or null if not stored
      */
-    suspend fun getECDSAKey(deviceId: String): ByteArray?
+    public suspend fun getECDSAKey(deviceId: String): ByteArray?
 
     /**
      * Get all trusted devices and their public keys.
      * @return Map of device ID to public key
      */
-    suspend fun getAllTrustedDevices(): Map<String, ByteArray>
+    public suspend fun getAllTrustedDevices(): Map<String, ByteArray>
 
     /**
      * Remove a device from the trusted list.
      * @param deviceId Device to untrust
      */
-    suspend fun removeTrustedDevice(deviceId: String)
+    public suspend fun removeTrustedDevice(deviceId: String): Unit
 
     /**
      * Clear all trusted devices.
      * Used for reset functionality or security cleanup.
      */
-    suspend fun clearAllTrustedDevices()
+    public suspend fun clearAllTrustedDevices(): Unit
 
     /**
      * Check if a device is trusted.
      * @param deviceId Device identifier
      * @return true if device is in trusted list
      */
-    suspend fun isTrusted(deviceId: String): Boolean {
+    public suspend fun isTrusted(deviceId: String): Boolean {
         return getTrustedDeviceKey(deviceId) != null
     }
 
@@ -88,7 +88,7 @@ interface TrustStorage {
      * generate the key directly inside the secure store. The supplied bytes form
      * exists for the in-memory test fake and the desktop fallback path.
      */
-    suspend fun storeDevicePrivateKey(privateKey: ByteArray)
+    public suspend fun storeDevicePrivateKey(privateKey: ByteArray): Unit
 
     /**
      * Retrieve this device's ECDSA private key bytes.
@@ -98,20 +98,20 @@ interface TrustStorage {
      * platforms must override [signWithDeviceKey] so callers never need the bytes.
      * Use [hasDeviceKey] to check presence without materializing the bytes.
      */
-    suspend fun getDevicePrivateKey(): ByteArray?
+    public suspend fun getDevicePrivateKey(): ByteArray?
 
     /**
      * Persist this device's ECDSA public key for fast read-back during pairing
      * and message signing. The public key is not a secret; any persistent
      * platform store is acceptable.
      */
-    suspend fun storeDevicePublicKey(publicKey: ByteArray)
+    public suspend fun storeDevicePublicKey(publicKey: ByteArray): Unit
 
     /**
      * Retrieve this device's ECDSA public key, or `null` if no identity has
      * been generated yet.
      */
-    suspend fun getDevicePublicKey(): ByteArray?
+    public suspend fun getDevicePublicKey(): ByteArray?
 
     /**
      * Whether this device has a persisted identity key. Cheaper than
@@ -119,7 +119,7 @@ interface TrustStorage {
      * secure store and cannot be exported. Default implementation infers
      * presence from [getDevicePrivateKey].
      */
-    suspend fun hasDeviceKey(): Boolean {
+    public suspend fun hasDeviceKey(): Boolean {
         return getDevicePrivateKey() != null
     }
 
@@ -127,7 +127,7 @@ interface TrustStorage {
      * Delete this device's identity private key (and public key).
      * After this, the device generates a new identity on next initialize().
      */
-    suspend fun deleteDevicePrivateKey()
+    public suspend fun deleteDevicePrivateKey(): Unit
 
     /**
      * Sign data with this device's persisted ECDSA private key.
@@ -140,7 +140,7 @@ interface TrustStorage {
      *
      * @return signature bytes, or `null` if no identity is present.
      */
-    suspend fun signWithDeviceKey(data: ByteArray, crypto: TrustCrypto): ByteArray? {
+    public suspend fun signWithDeviceKey(data: ByteArray, crypto: TrustCrypto): ByteArray? {
         val privateBytes = getDevicePrivateKey() ?: return null
         return crypto.signWithECDSA(TrustCrypto.ECDSAPrivateKey(privateBytes), data)
     }
@@ -153,13 +153,13 @@ interface TrustStorage {
      * transfers — much cheaper than per-chunk ECDSA, since both halves of the pair share
      * the symmetric key. Default is no-op for forward compat with older test fakes.
      */
-    suspend fun storeSharedSecret(deviceId: String, sharedSecret: ByteArray) {}
+    public suspend fun storeSharedSecret(deviceId: String, sharedSecret: ByteArray): Unit {}
 
     /**
      * Retrieve the ECDH shared secret previously stored for [deviceId]. Null on legacy
      * pairings that pre-date this field — callers fall back to per-frame ECDSA signing.
      */
-    suspend fun getSharedSecret(deviceId: String): ByteArray? = null
+    public suspend fun getSharedSecret(deviceId: String): ByteArray? = null
 
     /**
      * Ensure this device has an identity keypair, generating one if none exists,
@@ -181,7 +181,7 @@ interface TrustStorage {
      * handing back the same broken pair. So before reusing a stored pair we confirm the
      * two halves actually match; on mismatch (or a missing half) we regenerate both.
      */
-    suspend fun ensureDeviceKey(crypto: TrustCrypto): TrustCrypto.ECDSAPublicKey {
+    public suspend fun ensureDeviceKey(crypto: TrustCrypto): TrustCrypto.ECDSAPublicKey {
         val storedPublic = getDevicePublicKey()
         if (hasDeviceKey() && storedPublic != null) {
             // getDevicePrivateKey() returns null on secure-store platforms that don't

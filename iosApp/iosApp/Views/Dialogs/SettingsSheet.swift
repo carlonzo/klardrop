@@ -183,14 +183,14 @@ struct ReportProblemSheet: View {
     }
 
     private func send() {
-        // `name` is passed explicitly rather than leaning on the Kotlin default argument, so this
-        // call does not depend on SKIE's default-argument bridging staying enabled.
+        // `name` is passed explicitly rather than leaning on Kotlin default-argument
+        // bridging (which does not survive the Swift export).
         outcome = CrashReporter.shared.reportUserFeedback(
             comments: description,
             name: nil,
             email: email
         )
-        if outcome == .sent {
+        if outcome == .Sent {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 onDismiss()
             }
@@ -200,18 +200,19 @@ struct ReportProblemSheet: View {
     private func isSent(_ outcome: ReportOutcome?) -> Bool {
         guard let outcome else { return false }
         switch outcome {
-        case .sent: return true
+        case .Sent: return true
         default:    return false
         }
     }
 
     private func message(for outcome: ReportOutcome) -> String {
         switch outcome {
-        case .sent:     return "Thanks \u{2014} report sent."
-        case .disabled: return "Reporting is turned off in this build, so nothing was sent."
+        case .Sent:     return "Thanks \u{2014} report sent."
+        case .Disabled: return "Reporting is turned off in this build, so nothing was sent."
         default:        return "Could not send the report. Please try again later."
         }
     }
+
 }
 
 // MARK: - AppMenuButton

@@ -14,12 +14,12 @@ import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.encodeToByteArray
 import kotlinx.serialization.protobuf.ProtoBuf
 
-interface KnownDevicesRepository {
+public interface KnownDevicesRepository {
 
-  val knownDevices: Flow<Map<String, DeviceInfo>>
+  public val knownDevices: Flow<Map<String, DeviceInfo>>
 
-  suspend fun addKnownDevice(deviceInfo: DeviceInfo)
-  suspend fun removeKnownDevice(deviceId: String)
+  public suspend fun addKnownDevice(deviceInfo: DeviceInfo): Unit
+  public suspend fun removeKnownDevice(deviceId: String): Unit
 }
 
 internal class KnownDevicesRepositoryImpl(

@@ -4,7 +4,7 @@ package com.carlom.klardrop.common.utils
  * Utility functions for determining file types based on file names and extensions.
  * Uses MIME type mappings from the platform file system.
  */
-object FileTypeUtils {
+public object FileTypeUtils {
 
   // MIME type mappings extracted from PlatformFileSystem for consistency
   private val mimeTypes = mapOf(
@@ -85,7 +85,7 @@ object FileTypeUtils {
    * @param fileName The name of the file including extension
    * @return true if the file is a video, false otherwise
    */
-  fun isVideo(fileName: String): Boolean {
+  public fun isVideo(fileName: String): Boolean {
     val extension = getFileExtension(fileName)
     val mimeType = mimeTypes[extension] ?: return false
     return mimeType.startsWith("video/")
@@ -106,7 +106,7 @@ object FileTypeUtils {
   }
 
 
-  fun getMimeTypeFromExtension(extension: String?): String {
+  public fun getMimeTypeFromExtension(extension: String?): String {
     if (extension == null) return DEFAULT_MIME_TYPE
 
     return mimeTypes[extension] ?: run {
@@ -123,7 +123,7 @@ object FileTypeUtils {
    * @param mimeType The MIME type to check
    * @return true if the MIME type is an image, false otherwise
    */
-  fun isImageMimeType(mimeType: String): Boolean {
+  public fun isImageMimeType(mimeType: String): Boolean {
     return mimeType.startsWith("image/")
   }
 
@@ -132,11 +132,11 @@ object FileTypeUtils {
    * @param mimeType The MIME type to check
    * @return true if the MIME type is a video, false otherwise
    */
-  fun isVideoMimeType(mimeType: String): Boolean {
+  public fun isVideoMimeType(mimeType: String): Boolean {
     return mimeType.startsWith("video/")
   }
 
-  fun isAudioMimeType(mimeType: String): Boolean {
+  public fun isAudioMimeType(mimeType: String): Boolean {
     return mimeType.startsWith("audio/")
   }
 
@@ -145,7 +145,7 @@ object FileTypeUtils {
    * @param mimeType The MIME type to check
    * @return true if the MIME type is an image or video, false otherwise
    */
-  fun isImageOrVideoMimeType(mimeType: String): Boolean {
+  public fun isImageOrVideoMimeType(mimeType: String): Boolean {
     return isImageMimeType(mimeType) || isVideoMimeType(mimeType)
   }
 

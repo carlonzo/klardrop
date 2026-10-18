@@ -19,7 +19,7 @@ import platform.posix.getenv
  * Disabled by default: [isSupported] is false unless `KLARDROP_LINUX_BLE=1` is set AND
  * a capable BlueZ adapter is present, so LAN-only native v1 stays the default path.
  */
-actual class BleTransport {
+internal actual class BleTransport {
 
   private val advertiser = SdBusAdvertiser()
 

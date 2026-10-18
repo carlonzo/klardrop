@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
-class ShowDevicesControllerHelper(
+public class ShowDevicesControllerHelper(
   private val coroutineScope: CoroutineScope,
   private val visibleDevices: StateFlow<Map<String, DiscoveryDevice>>,
   private val messageRepository: MessageRepository,
@@ -28,7 +28,7 @@ class ShowDevicesControllerHelper(
 ) {
 
   private val _devicesFlow = MutableStateFlow<Map<String, DeviceUi>>(mapOf())
-  val devicesFlow: Flow<Collection<DeviceUi>> = _devicesFlow.map { it.values }
+  public val devicesFlow: Flow<Collection<DeviceUi>> = _devicesFlow.map { it.values }
 
   init {
     coroutineScope.launch {
@@ -102,7 +102,7 @@ class ShowDevicesControllerHelper(
     }
   }
 
-  suspend fun collectProgress(flow: Flow<MessengerSendProgress>, deviceId: String) {
+  public suspend fun collectProgress(flow: Flow<MessengerSendProgress>, deviceId: String): Unit {
     flow.collect { progress ->
       _devicesFlow.update { devices ->
 

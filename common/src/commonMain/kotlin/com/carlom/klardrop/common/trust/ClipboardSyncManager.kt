@@ -39,7 +39,7 @@ import kotlin.time.ExperimentalTime
  * [com.carlom.klardrop.common.communication.router.MessagesRouter] enforces the same rule
  * one layer down so an unpaired peer's CLIPBOARD_SYNC frame never even reaches this class.
  */
-class ClipboardSyncManager(
+internal class ClipboardSyncManager(
   private val clipboardManager: ClipboardAccess,
   private val visibleDevices: VisibleDevices,
   private val trustManager: TrustManager,

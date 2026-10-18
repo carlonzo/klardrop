@@ -6,18 +6,18 @@ import io.github.vinceglb.filekit.extension
 import io.github.vinceglb.filekit.name
 import io.github.vinceglb.filekit.size
 
-sealed interface QrSharePayload {
-  data class Text(val text: String) : QrSharePayload
-  data class Files(val files: List<SharedFile>) : QrSharePayload
+public sealed interface QrSharePayload {
+  public data class Text(public val text: String) : QrSharePayload
+  public data class Files(public val files: List<SharedFile>) : QrSharePayload
 }
 
-data class SharedFile(
-  val file: PlatformFile,
-  val fileName: String,
-  val mimeType: String,
-  val fileSize: Long, // 0 if unknown; never Content-Length: -1
+public data class SharedFile(
+  public val file: PlatformFile,
+  public val fileName: String,
+  public val mimeType: String,
+  public val fileSize: Long, // 0 if unknown; never Content-Length: -1
 ) {
-  constructor(file: PlatformFile) : this(
+  public constructor(file: PlatformFile) : this(
     file = file,
     fileName = file.name,
     mimeType = FileTypeUtils.getMimeTypeFromExtension(file.extension),

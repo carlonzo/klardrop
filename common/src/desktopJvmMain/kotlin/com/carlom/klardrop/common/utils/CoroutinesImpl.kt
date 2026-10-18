@@ -7,7 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlin.coroutines.CoroutineContext
 
-actual class CoroutinesImpl actual constructor() : Coroutines {
+internal actual class CoroutinesImpl actual constructor() : Coroutines {
 
   // Last-resort handler for uncaught failures in the top-level coroutines of the app's
   // SupervisorJob scopes. It runs on the failing coroutine's own thread. Rethrowing here

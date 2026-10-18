@@ -19,10 +19,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * with `>0` meaning at least one Activity is in the started state and the
  * user is plausibly looking at the app.
  */
-actual class ForegroundState(context: Context) {
+public actual class ForegroundState(context: Context) {
 
   private val flow = MutableStateFlow(false)
-  actual val isForeground: StateFlow<Boolean> = flow.asStateFlow()
+  public actual val isForeground: StateFlow<Boolean> = flow.asStateFlow()
 
   init {
     val app = context.applicationContext as? Application

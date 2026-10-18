@@ -48,7 +48,7 @@ import kotlinx.serialization.protobuf.ProtoBuf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
-class CommunicationModule(
+internal class CommunicationModule(
   private val coroutines: Coroutines,
   private val visibleDevices: VisibleDevices,
   private val protoBuf: ProtoBuf,

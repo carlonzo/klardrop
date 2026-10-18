@@ -12,10 +12,10 @@ import platform.UIKit.UIApplicationDidBecomeActiveNotification
 import platform.UIKit.UIApplicationWillResignActiveNotification
 import platform.darwin.NSObject
 
-actual class ForegroundState {
+public actual class ForegroundState {
 
   private val flow = MutableStateFlow(false)
-  actual val isForeground: StateFlow<Boolean> = flow.asStateFlow()
+  public actual val isForeground: StateFlow<Boolean> = flow.asStateFlow()
 
   init {
     flow.value = UIApplication.sharedApplication.applicationState.value == 0L

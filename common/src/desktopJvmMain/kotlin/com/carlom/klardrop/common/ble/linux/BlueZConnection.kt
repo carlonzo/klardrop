@@ -16,7 +16,7 @@ import org.freedesktop.dbus.types.Variant
  * LEAdvertisingManager1 (>= 5.48) on the system bus, and its D-Bus policy lets any
  * local user own a per-app GATT application/advertisement.
  */
-object BlueZConnection {
+internal object BlueZConnection {
 
   const val BLUEZ_SERVICE = "org.bluez"
   const val GATT_MANAGER = "org.bluez.GattManager1"

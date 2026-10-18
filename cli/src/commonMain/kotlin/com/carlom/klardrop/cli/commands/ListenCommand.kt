@@ -122,7 +122,7 @@ class ListenCommand : CliktCommand(
         is ReceiveMessageStatus.Started -> CliLogging.error("[listen] Started transfer from $deviceId")
         is ReceiveMessageStatus.Progress -> {
           val pct = if (status.messages.isNotEmpty()) {
-            status.messages.firstOrNull()?.second ?: 0
+            status.messages.firstOrNull()?.progress ?: 0
           } else 0
           CliLogging.error("[listen] Progress from $deviceId: $pct%")
         }

@@ -52,7 +52,7 @@ import kotlin.time.Duration.Companion.seconds
  * and report discovered peers to callers. Session-level I/O (GATT connect/read/write) is
  * planned as a follow-up that reuses the existing Klardrop message serializer.
  */
-actual class BleTransport(private val context: Context) {
+internal actual class BleTransport(private val context: Context) {
 
   private val manager: BluetoothManager? =
     ContextCompat.getSystemService(context, BluetoothManager::class.java)
@@ -514,8 +514,8 @@ private val WRITE_ACK_TIMEOUT = 5.seconds
  * `connectCentral` caller can await a fully-ready session with a single suspend point.
  */
 private class CentralSessionHolder(
-  @Suppress("unused") val remoteShortDeviceId: String,
-  val incoming: Channel<ByteArray>,
+  @Suppress("unused") internal val remoteShortDeviceId: String,
+  internal val incoming: Channel<ByteArray>,
 ) {
   @Volatile var negotiatedMtu: Int = 20 // safe default before onMtuChanged fires
   @Volatile var txCharacteristic: BluetoothGattCharacteristic? = null

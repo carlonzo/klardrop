@@ -17,7 +17,7 @@ import com.carlom.klardrop.common.utils.log
  * Until that lands every entry point here reports not-ready so the transport stays
  * provably inert: BLE is disabled by default and LAN-only native v1 is unaffected.
  */
-object SdBusGatt {
+internal object SdBusGatt {
 
   /** Object root mirroring the dbus-java peripheral's exported application path layout. */
   const val APP_PATH = "/com/carlom/klardrop/ble"

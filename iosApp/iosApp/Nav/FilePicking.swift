@@ -1,6 +1,9 @@
 import SwiftUI
 #if os(iOS)
 import PhotosUI
+#if canImport(_PhotosUI_SwiftUI)
+import _PhotosUI_SwiftUI
+#endif
 #endif
 import UniformTypeIdentifiers
 import presentation
@@ -17,7 +20,7 @@ import presentation
 //      a. Security-scope-accessed (fileImporter URLs).
 //      b. COPIED into the app's temporary sandbox (Kotlin reads off-thread,
 //         so the security-scoped bookmark won't survive the callback).
-//      c. Bridged via the SKIE global free function platformFileFromPath(path:)
+//      c. Bridged via the :presentation top-level function platformFileFromPath(path:)
 //         -> Filekit_corePlatformFile.
 //
 // 3. The resulting [Filekit_corePlatformFile] is handed to the caller's onPicked closure
@@ -42,15 +45,15 @@ final class FilePickerState {
     var photosPickerItems: [PhotosPickerItem] = []
     #endif
 
-    var onPicked: (([Filekit_corePlatformFile]) -> Void)?
+    var onPicked: (([PlatformFile]) -> Void)?
 
-    func presentFilePicker(onPicked: @escaping ([Filekit_corePlatformFile]) -> Void) {
+    func presentFilePicker(onPicked: @escaping ([PlatformFile]) -> Void) {
         self.onPicked = onPicked
         showFilePicker = true
     }
 
     #if os(iOS)
-    func presentPhotosPicker(onPicked: @escaping ([Filekit_corePlatformFile]) -> Void) {
+    func presentPhotosPicker(onPicked: @escaping ([PlatformFile]) -> Void) {
         self.onPicked = onPicked
         showPhotosPicker = true
     }
@@ -118,10 +121,10 @@ extension View {
 // MARK: - Resolution helpers (private)
 
 /// Resolve security-scoped fileImporter URLs into sandbox-copied Filekit_corePlatformFiles.
-private func resolveFileImporterResult(_ result: Result<[URL], Error>) async -> [Filekit_corePlatformFile] {
+private func resolveFileImporterResult(_ result: Result<[URL], Error>) async -> [PlatformFile] {
     guard case .success(let urls) = result else { return [] }
 
-    var platformFiles: [Filekit_corePlatformFile] = []
+    var platformFiles: [PlatformFile] = []
 
     for url in urls {
         let didAccess = url.startAccessingSecurityScopedResource()
@@ -130,7 +133,7 @@ private func resolveFileImporterResult(_ result: Result<[URL], Error>) async -> 
         }
 
         guard let dest = copyToSandbox(url: url) else { continue }
-        let pf = PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+        let pf = platformFileFromPath(path: dest.path)
         platformFiles.append(pf)
     }
 
@@ -139,8 +142,8 @@ private func resolveFileImporterResult(_ result: Result<[URL], Error>) async -> 
 
 #if os(iOS)
 /// Resolve PhotosPickerItems by loading their Data and writing to a temp file.
-private func resolvePhotosPickerItems(_ items: [PhotosPickerItem]) async -> [Filekit_corePlatformFile] {
-    var platformFiles: [Filekit_corePlatformFile] = []
+private func resolvePhotosPickerItems(_ items: [PhotosPickerItem]) async -> [PlatformFile] {
+    var platformFiles: [PlatformFile] = []
 
     for item in items {
         guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
@@ -156,7 +159,7 @@ private func resolvePhotosPickerItems(_ items: [PhotosPickerItem]) async -> [Fil
             try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
             let dest = destDir.appendingPathComponent(filename)
             try data.write(to: dest)
-            let pf = PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+            let pf = platformFileFromPath(path: dest.path)
             platformFiles.append(pf)
         } catch {
             // Skip files that can't be written; log silently.

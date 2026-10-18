@@ -3,8 +3,8 @@ package com.carlom.klardrop
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.receiver.ReceiveMessageUpdate
 
-interface ReceiveNotificationsCallbacks {
-    fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate)
-    fun onCardDismissed(id: Int)
-    fun onConnectionInfoAccepted(message: ConnectionInfoMessage) {}
+public interface ReceiveNotificationsCallbacks {
+    public fun onReceivedCardClicked(receiveUpdate: ReceiveMessageUpdate): Unit
+    public fun onCardDismissed(id: Int): Unit
+    public fun onConnectionInfoAccepted(message: ConnectionInfoMessage): Unit {}
 }

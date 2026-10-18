@@ -5,12 +5,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-actual class ConnectivityRestrictionMonitor(
+public actual class ConnectivityRestrictionMonitor(
   initial: ConnectivityRestrictions = ConnectivityRestrictions.EMPTY,
 ) {
   private val state = MutableStateFlow(initial)
 
-  actual fun observe(): Flow<ConnectivityRestrictions> = state.asStateFlow()
+  public actual fun observe(): Flow<ConnectivityRestrictions> = state.asStateFlow()
 
-  actual fun refresh() = Unit
+  public actual fun refresh(): Unit = Unit
 }

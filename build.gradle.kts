@@ -67,6 +67,44 @@ subprojects {
     sourceCompatibility = javaVersion.toString()
     targetCompatibility = javaVersion.toString()
   }
+
+  // Workaround for Kotlin 2.4.20 swift-export bug:
+  // swift-export emits a fatalError @_spi stub plus the default-body implementation for opt-in
+  // (@ExperimentalSerializationApi -> @_spi) interface members inside the same extension,
+  // causing "invalid redeclaration" Swift compile errors.
+  // Removal condition: can be removed when Kotlin fixes this bug in swift-export;
+  // check by deleting this post-processing step and building the app.
+  val swiftExportTaskClass = try {
+    @Suppress("UNCHECKED_CAST")
+    Class.forName("org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftexport.tasks.SwiftExportTask") as Class<Task>
+  } catch (_: ClassNotFoundException) {
+    null
+  }
+  if (swiftExportTaskClass != null) {
+    tasks.withType(swiftExportTaskClass).configureEach {
+      val getParams = javaClass.getMethod("getParameters")
+      val params = getParams.invoke(this)
+      val getOutputPath = params.javaClass.getMethod("getOutputPath")
+      @Suppress("UNCHECKED_CAST")
+      val outputDir = getOutputPath.invoke(params) as org.gradle.api.provider.Provider<org.gradle.api.file.Directory>
+      doLast {
+        val dir = outputDir.orNull?.asFile ?: return@doLast
+        if (!dir.exists()) return@doLast
+        val duplicateSpiStubRegex = Regex(
+          """(?s)(\n[ \t]*@_spi\([^)]*\)\n[ \t]*public func [^{]*\{)\n[ \t]*fatalError\("'[^']*' is an @_spi requirement that must be implemented by Swift conformers"\)\n[ \t]*\}(?=\1)"""
+        )
+        dir.walkTopDown()
+          .filter { it.isFile && it.extension == "swift" }
+          .forEach { file ->
+            val content = file.readText()
+            val patched = duplicateSpiStubRegex.replace(content, "")
+            if (patched != content) {
+              file.writeText(patched)
+            }
+          }
+      }
+    }
+  }
 }
 
 

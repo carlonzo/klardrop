@@ -29,7 +29,7 @@ import kotlin.random.Random
  * interface — clears the registry through `runBlocking`, which is safe because the critical
  * section it waits for is a few map operations wide.
  */
-object ShareRegistry {
+internal object ShareRegistry {
 
   /** Maximum number of retained share requests. Older requests are evicted first. */
   const val MAX_REQUESTS = 256
@@ -153,7 +153,7 @@ object ShareRegistry {
 }
 
 /** The per-item statuses a share item can report. */
-object ShareStatus {
+internal object ShareStatus {
   const val QUEUED = "queued"
   const val AWAITING = "awaiting"
   const val TRANSFERRING = "transferring"
@@ -163,14 +163,14 @@ object ShareStatus {
 }
 
 /** The mutually exclusive payload kinds `POST /share` accepts. */
-object ShareKind {
+internal object ShareKind {
   const val FILES = "files"
   const val TEXT = "text"
   const val CLIPBOARD = "clipboard"
 }
 
 /** One submitted item of a share request. Mutated in place under [ShareRegistry]'s lock. */
-data class ShareItem(
+internal data class ShareItem(
   /** Wire id of the transfer message, or null when the item failed before any transfer existed. */
   val transferId: String?,
   /** Submitted path for a file, null for text/clipboard. */
@@ -184,7 +184,7 @@ data class ShareItem(
 )
 
 /** One accepted share request. Mutated in place under [ShareRegistry]'s lock. */
-data class ShareRequestRecord(
+internal data class ShareRequestRecord(
   val requestId: String,
   val deviceId: String,
   val kind: String,

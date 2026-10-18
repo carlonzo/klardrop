@@ -4,10 +4,14 @@ plugins {
   alias(deps.plugins.kotlin.serialization)
   alias(deps.plugins.sqldelight)
   alias(deps.plugins.sentry.kmp)
-  kotlin("native.cocoapods")
 }
 
 kotlin {
+  explicitApi()
+
+  @OptIn(org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation::class)
+  abiValidation {
+  }
   android {
     namespace = "com.klardrop.common"
     compileSdk = 37
@@ -107,14 +111,21 @@ kotlin {
 
   applyDefaultHierarchyTemplate()
 
-  // The sentry-kmp plugin adds the `Sentry` pod to this block for as long as we are
-  // still on the CocoaPods integration. Once :presentation moves to swift-export the
-  // whole block goes away and the plugin links sentry-cocoa from SwiftPM instead —
-  // no Kotlin source change either way, since nothing imports `cocoapods.*` anymore.
-  cocoapods {
-    version = rootProject.version.toString()
-    ios.deploymentTarget = "17.0"
-    osx.deploymentTarget = "14.0"
+  // The sentry-kmp plugin links sentry-cocoa from Xcode's SwiftPM integration:
+  // the sentry-cocoa package reference lives in iosApp.xcodeproj (exact 8.58.2,
+  // matching the kmp 0.27.0 cinterop), and the plugin finds Sentry.xcframework in
+  // the default DerivedData at link time (`sentryKmp.linker.xcodeprojPath` points
+  // it at iosApp.xcodeproj). No Kotlin source change — nothing imports `cocoapods.*`.
+
+  // Tells the sentry-kmp plugin where the Xcode project lives so its
+  // DerivedData strategy can find Sentry.xcframework (the sentry-cocoa package
+  // reference lives in iosApp.xcodeproj, pinned to the version the kmp cinterop
+  // was built against). Gradle-run
+  // Apple test executables link against that same framework copy.
+  sentryKmp {
+    linker {
+      xcodeprojPath.set(rootProject.file("iosApp/iosApp.xcodeproj").absolutePath)
+    }
   }
 
   sourceSets {
@@ -237,8 +248,9 @@ sqldelight {
 //
 // `klardropVersion` is an alias for the same value, NOT a second knob: the Apple frameworks
 // are not produced by the workflow's own `./gradlew` invocation — xcodebuild runs
-// `syncFramework` from common/klardrop_common.podspec's script phase, which inherits the
-// process environment but none of the workflow's `-P` flags. So the Apple jobs also export
+// `embedSwiftExportForXcode` from the "Embed Kotlin presentation.framework"
+// Run Script phase, which inherits the process environment but none of the workflow's
+// `-P` flags. So the Apple jobs also export
 // ORG_GRADLE_PROJECT_klardropVersion, and dots are not usable in an env var name. The dotted
 // property is checked first and therefore still wins wherever `-Pklardrop.version=` is passed.
 // Without the alias every Apple build embeds the "0.0.0-dev" fallback and its crashes reach
@@ -260,8 +272,8 @@ val klardropUpdateChannel: String = providers.gradleProperty("klardrop.updateCha
 // Deliberately property-based rather than dot-separated: CI passes it as the environment
 // variable ORG_GRADLE_PROJECT_klardropSentryDsn, and dots are not portable in env names.
 // That matters because the Apple frameworks are not built by the workflow's own `./gradlew`
-// invocation — xcodebuild runs `syncFramework` from the podspec script phase, which inherits
-// the environment but none of the workflow's `-P` flags.
+// invocation — xcodebuild runs `embedSwiftExportForXcode` from the Run Script
+// phase, which inherits the environment but none of the workflow's `-P` flags.
 //
 // Empty by default, which is what every local and pull-request build gets. `initCrashReporter`
 // treats an empty DSN as "crash reporting disabled", so a dev build cannot report at all.
@@ -288,28 +300,93 @@ val generateKlardropVersion by tasks.registering {
       package com.carlom.klardrop.common
 
       /** Generated from the `klardrop.version` Gradle property — do not edit. */
-      object KlardropVersion {
-        const val VERSION: String = "$versionValue"
-        const val UPDATE_CHANNEL: String = "$channelValue"
+      public object KlardropVersion {
+        public const val VERSION: String = "$versionValue"
+        public const val UPDATE_CHANNEL: String = "$channelValue"
 
         /**
          * True when nothing passed `klardrop.version`, i.e. this is a developer build rather
          * than one CI produced. Drives [APP_NAME] so a local build is distinguishable from an
          * installed release — in the launcher, in the tray, and in the peer list on the LAN.
          */
-        const val IS_LOCAL_BUILD: Boolean = $isLocalValue
+        public const val IS_LOCAL_BUILD: Boolean = $isLocalValue
 
         /** User-visible app name. Suffixed on local builds so two installs can't be confused. */
-        const val APP_NAME: String = "$appNameValue"
+        public const val APP_NAME: String = "$appNameValue"
 
         /** Sentry DSN, injected by CI. Empty in local and pull-request builds. */
-        const val SENTRY_DSN: String = "$sentryDsnValue"
+        public const val SENTRY_DSN: String = "$sentryDsnValue"
       }
       """.trimIndent() + "\n"
     )
   }
 }
 
+tasks.matching { it.name == "generateCommonMainAppDatabaseInterface" }.configureEach {
+  val outputDir = layout.buildDirectory.dir("generated/sqldelight/code/AppDatabase/commonMain")
+  doLast {
+    val dir = outputDir.get().asFile
+    if (!dir.exists()) return@doLast
+    dir.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { file ->
+      val name = file.name
+      if (name == "AppDatabase.kt") {
+        val original = file.readText()
+        val rewritten = original
+          .replace("public interface ", "internal interface ")
+          .replace("public ", "")
+        if (rewritten != original) file.writeText(rewritten)
+      } else if (name.endsWith("Queries.kt") || name == "AppDatabaseImpl.kt") {
+        val original = file.readText()
+        val rewritten = original.replace("public ", "internal ")
+        if (rewritten != original) file.writeText(rewritten)
+      }
+    }
+  }
+}
+
 kotlin.sourceSets.commonMain {
   kotlin.srcDir(generateKlardropVersion)
 }
+
+val apiDumpDir = layout.projectDirectory.dir("api")
+val checkNoLeakedImplementationTypes = tasks.register("checkNoLeakedImplementationTypes") {
+  group = "verification"
+  description = "Verifies that no forbidden implementation types are exposed in the public ABI dump."
+  inputs.dir(apiDumpDir)
+  val dumpDir = apiDumpDir.asFile
+  val forbidden = listOf(
+    "com.squareup.wire",
+    "app.cash.sqldelight",
+    "com.carlonzo.ukey2",
+    "com.google.security",
+    "com.google.location.nearby",
+    "sharing.nearby",
+    "location.nearby",
+  )
+  doLast {
+    if (!dumpDir.exists()) return@doLast
+    val offending = mutableListOf<String>()
+    dumpDir.walkTopDown().filter { it.isFile }.forEach { file ->
+      file.useLines { lines ->
+        lines.forEachIndexed { index, line ->
+          val normalized = line.replace('/', '.')
+          for (pkg in forbidden) {
+            if (pkg in normalized) {
+              offending.add("${file.relativeTo(dumpDir.parentFile)}:${index + 1} [$pkg]: $line")
+              break
+            }
+          }
+        }
+      }
+    }
+    if (offending.isNotEmpty()) {
+      throw GradleException("Forbidden package leaks detected in API dumps:\n" + offending.joinToString("\n"))
+    }
+  }
+}
+
+tasks.named("check") {
+  dependsOn("checkKotlinAbi")
+  dependsOn(checkNoLeakedImplementationTypes)
+}
+

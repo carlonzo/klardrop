@@ -1,3 +1,3 @@
 package com.carlom.klardrop.common.communication
 
-actual fun platformTransferAnchor(): TransferAnchor = IosTransferAnchor()
+public actual fun platformTransferAnchor(): TransferAnchor = IosTransferAnchor()

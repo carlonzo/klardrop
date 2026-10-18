@@ -43,7 +43,7 @@ import platform.posix.strerror
  * - The probe opens the system bus per call and closes it after (no shared-connection
  *   lifecycle yet); see follow-up note on [probeCapability].
  */
-object SdBusConnection {
+internal object SdBusConnection {
 
   const val BLUEZ_SERVICE = "org.bluez"
   const val BLUEZ_ROOT = "/"

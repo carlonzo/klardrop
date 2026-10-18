@@ -27,7 +27,7 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.time.Clock
 
-open class LanHttpShareServer(
+internal open class LanHttpShareServer(
   private val coroutines: Coroutines,
   private val fileManager: FileManager,
   private val tls: LanTlsListener,

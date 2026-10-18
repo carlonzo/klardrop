@@ -124,7 +124,7 @@ class MessagesRouterImplTest {
       kotlinx.coroutines.flow.flowOf(null)
   }
 
-  class MockMessageHandlers : MessageHandlers {
+  internal class MockMessageHandlers : MessageHandlers {
     var handlerToReturn: MessageHandler<Message, SendMessageRequest>? = null
 
     override fun get(messageType: MessageType): MessageHandler<Message, SendMessageRequest>? {
@@ -132,7 +132,7 @@ class MessagesRouterImplTest {
     }
   }
 
-  class MockMessageHandler<E : Message, R : SendMessageRequest> : MessageHandler<E, R> {
+  internal class MockMessageHandler<E : Message, R : SendMessageRequest> : MessageHandler<E, R> {
     var incomingMessageHandled: E? = null
     var outgoingRequestHandled: R? = null
     override suspend fun handleIncoming(message: E, readChannel: ByteReadChannel, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>) {

@@ -33,7 +33,7 @@ import platform.Foundation.create
 import platform.darwin.NSObject
 import kotlin.time.Duration.Companion.seconds
 
-actual class ServiceDiscoveryMdns {
+internal actual class ServiceDiscoveryMdns {
 
   private val browserReferencesHolder = mutableListOf<NSNetServiceBrowser>()
   private val browserDelegateReferencesHolder = mutableListOf<BonjourBrowserDelegate>()
@@ -259,7 +259,7 @@ actual class ServiceDiscoveryMdns {
     }
   }
 
-  inner class NetServiceDelegate(private val producerScope: ProducerScope<ServiceDiscoveryEvent>) : NSObject(),
+  private inner class NetServiceDelegate(private val producerScope: ProducerScope<ServiceDiscoveryEvent>) : NSObject(),
     NSNetServiceDelegateProtocol {
 
       @ObjCSignatureOverride
@@ -307,7 +307,7 @@ actual class ServiceDiscoveryMdns {
     }
   }
 
-  inner class BonjourBrowserDelegate(
+  private inner class BonjourBrowserDelegate(
     private val producerScope: ProducerScope<ServiceDiscoveryEvent>,
     private val serviceDelegate: NetServiceDelegate
   ) : NSObject(),

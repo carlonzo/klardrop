@@ -44,7 +44,7 @@ import platform.darwin.dispatch_queue_create
 import platform.posix.memcpy
 import platform.posix.sockaddr_in
 
-actual class LanTlsListener actual constructor() {
+internal actual class LanTlsListener actual constructor() {
 
     private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var listener: nw_listener_t = null

@@ -1,3 +1,3 @@
 package com.carlom.klardrop.common.communication
 
-actual fun platformTransferAnchor(): TransferAnchor = LinuxTransferAnchor()
+public actual fun platformTransferAnchor(): TransferAnchor = LinuxTransferAnchor()

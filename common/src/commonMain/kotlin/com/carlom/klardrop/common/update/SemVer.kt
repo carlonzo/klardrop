@@ -16,10 +16,10 @@ internal fun isNewerVersion(candidate: String, current: String): Boolean {
 }
 
 internal data class SemVer(
-  val major: Int,
-  val minor: Int,
-  val patch: Int,
-  val preRelease: String?,
+  internal val major: Int,
+  internal val minor: Int,
+  internal val patch: Int,
+  internal val preRelease: String?,
 ) : Comparable<SemVer> {
 
   override fun compareTo(other: SemVer): Int {

@@ -15,28 +15,28 @@ import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import kotlinx.io.files.Path
 
-expect class InternalPlatformDependencies {
-  fun getDownloadStoragePath(): Path
-  fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
-  fun networkLifecycleMonitor(): NetworkLifecycleMonitor
-  fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector
-  fun permissionsMonitor(): PermissionsMonitor
-  fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor
-  fun notifier(): Notifier
-  fun foregroundState(): ForegroundState
-  fun bleTransport(): BleTransport
-  fun clipboardReaderWriter(): ClipboardReaderWriter
-  fun connectionInfoJoiner(): ConnectionInfoJoiner
-  fun driverFactory(): DriverFactory
-  fun trustStorage(): TrustStorage
-  suspend fun openFile(filePath: String): Boolean
+public expect class InternalPlatformDependencies {
+  internal fun getDownloadStoragePath(): Path
+  internal fun serviceDiscoveryMdns(): ServiceDiscoveryMdns
+  internal fun networkLifecycleMonitor(): NetworkLifecycleMonitor
+  internal fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector
+  internal fun permissionsMonitor(): PermissionsMonitor
+  internal fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor
+  internal fun notifier(): Notifier
+  internal fun foregroundState(): ForegroundState
+  internal fun bleTransport(): BleTransport
+  internal fun clipboardReaderWriter(): ClipboardReaderWriter
+  internal fun connectionInfoJoiner(): ConnectionInfoJoiner
+  internal fun driverFactory(): DriverFactory
+  internal fun trustStorage(): TrustStorage
+  internal suspend fun openFile(filePath: String): Boolean
 
   /**
    * Hand [url] to the system's URL handler — browser for http(s), mail client for
    * mailto:, etc. Returns false when the platform can't dispatch the URL (no handler
    * registered, runtime restriction, etc.) so callers can surface an error.
    */
-  suspend fun openUrl(url: String): Boolean
+  internal suspend fun openUrl(url: String): Boolean
 
   /**
    * Save the file at [tempPath] into the platform's media gallery and return a string the
@@ -47,11 +47,11 @@ expect class InternalPlatformDependencies {
    *
    * On success the temp file SHOULD be removed by the implementation.
    */
-  suspend fun saveMediaToGallery(tempPath: Path, mimeType: String, displayName: String): String?
+  internal suspend fun saveMediaToGallery(tempPath: Path, mimeType: String, displayName: String): String?
 }
 
-expect object CommonPlatformDependencies {
-  fun osType(): OsType
-  fun deviceType(): DeviceType
-  fun getDeviceName(): String
+public expect object CommonPlatformDependencies {
+  public fun osType(): OsType
+  public fun deviceType(): DeviceType
+  public fun getDeviceName(): String
 }

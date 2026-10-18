@@ -5,7 +5,7 @@ import com.carlom.klardrop.common.mdns.ServiceInfo
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 
-class KlardropDiscoveryUtils {
+internal class KlardropDiscoveryUtils {
 
   fun getRegisterServiceInfo(port: Int, currentDevice: CurrentDevice): RegisterServiceInfo {
 

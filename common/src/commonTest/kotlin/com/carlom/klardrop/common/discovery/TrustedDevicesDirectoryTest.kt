@@ -81,7 +81,7 @@ class TrustedDevicesDirectoryTest {
   private val coroutines = TestCoroutines(dispatcher, ioDispatcher = dispatcher)
 
   private val trustStorage = InMemoryTrustStorage()
-  private val trustChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+  private val trustChanges = MutableSharedFlow<TrustChangeEvent>(extraBufferCapacity = 8)
   private val visibleDevices = FakeVisibleDevices()
 
   private val laptop = DeviceInfo(
@@ -107,7 +107,7 @@ class TrustedDevicesDirectoryTest {
 
     visibleDevices.onNewDeviceVisible(laptop, connection)
     trustStorage.storeTrustedDevice(laptop.deviceId, byteArrayOf(1, 2, 3))
-    trustChanges.emit(Unit)
+    trustChanges.emit(TrustChangeEvent)
     advanceUntilIdle()
 
     assertEquals(laptop, directory.trustedDevices.value[laptop.deviceId])
@@ -161,7 +161,7 @@ class TrustedDevicesDirectoryTest {
     assertNotNull(directory.trustedDevices.value[laptop.deviceId])
 
     trustStorage.removeTrustedDevice(laptop.deviceId)
-    trustChanges.emit(Unit)
+    trustChanges.emit(TrustChangeEvent)
     advanceUntilIdle()
 
     assertNull(directory.trustedDevices.value[laptop.deviceId])

@@ -43,7 +43,7 @@ import sharing.nearby.TextMetadata
 import sharing.nearby.V1Frame.FrameType
 import kotlin.random.Random
 
-class NearbyClientConnectionHandler(
+internal class NearbyClientConnectionHandler(
   private val currentDeviceProvider: CurrentDeviceProvider,
   private val fileManager: FileManager,
   private val sendRequests: List<SendMessageRequest>,

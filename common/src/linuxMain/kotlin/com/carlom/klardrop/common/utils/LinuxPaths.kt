@@ -7,17 +7,17 @@ import platform.posix.getenv
 import platform.posix.geteuid
 import platform.posix.getpwuid
 
-data class ResolvedLinuxPaths(
-  val home: String,
-  val trustDir: String,
-  val dataDir: String,
-  val databasesDir: String,
-  val configDir: String,
-  val cacheDir: String,
-  val downloadDir: String,
+internal data class ResolvedLinuxPaths(
+  internal val home: String,
+  internal val trustDir: String,
+  internal val dataDir: String,
+  internal val databasesDir: String,
+  internal val configDir: String,
+  internal val cacheDir: String,
+  internal val downloadDir: String,
 )
 
-object LinuxPaths {
+internal object LinuxPaths {
 
   @OptIn(ExperimentalForeignApi::class)
   fun defaultHome(): String {

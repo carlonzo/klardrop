@@ -1,13 +1,13 @@
 package com.carlom.klardrop.common
 
 import com.carlom.klardrop.common.communication.ConnectionMessenger
-import com.carlom.klardrop.common.communication.ConnectionsPool
+import com.carlom.klardrop.common.communication.InternalConnectionsPool
 import com.carlom.klardrop.common.communication.Reachability
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class FakeConnectionPool: ConnectionsPool {
+internal class FakeConnectionPool: InternalConnectionsPool {
   private val connections = mutableMapOf<String, ConnectionMessenger>()
   private val reachabilityFlow = MutableStateFlow<Map<String, Reachability>>(emptyMap())
 

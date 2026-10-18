@@ -18,11 +18,11 @@ import presentation
 // Never call discoveryController() more than once — each call constructs a
 // fresh (and divergent) instance with its own coroutine scope.
 //
-// StateFlow bridging: each stored property is seeded synchronously in init()
-// from flow.value (prevents the empty-flash on first render), then start()
-// opens a Task that iterates `for await v in flow { self.field = v }`.
-// Because this class is @MainActor, all assignments are on the main thread.
-// stop() cancels the Tasks which tears down the Kotlin SKIE collectors.
+// StateFlow bridging (swift-export): each stored property is seeded synchronously
+// in init() from flow.value (prevents the empty-flash on first render), then start()
+// opens a Task that iterates `for await v in flow.asAsyncSequence()`. Because this
+// class is @MainActor, all assignments are on the main thread.
+// stop() cancels the Tasks which tears down the Kotlin flow collectors.
 //
 // Callers drive lifecycle with `.task { model.start() }` (auto-cancels on
 // disappear) plus an explicit stop() / onDisappear for onDispose.
@@ -69,9 +69,10 @@ final class DiscoveryAppModel {
         self.updateController = updateCtrl
 
         // Seed synchronously — no empty-flash on first render.
+        // swift-export exposes .value with Swift-native types (Bool, not NSNumber).
         self.state = ctrl.screenStateFlow.value
         self.permissionsState = ctrl.permissionsState.value
-        self.backgroundDiscoveryEnabled = ctrl.backgroundDiscoveryEnabled.value.boolValue
+        self.backgroundDiscoveryEnabled = ctrl.backgroundDiscoveryEnabled.value
         self.updateStatus = updateCtrl.status.value
         self.updateInstallProgress = updateCtrl.installProgress.value
     }
@@ -84,33 +85,43 @@ final class DiscoveryAppModel {
         stateTasks = [
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.controller.screenStateFlow {
-                    self.state = next
-                }
+                do {
+                    for try await next in self.controller.screenStateFlow.asAsyncSequence() {
+                        self.state = next
+                    }
+                } catch {}
             },
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.controller.permissionsState {
-                    self.permissionsState = next
-                }
+                do {
+                    for try await next in self.controller.permissionsState.asAsyncSequence() {
+                        self.permissionsState = next
+                    }
+                } catch {}
             },
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.controller.backgroundDiscoveryEnabled {
-                    self.backgroundDiscoveryEnabled = next.boolValue
-                }
+                do {
+                    for try await next in self.controller.backgroundDiscoveryEnabled.asAsyncSequence() {
+                        self.backgroundDiscoveryEnabled = next
+                    }
+                } catch {}
             },
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.updateController.status {
-                    self.updateStatus = next
-                }
+                do {
+                    for try await next in self.updateController.status.asAsyncSequence() {
+                        self.updateStatus = next
+                    }
+                } catch {}
             },
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.updateController.installProgress {
-                    self.updateInstallProgress = next
-                }
+                do {
+                    for try await next in self.updateController.installProgress.asAsyncSequence() {
+                        self.updateInstallProgress = next
+                    }
+                } catch {}
             },
         ]
     }
@@ -154,7 +165,7 @@ final class DiscoveryAppModel {
     /// the callback is hopped to the main actor for SwiftUI.
     func sendShareFiles(
         _ device: DeviceUi,
-        files: [Filekit_corePlatformFile],
+        files: [PlatformFile],
         onProgress: @escaping (MessengerSendProgress) -> Void
     ) {
         controller.sendFiles(deviceId: device.deviceId, files: files) { progress in

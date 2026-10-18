@@ -16,7 +16,7 @@ import com.carlom.klardrop.common.communication.MessengerSendProgress
  *
  * Swift: `ShareSheetDismissPolicy.shared.shouldDismiss(trigger:progress:handoffComplete:)`.
  */
-enum class ShareSheetDismissTrigger {
+public enum class ShareSheetDismissTrigger {
   /** User tapped a device. Select ≠ send; never close. */
   SelectDevice,
 
@@ -36,12 +36,12 @@ enum class ShareSheetDismissTrigger {
   EmptyPayload,
 }
 
-object ShareSheetDismissPolicy {
+public object ShareSheetDismissPolicy {
 
   /** Connecting state to show immediately on Send tap, before the first progress emission. */
-  fun connecting(): MessengerSendProgress = MessengerSendProgress.Pending
+  public fun connecting(): MessengerSendProgress = MessengerSendProgress.Pending
 
-  fun shouldDismiss(
+  public fun shouldDismiss(
     trigger: ShareSheetDismissTrigger,
     progress: MessengerSendProgress? = null,
     handoffComplete: Boolean = false,

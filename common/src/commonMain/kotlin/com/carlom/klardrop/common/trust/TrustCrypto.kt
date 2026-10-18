@@ -19,9 +19,9 @@ import kotlinx.coroutines.withContext
  * This implementation uses the cryptography-kotlin library for all cryptographic
  * operations, ensuring secure and multiplatform-compatible cryptography.
  */
-class TrustCrypto {
+public class TrustCrypto public constructor() {
 
-  companion object {
+  internal companion object {
     private const val NONCE_SIZE = 16
     private const val ECDH_PUBLIC_KEY_SIZE = 65  // P-256 uncompressed public key
     private const val ECDH_PRIVATE_KEY_SIZE = 32  // P-256 private key
@@ -40,12 +40,12 @@ class TrustCrypto {
   private val hkdf = provider.get(HKDF)
 
   // Key pair wrapper classes
-  data class ECDHKeyPair(
+  internal data class ECDHKeyPair(
     val publicKey: ECDHPublicKey,
     val privateKey: ECDHPrivateKey
   )
 
-  data class ECDHPublicKey(
+  internal data class ECDHPublicKey(
     val data: ByteArray
   ) {
     override fun equals(other: Any?): Boolean {
@@ -57,7 +57,7 @@ class TrustCrypto {
     override fun hashCode(): Int = data.contentHashCode()
   }
 
-  data class ECDHPrivateKey(
+  internal data class ECDHPrivateKey(
     val data: ByteArray
   ) {
     override fun equals(other: Any?): Boolean {
@@ -79,13 +79,13 @@ class TrustCrypto {
     }
   }
 
-  data class ECDSAKeyPair(
-    val publicKey: ECDSAPublicKey,
-    val privateKey: ECDSAPrivateKey
+  public data class ECDSAKeyPair(
+    public val publicKey: ECDSAPublicKey,
+    public val privateKey: ECDSAPrivateKey
   )
 
-  data class ECDSAPublicKey(
-    val data: ByteArray
+  public data class ECDSAPublicKey(
+    public val data: ByteArray
   ) {
     override fun equals(other: Any?): Boolean {
       if (this === other) return true
@@ -96,8 +96,8 @@ class TrustCrypto {
     override fun hashCode(): Int = data.contentHashCode()
   }
 
-  data class ECDSAPrivateKey(
-    val data: ByteArray
+  public data class ECDSAPrivateKey(
+    public val data: ByteArray
   ) {
     override fun equals(other: Any?): Boolean {
       if (this === other) return true
@@ -113,7 +113,7 @@ class TrustCrypto {
      * Securely clear the private key data from memory.
      * Call this when the key is no longer needed.
      */
-    fun clear() {
+    public fun clear() {
       data.fill(0)
     }
   }
@@ -123,7 +123,7 @@ class TrustCrypto {
    * Uses P-256 curve for optimal security and performance.
    * @return ECDH keypair
    */
-  suspend fun generateECDHKeyPair(): ECDHKeyPair = withContext(Dispatchers.Default) {
+  internal suspend fun generateECDHKeyPair(): ECDHKeyPair = withContext(Dispatchers.Default) {
     try {
       val keyPairGenerator = ecdh.keyPairGenerator(EC.Curve.P256)
       val keyPair = keyPairGenerator.generateKey()
@@ -146,7 +146,7 @@ class TrustCrypto {
    * @param peerPublicKeyBytes Peer's public key as bytes
    * @return Shared secret bytes
    */
-  suspend fun computeECDHSecret(
+  internal suspend fun computeECDHSecret(
     privateKey: ECDHPrivateKey,
     peerPublicKeyBytes: ByteArray
   ): ByteArray = withContext(Dispatchers.Default) {
@@ -174,7 +174,7 @@ class TrustCrypto {
    * Uses P-256 curve with SHA256 for signing.
    * @return ECDSA keypair
    */
-  suspend fun generateECDSAKeyPair(): ECDSAKeyPair = withContext(Dispatchers.Default) {
+  public suspend fun generateECDSAKeyPair(): ECDSAKeyPair = withContext(Dispatchers.Default) {
     try {
       val keyPairGenerator = ecdsa.keyPairGenerator(EC.Curve.P256)
       val keyPair = keyPairGenerator.generateKey()
@@ -197,7 +197,7 @@ class TrustCrypto {
    * @param data Data to sign
    * @return Signature bytes in RAW format (r || s)
    */
-  suspend fun signWithECDSA(
+  public suspend fun signWithECDSA(
     privateKey: ECDSAPrivateKey,
     data: ByteArray
   ): ByteArray = withContext(Dispatchers.Default) {
@@ -219,7 +219,7 @@ class TrustCrypto {
    * @param signature Signature to verify
    * @return true if signature is valid
    */
-  suspend fun verifyECDSA(
+  public suspend fun verifyECDSA(
     publicKeyBytes: ByteArray,
     data: ByteArray,
     signature: ByteArray
@@ -247,7 +247,7 @@ class TrustCrypto {
    * @param publicKey ECDH public key
    * @return Public key bytes
    */
-  fun encodePublicKey(publicKey: ECDHPublicKey): ByteArray {
+  internal fun encodePublicKey(publicKey: ECDHPublicKey): ByteArray {
     return publicKey.data
   }
 
@@ -257,7 +257,7 @@ class TrustCrypto {
    * @param publicKey ECDSA public key
    * @return Public key bytes
    */
-  fun encodeECDSAPublicKey(publicKey: ECDSAPublicKey): ByteArray {
+  internal fun encodeECDSAPublicKey(publicKey: ECDSAPublicKey): ByteArray {
     return publicKey.data
   }
 
@@ -265,7 +265,7 @@ class TrustCrypto {
    * Generate cryptographically secure random nonce.
    * @return 16 random bytes
    */
-  fun generateNonce(): ByteArray {
+  internal fun generateNonce(): ByteArray {
     return CryptographyRandom.nextBytes(NONCE_SIZE)
   }
 
@@ -273,7 +273,7 @@ class TrustCrypto {
    * Combine multiple byte arrays for signing/verification.
    * Used to create data to sign from payload + timestamp + nonce.
    */
-  fun combineForSigning(payload: ByteArray, timestamp: Long, nonce: ByteArray): ByteArray {
+  internal fun combineForSigning(payload: ByteArray, timestamp: Long, nonce: ByteArray): ByteArray {
     val timestampBytes = timestamp.toByteArray()
     return payload + timestampBytes + nonce
   }
@@ -284,7 +284,7 @@ class TrustCrypto {
    * `SHA256(file)` and is signed once; chunks flow unsigned; the receiver hashes as it
    * accumulates and rejects on mismatch at completion time.
    */
-  suspend fun sha256(data: ByteArray): ByteArray {
+  internal suspend fun sha256(data: ByteArray): ByteArray {
     // No explicit Dispatchers.Default switch here: callers in the file path are already
     // running on coroutines.ioDispatcher, and offloading via withContext breaks runTest
     // ordering for tests that observe interleaved progress emissions across the call.
@@ -299,9 +299,9 @@ class TrustCrypto {
    * the final digest via [Sha256Accumulator.digest]. Used by the receive pipeline so we don't
    * have to re-read the file from disk after assembling it.
    */
-  fun sha256Accumulator(): Sha256Accumulator = Sha256AccumulatorImpl()
+  internal fun sha256Accumulator(): Sha256Accumulator = Sha256AccumulatorImpl()
 
-  interface Sha256Accumulator {
+  internal interface Sha256Accumulator {
     fun update(data: ByteArray, offset: Int = 0, length: Int = data.size)
     suspend fun digest(): ByteArray
   }
@@ -315,7 +315,7 @@ class TrustCrypto {
    * keys derived for different uses are mutually orthogonal — that way compromising one
    * doesn't leak the others, and you can rotate per use case.
    */
-  suspend fun hkdfSha256(
+  internal suspend fun hkdfSha256(
     sharedSecret: ByteArray,
     info: ByteArray,
     salt: ByteArray = ByteArray(0),
@@ -329,13 +329,13 @@ class TrustCrypto {
    * Compute HMAC-SHA256 of [data] under [key]. Constant time for the inputs we use.
    * Pair with [verifyHmacSha256] for symmetric-key authenticity.
    */
-  suspend fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
+  internal suspend fun hmacSha256(key: ByteArray, data: ByteArray): ByteArray {
     val hmacKey = hmac.keyDecoder(SHA256).decodeFromByteArray(HMAC.Key.Format.RAW, key)
     return hmacKey.signatureGenerator().generateSignature(data)
   }
 
   /** Verify an HMAC-SHA256 [tag] over [data] under [key]. */
-  suspend fun verifyHmacSha256(key: ByteArray, data: ByteArray, tag: ByteArray): Boolean {
+  internal suspend fun verifyHmacSha256(key: ByteArray, data: ByteArray, tag: ByteArray): Boolean {
     val hmacKey = hmac.keyDecoder(SHA256).decodeFromByteArray(HMAC.Key.Format.RAW, key)
     return hmacKey.signatureVerifier().tryVerifySignature(data, tag)
   }

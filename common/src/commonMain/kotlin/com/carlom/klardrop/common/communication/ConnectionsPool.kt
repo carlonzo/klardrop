@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-interface ConnectionsPool {
+public interface ConnectionsPool {
 
   /**
    * Per-device reachability state derived from pool membership and probe
@@ -31,44 +31,45 @@ interface ConnectionsPool {
    * Online/Offline/Connecting indicators without having to drive their own
    * connection state machine.
    */
-  val reachability: StateFlow<Map<String, Reachability>>
+  public val reachability: StateFlow<Map<String, Reachability>>
 
-  suspend fun isAvailable(deviceId: String): Boolean
+  public suspend fun isAvailable(deviceId: String): Boolean
 
-  suspend fun updateConnection(deviceId: String, connectionMessenger: ConnectionMessenger)
+  public suspend fun closeAllConnections(): Unit
 
-  suspend fun getConnection(deviceId: String): ConnectionMessenger?
-
-  suspend fun closeAllConnections()
-
-  suspend fun closeConnection(deviceId: String)
+  public suspend fun closeConnection(deviceId: String): Unit
 
   /** Signal that a probe is in flight for [deviceId] — transitions to [Reachability.Probing]. */
-  fun markProbing(deviceId: String)
+  public fun markProbing(deviceId: String): Unit
 
   /** Signal that a probe / send attempt failed — transitions to [Reachability.Unreachable]. */
-  fun markUnreachable(deviceId: String)
+  public fun markUnreachable(deviceId: String): Unit
 }
 
-sealed interface Reachability {
+internal interface InternalConnectionsPool : ConnectionsPool {
+  suspend fun updateConnection(deviceId: String, connectionMessenger: ConnectionMessenger)
+  suspend fun getConnection(deviceId: String): ConnectionMessenger?
+}
+
+public sealed interface Reachability {
   /** No probe attempted yet, or pool was just flushed. */
-  data object Unknown : Reachability
+  public data object Unknown : Reachability
 
   /** A probe is currently in flight. */
-  data object Probing : Reachability
+  public data object Probing : Reachability
 
   /** A live connection exists in the pool, or the last probe succeeded. */
-  data object Reachable : Reachability
+  public data object Reachable : Reachability
 
   /** Last probe / send attempt failed. */
-  data object Unreachable : Reachability
+  public data object Unreachable : Reachability
 }
 
 internal class ConnectionsPoolImpl(
   coroutines: Coroutines? = null,
   networkLifecycleMonitor: NetworkLifecycleMonitor? = null,
   private val currentDeviceProvider: com.carlom.klardrop.common.discovery.CurrentDeviceProvider? = null,
-) : ConnectionsPool {
+) : InternalConnectionsPool {
 
   /**
    * Test-only constructor: accepts the raw [Flow] of [NetworkChangeEvent]s so tests
@@ -380,7 +381,7 @@ internal class ConnectionsPoolImpl(
  * [deviceId], [isClosed], and [close] — the transport-specific handle stays internal to
  * the variant.
  */
-sealed class Connection {
+internal sealed class Connection {
   abstract val deviceId: String
   abstract val isClosed: Boolean
   abstract fun close()

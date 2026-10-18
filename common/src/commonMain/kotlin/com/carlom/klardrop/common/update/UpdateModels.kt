@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
  * instruction we show the user. Detected at runtime on desktop; always
  * [UNKNOWN] on mobile (those platforms update through their app stores).
  */
-enum class InstallChannel(val displayName: String) {
+public enum class InstallChannel(public val displayName: String) {
   BREW("Homebrew"),          // macOS Homebrew cask
   DMG("macOS disk image"),   // macOS: downloaded .dmg by hand
   TARBALL("install.sh"),     // Linux: install.sh script (self-updatable in place)
@@ -33,19 +33,19 @@ enum class InstallChannel(val displayName: String) {
  * runtime in a minified release build.
  */
 @Serializable
-data class LatestManifest(
-  val version: String,
-  val tag: String? = null,
-  val publishedAt: String? = null,
-  val notes: String? = null,
-  val platforms: Map<String, ReleaseAsset> = emptyMap(),
+public data class LatestManifest(
+  public val version: String,
+  public val tag: String? = null,
+  public val publishedAt: String? = null,
+  public val notes: String? = null,
+  public val platforms: Map<String, ReleaseAsset> = emptyMap(),
 )
 
 @Serializable
-data class ReleaseAsset(
-  val url: String,
-  val sha256: String? = null,
-  val size: Long? = null,
+public data class ReleaseAsset(
+  public val url: String,
+  public val sha256: String? = null,
+  public val size: Long? = null,
 )
 
 /**
@@ -55,36 +55,36 @@ data class ReleaseAsset(
  * A re-check never regresses [Available] back to [Checking] or [Failed] — once we
  * know a newer version exists, a later flaky fetch must not hide the banner.
  */
-sealed interface UpdateStatus {
+public sealed interface UpdateStatus {
   /** Never checked (or unsupported platform) — the banner renders nothing. */
-  data object Unknown : UpdateStatus
+  public data object Unknown : UpdateStatus
 
   /** A check is in flight. Only reached from [Unknown], [UpToDate] or [Failed]. */
-  data object Checking : UpdateStatus
+  public data object Checking : UpdateStatus
 
   /** Checked and we're on the latest version — the banner renders nothing. */
-  data object UpToDate : UpdateStatus
+  public data object UpToDate : UpdateStatus
 
   /** The check itself failed (offline, GitHub down, malformed manifest). */
-  data class Failed(val message: String) : UpdateStatus
+  public data class Failed(public val message: String) : UpdateStatus
 
   /** A newer version exists; [action] is the channel-specific way to get it. */
-  data class Available(
-    val version: String,
-    val channel: InstallChannel,
-    val action: UpdateAction,
+  public data class Available(
+    public val version: String,
+    public val channel: InstallChannel,
+    public val action: UpdateAction,
     /** Release-notes page for [version], for the "What's new" link. */
-    val notesUrl: String? = null,
+    public val notesUrl: String? = null,
   ) : UpdateStatus
 }
 
 /** What the "update" button does, depending on the install channel. */
-sealed interface UpdateAction {
+public sealed interface UpdateAction {
   /** A shell command the user runs to upgrade (the banner offers to copy it). */
-  data class RunCommand(val command: String) : UpdateAction
+  public data class RunCommand(public val command: String) : UpdateAction
 
   /** A URL to open in the browser (download page / specific asset). */
-  data class OpenUrl(val url: String) : UpdateAction
+  public data class OpenUrl(public val url: String) : UpdateAction
 }
 
 /**
@@ -93,19 +93,19 @@ sealed interface UpdateAction {
  * this through [UpdateChecker.install]; the banner renders it. Channels that can't
  * self-install never leave [Idle] and fall back to the [UpdateAction].
  */
-sealed interface InstallProgress {
+public sealed interface InstallProgress {
   /** No self-update in flight (or the channel can't self-install). */
-  data object Idle : InstallProgress
+  public data object Idle : InstallProgress
 
   /** Downloading the new build. [fraction] is 0..1, or null when indeterminate (e.g. extracting). */
-  data class Downloading(val fraction: Float?) : InstallProgress
+  public data class Downloading(public val fraction: Float?) : InstallProgress
 
   /** Downloaded, verified and staged — a restart applies it. */
-  data object Ready : InstallProgress
+  public data object Ready : InstallProgress
 
   /** In the process of applying and restarting. */
-  data object Applying : InstallProgress
+  public data object Applying : InstallProgress
 
   /** The self-update failed; the banner falls back to the [UpdateAction]. */
-  data class Failed(val message: String) : InstallProgress
+  public data class Failed(public val message: String) : InstallProgress
 }

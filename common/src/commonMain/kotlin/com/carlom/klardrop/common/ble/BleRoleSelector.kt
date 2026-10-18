@@ -11,7 +11,7 @@ package com.carlom.klardrop.common.ble
  * The comparison is simple and stable — any two devices will always agree on who
  * initiates, regardless of which discovers the other first.
  */
-object BleRoleSelector {
+internal object BleRoleSelector {
 
   /**
    * Returns true if the local device should initiate the BLE GATT connection to [peerShortDeviceId].

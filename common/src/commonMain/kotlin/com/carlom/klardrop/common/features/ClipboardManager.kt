@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-interface ClipboardSource {
+internal interface ClipboardSource {
   fun read(): String
   fun readForSync(): String
   fun write(text: String)
@@ -23,7 +23,7 @@ interface ClipboardSource {
   fun changeSignals(): Flow<Unit>?
 }
 
-expect class ClipboardReaderWriter : ClipboardSource {
+internal expect class ClipboardReaderWriter : ClipboardSource {
   /** User-initiated (chat Paste). iOS always reads `string`. */
   override fun read(): String
   /** Background poller only. iOS applies the session Allow Paste gate. */
@@ -39,20 +39,30 @@ expect class ClipboardReaderWriter : ClipboardSource {
  * notably [com.carlom.klardrop.common.trust.ClipboardSyncManager], whose trust gating is
  * worth unit-testing — don't have to construct the platform `ClipboardReaderWriter`.
  */
-interface ClipboardAccess {
+internal interface ClipboardAccess {
   val flow: Flow<String>
   fun read(): String
   fun write(text: String)
 }
 
-class ClipboardManager(
+internal class InMemoryClipboardSource : ClipboardSource {
+  private var text: String = ""
+  override fun read(): String = text
+  override fun readForSync(): String = text
+  override fun write(text: String) { this.text = text }
+  override fun changeSignals(): Flow<Unit>? = null
+}
+
+public class ClipboardManager internal constructor(
   private val coroutines: Coroutines,
   private val readerWriter: ClipboardSource
 ) : ClipboardAccess {
 
+  public constructor(coroutines: Coroutines) : this(coroutines, InMemoryClipboardSource())
+
   private val clipboardScope = coroutines.newScope(coroutines.ioDispatcher)
 
-  override val flow = buildFlow()
+  public override val flow: Flow<String> = buildFlow()
     .distinctUntilChanged()
     .shareIn(clipboardScope, started = SharingStarted.WhileSubscribed())
 
@@ -101,11 +111,11 @@ class ClipboardManager(
     }
   }
 
-  override fun write(text: String) {
+  public override fun write(text: String): Unit {
     readerWriter.write(text)
   }
 
-  override fun read(): String {
+  public override fun read(): String {
     return runCatching { readerWriter.read() }
       .getOrDefault("")
   }

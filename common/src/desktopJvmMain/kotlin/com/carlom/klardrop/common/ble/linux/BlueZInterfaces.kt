@@ -21,10 +21,10 @@ import org.freedesktop.dbus.types.Variant
  */
 
 /** String-array D-Bus type ("as") for @DBusProperty, which cannot express generics directly. */
-interface StringListType : TypeRef<List<String>>
+internal interface StringListType : TypeRef<List<String>>
 
 /** String-keyed variant-map D-Bus type ("a{sv}") for @DBusProperty. */
-interface VariantMapType : TypeRef<Map<String, Variant<*>>>
+internal interface VariantMapType : TypeRef<Map<String, Variant<*>>>
 
 @DBusInterfaceName("org.bluez.Adapter1")
 @DBusProperty(name = "Address", type = String::class, access = DBusProperty.Access.READ)
@@ -33,7 +33,7 @@ interface VariantMapType : TypeRef<Map<String, Variant<*>>>
 @DBusProperty(name = "Powered", type = Boolean::class)
 @DBusProperty(name = "Discoverable", type = Boolean::class)
 @DBusProperty(name = "Discovering", type = Boolean::class, access = DBusProperty.Access.READ)
-interface Adapter1 : DBusInterface {
+internal interface Adapter1 : DBusInterface {
   fun SetDiscoveryFilter(properties: Map<String, Variant<*>>)
   fun StartDiscovery()
   fun StopDiscovery()
@@ -47,13 +47,13 @@ interface Adapter1 : DBusInterface {
 @DBusProperty(name = "Connected", type = Boolean::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "ServicesResolved", type = Boolean::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "RSSI", type = Short::class, access = DBusProperty.Access.READ)
-interface Device1 : DBusInterface {
+internal interface Device1 : DBusInterface {
   fun Connect()
   fun Disconnect()
 }
 
 @DBusInterfaceName("org.bluez.GattManager1")
-interface GattManager1 : DBusInterface {
+internal interface GattManager1 : DBusInterface {
   fun RegisterApplication(application: DBusPath, options: Map<String, Variant<*>>)
   fun UnregisterApplication(application: DBusPath)
 }
@@ -63,7 +63,7 @@ interface GattManager1 : DBusInterface {
 @DBusProperty(name = "SupportedInstances", type = Byte::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "SupportedIncludes", type = StringListType::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "SupportedSecondaryChannels", type = StringListType::class, access = DBusProperty.Access.READ)
-interface LEAdvertisingManager1 : DBusInterface {
+internal interface LEAdvertisingManager1 : DBusInterface {
   fun RegisterAdvertisement(advertisement: DBusPath, options: Map<String, Variant<*>>)
   fun UnregisterAdvertisement(advertisement: DBusPath)
 }
@@ -73,7 +73,7 @@ interface LEAdvertisingManager1 : DBusInterface {
 @DBusProperty(name = "UUID", type = String::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "Primary", type = Boolean::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "Device", type = DBusPath::class, access = DBusProperty.Access.READ)
-interface GattService1 : DBusInterface
+internal interface GattService1 : DBusInterface
 
 /** GATT characteristic we export in the peripheral role and consume in the central role. */
 @DBusInterfaceName("org.bluez.GattCharacteristic1")
@@ -83,7 +83,7 @@ interface GattService1 : DBusInterface
 @DBusProperty(name = "Notifying", type = Boolean::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "Flags", type = StringListType::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "MTU", type = UInt16::class, access = DBusProperty.Access.READ)
-interface GattCharacteristic1 : DBusInterface {
+internal interface GattCharacteristic1 : DBusInterface {
   fun ReadValue(options: Map<String, Variant<*>>): ByteArray
   fun WriteValue(value: ByteArray, options: Map<String, Variant<*>>)
   fun StartNotify()
@@ -97,6 +97,6 @@ interface GattCharacteristic1 : DBusInterface {
 @DBusProperty(name = "ServiceData", type = VariantMapType::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "LocalName", type = String::class, access = DBusProperty.Access.READ)
 @DBusProperty(name = "Includes", type = StringListType::class, access = DBusProperty.Access.READ)
-interface LEAdvertisement1 : DBusInterface {
+internal interface LEAdvertisement1 : DBusInterface {
   fun Release()
 }

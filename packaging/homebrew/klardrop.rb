@@ -6,7 +6,7 @@
 # `brew install --cask ./klardrop.rb`.
 #
 # The macOS DMG shipped via this cask is a Developer ID-signed + notarized native
-# macOS app (built from Swift/SKIE, not the legacy Compose/JVM desktop). The
+# macOS app (built from Swift/swift-export, not the legacy Compose/JVM desktop). The
 # Homebrew job only publishes this cask when the release contains a macos-verified.txt
 # marker (written by the notarize step), guaranteeing this cask always points at
 # a properly signed and notarized build.
@@ -19,6 +19,8 @@ cask "klardrop" do
   name "Klardrop"
   desc "Share files and clipboard with nearby devices over the local network (AirDrop-style)"
   homepage "https://github.com/carlonzo/klardrop"
+
+  depends_on macos: ">= :sequoia"
 
   app "Klardrop.app"
 

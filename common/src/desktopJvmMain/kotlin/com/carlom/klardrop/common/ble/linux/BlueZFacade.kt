@@ -13,7 +13,7 @@ import com.carlom.klardrop.common.discovery.CurrentDevice
  * exercise (the real implementation is [BlueZPeripheralFacade]); central-role
  * operations likewise (the real implementation is [BlueZCentralFacade]).
  */
-interface BlueZFacade {
+internal interface BlueZFacade {
 
   /** Probes the system bus for adapters usable for both GATT client and peripheral roles. */
   suspend fun probeCapability(): BlueZCapability
@@ -94,19 +94,19 @@ interface BlueZFacade {
  * Live GATT link to a remote peer in the central role, returned by [BlueZFacade.connect].
  * Lambda-based like [LinuxBleSession]'s notify hook so fakes construct it inline.
  */
-class BlueZPeerLink(
+internal class BlueZPeerLink(
   /** Negotiated ATT MTU (`GattCharacteristic1.MTU` when BlueZ exposes it, else DEFAULT_MTU). */
-  val mtu: Int,
+  internal val mtu: Int,
   /** Write to the peer's TX characteristic. Throws when the write fails. */
-  val writeTx: suspend (ByteArray) -> Unit,
+  internal val writeTx: suspend (ByteArray) -> Unit,
   /** Drop the GATT link. Idempotent. */
-  val close: () -> Unit = {},
+  internal val close: () -> Unit = {},
 )
 
 /** Result of probing BlueZ for BLE capability. */
-data class BlueZCapability(
+internal data class BlueZCapability(
   /** True when at least one adapter exposes both GattManager1 and LEAdvertisingManager1. */
-  val supported: Boolean,
+  internal val supported: Boolean,
   /** Object paths of the fully capable adapters (e.g. /org/bluez/hci0). */
-  val adapterPaths: List<String>,
+  internal val adapterPaths: List<String>,
 )

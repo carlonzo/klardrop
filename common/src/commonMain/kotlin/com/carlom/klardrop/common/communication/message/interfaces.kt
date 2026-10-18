@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
-enum class MessageType(val id: Byte) {
+public enum class MessageType(public val id: Byte) {
 
   HANDSHAKE(0),
   TEXT(1),
@@ -45,7 +45,7 @@ enum class MessageType(val id: Byte) {
 
   ;
 
-  companion object {
+  internal companion object {
     fun fromId(id: Byte): MessageType {
       return MessageType.entries.first { it.id == id }
     }
@@ -53,26 +53,26 @@ enum class MessageType(val id: Byte) {
 
 }
 
-sealed class Message {
-  open val id: Int = Random.nextInt()
+public sealed class Message {
+  public open val id: Int = Random.nextInt()
 
-  abstract val type: MessageType
-  abstract val hasPayload: Boolean
+  public abstract val type: MessageType
+  public abstract val hasPayload: Boolean
 }
 
-sealed interface SendMessageRequest {
-  val message: Message
+public sealed interface SendMessageRequest {
+  public val message: Message
 }
 
 /**
  * Signature wrapper for trusted messages - encapsulates all cryptographic data.
  */
 @Serializable
-data class MessageSignature(
-    val signature: ByteArray,
-    val timestamp: Long,
-    val nonce: ByteArray,
-    val senderId: String
+internal data class MessageSignature(
+    internal val signature: ByteArray,
+    internal val timestamp: Long,
+    internal val nonce: ByteArray,
+    internal val senderId: String
 ) {
     /**
      * ByteArray-safe content comparison for MessageSignature.
@@ -109,7 +109,7 @@ data class MessageSignature(
 /**
  * SendMessageRequest with optional signature for trusted device communication.
  */
-interface SignedSendMessageRequest : SendMessageRequest {
+internal interface SignedSendMessageRequest : SendMessageRequest {
     val messageSignature: MessageSignature?
     
     /**
@@ -123,7 +123,9 @@ interface SignedSendMessageRequest : SendMessageRequest {
     fun requiresVerification(): Boolean = isSigned()
 }
 
-fun Message.toSimpleSendRequest(messageSignature: MessageSignature? = null): SendMessageRequest {
+public fun Message.toSimpleSendRequest(): SendMessageRequest = toSimpleSendRequest(messageSignature = null)
+
+internal fun Message.toSimpleSendRequest(messageSignature: MessageSignature?): SendMessageRequest {
   if (hasPayload) {
     throw IllegalStateException("Message has payload. Cant use an empty send request")
   }
@@ -131,12 +133,12 @@ fun Message.toSimpleSendRequest(messageSignature: MessageSignature? = null): Sen
   return SimpleSendMessageRequest(this, messageSignature)
 }
 
-class SimpleSendMessageRequest(
+internal class SimpleSendMessageRequest(
     override val message: Message,
     override val messageSignature: MessageSignature? = null
 ) : SignedSendMessageRequest
 
-enum class AckType {
+internal enum class AckType {
   READY,
   RECEIVED,
   REJECTED,
@@ -144,8 +146,8 @@ enum class AckType {
 }
 
 @Serializable
-data class MessageAcknowledgment(
-  val ackType: AckType,
+internal data class MessageAcknowledgment(
+  internal val ackType: AckType,
   override val id: Int = Random.nextInt(),
 ) : Message() {
   override val type: MessageType = when (ackType) {
@@ -162,7 +164,7 @@ data class MessageAcknowledgment(
  * timeout because the rejection is a deliberate user action, so retrying doesn't help —
  * Messenger surfaces this as a terminal error rather than triggering reconnect-and-retry.
  */
-class TransferRejectedException(val messageId: Int) :
+internal class TransferRejectedException(val messageId: Int) :
   RuntimeException("Transfer rejected by recipient (messageId=$messageId)")
 
 /**
@@ -170,9 +172,9 @@ class TransferRejectedException(val messageId: Int) :
  * or the transfer outright. It carries no message id because the Quick Share handshake rejects
  * before a message is minted, so Messenger classifies it from the type alone.
  */
-class NearbyTransferRejectedException(message: String) : RuntimeException(message)
+internal class NearbyTransferRejectedException(message: String) : RuntimeException(message)
 
-interface MessageHandler<E : Message, R : SendMessageRequest> {
+internal interface MessageHandler<E : Message, R : SendMessageRequest> {
 
   suspend fun handleIncoming(message: E, readChannel: ByteReadChannel, receiveFlow: MutableStateFlow<ReceiveMessageUpdate>)
 

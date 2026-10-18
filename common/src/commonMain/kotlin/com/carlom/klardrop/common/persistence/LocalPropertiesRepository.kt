@@ -12,17 +12,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.withContext
 
-interface LocalPropertiesRepository {
+public interface LocalPropertiesRepository {
 
-  val properties: Flow<KlardropProperties>
+  public val properties: Flow<KlardropProperties>
 
-  suspend fun getProperty(): KlardropProperties
-  suspend fun save(properties: KlardropProperties)
-  suspend fun saveCustomDeviceName(customDeviceName: String?)
+  public suspend fun getProperty(): KlardropProperties
+  public suspend fun save(properties: KlardropProperties): Unit
+  public suspend fun saveCustomDeviceName(customDeviceName: String?): Unit
 
   /** Opt-in: keep the device discoverable/connectable while the app is backgrounded
    *  (Android backs this with a foreground service). */
-  suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean)
+  public suspend fun saveBackgroundDiscoveryEnabled(enabled: Boolean): Unit
 
 }
 
@@ -78,8 +78,8 @@ internal fun <T>MutablePreferences.putOrRemove(key: Preferences.Key<T>, value: T
   else set(key, value)
 }
 
-data class KlardropProperties(
-  val deviceId: String,
-  val customDeviceName: String? = null,
-  val backgroundDiscoveryEnabled: Boolean = false,
+public data class KlardropProperties(
+  public val deviceId: String,
+  public val customDeviceName: String? = null,
+  public val backgroundDiscoveryEnabled: Boolean = false,
 )

@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlin.random.Random
 
 @Serializable
-enum class ConnectionKind {
+public enum class ConnectionKind {
   WIFI_OPEN,
   WIFI_WEP,
   WIFI_WPA,
@@ -14,11 +14,11 @@ enum class ConnectionKind {
 }
 
 @Serializable
-data class ConnectionInfoMessage(
-  val kind: ConnectionKind,
-  val ssid: String,
-  val password: String? = null,
-  val hidden: Boolean = false,
+public data class ConnectionInfoMessage(
+  public val kind: ConnectionKind,
+  public val ssid: String,
+  public val password: String? = null,
+  public val hidden: Boolean = false,
   override val id: Int = Random.nextInt(),
 ) : Message() {
 

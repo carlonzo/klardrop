@@ -8,12 +8,12 @@ import com.carlom.klardrop.common.utils.readFileText
 import kotlinx.cinterop.*
 import platform.posix.*
 
-actual object CommonPlatformDependencies {
-  actual fun osType(): OsType = OsType.LINUX
+public actual object CommonPlatformDependencies {
+  public actual fun osType(): OsType = OsType.LINUX
 
-  actual fun deviceType(): DeviceType = DeviceType.DESKTOP
+  public actual fun deviceType(): DeviceType = DeviceType.DESKTOP
 
-  actual fun getDeviceName(): String = hostname
+  public actual fun getDeviceName(): String = hostname
 }
 
 private val hostname: String by lazy {

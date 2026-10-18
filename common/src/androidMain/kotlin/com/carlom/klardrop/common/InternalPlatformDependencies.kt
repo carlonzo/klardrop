@@ -29,23 +29,23 @@ import kotlinx.io.files.Path
 import kotlinx.io.files.SystemFileSystem
 import java.io.File
 
-actual class InternalPlatformDependencies(private val context: Context, private val applicationInfo: ApplicationInfo) {
+public actual class InternalPlatformDependencies(private val context: Context, private val applicationInfo: ApplicationInfo) {
 
   private val bleTransport by lazy { BleTransport(context) }
 
-  actual fun getDownloadStoragePath(): Path {
+  internal actual fun getDownloadStoragePath(): Path {
     return Path(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath)
   }
 
-  actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
+  internal actual fun serviceDiscoveryMdns(): ServiceDiscoveryMdns {
     return ServiceDiscoveryMdns(context)
   }
 
   private val networkLifecycleMonitor by lazy { NetworkLifecycleMonitor(context) }
 
-  actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
+  internal actual fun networkLifecycleMonitor(): NetworkLifecycleMonitor = networkLifecycleMonitor
 
-  actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
+  internal actual fun lanAddressSelector(): com.carlom.klardrop.common.qrshare.LanAddressSelector =
     com.carlom.klardrop.common.qrshare.PlatformLanAddressSelector(context)
 
   // Eager, not lazy: ForegroundState counts Activity starts from the moment it registers, and
@@ -54,41 +54,41 @@ actual class InternalPlatformDependencies(private val context: Context, private 
   // discovery OFF for the whole session (KLARDROP-KA).
   private val foregroundState = ForegroundState(context)
 
-  actual fun foregroundState(): ForegroundState = foregroundState
+  internal actual fun foregroundState(): ForegroundState = foregroundState
 
   private val permissionsMonitor by lazy { PermissionsMonitor(context, foregroundState) }
 
-  actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
+  internal actual fun permissionsMonitor(): PermissionsMonitor = permissionsMonitor
 
   private val connectivityRestrictionMonitor by lazy {
     ConnectivityRestrictionMonitor(context, foregroundState)
   }
 
-  actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
+  internal actual fun connectivityRestrictionMonitor(): ConnectivityRestrictionMonitor = connectivityRestrictionMonitor
 
   private val notifier by lazy { Notifier(context) }
 
-  actual fun notifier(): Notifier = notifier
+  internal actual fun notifier(): Notifier = notifier
 
-  actual fun bleTransport(): BleTransport = bleTransport
+  internal actual fun bleTransport(): BleTransport = bleTransport
 
-  actual fun clipboardReaderWriter(): ClipboardReaderWriter {
+  internal actual fun clipboardReaderWriter(): ClipboardReaderWriter {
     return ClipboardReaderWriter(context)
   }
 
-  actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
+  internal actual fun connectionInfoJoiner(): ConnectionInfoJoiner {
     return AndroidConnectionInfoJoiner(context, ClipboardReaderWriter(context))
   }
 
-  actual fun driverFactory(): DriverFactory {
+  internal actual fun driverFactory(): DriverFactory {
     return DriverFactory(context)
   }
 
-  actual fun trustStorage(): TrustStorage {
+  internal actual fun trustStorage(): TrustStorage {
     return AndroidTrustStorage(context)
   }
 
-  actual suspend fun openFile(filePath: String): Boolean {
+  internal actual suspend fun openFile(filePath: String): Boolean {
     return try {
       // file_path can be either a content:// URI (for media saved via MediaStore) or a
       // regular filesystem path (for everything else). Content URIs go straight into the
@@ -134,7 +134,7 @@ actual class InternalPlatformDependencies(private val context: Context, private 
     }
   }
 
-  actual suspend fun openUrl(url: String): Boolean {
+  internal actual suspend fun openUrl(url: String): Boolean {
     return try {
       val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -150,7 +150,7 @@ actual class InternalPlatformDependencies(private val context: Context, private 
     }
   }
 
-  actual suspend fun saveMediaToGallery(
+  internal actual suspend fun saveMediaToGallery(
     tempPath: Path,
     mimeType: String,
     displayName: String,

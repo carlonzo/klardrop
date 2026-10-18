@@ -39,7 +39,7 @@ import org.freedesktop.dbus.types.Variant
  * and a well-known name like "org.bluez" never matches either — incoming signals carry
  * the sender's unique name, so dbus-java's client-side rule check would drop every one.
  */
-class BlueZCentralFacade(
+internal class BlueZCentralFacade(
   private val connection: DBusConnection,
   private val adapterPath: String,
 ) : BlueZFacade {
