@@ -1129,18 +1129,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				ONLY_ACTIVE_ARCH = YES;
-				/* One Kotlin framework only. `presentation` here is the umbrella built by
-				   :control-plane:linkDebugFrameworkMacosArm64, which embeds :presentation and
-				   :klardrop-common, so `import presentation` still resolves in the Swift
-				   files this target shares with iOS. The `presentation` pod is deliberately
-				   absent from this target: a second, separate
-				   presentation.framework would make the same ObjC class visible through two
-				   Swift modules, which is what produced "'KlardropBootstrap' is ambiguous
-				   for type lookup in this context". ld64's lazy archive-member extraction
-				   used to hide that, by never pulling in the second framework's copy. */
 				OTHER_LDFLAGS = (
-					"-framework",
-					"presentation",
 					"-ObjC",
 					"-lc++",
 					"$(inherited)",
@@ -1213,16 +1202,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				/* One Kotlin framework only. `presentation` here is the umbrella built by
-				   :control-plane:linkReleaseFrameworkMacosArm64, which embeds :presentation
-				   and :klardrop-common, so `import presentation` still resolves in the
-				   Swift files this target shares with iOS. The `presentation` pod is
-				   deliberately absent from this target: a second, separate
-				   presentation.framework would make the same ObjC class visible through
-				   two Swift modules. */
 				OTHER_LDFLAGS = (
-					"-framework",
-					"presentation",
 					"-ObjC",
 					"-lc++",
 					"$(inherited)",
