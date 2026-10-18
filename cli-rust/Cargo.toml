@@ -63,4 +63,4 @@ strip = true
 # crate reaches the shipped client: `cargo tree -e normal` must never list
 # them.
 portable-pty = "0.9"
-vt100 = "0.16"
+vt100 = "0.17"
