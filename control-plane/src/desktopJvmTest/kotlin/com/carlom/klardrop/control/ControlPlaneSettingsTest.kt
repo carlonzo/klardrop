@@ -77,7 +77,8 @@ class ControlPlaneSettingsTest {
   fun postSettingsMustBeVisibleInNextGetState() {
     val token = ControlPlane.token
     var expected = true
-    for (iteration in 1..50) {
+    // 2000 round trips (~2s): without the fix this goes red within a few hundred on desktop JVM.
+    for (iteration in 1..2000) {
       val (postCode, postBody) = request(
         "POST",
         "/settings",
