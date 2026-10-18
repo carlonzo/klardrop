@@ -102,6 +102,7 @@ public final class com/carlom/klardrop/DiscoveryController : com/carlom/klardrop
 	public final fun sendTextTracked (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun setActiveChatDeviceId (Ljava/lang/String;)V
 	public final fun setBackgroundDiscoveryEnabled (Z)V
+	public final fun setBackgroundDiscoveryEnabledAndWait (ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun startPreparedFiles (Ljava/lang/String;Ljava/util/List;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun startPreparedFiles$default (Lcom/carlom/klardrop/DiscoveryController;Ljava/lang/String;Ljava/util/List;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 	public final fun startTrackedTextSend (Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
