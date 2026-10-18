@@ -102,4 +102,57 @@ class ControlPlaneSettingsTest {
       expected = !expected
     }
   }
+
+  @Test
+  fun postRenameDeviceAndSettingsMustBeVisibleInNextGetState() {
+    val token = ControlPlane.token
+    val systemName = com.carlom.klardrop.common.CommonPlatformDependencies.getDeviceName()
+
+    for (iteration in 1..2000) {
+      val name = "name-$iteration"
+      val isRenameDevice = iteration % 2 != 0
+      val endpoint = if (isRenameDevice) "/rename-device" else "/settings"
+      val (postCode, postBody) = request(
+        "POST",
+        endpoint,
+        token,
+        """{"name":"$name"}""",
+      )
+      assertEquals(200, postCode, "Iteration $iteration: POST $endpoint failed: $postBody")
+
+      val (getCode, getBody) = request("GET", "/state", token)
+      assertEquals(200, getCode, "Iteration $iteration: GET /state failed: $getBody")
+
+      val json = Json.parseToJsonElement(getBody).jsonObject
+      val self = json["self"]?.jsonObject
+      val actualName = self?.get("deviceName")?.jsonPrimitive?.content
+      assertEquals(
+        name,
+        actualName,
+        "Iteration $iteration: expected deviceName=$name, but got $actualName in GET /state: $getBody",
+      )
+
+      if (iteration % 100 == 0) {
+        val blankEndpoint = if ((iteration / 100) % 2 != 0) "/rename-device" else "/settings"
+        val (blankPostCode, blankPostBody) = request(
+          "POST",
+          blankEndpoint,
+          token,
+          """{"name":""}""",
+        )
+        assertEquals(200, blankPostCode, "Iteration $iteration: POST $blankEndpoint with blank name failed: $blankPostBody")
+
+        val (blankGetCode, blankGetBody) = request("GET", "/state", token)
+        assertEquals(200, blankGetCode, "Iteration $iteration: GET /state after blank name failed: $blankGetBody")
+
+        val blankJson = Json.parseToJsonElement(blankGetBody).jsonObject
+        val blankActualName = blankJson["self"]?.jsonObject?.get("deviceName")?.jsonPrimitive?.content
+        assertEquals(
+          systemName,
+          blankActualName,
+          "Iteration $iteration: expected systemName=$systemName, but got $blankActualName in GET /state: $blankGetBody",
+        )
+      }
+    }
+  }
 }
