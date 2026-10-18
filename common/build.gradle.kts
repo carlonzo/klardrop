@@ -125,7 +125,8 @@ kotlin {
   // was built against). Gradle-run
   // Apple test executables link against that same framework copy.
   sentryKmp {
-    // Sentry Cocoa comes from the Xcode project's SwiftPM package; AUTO would add a second copy via Kotlin swiftPMDependencies.
+    // Sentry Cocoa comes from the Xcode project's SwiftPM package; AUTO would add a
+    // second copy via Kotlin swiftPMDependencies.
     autoInstall.apple.provider.set(AppleDependencyProvider.NONE)
     linker {
       xcodeprojPath.set(rootProject.file("iosApp/iosApp.xcodeproj").absolutePath)

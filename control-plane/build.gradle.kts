@@ -70,7 +70,7 @@ kotlin {
   applyDefaultHierarchyTemplate()
 
   // Tells the sentry-kmp plugin where the Xcode project lives so it finds Sentry.xcframework
-  // in DerivedData (SwiftPM, see iosApp/Package.swift). Same as :presentation.
+  // in DerivedData (the sentry-cocoa SwiftPM package reference in iosApp.xcodeproj). Same as :presentation.
   sentryKmp {
     autoInstall.apple.provider.set(AppleDependencyProvider.NONE)
     linker {
