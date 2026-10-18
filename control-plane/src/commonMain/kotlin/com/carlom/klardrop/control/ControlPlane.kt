@@ -747,7 +747,7 @@ object ControlPlane : ControlPlaneService {
         val ctrl = controller ?: error("DiscoveryController not bound")
         val bgDiscovery = body.boolean("backgroundDiscovery") ?: body.boolean("backgroundDiscoveryEnabled")
         if (bgDiscovery != null) {
-          ctrl.setBackgroundDiscoveryEnabled(bgDiscovery)
+          ctrl.setBackgroundDiscoveryEnabledAndWait(bgDiscovery)
         }
         val name = body.string("name") ?: body.string("deviceName") ?: body.string("customName")
         if (name != null) {

@@ -41,15 +41,18 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.seconds
 
 // TODO should this be composable and get the dispose callback to cancel scope?
 public class DiscoveryController internal constructor(
@@ -150,6 +153,14 @@ public class DiscoveryController internal constructor(
 
   public fun setBackgroundDiscoveryEnabled(enabled: Boolean): Unit {
     controllerScope.launch { localPropertiesRepository.saveBackgroundDiscoveryEnabled(enabled) }
+  }
+
+  /** Same as [setBackgroundDiscoveryEnabled], but returns only once [backgroundDiscoveryEnabled]
+   *  publishes [enabled], so a caller (the control plane's POST /settings) can rely on the next
+   *  read seeing it. Bounded so a concurrent writer can't hang the caller. */
+  public suspend fun setBackgroundDiscoveryEnabledAndWait(enabled: Boolean): Unit {
+    localPropertiesRepository.saveBackgroundDiscoveryEnabled(enabled)
+    withTimeoutOrNull(5.seconds) { backgroundDiscoveryEnabled.first { it == enabled } }
   }
 
   private val _outgoingTransfers = MutableSharedFlow<OutgoingTransfer>(extraBufferCapacity = 64)
