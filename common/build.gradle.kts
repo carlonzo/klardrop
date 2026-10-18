@@ -10,6 +10,7 @@ plugins {
 
 kotlin {
   explicitApi()
+
   android {
     namespace = "com.klardrop.common"
     compileSdk = 37
@@ -348,5 +349,3 @@ tasks.matching { it.name == "generateCommonMainAppDatabaseInterface" }.configure
 kotlin.sourceSets.commonMain {
   kotlin.srcDir(generateKlardropVersion)
 }
-
-

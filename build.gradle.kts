@@ -169,6 +169,3 @@ listOf(":klardrop-common", ":presentation").forEach {
     kotlinApiGuard()
   }
 }
-
-
-
