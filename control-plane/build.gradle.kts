@@ -83,7 +83,10 @@ kotlin {
   swiftExport {
     moduleName = "presentation"
     flattenPackage = "com.carlom.klardrop"
-    export(project(":presentation"))
+    // Distinct module name avoids colliding with root `presentation` on case-insensitive filesystems (macOS CI).
+    export(project(":presentation")) {
+      moduleName = "KlardropPresentation"
+    }
     export(project(":klardrop-common")) {
       moduleName = "KlardropCommon"
       flattenPackage = "com.carlom.klardrop.common"
