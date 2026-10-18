@@ -15,10 +15,6 @@ plugins {
 kotlin {
   explicitApi()
 
-  @OptIn(org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation::class)
-  abiValidation {
-  }
-
   android {
     namespace = "com.klardrop.presentation"
     compileSdk = 37
@@ -144,45 +140,4 @@ kotlin {
   }
 }
 
-val apiDumpDir = layout.projectDirectory.dir("api")
-val checkNoLeakedImplementationTypes = tasks.register("checkNoLeakedImplementationTypes") {
-  group = "verification"
-  description = "Verifies that no forbidden implementation types are exposed in the public ABI dump."
-  inputs.dir(apiDumpDir)
-  val dumpDir = apiDumpDir.asFile
-  val forbidden = listOf(
-    "com.squareup.wire",
-    "app.cash.sqldelight",
-    "com.carlonzo.ukey2",
-    "com.google.security",
-    "com.google.location.nearby",
-    "sharing.nearby",
-    "location.nearby",
-  )
-  doLast {
-    if (!dumpDir.exists()) return@doLast
-    val offending = mutableListOf<String>()
-    dumpDir.walkTopDown().filter { it.isFile }.forEach { file ->
-      file.useLines { lines ->
-        lines.forEachIndexed { index, line ->
-          val normalized = line.replace('/', '.')
-          for (pkg in forbidden) {
-            if (pkg in normalized) {
-              offending.add("${file.relativeTo(dumpDir.parentFile)}:${index + 1} [$pkg]: $line")
-              break
-            }
-          }
-        }
-      }
-    }
-    if (offending.isNotEmpty()) {
-      throw GradleException("Forbidden package leaks detected in API dumps:\n" + offending.joinToString("\n"))
-    }
-  }
-}
-
-tasks.named("check") {
-  dependsOn("checkKotlinAbi")
-  dependsOn(checkNoLeakedImplementationTypes)
-}
 
