@@ -20,6 +20,8 @@ cask "klardrop" do
   desc "Share files and clipboard with nearby devices over the local network (AirDrop-style)"
   homepage "https://github.com/carlonzo/klardrop"
 
+  depends_on macos: ">= :sequoia"
+
   app "Klardrop.app"
 
   zap trash: [

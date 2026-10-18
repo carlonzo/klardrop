@@ -1006,7 +1006,7 @@
           return tabs([
             { id:"stable", label:"Stable", panel: macChannel(
                 "Download .dmg" + sizeFor("macos"), urlFor("macos"),
-                "macOS 12+ · unsigned build — right-click the app and choose <b>Open</b> the first time.", BREW_CMD) },
+                "macOS 15+ · unsigned build — right-click the app and choose <b>Open</b> the first time.", BREW_CMD) },
             { id:"nightly", label:"Nightly", panel: macChannel(
                 "Download .dmg" + nsizeFor("macos"), nurlFor("macos", NIGHTLY_PAGE),
                 "Latest tester build — newest features, less tested. Right-click → <b>Open</b> the first time.", BREW_NIGHTLY) },
@@ -1038,7 +1038,7 @@
           const appStoreReady = APP_STORE_URL && !APP_STORE_URL.includes('<');
           const stablePanel = appStoreReady
             ? primaryDownload("Download on the App Store", APP_STORE_URL,
-                "iOS 17+ · the stable release from Apple's App Store.")
+                "iOS 18+ · the stable release from Apple's App Store.")
             : `<p class="dl-note">App Store release — coming soon.</p>`;
           const nightlyPanel = primaryDownload("Join the TestFlight beta", TESTFLIGHT_URL,
               "Latest tester build — newest features, less tested. Requires the free <b>TestFlight</b> app.");
