@@ -19,16 +19,16 @@ repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 darwin_bundle = os.environ.get("DARWIN_SDK_BUNDLE", "~/.swiftpm/swift-sdks/darwin.artifactbundle")
 B = os.path.expanduser(darwin_bundle)
 
+appdirs = sys.argv[2:] or [f"{repo}/iosApp/iosApp"]
+
 if plat == "ios":
     gen = f"{repo}/presentation/build/SwiftExport/iosArm64/Debug"
     triple = "arm64-apple-ios18.0"
     sdk = f"{B}/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"
-    appdirs = sys.argv[2:] or [f"{repo}/iosApp/iosApp"]
 else:
     gen = f"{repo}/control-plane/build/SwiftExport/macosArm64/Debug"
     triple = "arm64-apple-macosx15.0"
     sdk = f"{B}/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
-    appdirs = sys.argv[2:] or [f"{repo}/iosApp/iosApp"]
 
 res = f"{B}/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift"
 out = f"/tmp/klardrop-swift-check/out-{plat}"
@@ -111,5 +111,6 @@ files = [f for d in appdirs for f in glob.glob(f"{d}/**/*.swift", recursive=True
 r = subprocess.run(base[:-1] + ["App"] + inc + ["-typecheck", "-module-name", "App"] + files, capture_output=True, text=True)
 errs = sorted(set(l for l in r.stderr.splitlines() if ": error:" in l))
 print(f"[app] {len(files)} files: {'OK' if r.returncode == 0 else 'FAIL'} ({len(errs)} errors)")
-print("\n".join(errs) or r.stderr[-3000:])
+if r.returncode != 0:
+    print("\n".join(errs) or r.stderr[-3000:])
 sys.exit(0 if ok and r.returncode == 0 else 1)

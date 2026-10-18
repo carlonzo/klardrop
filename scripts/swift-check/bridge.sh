@@ -13,34 +13,29 @@ GRADLEW_IOS="${GRADLEW_IOS:-$HOME/kn-ios/gradlew-ios}"
 ulimit -n 65536
 cd "$repo"
 
-if [ "$plat" = "ios" ]; then
-  out_dir="/tmp/swx-out-ios"
-  mkdir -p "$out_dir"
-  export SDK_NAME=iphoneos \
-         PLATFORM_NAME=iphoneos \
-         ARCHS=arm64 \
-         CONFIGURATION=Debug \
-         TARGET_BUILD_DIR="$out_dir" \
-         BUILT_PRODUCTS_DIR="$out_dir" \
-         FRAMEWORKS_FOLDER_PATH=Frameworks \
-         ENABLE_BITCODE=NO \
-         EXPANDED_CODE_SIGN_IDENTITY=- \
-         SRCROOT="$repo/iosApp" \
-         CONFIGURATION_BUILD_DIR="$out_dir"
-  "$GRADLEW_IOS" :presentation:compileSwiftExportMainKotlinIosArm64 --console=plain
-elif [ "$plat" = "mac" ]; then
-  out_dir="/tmp/swx-out-mac"
-  mkdir -p "$out_dir"
-  export SDK_NAME=macosx \
-         PLATFORM_NAME=macosx \
-         ARCHS=arm64 \
-         CONFIGURATION=Debug \
-         TARGET_BUILD_DIR="$out_dir" \
-         BUILT_PRODUCTS_DIR="$out_dir" \
-         FRAMEWORKS_FOLDER_PATH=Frameworks \
-         ENABLE_BITCODE=NO \
-         EXPANDED_CODE_SIGN_IDENTITY=- \
-         SRCROOT="$repo/iosApp" \
-         CONFIGURATION_BUILD_DIR="$out_dir"
-  "$GRADLEW_IOS" :presentation:compileSwiftExportMainKotlinMacosArm64 :control-plane:compileSwiftExportMainKotlinMacosArm64 --continue --console=plain
-fi
+case "$plat" in
+  ios)
+    sdk=iphoneos
+    out_dir="/tmp/swx-out-ios"
+    tasks=(:presentation:compileSwiftExportMainKotlinIosArm64)
+    ;;
+  mac)
+    sdk=macosx
+    out_dir="/tmp/swx-out-mac"
+    tasks=(:presentation:compileSwiftExportMainKotlinMacosArm64 :control-plane:compileSwiftExportMainKotlinMacosArm64 --continue)
+    ;;
+esac
+
+mkdir -p "$out_dir"
+export SDK_NAME="$sdk" \
+       PLATFORM_NAME="$sdk" \
+       ARCHS=arm64 \
+       CONFIGURATION=Debug \
+       TARGET_BUILD_DIR="$out_dir" \
+       BUILT_PRODUCTS_DIR="$out_dir" \
+       FRAMEWORKS_FOLDER_PATH=Frameworks \
+       ENABLE_BITCODE=NO \
+       EXPANDED_CODE_SIGN_IDENTITY=- \
+       SRCROOT="$repo/iosApp" \
+       CONFIGURATION_BUILD_DIR="$out_dir"
+"$GRADLEW_IOS" "${tasks[@]}" --console=plain
