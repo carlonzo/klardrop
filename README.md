@@ -215,6 +215,19 @@ open iosApp/iosApp.xcworkspace
 ./gradlew test
 ```
 
+### Typechecking the Swift apps on Linux
+
+As a local dev aid, the Swift apps can be typechecked on Linux (CI's macOS job is the real Xcode build):
+- **Prerequisites**: Linux x64 host with the patched Kotlin/Native iOS toolchain from `~/kn-ios` (see `~/kn-ios/README.md`), the Apple SDK bundle from `omarchy-apple-dev` at `~/.swiftpm/swift-sdks/darwin.artifactbundle`, and `swiftc` on `PATH`.
+- **Environment overrides**: `GRADLEW_IOS`, `DARWIN_SDK_BUNDLE`, and `KONAN_DIST`.
+- **Usage**:
+  ```bash
+  scripts/swift-check/bridge.sh ios|mac
+  python3 scripts/swift-check/check.py ios|mac
+  # Or run just the swift-export step:
+  scripts/swift-check/swx-run.sh
+  ```
+
 ## Contributing
 
 Klardrop is a personal project: the codebase is being tidied
