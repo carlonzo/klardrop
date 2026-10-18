@@ -4,7 +4,7 @@ agp = "9.4.1"
 # since 2.4.20, covering the last SKIE feature we depended on (`onEnum(of:)` is now
 # `.sealedType()`). swift-export needs direct integration (it does not support
 # CocoaPods), which is what the Sentry swap below unblocked.
-kotlin = "2.4.20"
+kotlin = "2.4.21"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 jetbrains-compose = "1.12.2"
