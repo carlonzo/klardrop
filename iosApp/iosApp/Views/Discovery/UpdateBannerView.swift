@@ -26,10 +26,10 @@ struct UpdateBannerView: View {
         // Only show for Available status
         switch status.sealedType() {
         case .available(let available):
-            if dismissedVersion == available.version {
+            if dismissedVersion == available.value.version {
                 EmptyView()
             } else {
-                bannerContent(available: available)
+                bannerContent(available: available.value)
             }
         default:
             EmptyView()
@@ -37,7 +37,7 @@ struct UpdateBannerView: View {
     }
 
     @ViewBuilder
-    private func bannerContent(available: UpdateStatusAvailable) -> some View {
+    private func bannerContent(available: UpdateStatus.Available) -> some View {
         let action = available.action
         let fallbackLabel: String = {
             switch action.sealedType() {
@@ -50,7 +50,7 @@ struct UpdateBannerView: View {
         let fallbackDetail: String = {
             switch action.sealedType() {
             case .runCommand(let r):
-                return r.command
+                return r.value.command
             case .openUrl:
                 return "A new version is ready to download."
             }
@@ -129,7 +129,7 @@ struct UpdateBannerView: View {
         switch installProgress.sealedType() {
         case .downloading(let d):
             // swift-export maps Kotlin Float? directly to Swift Float? — no boxing.
-            let pctStr: String = d.fraction.map { " \(Int($0 * 100))%" } ?? "\u{2026}"
+            let pctStr: String = d.value.fraction.map { " \(Int($0 * 100))%" } ?? "\u{2026}"
             return ("Downloading update\(pctStr)", nil, nil)
         case .ready:
             return ("Update downloaded \u{2014} restart to apply.", "Restart", onRestart)

@@ -16,7 +16,7 @@ import presentation
 struct ShareInboxSheet: View {
 
     let model: DiscoveryAppModel
-    let files: [Filekit_corePlatformFile]
+    let files: [PlatformFile]
     let onComplete: () -> Void
 
     @State private var selectedId: String?
@@ -63,7 +63,7 @@ struct ShareInboxSheet: View {
 
     private var swipeDismissAllowed: Bool {
         ShareSheetDismissPolicy.shared.shouldDismiss(
-            trigger: .swipeAway,
+            trigger: .SwipeAway,
             progress: sendProgress,
             handoffComplete: handoffComplete
         )
@@ -85,7 +85,7 @@ struct ShareInboxSheet: View {
                     progress: sendProgress,
                     onHide: {
                         if ShareSheetDismissPolicy.shared.shouldDismiss(
-                            trigger: .userHide,
+                            trigger: .UserHide,
                             progress: sendProgress,
                             handoffComplete: handoffComplete
                         ) {
@@ -104,7 +104,7 @@ struct ShareInboxSheet: View {
                         else { return }
                         if files.isEmpty {
                             if ShareSheetDismissPolicy.shared.shouldDismiss(
-                                trigger: .emptyPayload,
+                                trigger: .EmptyPayload,
                                 progress: nil,
                                 handoffComplete: false
                             ) {
@@ -121,7 +121,7 @@ struct ShareInboxSheet: View {
                     },
                     onShareViaQr: {
                         let sharedFiles = files.map { SharedFile(file: $0) }
-                        let payload = QrSharePayloadFiles(files: sharedFiles)
+                        let payload = QrSharePayload.Files(files: sharedFiles)
                         Task {
                             // swift-export maps Kotlin suspend + CancellationException to throws.
                             // Failures other than cancel are already stored as QrShareState.Failed.
@@ -140,16 +140,18 @@ struct ShareInboxSheet: View {
         #endif
         .task {
             sessionState = session.state.value
-            for await next in session.state.asAsyncSequence() {
-                sessionState = next
-            }
+            do {
+                for try await next in session.state.asAsyncSequence() {
+                    sessionState = next
+                }
+            } catch {}
         }
         .task(id: progressTerminalKey) {
             guard progressTerminalKey == "completed" else { return }
             try? await Task.sleep(nanoseconds: 900_000_000)
             guard !Task.isCancelled else { return }
             if ShareSheetDismissPolicy.shared.shouldDismiss(
-                trigger: .completed,
+                trigger: .Completed,
                 progress: sendProgress,
                 handoffComplete: handoffComplete
             ) {
@@ -157,6 +159,7 @@ struct ShareInboxSheet: View {
             }
         }
     }
+
 }
 
 // MARK: - DeviceUi → KdShareDevice
@@ -210,15 +213,15 @@ private struct SendStatusView: View {
     private var statusBody: some View {
         switch progress.map({ $0.sealedType() }) {
         case .inProgress(let p):
-            ProgressView(value: Double(p.percentage) / 100.0)
+            ProgressView(value: Double(p.value.percentage) / 100.0)
             Spacer().frame(height: KdSpacing.s3)
-            Text("Sending… \(p.percentage)%")
+            Text("Sending… \(p.value.percentage)%")
                 .kdStyle(.body, color: kd.text)
         case .completed:
             Text("Sent ✓")
                 .kdStyle(.body, color: kd.text)
         case .error(let e):
-            Text("Couldn't send: \(e.message)")
+            Text("Couldn't send: \(e.value.message)")
                 .kdStyle(.body, color: kd.text)
         case .awaitingRecipient:
             ProgressView()

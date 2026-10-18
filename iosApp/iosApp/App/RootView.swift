@@ -32,7 +32,7 @@ struct RootView: View {
     private let ownsModel: Bool
 
     // Share-extension hand-off state.
-    @State private var shareFiles: [Filekit_corePlatformFile] = []
+    @State private var shareFiles: [PlatformFile] = []
     @State private var showShareInbox = false
 
     init(bootstrap: KlardropBootstrap) {
@@ -104,10 +104,10 @@ struct RootView: View {
         let paths = ShareInbox.drainPendingPaths()
         guard !paths.isEmpty else { return }
 
-        var files: [Filekit_corePlatformFile] = []
+        var files: [PlatformFile] = []
         for path in paths {
             if let local = copyIntoTemp(path) {
-                files.append(PlatformFileBridgeKt.platformFileFromPath(path: local))
+                files.append(platformFileFromPath(path: local))
             }
             try? FileManager.default.removeItem(atPath: path)
         }

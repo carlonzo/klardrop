@@ -54,7 +54,7 @@ extension DeviceUi {
             case .sending:
                 return "Sending\u{2026}"
             case .sentCompleted(let c):
-                return c.error ? "Failed" : nil
+                return c.value.error ? "Failed" : nil
             case .idle:
                 switch reachability.sealedType() {
                 case .unreachable:

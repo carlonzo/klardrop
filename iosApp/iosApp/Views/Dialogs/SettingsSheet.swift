@@ -190,7 +190,7 @@ struct ReportProblemSheet: View {
             name: nil,
             email: email
         )
-        if outcome == .sent {
+        if outcome == .Sent {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 onDismiss()
             }
@@ -200,18 +200,19 @@ struct ReportProblemSheet: View {
     private func isSent(_ outcome: ReportOutcome?) -> Bool {
         guard let outcome else { return false }
         switch outcome {
-        case .sent: return true
+        case .Sent: return true
         default:    return false
         }
     }
 
     private func message(for outcome: ReportOutcome) -> String {
         switch outcome {
-        case .sent:     return "Thanks \u{2014} report sent."
-        case .disabled: return "Reporting is turned off in this build, so nothing was sent."
+        case .Sent:     return "Thanks \u{2014} report sent."
+        case .Disabled: return "Reporting is turned off in this build, so nothing was sent."
         default:        return "Could not send the report. Please try again later."
         }
     }
+
 }
 
 // MARK: - AppMenuButton

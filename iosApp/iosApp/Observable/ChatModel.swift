@@ -44,7 +44,7 @@ final class ChatModel {
     private(set) var messages: [ChatMessage] = []
     private(set) var uiState: ChatUiState = emptyChatUiState()
     private(set) var pendingAuth: ReceiveMessageUpdate? = nil
-    private(set) var reachability: Reachability = ReachabilityUnknown()
+    private(set) var reachability: Reachability = Reachability.Unknown.shared
 
     /// Draft text owned here so MessageInputView binds via @Bindable.
     var draft: String = ""
@@ -96,30 +96,38 @@ final class ChatModel {
             // messages: StateFlow<List<ChatMessage>> — Kotlin List maps to Swift Array.
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.viewModel.messages.asAsyncSequence() {
-                    self.messages = next
-                }
+                do {
+                    for try await next in self.viewModel.messages.asAsyncSequence() {
+                        self.messages = next
+                    }
+                } catch {}
             },
             // uiState: StateFlow<ChatUiState>
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.viewModel.uiState.asAsyncSequence() {
-                    self.uiState = next
-                }
+                do {
+                    for try await next in self.viewModel.uiState.asAsyncSequence() {
+                        self.uiState = next
+                    }
+                } catch {}
             },
             // reachability: StateFlow<Reachability>
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.viewModel.reachability.asAsyncSequence() {
-                    self.reachability = next
-                }
+                do {
+                    for try await next in self.viewModel.reachability.asAsyncSequence() {
+                        self.reachability = next
+                    }
+                } catch {}
             },
             // pendingAuth: StateFlow<ReceiveMessageUpdate?>
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.viewModel.pendingAuth.asAsyncSequence() {
-                    self.pendingAuth = next
-                }
+                do {
+                    for try await next in self.viewModel.pendingAuth.asAsyncSequence() {
+                        self.pendingAuth = next
+                    }
+                } catch {}
             },
         ]
     }
@@ -140,7 +148,7 @@ final class ChatModel {
         draft = ""
     }
 
-    func sendFiles(_ files: [Filekit_corePlatformFile]) {
+    func sendFiles(_ files: [PlatformFile]) {
         viewModel.sendFiles(files: files)
     }
 

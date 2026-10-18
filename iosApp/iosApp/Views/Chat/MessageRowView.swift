@@ -92,8 +92,9 @@ private struct TextMessageBubble: View {
 
     /// Detects if the message content is a tappable URL (via Kotlin free fn in :presentation).
     private var openableUrl: String? {
-        UrlDetectionKt.openableUrlOrNull(text: message.content)
+        openableUrlOrNull(text: message.content)
     }
+
 
     var body: some View {
         VStack(alignment: direction == .outgoing ? .trailing : .leading, spacing: 0) {

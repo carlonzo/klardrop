@@ -90,12 +90,12 @@ struct IncomingBannerStackView: View {
         switch notification.sealedType() {
         case .peerRevokedTrust(let p):
             SystemNotificationCardView(
-                title: p.deviceName,
+                title: p.value.deviceName,
                 bodyText: "removed this device. You\u{2019}re no longer paired.",
                 primaryAction: "Pair",
-                onPrimary: { model.onNotificationPair(p.id) },
+                onPrimary: { model.onNotificationPair(p.value.id) },
                 secondaryAction: "Dismiss",
-                onSecondary: { model.onNotificationDismissed(p.id) }
+                onSecondary: { model.onNotificationDismissed(p.value.id) }
             )
         }
     }
@@ -138,18 +138,18 @@ private struct ReceiveCardView: View {
                 subtitle: isText ? "wants to send you a message" : "wants to send you a file",
                 onAccept: {
                     // acceptTransfer is (PresentationBoolean *) -> Void — Bool auto-bridges.
-                    pending.acceptTransfer(true)
+                    pending.value.acceptTransfer(true)
                     model.onReceivedCardClicked(update)
                 },
                 onDecline: {
-                    pending.acceptTransfer(false)
+                    pending.value.acceptTransfer(false)
                     model.onCardDismissed(id)
                     withAnimation(.easeOut(duration: 0.2)) { visible = false }
                 }
             )
             .swipeActions(edge: .trailing) {
                 Button(role: .destructive) {
-                    pending.acceptTransfer(false)
+                    pending.value.acceptTransfer(false)
                     model.onCardDismissed(id)
                     withAnimation(.easeOut(duration: 0.2)) { visible = false }
                 } label: {

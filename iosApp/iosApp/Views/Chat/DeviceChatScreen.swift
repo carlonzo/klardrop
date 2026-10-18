@@ -1,7 +1,14 @@
 import SwiftUI
-#if os(iOS)
+#if canImport(UIKit)
 import UIKit
+#endif
+#if canImport(PhotosUI)
 import PhotosUI
+#endif
+#if canImport(_PhotosUI_SwiftUI)
+import _PhotosUI_SwiftUI
+#endif
+#if canImport(Photos)
 import Photos
 #endif
 import presentation
@@ -268,7 +275,7 @@ struct DeviceChatScreen: View {
         switch result {
         case .success(let urls):
             Task {
-                var platformFiles: [Filekit_corePlatformFile] = []
+                var platformFiles: [PlatformFile] = []
                 for url in urls {
                     guard url.startAccessingSecurityScopedResource() else { continue }
                     defer { url.stopAccessingSecurityScopedResource() }
@@ -278,7 +285,7 @@ struct DeviceChatScreen: View {
                         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
                         let dest = tempDir.appendingPathComponent(url.lastPathComponent)
                         try FileManager.default.copyItem(at: url, to: dest)
-                        let pf = PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+                        let pf = platformFileFromPath(path: dest.path)
                         platformFiles.append(pf)
                     } catch {}
                 }
@@ -293,7 +300,7 @@ struct DeviceChatScreen: View {
 
     #if os(iOS)
     private func handlePhotoItems(_ items: [PhotosPickerItem]) async {
-        var platformFiles: [Filekit_corePlatformFile] = []
+        var platformFiles: [PlatformFile] = []
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
             let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
@@ -302,7 +309,7 @@ struct DeviceChatScreen: View {
             guard (try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)) != nil else { continue }
             let dest = tempDir.appendingPathComponent("photo.\(ext)")
             guard (try? data.write(to: dest)) != nil else { continue }
-            let pf = PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+            let pf = platformFileFromPath(path: dest.path)
             platformFiles.append(pf)
         }
         if !platformFiles.isEmpty {
@@ -323,9 +330,9 @@ private struct IncomingAuthBannerView: View {
 
     var body: some View {
         // Only render for PendingAuthorization status
-        let status: ReceiveMessageStatusPendingAuthorization? = {
+        let status: ReceiveMessageStatus.PendingAuthorization? = {
             switch update.status.sealedType() {
-            case .pendingAuthorization(let s): return s
+            case .pendingAuthorization(let s): return s.value
             default: return nil
             }
         }()
@@ -658,7 +665,7 @@ private struct AttachmentTile: View {
 
 private struct RecentMediaRailView: View {
 
-    let onPick: ([Filekit_corePlatformFile]) -> Void
+    let onPick: ([PlatformFile]) -> Void
 
     @Environment(\.kdColors) private var kd
     @State private var assets: [PHAsset] = []
@@ -780,8 +787,8 @@ private struct RecentThumb: View {
 
 private enum AttachmentImport {
 
-    static func platformFiles(fromSecurityScoped urls: [URL]) -> [Filekit_corePlatformFile] {
-        var out: [Filekit_corePlatformFile] = []
+    static func platformFiles(fromSecurityScoped urls: [URL]) -> [PlatformFile] {
+        var out: [PlatformFile] = []
         for url in urls {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
@@ -790,8 +797,8 @@ private enum AttachmentImport {
         return out
     }
 
-    static func platformFiles(from items: [PhotosPickerItem]) async -> [Filekit_corePlatformFile] {
-        var out: [Filekit_corePlatformFile] = []
+    static func platformFiles(from items: [PhotosPickerItem]) async -> [PlatformFile] {
+        var out: [PlatformFile] = []
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
             let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
@@ -800,7 +807,7 @@ private enum AttachmentImport {
         return out
     }
 
-    static func platformFile(from asset: PHAsset) async -> Filekit_corePlatformFile? {
+    static func platformFile(from asset: PHAsset) async -> PlatformFile? {
         let resources = PHAssetResource.assetResources(for: asset)
         let preferred: [PHAssetResourceType] = [.photo, .video, .fullSizePhoto, .fullSizeVideo, .pairedVideo]
         let resource = preferred.compactMap { type in resources.first { $0.type == type } }.first
@@ -820,21 +827,21 @@ private enum AttachmentImport {
         } catch {
             return nil
         }
-        return PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+        return platformFileFromPath(path: dest.path)
     }
 
-    private static func copyToTemp(from url: URL) -> Filekit_corePlatformFile? {
+    private static func copyToTemp(from url: URL) -> PlatformFile? {
         guard let dir = makeTempDir() else { return nil }
         let dest = dir.appendingPathComponent(url.lastPathComponent)
         guard (try? FileManager.default.copyItem(at: url, to: dest)) != nil else { return nil }
-        return PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+        return platformFileFromPath(path: dest.path)
     }
 
-    private static func writeTemp(data: Data, filename: String) -> Filekit_corePlatformFile? {
+    private static func writeTemp(data: Data, filename: String) -> PlatformFile? {
         guard let dir = makeTempDir() else { return nil }
         let dest = dir.appendingPathComponent(filename)
         guard (try? data.write(to: dest)) != nil else { return nil }
-        return PlatformFileBridgeKt.platformFileFromPath(path: dest.path)
+        return platformFileFromPath(path: dest.path)
     }
 
     private static func makeTempDir() -> URL? {

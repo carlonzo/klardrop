@@ -23,7 +23,7 @@ import presentation
 @main
 struct KlardropMacApp: App {
 
-    private let bootstrap: presentation.KlardropBootstrap
+    private let bootstrap: KlardropBootstrap
 
     // App-owned so the MenuBarExtra and the window share a single
     // DiscoveryController (never construct a second one — see DiscoveryAppModel).
@@ -35,7 +35,7 @@ struct KlardropMacApp: App {
         // Constructing the bootstrap also starts Sentry (see KlardropBootstrap).
         // The default controlPort is an ephemeral loopback port; KLARDROP_CONTROL_PORT
         // can pin it, and -1 disables local IPC entirely.
-        let bootstrap = presentation.KlardropBootstrap()
+        let bootstrap = KlardropBootstrap()
         self.bootstrap = bootstrap
         let model = DiscoveryAppModel(bootstrap: bootstrap)
         _model = State(initialValue: model)
@@ -75,7 +75,7 @@ struct KlardropMacApp: App {
     // bind() launches the flow collectors on the engine's app scope.
     // -----------------------------------------------------------------------
 
-    private static func startLocalControlPlane(app: presentation.Klardrop, controller: presentation.DiscoveryController) {
+    private static func startLocalControlPlane(app: Klardrop, controller: DiscoveryController) {
         Task.detached(priority: .background) {
             do {
                 try await ControlPlane.shared.start(app: app)
@@ -163,7 +163,7 @@ private struct MenuBarContent: View {
 
     /// Open the app and select the tapped device — same flow as a sidebar tap
     /// in KlardropNav (select chat, notify controller, mark active chat).
-    private func open(_ device: presentation.DeviceUi) {
+    private func open(_ device: DeviceUi) {
         activateApp()
         let route = ChatRoute(deviceId: device.deviceId, deviceName: device.deviceName)
         model.selectedChat = route

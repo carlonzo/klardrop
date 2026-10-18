@@ -85,33 +85,43 @@ final class DiscoveryAppModel {
         stateTasks = [
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.controller.screenStateFlow.asAsyncSequence() {
-                    self.state = next
-                }
+                do {
+                    for try await next in self.controller.screenStateFlow.asAsyncSequence() {
+                        self.state = next
+                    }
+                } catch {}
             },
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.controller.permissionsState.asAsyncSequence() {
-                    self.permissionsState = next
-                }
+                do {
+                    for try await next in self.controller.permissionsState.asAsyncSequence() {
+                        self.permissionsState = next
+                    }
+                } catch {}
             },
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.controller.backgroundDiscoveryEnabled.asAsyncSequence() {
-                    self.backgroundDiscoveryEnabled = next
-                }
+                do {
+                    for try await next in self.controller.backgroundDiscoveryEnabled.asAsyncSequence() {
+                        self.backgroundDiscoveryEnabled = next
+                    }
+                } catch {}
             },
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.updateController.status.asAsyncSequence() {
-                    self.updateStatus = next
-                }
+                do {
+                    for try await next in self.updateController.status.asAsyncSequence() {
+                        self.updateStatus = next
+                    }
+                } catch {}
             },
             Task { [weak self] in
                 guard let self else { return }
-                for await next in self.updateController.installProgress.asAsyncSequence() {
-                    self.updateInstallProgress = next
-                }
+                do {
+                    for try await next in self.updateController.installProgress.asAsyncSequence() {
+                        self.updateInstallProgress = next
+                    }
+                } catch {}
             },
         ]
     }
@@ -155,7 +165,7 @@ final class DiscoveryAppModel {
     /// the callback is hopped to the main actor for SwiftUI.
     func sendShareFiles(
         _ device: DeviceUi,
-        files: [Filekit_corePlatformFile],
+        files: [PlatformFile],
         onProgress: @escaping (MessengerSendProgress) -> Void
     ) {
         controller.sendFiles(deviceId: device.deviceId, files: files) { progress in

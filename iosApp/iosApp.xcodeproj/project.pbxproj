@@ -28,6 +28,8 @@
 		1940F391E2C19CC3621CEF71 /* KdSpacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE2900C33A5D4FCB082B78 /* KdSpacing.swift */; };
 		19B7B5BAAD695CC7106C2111 /* KlardropShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E8D02C9FE68B9DA10D7FC00D /* KlardropShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1E9CB7CE348B5FD6CDACBF1F /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0C2857366865997CD52F57 /* RootView.swift */; };
+		A1B2C3D4E5F6010203040502 /* KotlinTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6010203040501 /* KotlinTypes.swift */; };
+		A1B2C3D4E5F6010203040503 /* KotlinTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6010203040501 /* KotlinTypes.swift */; };
 		1EB4D638862E6AF6AABDA495 /* DeviceAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF406F852D741B670D0B3EDD /* DeviceAvatarView.swift */; };
 		227FC59E976D5DCE6BE59518 /* FilePicking.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BBAF324273D25F8CE8733D1 /* FilePicking.swift */; };
 		25854FF09AB48EEE3DA5A4C9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0C2857366865997CD52F57 /* RootView.swift */; };
@@ -178,6 +180,7 @@
 		236550792A75989700412ADF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		2405ADA8D7EA482D702EEB81 /* Klardrop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Klardrop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2B0C2857366865997CD52F57 /* RootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6010203040501 /* KotlinTypes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KotlinTypes.swift; sourceTree = "<group>"; };
 		2F0E5908AF635BAECCE52473 /* SidebarView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		374C118F971889B9DC26AE84 /* MessageInputView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageInputView.swift; sourceTree = "<group>"; };
 		38FF9C58AD2000465E2ED481 /* MessageRowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageRowView.swift; sourceTree = "<group>"; };
@@ -322,6 +325,7 @@
 			isa = PBXGroup;
 			children = (
 				2B0C2857366865997CD52F57 /* RootView.swift */,
+				A1B2C3D4E5F6010203040501 /* KotlinTypes.swift */,
 				FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */,
 				8320B3CCB3CAA291C7EBDB0F /* MacApp.swift */,
 			);
@@ -684,6 +688,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				25854FF09AB48EEE3DA5A4C9 /* RootView.swift in Sources */,
+				A1B2C3D4E5F6010203040502 /* KotlinTypes.swift in Sources */,
 				DDFCE403CC505E5D64D40F09 /* iOSApp.swift in Sources */,
 				BB3898649DCACF2E256E5C32 /* Color+Hex.swift in Sources */,
 				C5D4DC65F6E3B14AE90B7A09 /* KdColors.swift in Sources */,
@@ -740,6 +745,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1E9CB7CE348B5FD6CDACBF1F /* RootView.swift in Sources */,
+				A1B2C3D4E5F6010203040503 /* KotlinTypes.swift in Sources */,
 				57DDBFC25CBDBEBAC6C6E527 /* Color+Hex.swift in Sources */,
 				96972AF43A557DDE6D1D1B3D /* KdColors.swift in Sources */,
 				9A848A1EEF4106C24B6BB123 /* KdMotion.swift in Sources */,

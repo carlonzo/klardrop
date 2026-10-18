@@ -37,9 +37,9 @@ struct QrShareView: View {
     private var currentUrl: String? {
         switch state.sealedType() {
         case .qrVisible(let s):
-            return s.url
+            return s.value.url
         case .serving(let s):
-            return s.qrStillVisible ? s.url : nil
+            return s.value.qrStillVisible ? s.value.url : nil
         default:
             return nil
         }
@@ -48,7 +48,7 @@ struct QrShareView: View {
     private var payloadSummary: String? {
         switch state.sealedType() {
         case .qrVisible(let s):
-            return s.payloadSummary.isEmpty ? nil : s.payloadSummary
+            return s.value.payloadSummary.isEmpty ? nil : s.value.payloadSummary
         default:
             return nil
         }
@@ -57,7 +57,7 @@ struct QrShareView: View {
     private var downloads: [QrDownloadProgress] {
         switch state.sealedType() {
         case .serving(let s):
-            return s.downloads
+            return s.value.downloads
         default:
             return []
         }
@@ -66,7 +66,7 @@ struct QrShareView: View {
     private var errorMessage: String? {
         switch state.sealedType() {
         case .failed(let s):
-            return s.message
+            return s.value.message
         default:
             return nil
         }
@@ -92,7 +92,7 @@ struct QrShareView: View {
         case .failed:
             return "Dismiss"
         case .serving(let s):
-            if !s.downloads.isEmpty || !s.qrStillVisible {
+            if !s.value.downloads.isEmpty || !s.value.qrStillVisible {
                 return "Hide — keeps sending"
             }
             return "Dismiss"
@@ -233,9 +233,11 @@ struct QrShareView: View {
             Spacer().frame(height: KdSpacing.s7)
         }
         .task {
-            for await next in session.state.asAsyncSequence() {
-                self.state = next
-            }
+            do {
+                for try await next in session.state.asAsyncSequence() {
+                    self.state = next
+                }
+            } catch {}
         }
         .task(id: currentUrl) {
             if let currentUrl, !currentUrl.isEmpty {
