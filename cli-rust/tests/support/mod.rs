@@ -25,6 +25,7 @@ use portable_pty::{native_pty_system, Child as PtyChild, CommandBuilder, PtySize
 use portable_pty::{MasterPty, SlavePty};
 use std::fs;
 use std::io::{Read, Write};
+use std::num::NonZeroU16;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -382,6 +383,20 @@ pub struct Tui {
     _slave: Option<Box<dyn SlavePty + Send>>,
 }
 
+/// A row or column count `vt100` 0.18 will accept.
+///
+/// `Parser::new` and `Screen::set_size` take [`NonZeroU16`]. A zero was already
+/// not a screen — 0.17 panicked inside the parser — and nothing in this harness
+/// produces one. The value is the `u16` a test handed to
+/// [`Tui::launch_sized_with`] or [`Tui::resize`] (`COLS`/`ROWS`, or a literal
+/// such as 10×4, 60×14, 100×30) and is forwarded unchanged to the pty. The
+/// harness never reads a size back from the kernel, so a zero is a test asking
+/// for a grid the parser cannot build. Fail there: the parser then stays the
+/// same size as the pty it is decoding.
+fn vt_extent(value: u16, axis: &str) -> NonZeroU16 {
+    NonZeroU16::new(value).unwrap_or_else(|| panic!("pty {axis} must be non-zero"))
+}
+
 impl Tui {
     /// Starts `klardrop interactive` against `fixture` on a pty of the default
     /// size, with motion, mouse capture and colour off so the screen is a pure
@@ -499,7 +514,11 @@ impl Tui {
         let mut reader = master.try_clone_reader().expect("clone pty reader");
         let writer = master.take_writer().expect("take pty writer");
 
-        let parser = Arc::new(Mutex::new(vt100::Parser::new(rows, cols, 0)));
+        let parser = Arc::new(Mutex::new(vt100::Parser::new(
+            vt_extent(rows, "rows"),
+            vt_extent(cols, "cols"),
+            0,
+        )));
         let exited = Arc::new(Mutex::new(None));
         let raw = Arc::new(Mutex::new(Vec::new()));
         {
@@ -563,7 +582,7 @@ impl Tui {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .screen_mut()
-            .set_size(rows, cols);
+            .set_size(vt_extent(rows, "rows"), vt_extent(cols, "cols"));
     }
 
     /// The screen as text: one string per row, trailing blank rows removed.
