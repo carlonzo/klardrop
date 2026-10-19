@@ -13,7 +13,7 @@ ktor = "3.6.0"
 datastore = "1.2.1"
 androidx-activity = "1.13.0"
 kotlinx-io = "0.9.1"
-sentry-kmp = "0.28.0"
+sentry-kmp = "0.29.0"
 # Tracks the Sentry *Android Gradle* plugin, which is versioned independently of the
 # KMP SDK above and must not be pinned to it.
 sentry-android = "6.24.0"
