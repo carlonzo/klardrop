@@ -1,6 +1,8 @@
 import com.android.build.api.dsl.ApplicationExtension
 import com.android.build.api.dsl.LibraryExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 group = "com.carlom.klardrop"
@@ -107,4 +109,63 @@ subprojects {
   }
 }
 
+/**
+ * Fails `check` when a public ABI dump (api/) mentions an implementation package, and runs the
+ * Kotlin ABI check. Used by the modules with committed ABI dumps (:klardrop-common, :presentation).
+ */
+fun Project.kotlinApiGuard() {
+  val apiDumpDir = layout.projectDirectory.dir("api")
+  val checkNoLeakedImplementationTypes = tasks.register("checkNoLeakedImplementationTypes") {
+    group = "verification"
+    description = "Verifies that no forbidden implementation types are exposed in the public ABI dump."
+    inputs.dir(apiDumpDir)
+    val dumpDir = apiDumpDir.asFile
+    val forbidden = listOf(
+      "com.squareup.wire",
+      "app.cash.sqldelight",
+      "com.carlonzo.ukey2",
+      "com.google.security",
+      "com.google.location.nearby",
+      "sharing.nearby",
+      "location.nearby",
+    )
+    doLast {
+      if (!dumpDir.exists()) return@doLast
+      val offending = mutableListOf<String>()
+      dumpDir.walkTopDown().filter { it.isFile }.forEach { file ->
+        file.useLines { lines ->
+          lines.forEachIndexed { index, line ->
+            val normalized = line.replace('/', '.')
+            for (pkg in forbidden) {
+              if (pkg in normalized) {
+                offending.add("${file.relativeTo(dumpDir.parentFile)}:${index + 1} [$pkg]: $line")
+                break
+              }
+            }
+          }
+        }
+      }
+      if (offending.isNotEmpty()) {
+        throw GradleException("Forbidden package leaks detected in API dumps:\n" + offending.joinToString("\n"))
+      }
+    }
+  }
 
+  pluginManager.withPlugin("org.jetbrains.kotlin.multiplatform") {
+    extensions.configure<KotlinMultiplatformExtension> {
+      @OptIn(ExperimentalAbiValidation::class)
+      abiValidation {
+      }
+    }
+    tasks.named("check") {
+      dependsOn("checkKotlinAbi")
+      dependsOn(checkNoLeakedImplementationTypes)
+    }
+  }
+}
+
+listOf(":klardrop-common", ":presentation").forEach {
+  project(it) {
+    kotlinApiGuard()
+  }
+}

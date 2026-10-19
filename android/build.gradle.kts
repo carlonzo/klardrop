@@ -126,9 +126,9 @@ android {
 // separate CI step. This replaces what com.bugsnag.android.gradle used to do.
 sentry {
   // MANDATORY. The Sentry SDK already reaches this APK transitively: sentry-kotlin-
-  // multiplatform 0.27.0 (via :klardrop-common) pulls io.sentry:sentry-android 8.41.0,
+  // multiplatform 0.28.0 (via :klardrop-common) pulls io.sentry:sentry-android 8.58.0,
   // the version it was built against. Auto-installation would add a second, direct
-  // io.sentry:sentry-android at the version *this plugin* ships (8.53.0 for 6.19.0),
+  // io.sentry:sentry-android at the version *this plugin* ships (8.61.0 for 6.24.0),
   // and Gradle's conflict resolution would quietly hand the KMP SDK the newer one.
   // We want the mapping upload out of this plugin and nothing else — and that means
   // this flag has to be re-checked on every plugin bump, not set and forgotten.

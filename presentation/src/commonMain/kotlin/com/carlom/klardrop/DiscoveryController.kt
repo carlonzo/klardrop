@@ -861,9 +861,15 @@ public class DiscoveryController internal constructor(
 
   public fun saveCustomDeviceName(customName: String?): Unit {
     controllerScope.launch {
-      currentDeviceProvider.updateCustomDeviceName(customName)
-      loadDeviceNames()
+      saveCustomDeviceNameAndWait(customName)
     }
+  }
+
+  /** Same as [saveCustomDeviceName], but returns only once the new name is persisted, so a caller
+   *  (the control plane's /rename-device and POST /settings) can rely on the next read seeing it. */
+  public suspend fun saveCustomDeviceNameAndWait(customName: String?): Unit {
+    currentDeviceProvider.updateCustomDeviceName(customName)
+    loadDeviceNames()
   }
 
   // --- Debug-control entry points. Same methods the UI buttons call, keyed by device id. ---

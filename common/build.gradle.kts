@@ -1,3 +1,5 @@
+import io.sentry.kotlin.multiplatform.gradle.AppleDependencyProvider
+
 plugins {
   alias(deps.plugins.kotlin.multiplatform)
   alias(deps.plugins.android.kmp.library)
@@ -9,9 +11,6 @@ plugins {
 kotlin {
   explicitApi()
 
-  @OptIn(org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation::class)
-  abiValidation {
-  }
   android {
     namespace = "com.klardrop.common"
     compileSdk = 37
@@ -112,8 +111,8 @@ kotlin {
   applyDefaultHierarchyTemplate()
 
   // The sentry-kmp plugin links sentry-cocoa from Xcode's SwiftPM integration:
-  // the sentry-cocoa package reference lives in iosApp.xcodeproj (exact 8.58.2,
-  // matching the kmp 0.27.0 cinterop), and the plugin finds Sentry.xcframework in
+  // the sentry-cocoa package reference lives in iosApp.xcodeproj (exact 9.29.2,
+  // matching the kmp 0.28.0 cinterop), and the plugin finds Sentry.xcframework in
   // the default DerivedData at link time (`sentryKmp.linker.xcodeprojPath` points
   // it at iosApp.xcodeproj). No Kotlin source change — nothing imports `cocoapods.*`.
 
@@ -123,6 +122,9 @@ kotlin {
   // was built against). Gradle-run
   // Apple test executables link against that same framework copy.
   sentryKmp {
+    // Sentry Cocoa comes from the Xcode project's SwiftPM package; AUTO would add a
+    // second copy via Kotlin swiftPMDependencies.
+    autoInstall.apple.provider.set(AppleDependencyProvider.NONE)
     linker {
       xcodeprojPath.set(rootProject.file("iosApp/iosApp.xcodeproj").absolutePath)
     }
@@ -347,46 +349,3 @@ tasks.matching { it.name == "generateCommonMainAppDatabaseInterface" }.configure
 kotlin.sourceSets.commonMain {
   kotlin.srcDir(generateKlardropVersion)
 }
-
-val apiDumpDir = layout.projectDirectory.dir("api")
-val checkNoLeakedImplementationTypes = tasks.register("checkNoLeakedImplementationTypes") {
-  group = "verification"
-  description = "Verifies that no forbidden implementation types are exposed in the public ABI dump."
-  inputs.dir(apiDumpDir)
-  val dumpDir = apiDumpDir.asFile
-  val forbidden = listOf(
-    "com.squareup.wire",
-    "app.cash.sqldelight",
-    "com.carlonzo.ukey2",
-    "com.google.security",
-    "com.google.location.nearby",
-    "sharing.nearby",
-    "location.nearby",
-  )
-  doLast {
-    if (!dumpDir.exists()) return@doLast
-    val offending = mutableListOf<String>()
-    dumpDir.walkTopDown().filter { it.isFile }.forEach { file ->
-      file.useLines { lines ->
-        lines.forEachIndexed { index, line ->
-          val normalized = line.replace('/', '.')
-          for (pkg in forbidden) {
-            if (pkg in normalized) {
-              offending.add("${file.relativeTo(dumpDir.parentFile)}:${index + 1} [$pkg]: $line")
-              break
-            }
-          }
-        }
-      }
-    }
-    if (offending.isNotEmpty()) {
-      throw GradleException("Forbidden package leaks detected in API dumps:\n" + offending.joinToString("\n"))
-    }
-  }
-}
-
-tasks.named("check") {
-  dependsOn("checkKotlinAbi")
-  dependsOn(checkNoLeakedImplementationTypes)
-}
-
