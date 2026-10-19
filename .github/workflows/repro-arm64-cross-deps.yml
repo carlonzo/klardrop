@@ -1,0 +1,76 @@
+# Throwaway: reproduce the nightly arm64 cross-library install on the same
+# ubuntu-26.04 image, then run the fixed script and the engine cross-link.
+# Not for main. Delete this file with the repro branch.
+name: Repro arm64 cross deps
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-arm64-engine:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      # The nightly step is `bash packaging/linux/install-arm64-cross-deps.sh`.
+      # Plan that script as it exists on main (live ports.ubuntu.com). -s stops
+      # a downgrade from actually changing the host toolchain before the fixed
+      # script runs; apt still exits 100 when the plan downgrades packages.
+      - name: Simulate the nightly apt install from main
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin main
+          git show FETCH_HEAD:packaging/linux/install-arm64-cross-deps.sh > /tmp/old-install-arm64-cross-deps.sh
+          sed -i 's/apt-get install -y/apt-get install -s -y/' /tmp/old-install-arm64-cross-deps.sh
+          set +e
+          bash /tmp/old-install-arm64-cross-deps.sh > /tmp/old-apt.txt 2>&1
+          rc=$?
+          set -e
+          cat /tmp/old-apt.txt
+          if grep -q 'will be DOWNGRADED\|without --allow-downgrades' /tmp/old-apt.txt; then
+            echo "RESULT: reproduced the host-downgrade refusal from the nightly job"
+          elif [ "$rc" -eq 0 ]; then
+            echo "RESULT: live ports install currently simulates clean (mirrors in sync)"
+          else
+            echo "RESULT: old install failed unexpectedly (rc=$rc)"
+            exit "$rc"
+          fi
+
+      - name: Install aarch64 cross libraries
+        run: bash packaging/linux/install-arm64-cross-deps.sh
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-x64-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-x64-
+
+      - name: Cross-compile linuxArm64 engine
+        run: >-
+          ./gradlew
+          :cli:linkReleaseExecutableLinuxArm64
+          -Pklardrop.version=1.0.0-repro
+          -Pklardrop.packageVersion=1.0.0
+          -Pklardrop.versionCode=1
+          -Pklardrop.updateChannel=nightly
+          -Pklardrop.forceLinuxArm64=true
+
+      - name: Require an aarch64 engine binary
+        run: |
+          set -euo pipefail
+          bin=cli/build/bin/linuxArm64/releaseExecutable/klardrop-engine.kexe
+          test -f "$bin"
+          machine="$(readelf -h "$bin" | awk -F: '/Machine:/ {print $2}')"
+          echo "engine ELF machine:$machine"
+          echo "$machine" | grep -qiE 'AArch64|ARM64'
