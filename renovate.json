@@ -5,6 +5,7 @@
     ":automergeMinor",
     ":automergePatch"
   ],
+  "automerge": true,
   "platformAutomerge": true,
   "packageRules": [
     {
