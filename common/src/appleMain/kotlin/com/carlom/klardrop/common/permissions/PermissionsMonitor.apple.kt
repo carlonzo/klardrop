@@ -41,14 +41,15 @@ public actual class PermissionsMonitor {
   }
 
   private fun snapshot(): PermissionsState {
-    val capabilities = mutableMapOf<Capability, CapabilityStatus>()
-    capabilities[Capability.BLUETOOTH] = bluetoothStatus()
-    capabilities[Capability.LOCAL_NETWORK] = CapabilityStatus.NotApplicable
-    capabilities[Capability.NOTIFICATIONS] = CapabilityStatus.NotApplicable
-    capabilities[Capability.LOCATION] = CapabilityStatus.NotApplicable
-    capabilities[Capability.NEARBY_WIFI_DEVICES] = CapabilityStatus.NotApplicable
-
-    return PermissionsState(capabilities = capabilities)
+    return PermissionsState(
+      capabilities = listOf(
+        CapabilityGrant(Capability.BLUETOOTH, bluetoothStatus()),
+        CapabilityGrant(Capability.LOCAL_NETWORK, CapabilityStatus.NotApplicable),
+        CapabilityGrant(Capability.NOTIFICATIONS, CapabilityStatus.NotApplicable),
+        CapabilityGrant(Capability.LOCATION, CapabilityStatus.NotApplicable),
+        CapabilityGrant(Capability.NEARBY_WIFI_DEVICES, CapabilityStatus.NotApplicable),
+      ),
+    )
   }
 
   private fun bluetoothStatus(): CapabilityStatus {

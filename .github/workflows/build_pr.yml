@@ -231,10 +231,11 @@ jobs:
             -configuration Debug build CODE_SIGNING_ALLOWED=NO
 
       # Launch the iOS app on a simulator and read the swift-export collections the
-      # root screen touches (permissions map, connectivity-restriction set). Gradle
-      # unit tests never open this bridge: iosSimulatorArm64Test is Kotlin code
-      # linked as a native test binary, and the xcodebuild above only compiles.
-      # A generic destination cannot boot, so pick an available iPhone simulator.
+      # root screen touches (permissions grants, connectivity-restriction reasons,
+      # device connection kinds). Gradle unit tests never open this bridge:
+      # iosSimulatorArm64Test is Kotlin code linked as a native test binary, and
+      # the xcodebuild above only compiles. A generic destination cannot boot, so
+      # pick an available iPhone simulator.
       - name: Test iOS launch and Swift export bridge
         timeout-minutes: 45
         run: |

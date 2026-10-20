@@ -50,17 +50,17 @@ public actual class PermissionsMonitor(
   }
 
   private fun snapshot(): PermissionsState {
-    val capabilities = mutableMapOf<Capability, CapabilityStatus>()
-
-    capabilities[Capability.BLUETOOTH] = bluetoothStatus()
-    capabilities[Capability.NOTIFICATIONS] = notificationsStatus()
-    capabilities[Capability.LOCATION] = locationStatus()
     // mDNS via NsdManager doesn't require a runtime permission on the SDK
     // versions we ship — manifest-level multicast access is enough. If we ever
     // start using Wi-Fi Aware / direct peer discovery this flips to
     // NEARBY_WIFI_DEVICES on T+.
-    capabilities[Capability.LOCAL_NETWORK] = CapabilityStatus.NotApplicable
-    capabilities[Capability.NEARBY_WIFI_DEVICES] = CapabilityStatus.NotApplicable
+    val capabilities = listOf(
+      CapabilityGrant(Capability.BLUETOOTH, bluetoothStatus()),
+      CapabilityGrant(Capability.NOTIFICATIONS, notificationsStatus()),
+      CapabilityGrant(Capability.LOCATION, locationStatus()),
+      CapabilityGrant(Capability.LOCAL_NETWORK, CapabilityStatus.NotApplicable),
+      CapabilityGrant(Capability.NEARBY_WIFI_DEVICES, CapabilityStatus.NotApplicable),
+    )
 
     log("PermissionsMonitor", "snapshot: $capabilities")
     return PermissionsState(capabilities = capabilities)

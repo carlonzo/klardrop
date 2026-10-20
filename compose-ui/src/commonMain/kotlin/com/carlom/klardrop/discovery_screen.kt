@@ -302,9 +302,9 @@ private fun DiscoveryDashboard(
 
                 val motion = KdTheme.motion
                 AnimatedVisibility(
-                    visible = permissionsState.capabilities.any { (_, status) ->
-                        status == com.carlom.klardrop.common.permissions.CapabilityStatus.Denied ||
-                            status == com.carlom.klardrop.common.permissions.CapabilityStatus.Unknown
+                    visible = permissionsState.capabilities.any { grant ->
+                        grant.status == com.carlom.klardrop.common.permissions.CapabilityStatus.Denied ||
+                            grant.status == com.carlom.klardrop.common.permissions.CapabilityStatus.Unknown
                     } || permissionsState.educationalNotes.isNotEmpty(),
                     enter = expandVertically(tween(motion.dBase, easing = KdEaseOut)),
                     exit = shrinkVertically(tween(motion.dBase)),

@@ -39,6 +39,18 @@ public enum class ConnectivityRestriction {
   MeteredNetworkDenied,
 }
 
+/**
+ * One reported restriction.
+ *
+ * [ConnectivityRestrictions.reasons] is a list of these rather than a
+ * `Set<ConnectivityRestriction>`. swift-export force-casts a Kotlin set to
+ * `Set<Element>`, and a Kotlin enum does not survive that cast (same failure
+ * as KLARDROP-KJ's enum-keyed map). The enum itself is a single property.
+ */
+public data class ConnectivityRestrictionReason(
+  public val restriction: ConnectivityRestriction,
+)
+
 public data class ConnectivityRestrictions(
   public val batterySaverBlocking: Boolean = false,
   public val batteryOptimizationNotExempt: Boolean = false,
@@ -63,11 +75,11 @@ public data class ConnectivityRestrictions(
   public val restricted: Boolean
     get() = activeBlocker != null
 
-  public val reasons: Set<ConnectivityRestriction>
-    get() = buildSet {
-      if (batterySaverBlocking) add(ConnectivityRestriction.BatterySaverBlocking)
-      if (batteryOptimizationNotExempt) add(ConnectivityRestriction.BatteryOptimizationNotExempt)
-      if (meteredNetworkDenied) add(ConnectivityRestriction.MeteredNetworkDenied)
+  public val reasons: List<ConnectivityRestrictionReason>
+    get() = buildList {
+      if (batterySaverBlocking) add(ConnectivityRestrictionReason(ConnectivityRestriction.BatterySaverBlocking))
+      if (batteryOptimizationNotExempt) add(ConnectivityRestrictionReason(ConnectivityRestriction.BatteryOptimizationNotExempt))
+      if (meteredNetworkDenied) add(ConnectivityRestrictionReason(ConnectivityRestriction.MeteredNetworkDenied))
     }
 
   /**

@@ -192,13 +192,26 @@ final class com.carlom.klardrop.chat/TransferStats { // com.carlom.klardrop.chat
     final fun toString(): kotlin/String // com.carlom.klardrop.chat/TransferStats.toString|toString(){}[0]
 }
 
+final class com.carlom.klardrop/DeviceConnectionKind { // com.carlom.klardrop/DeviceConnectionKind|null[0]
+    constructor <init>(com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType) // com.carlom.klardrop/DeviceConnectionKind.<init>|<init>(com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType){}[0]
+
+    final val type // com.carlom.klardrop/DeviceConnectionKind.type|{}type[0]
+        final fun <get-type>(): com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType // com.carlom.klardrop/DeviceConnectionKind.type.<get-type>|<get-type>(){}[0]
+
+    final fun component1(): com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType // com.carlom.klardrop/DeviceConnectionKind.component1|component1(){}[0]
+    final fun copy(com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType = ...): com.carlom.klardrop/DeviceConnectionKind // com.carlom.klardrop/DeviceConnectionKind.copy|copy(com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/DeviceConnectionKind.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop/DeviceConnectionKind.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop/DeviceConnectionKind.toString|toString(){}[0]
+}
+
 final class com.carlom.klardrop/DeviceUi { // com.carlom.klardrop/DeviceUi|null[0]
-    constructor <init>(kotlin/String, kotlin/String, com.carlom.klardrop.common.utils/DeviceType, com.carlom.klardrop/ActivityState = ..., kotlin.collections/List<com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType>, kotlin/Boolean = ..., com.carlom.klardrop/TrustStatus = ..., com.carlom.klardrop.common.communication/Reachability = ..., kotlin/String? = ...) // com.carlom.klardrop/DeviceUi.<init>|<init>(kotlin.String;kotlin.String;com.carlom.klardrop.common.utils.DeviceType;com.carlom.klardrop.ActivityState;kotlin.collections.List<com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType>;kotlin.Boolean;com.carlom.klardrop.TrustStatus;com.carlom.klardrop.common.communication.Reachability;kotlin.String?){}[0]
+    constructor <init>(kotlin/String, kotlin/String, com.carlom.klardrop.common.utils/DeviceType, com.carlom.klardrop/ActivityState = ..., kotlin.collections/List<com.carlom.klardrop/DeviceConnectionKind>, kotlin/Boolean = ..., com.carlom.klardrop/TrustStatus = ..., com.carlom.klardrop.common.communication/Reachability = ..., kotlin/String? = ...) // com.carlom.klardrop/DeviceUi.<init>|<init>(kotlin.String;kotlin.String;com.carlom.klardrop.common.utils.DeviceType;com.carlom.klardrop.ActivityState;kotlin.collections.List<com.carlom.klardrop.DeviceConnectionKind>;kotlin.Boolean;com.carlom.klardrop.TrustStatus;com.carlom.klardrop.common.communication.Reachability;kotlin.String?){}[0]
 
     final val activityState // com.carlom.klardrop/DeviceUi.activityState|{}activityState[0]
         final fun <get-activityState>(): com.carlom.klardrop/ActivityState // com.carlom.klardrop/DeviceUi.activityState.<get-activityState>|<get-activityState>(){}[0]
     final val connectionTypes // com.carlom.klardrop/DeviceUi.connectionTypes|{}connectionTypes[0]
-        final fun <get-connectionTypes>(): kotlin.collections/List<com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType> // com.carlom.klardrop/DeviceUi.connectionTypes.<get-connectionTypes>|<get-connectionTypes>(){}[0]
+        final fun <get-connectionTypes>(): kotlin.collections/List<com.carlom.klardrop/DeviceConnectionKind> // com.carlom.klardrop/DeviceUi.connectionTypes.<get-connectionTypes>|<get-connectionTypes>(){}[0]
     final val deviceId // com.carlom.klardrop/DeviceUi.deviceId|{}deviceId[0]
         final fun <get-deviceId>(): kotlin/String // com.carlom.klardrop/DeviceUi.deviceId.<get-deviceId>|<get-deviceId>(){}[0]
     final val deviceName // com.carlom.klardrop/DeviceUi.deviceName|{}deviceName[0]
@@ -218,12 +231,12 @@ final class com.carlom.klardrop/DeviceUi { // com.carlom.klardrop/DeviceUi|null[
     final fun component2(): kotlin/String // com.carlom.klardrop/DeviceUi.component2|component2(){}[0]
     final fun component3(): com.carlom.klardrop.common.utils/DeviceType // com.carlom.klardrop/DeviceUi.component3|component3(){}[0]
     final fun component4(): com.carlom.klardrop/ActivityState // com.carlom.klardrop/DeviceUi.component4|component4(){}[0]
-    final fun component5(): kotlin.collections/List<com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType> // com.carlom.klardrop/DeviceUi.component5|component5(){}[0]
+    final fun component5(): kotlin.collections/List<com.carlom.klardrop/DeviceConnectionKind> // com.carlom.klardrop/DeviceUi.component5|component5(){}[0]
     final fun component6(): kotlin/Boolean // com.carlom.klardrop/DeviceUi.component6|component6(){}[0]
     final fun component7(): com.carlom.klardrop/TrustStatus // com.carlom.klardrop/DeviceUi.component7|component7(){}[0]
     final fun component8(): com.carlom.klardrop.common.communication/Reachability // com.carlom.klardrop/DeviceUi.component8|component8(){}[0]
     final fun component9(): kotlin/String? // com.carlom.klardrop/DeviceUi.component9|component9(){}[0]
-    final fun copy(kotlin/String = ..., kotlin/String = ..., com.carlom.klardrop.common.utils/DeviceType = ..., com.carlom.klardrop/ActivityState = ..., kotlin.collections/List<com.carlom.klardrop.common.discovery/DeviceConnection.DeviceConnectionType> = ..., kotlin/Boolean = ..., com.carlom.klardrop/TrustStatus = ..., com.carlom.klardrop.common.communication/Reachability = ..., kotlin/String? = ...): com.carlom.klardrop/DeviceUi // com.carlom.klardrop/DeviceUi.copy|copy(kotlin.String;kotlin.String;com.carlom.klardrop.common.utils.DeviceType;com.carlom.klardrop.ActivityState;kotlin.collections.List<com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType>;kotlin.Boolean;com.carlom.klardrop.TrustStatus;com.carlom.klardrop.common.communication.Reachability;kotlin.String?){}[0]
+    final fun copy(kotlin/String = ..., kotlin/String = ..., com.carlom.klardrop.common.utils/DeviceType = ..., com.carlom.klardrop/ActivityState = ..., kotlin.collections/List<com.carlom.klardrop/DeviceConnectionKind> = ..., kotlin/Boolean = ..., com.carlom.klardrop/TrustStatus = ..., com.carlom.klardrop.common.communication/Reachability = ..., kotlin/String? = ...): com.carlom.klardrop/DeviceUi // com.carlom.klardrop/DeviceUi.copy|copy(kotlin.String;kotlin.String;com.carlom.klardrop.common.utils.DeviceType;com.carlom.klardrop.ActivityState;kotlin.collections.List<com.carlom.klardrop.DeviceConnectionKind>;kotlin.Boolean;com.carlom.klardrop.TrustStatus;com.carlom.klardrop.common.communication.Reachability;kotlin.String?){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop/DeviceUi.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.carlom.klardrop/DeviceUi.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.carlom.klardrop/DeviceUi.toString|toString(){}[0]

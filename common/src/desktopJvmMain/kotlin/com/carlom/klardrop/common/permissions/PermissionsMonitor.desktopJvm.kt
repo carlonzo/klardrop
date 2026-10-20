@@ -21,7 +21,7 @@ public actual class PermissionsMonitor {
 
     val state = if (isMac) {
       PermissionsState(
-        capabilities = emptyMap(),
+        capabilities = emptyList(),
         educationalNotes = listOf(
           EducationalNote(
             id = "macos-local-network",

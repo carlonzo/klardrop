@@ -1007,12 +1007,24 @@ public data class PairingDialogState(
   public val errorMessage: String? = null,
 )
 
+/**
+ * A transport a device is currently announcing.
+ *
+ * Held as a record instead of a bare [DeviceConnection.DeviceConnectionType]
+ * because swift-export force-casts `List<Enum>` to a Swift array of that enum,
+ * and the Obj-C enum objects in the array do not cast (same failure as
+ * KLARDROP-KJ). [type] is read as a single enum property, which does bridge.
+ */
+public data class DeviceConnectionKind(
+  public val type: DeviceConnection.DeviceConnectionType,
+)
+
 public data class DeviceUi(
   public val deviceId: String,
   public val deviceName: String,
   public val deviceType: DeviceType,
   public val activityState: ActivityState = ActivityState.Idle,
-  public val connectionTypes: List<DeviceConnection.DeviceConnectionType>,
+  public val connectionTypes: List<DeviceConnectionKind>,
   public val hasUnreadMessages: Boolean = false,
   public val trustStatus: TrustStatus = TrustStatus.Unknown,
   public val reachability: Reachability = Reachability.Unknown,
