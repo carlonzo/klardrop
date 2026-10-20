@@ -230,6 +230,50 @@ jobs:
             -destination 'platform=macOS,arch=arm64' \
             -configuration Debug build CODE_SIGNING_ALLOWED=NO
 
+      # Launch the iOS app on a simulator and read the swift-export collections the
+      # root screen touches (permissions map, connectivity-restriction set). Gradle
+      # unit tests never open this bridge: iosSimulatorArm64Test is Kotlin code
+      # linked as a native test binary, and the xcodebuild above only compiles.
+      # A generic destination cannot boot, so pick an available iPhone simulator.
+      - name: Test iOS launch and Swift export bridge
+        timeout-minutes: 45
+        run: |
+          set -euo pipefail
+          DEST_ID="$(python3 - <<'PY'
+          import json, subprocess, sys
+          raw = subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"], text=True)
+          devices = json.loads(raw)["devices"]
+          preferred = []
+          fallback = []
+          for runtime, entries in devices.items():
+              if "iOS" not in runtime:
+                  continue
+              for device in entries:
+                  if not device.get("isAvailable", True):
+                      continue
+                  name = device.get("name", "")
+                  if not name.startswith("iPhone"):
+                      continue
+                  fallback.append(device["udid"])
+                  if "Pro" not in name and "SE" not in name and "mini" not in name:
+                      preferred.append(device["udid"])
+          chosen = preferred or fallback
+          if not chosen:
+              print("no available iPhone simulator", file=sys.stderr)
+              sys.exit(1)
+          print(chosen[0])
+          PY
+          )"
+          echo "iOS simulator: ${DEST_ID}"
+          xcodebuild test \
+            -workspace iosApp/iosApp.xcworkspace \
+            -scheme iosApp \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=${DEST_ID}" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            ARCHS=arm64
+
   # The native Rust client (cli-rust/) has no Gradle wiring at all, so the Linux
   # and macOS jobs above never compile, lint or test it — a Rust-only regression
   # would be invisible to this workflow. One matrix job covers the two Unix
