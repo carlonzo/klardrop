@@ -4,19 +4,58 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel a PR's in-flight run when a newer commit is pushed. Nightly and
+# release workflows do not share this group.
+concurrency:
+  group: build-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   checks: write
   pull-requests: write
 
 jobs:
-  # Linux carries the bulk of the test suite: common, Android host-tests, desktop JVM,
-  # CLI. Kotlin/Native mac/iOS targets are skipped automatically when no Apple
-  # toolchain is present, so we run a plain `./gradlew build` and let host-locking
-  # decide what compiles.
+  # Always runs. Build jobs are skipped from its outputs; the CI aggregator
+  # below is the check branch protection should require, because a conditional
+  # skip is a successful check and would satisfy an old per-job requirement.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.filter.outputs.full }}
+      linux: ${{ steps.filter.outputs.linux }}
+      macos: ${{ steps.filter.outputs.macos }}
+      rust_macos: ${{ steps.filter.outputs.rust_macos }}
+      desktop_jvm: ${{ steps.filter.outputs.desktop_jvm }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Classify changed paths
+        id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 .github/path_filters.py --self-test
+          gh api --paginate \
+            "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+            --jq '.[] | .filename' > /tmp/changed-paths.txt
+          python3 .github/path_filters.py \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            --files-from /tmp/changed-paths.txt
+
+  # One Ubuntu runner: JVM/Android/desktop/CLI tests, one linuxX64 engine link,
+  # one Rust release binary, then the fixtures and installer that consume them.
+  # Separate steps so a PunchThroughDialTest failure and a Qt failure name
+  # different steps inside this check.
   build-linux:
     name: Build & test (Linux)
+    needs: changes
+    if: needs.changes.outputs.linux == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
 
@@ -29,26 +68,41 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      # The Kotlin/Native Linux target cinterops against the host's avahi/openssl/systemd
-      # headers and links its sqlite3, so `./gradlew build` cannot even index the linuxX64
-      # cinterops without these. Same four packages the native-fixture job below and the
-      # release workflow's native x64 job install. linuxArm64 is not part of this build:
-      # an x64 host only declares it with `-Pklardrop.forceLinuxArm64=true`, which the
-      # release jobs use to cross-compile it (Kotlin/Native has no linux-aarch64 compiler,
-      # so a native ubuntu-26.04-arm runner cannot).
-      - name: Install native build deps
+      # avahi/sqlite/ssl/systemd: linuxX64 cinterop and the engine link.
+      # Qt packages: the two Qt suites below. One apt instead of the three
+      # this workflow used to run on separate runners.
+      - name: Install native and Qt build deps
         run: >-
           sudo apt-get update &&
           sudo apt-get install -y
           libavahi-client-dev libsqlite3-dev libssl-dev libsystemd-dev
+          qt6-base-dev qt6-declarative-dev qmake6 libgl-dev
+          qml6-module-qtquick qml6-module-qtquick-controls
+          qml6-module-qtquick-layouts qml6-module-qtquick-templates
+          qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models
+          qml6-module-qtqml-workerscript
 
-      - name: Build
+      # Same key the old Qt job wrote (konan-Linux-<catalog hash>), so a warm
+      # cache from main's history is a hit. actions/cache, as that job used,
+      # rather than the macOS job's restore/save split.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+
+      - name: Gradle build and test
         # Exclude :presentation's Apple shared-metadata compiles. On Linux there is no Apple
         # toolchain, so :klardrop-common's native targets are disabled (its Sentry cinterop
         # can't be processed here) and its iosMain/appleMain metadata is skipped. :presentation
         # would still try to compile its own Apple metadata, but can't resolve klardrop-common's
         # now-absent native `actual`s (e.g. InternalPlatformDependencies' constructor) and fails.
         # Apple is fully built and tested on the macOS job, so skip it here.
+        # `build` assembles linuxX64, including linkReleaseExecutableLinuxX64, so the
+        # fixture steps reuse cli/build/bin/linuxX64/releaseExecutable/klardrop-engine.kexe
+        # instead of linking the engine again.
+        timeout-minutes: 60
         run: >-
           ./gradlew build
           -x :presentation:compileIosMainKotlinMetadata
@@ -62,11 +116,74 @@ jobs:
           path: '**/build/test-results/**/TEST-*.xml'
           reporter: java-junit
 
-  # macOS only runs the targets Linux can't: the iOS simulator tests and the macOS
-  # native tests. Everything else is already covered on the Linux job, so we keep
-  # this minimal to save Mac runner minutes.
+      - name: Confirm the Gradle build produced the native engine
+        run: test -x cli/build/bin/linuxX64/releaseExecutable/klardrop-engine.kexe
+
+      - name: Cache Rust (cli-rust)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli-rust
+
+      - name: Show Rust toolchain
+        working-directory: cli-rust
+        run: |
+          rustc --version
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+
+      # --locked everywhere: Cargo.lock is committed, and a build that silently
+      # updated it would test dependency versions nobody reviewed.
+      - name: Rust test
+        working-directory: cli-rust
+        run: cargo test --locked
+
+      - name: Rust lint
+        working-directory: cli-rust
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Rust format
+        working-directory: cli-rust
+        run: cargo fmt --all --check
+
+      - name: Rust release build
+        working-directory: cli-rust
+        run: cargo build --locked --release
+
+      - name: Native fixture (Rust client + Kotlin/Native engine)
+        timeout-minutes: 45
+        env:
+          KLARDROP_RUST_BIN: ${{ github.workspace }}/cli-rust/target/release/klardrop
+          KLARDROP_ENGINE_BIN: ${{ github.workspace }}/cli/build/bin/linuxX64/releaseExecutable/klardrop-engine.kexe
+        run: ./scripts/klardrop-rust-fixture-tests.sh
+
+      - name: Qt integration suite (fake daemon)
+        timeout-minutes: 30
+        run: python3 linux/qt/tests/test_integration.py
+
+      - name: Qt frontend vs. the real engine
+        timeout-minutes: 30
+        env:
+          KLARDROP_ENGINE_BIN: ${{ github.workspace }}/cli/build/bin/linuxX64/releaseExecutable/klardrop-engine.kexe
+        run: ./scripts/klardrop-qt-real-engine-tests.sh
+
+      - name: Production JVM-host fixture (Rust client)
+        # The script starts ./gradlew :cli:jvmRun. The Gradle build above already
+        # compiled that JVM graph, so this is the fixture rather than a second cold build.
+        timeout-minutes: 45
+        env:
+          KLARDROP_RUST_BIN: ${{ github.workspace }}/cli-rust/target/release/klardrop
+        run: ./scripts/klardrop-jvm-host-fixture-tests.sh
+
+      - name: Installer tests (packaging/install.sh)
+        run: bash packaging/linux/test-omarchy-install.sh
+
+  # macOS runs what Linux cannot: Kotlin/Native Apple tests, one iOS
+  # build-for-testing plus the simulator launch, and one KlardropMac build.
   build-macos:
     name: Test (macOS / iOS)
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
     # macos-26 ships Xcode 26 (matches local dev + Kotlin/Native's bundled SDK). The default
     # macos-latest image's Xcode 16.4 (SDK 15.5) is too old: Kotlin/Native's AppKit/CoreFoundation
     # platform klibs reference newer-SDK symbols, so the Xcode link of the macOS/iOS apps fails
@@ -109,27 +226,46 @@ jobs:
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
           restore-keys: konan-${{ runner.os }}-
 
-      # Compile and link the native test binaries as their own step, before running
-      # them. These tests talk over real loopback sockets with multi-second connect
-      # and pumping deadlines, and Gradle will happily run one module's tests while
-      # another module is still linking — on a runner that reports as few as 3
-      # processors, that contention alone times the sockets out ("Could not connect
-      # to server..."). Building first means the test step starts on an idle box.
-      #
-      # Sentry first: the sentry-kmp Gradle plugin resolves Sentry.xcframework via
-      # its DerivedData strategy at Gradle *configuration* time — i.e. inside the
-      # link invocation below. On a fresh runner nothing has resolved the
-      # sentry-cocoa SPM package yet, so without this step the link fails
-      # with "Failed to find Sentry Cocoa framework". Resolving into the DEFAULT
-      # DerivedData seeds it exactly where the plugin looks: it runs
-      # `xcodebuild -project iosApp.xcodeproj -showBuildSettings` (no custom
-      # -derivedDataPath), takes BUILD_DIR, strips /Build/Products, and expects
+      # sentry-kmp resolves Sentry.xcframework from the default DerivedData at
+      # Gradle configuration time. Cache only SourcePackages (and the SwiftPM
+      # clone cache), keyed on the pinned package versions in the pbxproj, so a
+      # Swift-only edit does not re-download sentry-cocoa and a version bump does.
+      - name: Read pinned SPM versions
+        id: spm
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("iosApp/iosApp.xcodeproj/project.pbxproj").read_text()
+          section = text.split("Begin XCRemoteSwiftPackageReference section", 1)[1]
+          section = section.split("End XCRemoteSwiftPackageReference section", 1)[0]
+          pins = re.findall(
+              r'repositoryURL = "https://github.com/([^"]+)";.*?version = ([0-9][0-9.]*);',
+              section,
+              re.S,
+          )
+          if not pins:
+              raise SystemExit("no XCRemoteSwiftPackageReference versions found")
+          print("+".join(f"{repo.split('/')[-1]}-{version}" for repo, version in pins))
+          PY
+          )"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "SPM cache key: ${VERSION}"
+
+      - name: Cache Sentry SPM (SourcePackages)
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: sentry-spm-${{ runner.os }}-${{ steps.spm.outputs.version }}
+          restore-keys: sentry-spm-${{ runner.os }}-
+
+      # Keep -derivedDataPath OFF. The sentry-kmp plugin runs
+      # `xcodebuild -project iosApp.xcodeproj -showBuildSettings` with no custom
+      # derived data, then expects
       # <DerivedData>/SourcePackages/artifacts/sentry-cocoa/{Sentry,Sentry-Dynamic}/*.xcframework.
-      # Keep -derivedDataPath OFF this step — a custom path only the resolve step
-      # knows about leaves the plugin searching the default location and failing.
-      # The bare project.pbxproj now carries the sentry-cocoa package reference
-      # (XCRemoteSwiftPackageReference, exact 9.29.2), so resolve downloads and
-      # extracts the xcframework without any framework/code change in the app.
       - name: Resolve Sentry SPM (DerivedData for sentry-kmp)
         run: |
           xcodebuild -resolvePackageDependencies \
@@ -166,23 +302,15 @@ jobs:
         # ktor-network bind are the parts the shipped Klardrop.app runs and no
         # other job executes. :compose-ui has only android + desktopJvm targets
         # now, so it has no Apple test task and is fully covered by the Linux
-        # job. The old :common-ui (renamed :compose-ui) and :macos (vestigial KN
-        # stub removed in SwiftUI migration) tasks are gone.
+        # job.
         #
         # Step-level timeout (NOT job-level): a wedged native test — e.g. a
         # real-socket integration test whose runTest watchdog can't preempt a
         # blocked Kotlin/Native worker — otherwise runs to the 6h job default.
-        # A step timeout fails just this step, so the "Publish Test Report" step
-        # below (guarded on !cancelled(), which a job cancel would skip) still
-        # runs and surfaces the per-test results that did complete.
-        #
-        # The binaries are already linked by the step above, so this budget now
-        # covers test execution alone — which has historically run ~12 minutes.
-        # macOS and iOS Simulator tests are run as two sequential Gradle invocations
+        # macOS and iOS Simulator tests are two sequential Gradle invocations
         # with --no-parallel: a single invocation schedules both native test workers
         # at once, and on a 3-core runner that contention has been observed to push
-        # real-socket tests past this 60-minute step timeout even though every test
-        # that finished had passed.
+        # real-socket tests past this 60-minute step timeout.
         timeout-minutes: 60
         run: |
           ./gradlew --no-parallel \
@@ -203,41 +331,17 @@ jobs:
           path: '**/build/test-results/**/TEST-*.xml'
           reporter: java-junit
 
-      # Build the actual iOS + macOS apps (unsigned). The unit tests above do not
-      # exercise the Xcode app build, so a SwiftUI / pbxproj / swift-export / framework
-      # regression would otherwise slip through. Mirrors release.yml's macOS prep.
+      # embedSwiftExportForXcode runs Gradle pinned to JDK 21.
       - name: Set up JDK 21 (Apple app build uses the project's pinned JDK)
         uses: actions/setup-java@v6
         with:
           java-version: '21'
           distribution: 'zulu'
 
-      - name: Build iOS + macOS apps (unsigned)
-        run: |
-          # Direct Xcode integration: the "Embed Kotlin presentation.framework" Run
-          # Script phase in the pbxproj builds the framework via Gradle during the
-          # Xcode build itself — no pod install, no dummy framework prebuild.
-          # ARCHS=arm64: the KMP framework only builds the iosSimulatorArm64 target, so the
-          # presentation.framework has no x86_64 slice. 'generic/platform=iOS Simulator'
-          # otherwise also builds x86_64 and fails with "could not find module 'presentation'
-          # for target 'x86_64-apple-ios-simulator'". Restrict to arm64 (CI runner is arm64).
-          # NOTE: these still use the .xcworkspace while the Sentry SwiftPM package
-          # resolves — the workspace now references only iosApp.xcodeproj.
-          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme iosApp \
-            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug build CODE_SIGNING_ALLOWED=NO ARCHS=arm64
-          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
-            -destination 'platform=macOS,arch=arm64' \
-            -configuration Debug build CODE_SIGNING_ALLOWED=NO
-
-      # Launch the iOS app on a simulator and read the swift-export collections the
-      # root screen touches (permissions grants, connectivity-restriction reasons,
-      # device connection kinds). Gradle unit tests never open this bridge:
-      # iosSimulatorArm64Test is Kotlin code linked as a native test binary, and
-      # the xcodebuild above only compiles. A generic destination cannot boot, so
-      # pick an available iPhone simulator.
-      - name: Test iOS launch and Swift export bridge
-        timeout-minutes: 45
+      # One concrete arm64 simulator for build-for-testing and test-without-building.
+      # A generic destination cannot boot, and a second destination is a different
+      # build description, which is what made `xcodebuild test` compile iosApp again.
+      - name: Select iOS simulator
         run: |
           set -euo pipefail
           DEST_ID="$(python3 - <<'PY'
@@ -265,45 +369,71 @@ jobs:
           print(chosen[0])
           PY
           )"
+          echo "IOS_SIMULATOR_ID=${DEST_ID}" >> "$GITHUB_ENV"
           echo "iOS simulator: ${DEST_ID}"
-          xcodebuild test \
+
+      - name: Build iOS app for testing
+        # ARCHS=arm64: the KMP framework only has an iosSimulatorArm64 slice.
+        # Without it Xcode also builds x86_64 and fails looking for module
+        # 'presentation'. build-for-testing produces the .xctestrun the next
+        # step consumes, so there is no separate generic `xcodebuild build`.
+        timeout-minutes: 45
+        run: |
+          set -euo pipefail
+          xcodebuild build-for-testing \
             -workspace iosApp/iosApp.xcworkspace \
             -scheme iosApp \
             -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,id=${DEST_ID}" \
+            -destination "platform=iOS Simulator,id=${IOS_SIMULATOR_ID}" \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
             ARCHS=arm64
 
-  # The native Rust client (cli-rust/) has no Gradle wiring at all, so the Linux
-  # and macOS jobs above never compile, lint or test it — a Rust-only regression
-  # would be invisible to this workflow. One matrix job covers the two Unix
-  # platforms the shell runs on: Linux (native engine host) and macOS (app
-  # companion). Windows desktop runs the JVM app and has no Rust CLI.
-  #   ubuntu-latest    — Linux, the platform with a native engine fixture;
-  #   macos-14         — Apple Silicon (aarch64-apple-darwin), so the shell is
-  #                      compiled for the same triple the macOS app runs on,
-  #                      against the production JVM engine on the other side.
-  # macos-14 (not the macos-26 image above) on purpose: this job needs no Xcode,
-  # no Apple SDK and no Kotlin/Native, only a JDK-free `cargo`. The image
-  # comment above is about Kotlin/Native SDK versions, which do not apply here.
-  rust:
-    name: Rust client (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      # One broken platform must not hide the others' results.
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-14]
+      - name: Test iOS launch and Swift export bridge
+        timeout-minutes: 45
+        run: |
+          set -euo pipefail
+          xcodebuild test-without-building \
+            -workspace iosApp/iosApp.xcworkspace \
+            -scheme iosApp \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=${IOS_SIMULATOR_ID}" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            ARCHS=arm64
+
+      # KlardropMac is a second scheme. The iOS test does not compile it, and
+      # it is the build that embeds the control-plane framework.
+      - name: Build KlardropMac (unsigned)
+        timeout-minutes: 45
+        run: |
+          xcodebuild build \
+            -workspace iosApp/iosApp.xcworkspace \
+            -scheme KlardropMac \
+            -destination 'platform=macOS,arch=arm64' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
+
+  # Apple Silicon Rust client. Linux cargo test/clippy/fmt/release now live in
+  # the Linux job, next to the fixtures that link the release binary.
+  # macos-14 on purpose: this job needs no Xcode, no Apple SDK and no
+  # Kotlin/Native, only cargo. macos-26 is for the job above.
+  rust-macos:
+    name: Rust client (macos-14)
+    needs: changes
+    if: needs.changes.outputs.rust_macos == 'true'
+    runs-on: macos-14
     defaults:
       run:
         working-directory: cli-rust
     steps:
       - uses: actions/checkout@v7
 
-      # The hosted images ship stable rustup with clippy and rustfmt. Printing the
-      # versions makes a missing component a loud failure here instead of a
-      # confusing "no such subcommand" three steps later.
+      - name: Cache Rust (cli-rust)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli-rust
+
       - name: Show Rust toolchain
         shell: bash
         run: |
@@ -312,8 +442,6 @@ jobs:
           cargo fmt --version
           cargo clippy --version
 
-      # --locked everywhere: Cargo.lock is committed, and a build that silently
-      # updated it would test dependency versions nobody reviewed.
       - name: Test
         shell: bash
         run: cargo test --locked
@@ -326,17 +454,13 @@ jobs:
         shell: bash
         run: cargo fmt --all --check
 
-  # "Compile the macOS host code on a supported runner" as a real gate rather
-  # than a claim. `desktop` declares a Kotlin Multiplatform `jvm { }` target
-  # (desktop/build.gradle.kts), which on an Apple Silicon runner IS the macOS
-  # host build: :desktop:jvmJar compiles main against the desktopJvm actuals of
-  # :klardrop-common, :presentation, :compose-ui and :control-plane, and
-  # :desktop:jvmTest runs the host unit tests. The Linux job compiles the same
-  # JVM target, so what this adds is the macOS host itself.
-  # macos-26 matches the macOS job above (same image, same JDK, same setup-gradle
-  # cache) rather than introducing a second macOS image to keep warm.
+  # The Linux job compiles the same JVM target. This job is the macOS host
+  # itself: :desktop:jvmJar / :desktop:jvmTest on Apple Silicon. It stays its
+  # own runner so it overlaps the iOS job instead of lengthening it.
   desktop-jvm-host-macos:
     name: Compile macOS JVM host (desktop)
+    needs: changes
+    if: needs.changes.outputs.desktop_jvm == 'true'
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
@@ -354,160 +478,49 @@ jobs:
         timeout-minutes: 45
         run: ./gradlew :desktop:jvmJar :desktop:jvmTest
 
-  # The production JVM-host fixture: the Rust client against a real Kotlin/JVM
-  # daemon started WITHOUT --debug, i.e. ControlPlane.forBuild(false) with the
-  # production capability list. That is the host the macOS and Windows desktop
-  # apps run, and the only headless JVM host in this repo (the Compose Desktop
-  # app needs a display, and the runner has no xvfb). The script asserts the
-  # debug-only capabilities are absent, which is the evidence that the gate is
-  # exercising production control rather than a debug build.
-  jvm-host-fixture:
-    name: Production JVM-host fixture (Rust client)
+  # Single stable required check. `skipped` is a pass: path filters skip jobs
+  # on purpose. `failure` and `cancelled` are not. `!cancelled()` keeps a
+  # superseded PR run from posting a red CI check after concurrency cancels it,
+  # and still runs when a needed job failed.
+  ci:
+    name: CI
+    needs:
+      - changes
+      - build-linux
+      - build-macos
+      - rust-macos
+      - desktop-jvm-host-macos
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v6
-        with:
-          java-version: '25'
-          distribution: 'zulu'
-          java-package: jdk
-
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Build the Rust client
-        working-directory: cli-rust
-        run: cargo build --locked --release
-
-      - name: Run the production JVM-host fixture
-        # Generous: the script's first action is a cold `./gradlew :cli:jvmRun`,
-        # which builds :cli, :klardrop-common, :presentation and :control-plane
-        # for the JVM before the daemon can start. Step-level so a wedged run
-        # cannot eat the whole 6h job budget.
-        timeout-minutes: 45
-        run: ./scripts/klardrop-jvm-host-fixture-tests.sh
-
-  # packaging/install.sh is a release artifact: it is what users pipe from
-  # raw.githubusercontent, and it is the only thing that decides whether
-  # ~/.local/bin/klardrop and ~/.local/bin/klardrop-engine end up as a matched
-  # pair. Nothing in the Gradle jobs above executes it, so a broken guard,
-  # rollback or checksum check would ship green. The suite is hermetic (temp HOMEs +
-  # stubbed uname/ldd/systemctl/pacman/install/mv/curl) and needs no Gradle, but it does
-  # exercise the --jvm install path, which refuses to run without a JDK 21+ on PATH, so
-  # it gets its own fast job with a JDK pinned rather than relying on the runner image's.
-  packaging-tests:
-    name: Installer tests (packaging/install.sh)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v6
-        with:
-          java-version: '25'
-          distribution: 'zulu'
-          java-package: jdk
-
-      - name: Run the installer tests
-        run: bash packaging/linux/test-omarchy-install.sh
-
-  # The Rust client against the KOTLIN/NATIVE engine — the pairing the release
-  # tarball actually ships (`bin/klardrop` + `bin/klardrop-engine`), which no
-  # other job on a PR exercises: the Linux Gradle job tests the JVM host and the
-  # JVM-host fixture is JVM-only. Builds the engine with the same Gradle task
-  # packaging/linux/stage-native-tarball.sh requires, then runs the fixture.
-  native-fixture:
-    name: Native fixture (Rust client + Kotlin/Native engine)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v6
-        with:
-          java-version: '25'
-          distribution: 'zulu'
-          java-package: jdk
-
-      - uses: gradle/actions/setup-gradle@v6
-
-      # The engine links against these; the same four packages the release
-      # workflow's native job installs (Qt/xvfb omitted — no Qt frontend here).
-      - name: Install native build deps
-        run: >-
-          sudo apt-get update &&
-          sudo apt-get install -y
-          libavahi-client-dev libsqlite3-dev libssl-dev libsystemd-dev
-
-      - name: Build the Kotlin/Native engine
-        # Generous: on a cold runner this downloads the Kotlin/Native compiler
-        # and platform libs first, same as the macOS native tests above.
-        timeout-minutes: 60
-        run: ./gradlew :cli:linkReleaseExecutableLinuxX64
-
-      # --locked, like every other Rust invocation in this workflow: Cargo.lock
-      # is committed and a build that updated it would test unreviewed versions.
-      - name: Build the Rust client
-        working-directory: cli-rust
-        run: cargo build --locked --release
-
-      - name: Run the native fixture
-        timeout-minutes: 45
-        run: ./scripts/klardrop-rust-fixture-tests.sh
-
-  # The Qt frontend against the control plane. Two suites, because they prove
-  # different halves of the same contract:
-  #   - linux/qt/tests/test_integration.py drives the frontend against an
-  #     in-process fake daemon (focus gating, credential rotation, composer,
-  #     single instance, update 409);
-  #   - scripts/klardrop-qt-real-engine-tests.sh points the REAL frontend at the
-  #     REAL engine and asserts the response shapes clientbridge.cpp parses, plus
-  #     every request the binary actually makes.
-  # Shared control code moved across three hosts in this work, so "no Qt
-  # regression" has to be checked against a real engine rather than asserted by
-  # grepping route strings. This is the only PR gate that does either.
-  qt-regression:
-    name: Qt frontend vs. the real control plane
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v6
-        with:
-          java-version: '25'
-          distribution: 'zulu'
-          java-package: jdk
-
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Install Qt and native build deps
-        run: >-
-          sudo apt-get update &&
-          sudo apt-get install -y
-          qt6-base-dev qt6-declarative-dev qmake6 libgl-dev
-          qml6-module-qtquick qml6-module-qtquick-controls
-          qml6-module-qtquick-layouts qml6-module-qtquick-templates
-          qml6-module-qtquick-window qml6-module-qtqml qml6-module-qtqml-models
-          qml6-module-qtqml-workerscript
-          libavahi-client-dev libsqlite3-dev libssl-dev libsystemd-dev
-
-      - name: Cache Kotlin/Native (~/.konan)
-        uses: actions/cache@v6
-        with:
-          path: ~/.konan
-          key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
-          restore-keys: konan-${{ runner.os }}-
-
-      - name: Build the Kotlin/Native engine
-        timeout-minutes: 60
-        run: ./gradlew :cli:linkReleaseExecutableLinuxX64
-
-      - name: Qt integration suite (fake daemon)
-        timeout-minutes: 30
-        run: python3 linux/qt/tests/test_integration.py
-
-      - name: Qt frontend vs. the real engine
-        timeout-minutes: 30
-        run: ./scripts/klardrop-qt-real-engine-tests.sh
+      - name: Aggregate job results
+        env:
+          RESULT_CHANGES: ${{ needs.changes.result }}
+          RESULT_LINUX: ${{ needs.build-linux.result }}
+          RESULT_MACOS: ${{ needs.build-macos.result }}
+          RESULT_RUST_MACOS: ${{ needs.rust-macos.result }}
+          RESULT_DESKTOP_JVM: ${{ needs.desktop-jvm-host-macos.result }}
+        run: |
+          set -euo pipefail
+          fail=0
+          check() {
+            local name="$1" result="$2"
+            case "$result" in
+              success|skipped)
+                echo "$name: $result"
+                ;;
+              *)
+                echo "::error::$name finished with '$result' (expected success or skipped)"
+                fail=1
+                ;;
+            esac
+          }
+          check "Detect changed paths" "$RESULT_CHANGES"
+          check "Build & test (Linux)" "$RESULT_LINUX"
+          check "Test (macOS / iOS)" "$RESULT_MACOS"
+          check "Rust client (macos-14)" "$RESULT_RUST_MACOS"
+          check "Compile macOS JVM host (desktop)" "$RESULT_DESKTOP_JVM"
+          if [[ "$fail" -ne 0 ]]; then
+            exit 1
+          fi
+          echo "CI passed. Skipped jobs were filtered out by path."
