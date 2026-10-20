@@ -108,7 +108,7 @@ class ShowDevicesControllerHelperTest {
     val row = assertNotNull(rows[laptop.deviceId])
     assertEquals(TrustStatus.Trusted, row.trustStatus)
     assertEquals(Reachability.Reachable, row.reachability)
-    assertEquals(listOf(DeviceConnection.DeviceConnectionType.KLARDROP), row.connectionTypes)
+    assertEquals(listOf(DeviceConnectionKind(DeviceConnection.DeviceConnectionType.KLARDROP)), row.connectionTypes)
   }
 
   @Test
@@ -148,7 +148,10 @@ class ShowDevicesControllerHelperTest {
     val rows = devices()
     assertNotNull(rows[nearbyPhone.deviceId], "Untrusted peer with Nearby connection should be displayed")
     assertEquals(TrustStatus.Untrusted, rows.getValue(nearbyPhone.deviceId).trustStatus)
-    assertEquals(listOf(DeviceConnection.DeviceConnectionType.NEARBY), rows.getValue(nearbyPhone.deviceId).connectionTypes)
+    assertEquals(
+      listOf(DeviceConnectionKind(DeviceConnection.DeviceConnectionType.NEARBY)),
+      rows.getValue(nearbyPhone.deviceId).connectionTypes,
+    )
   }
 
   @Test

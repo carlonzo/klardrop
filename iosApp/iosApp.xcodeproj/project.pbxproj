@@ -101,6 +101,9 @@
 		D2CF4853B387C1094985A58A /* ChatHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F185C59B6B0ACD3A15285E9 /* ChatHeaderView.swift */; };
 		D7314AAB3EFD20A821391CEA /* KdType.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE0593C8B81ABFB4DBC5CE4F /* KdType.swift */; };
 		DDFCE403CC505E5D64D40F09 /* iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */; };
+		F1A0000000000000000000A1 /* SwiftExportBridgeProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A0000000000000000000B1 /* SwiftExportBridgeProbe.swift */; };
+		F1A0000000000000000000A2 /* SwiftExportBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A0000000000000000000B2 /* SwiftExportBridgeTests.swift */; };
+		F1A0000000000000000000A3 /* LaunchSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A0000000000000000000B3 /* LaunchSmokeTests.swift */; };
 		DF0C151B8A80CF8C41AA9880 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0E5908AF635BAECCE52473 /* SidebarView.swift */; };
 		E0313E6D241A1D2D5CAC64E8 /* PairingApprovalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11146602E1139C67C03F1B8F /* PairingApprovalSheet.swift */; };
 		E0EE131EF91B81E3E466BE3D /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F0E5908AF635BAECCE52473 /* SidebarView.swift */; };
@@ -131,6 +134,20 @@
 			proxyType = 1;
 			remoteGlobalIDString = 08CDB3752304941E1BCD75A8;
 			remoteInfo = KlardropMacShare;
+		};
+		F1A0000000000000000000D5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7555FF73242A565900829871 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7555FF7A242A565900829871;
+			remoteInfo = iosApp;
+		};
+		F1A0000000000000000000D6 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7555FF73242A565900829871 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7555FF7A242A565900829871;
+			remoteInfo = iosApp;
 		};
 		FE8847DD561E613D2CC63D85 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -234,6 +251,11 @@
 		FC56B4EA9CDB5D8456404160 /* PairingDialogView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PairingDialogView.swift; sourceTree = "<group>"; };
 		FCA74CDA387605E6B2A63703 /* NavRoutes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NavRoutes.swift; sourceTree = "<group>"; };
 		FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = iOSApp.swift; sourceTree = "<group>"; };
+		F1A0000000000000000000B1 /* SwiftExportBridgeProbe.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftExportBridgeProbe.swift; sourceTree = "<group>"; };
+		F1A0000000000000000000B2 /* SwiftExportBridgeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SwiftExportBridgeTests.swift; sourceTree = "<group>"; };
+		F1A0000000000000000000B3 /* LaunchSmokeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LaunchSmokeTests.swift; sourceTree = "<group>"; };
+		F1A0000000000000000000B4 /* iosAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iosAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F1A0000000000000000000B5 /* iosAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iosAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FF8F32CDC8B365315F430B2F /* PermissionsChecklistView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PermissionsChecklistView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -268,6 +290,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				S401CB3D2C17E0020F78D70 /* Sentry in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A0000000000000000000F2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A0000000000000000000F5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -321,12 +357,29 @@
 			path = "Klardrop Share";
 			sourceTree = "<group>";
 		};
+		F1A0000000000000000000C1 /* iosAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				F1A0000000000000000000B2 /* SwiftExportBridgeTests.swift */,
+			);
+			path = iosAppTests;
+			sourceTree = "<group>";
+		};
+		F1A0000000000000000000C2 /* iosAppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				F1A0000000000000000000B3 /* LaunchSmokeTests.swift */,
+			);
+			path = iosAppUITests;
+			sourceTree = "<group>";
+		};
 		2634D83B0A732E3A56FF65F5 /* App */ = {
 			isa = PBXGroup;
 			children = (
 				2B0C2857366865997CD52F57 /* RootView.swift */,
 				A1B2C3D4E5F6010203040501 /* KotlinTypes.swift */,
 				FCA7B5EFE4AA6CCD61BC35B7 /* iOSApp.swift */,
+				F1A0000000000000000000B1 /* SwiftExportBridgeProbe.swift */,
 				8320B3CCB3CAA291C7EBDB0F /* MacApp.swift */,
 			);
 			path = App;
@@ -362,6 +415,8 @@
 			children = (
 				AB1DB47929225F7C00F7AF9C /* Configuration */,
 				7555FF7D242A565900829871 /* iosApp */,
+				F1A0000000000000000000C1 /* iosAppTests */,
+				F1A0000000000000000000C2 /* iosAppUITests */,
 				236550732A75989700412ADF /* Klardrop Share */,
 				7555FF7C242A565900829871 /* Products */,
 				42799AB246E5F90AF97AA0EF /* Frameworks */,
@@ -378,6 +433,8 @@
 				2405ADA8D7EA482D702EEB81 /* Klardrop.app */,
 				E8D02C9FE68B9DA10D7FC00D /* KlardropShare.appex */,
 				7A8FF713C2C9F29BFAACB17B /* KlardropMacShare.appex */,
+				F1A0000000000000000000B4 /* iosAppTests.xctest */,
+				F1A0000000000000000000B5 /* iosAppUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -575,6 +632,42 @@
 			productReference = E8D02C9FE68B9DA10D7FC00D /* KlardropShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		F1A0000000000000000000D1 /* iosAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F1A0000000000000000000E1 /* Build configuration list for PBXNativeTarget "iosAppTests" */;
+			buildPhases = (
+				F1A0000000000000000000F1 /* Sources */,
+				F1A0000000000000000000F2 /* Frameworks */,
+				F1A0000000000000000000F3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F1A0000000000000000000D3 /* PBXTargetDependency */,
+			);
+			name = iosAppTests;
+			productName = iosAppTests;
+			productReference = F1A0000000000000000000B4 /* iosAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		F1A0000000000000000000D2 /* iosAppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F1A0000000000000000000E2 /* Build configuration list for PBXNativeTarget "iosAppUITests" */;
+			buildPhases = (
+				F1A0000000000000000000F4 /* Sources */,
+				F1A0000000000000000000F5 /* Frameworks */,
+				F1A0000000000000000000F6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F1A0000000000000000000D4 /* PBXTargetDependency */,
+			);
+			name = iosAppUITests;
+			productName = iosAppUITests;
+			productReference = F1A0000000000000000000B5 /* iosAppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -611,6 +704,8 @@
 				9A05A395CCACE91E4CB5B743 /* KlardropMac */,
 				A8BDB6209E7EDBC9F1131AA2 /* KlardropShare */,
 				08CDB3752304941E1BCD75A8 /* KlardropMacShare */,
+				F1A0000000000000000000D1 /* iosAppTests */,
+				F1A0000000000000000000D2 /* iosAppUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -641,6 +736,20 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		C4C873DCEDF5C01026F45829 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A0000000000000000000F3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A0000000000000000000F6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -690,6 +799,7 @@
 				25854FF09AB48EEE3DA5A4C9 /* RootView.swift in Sources */,
 				A1B2C3D4E5F6010203040502 /* KotlinTypes.swift in Sources */,
 				DDFCE403CC505E5D64D40F09 /* iOSApp.swift in Sources */,
+				F1A0000000000000000000A1 /* SwiftExportBridgeProbe.swift in Sources */,
 				BB3898649DCACF2E256E5C32 /* Color+Hex.swift in Sources */,
 				C5D4DC65F6E3B14AE90B7A09 /* KdColors.swift in Sources */,
 				FF1768002FCE0F7B45CE10E7 /* KdMotion.swift in Sources */,
@@ -737,6 +847,22 @@
 				0FAC658C2DB3BBD6E87645EF /* UpdateBannerView.swift in Sources */,
 				147568EACDD87E73564521FD /* ShareInbox.swift in Sources */,
 				57750F55D0CFBB1DB18D7E4E /* ShareInboxSheet.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A0000000000000000000F1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F1A0000000000000000000A2 /* SwiftExportBridgeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A0000000000000000000F4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F1A0000000000000000000A3 /* LaunchSmokeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -824,6 +950,16 @@
 			name = KlardropShare;
 			target = A8BDB6209E7EDBC9F1131AA2 /* KlardropShare */;
 			targetProxy = FE8847DD561E613D2CC63D85 /* PBXContainerItemProxy */;
+		};
+		F1A0000000000000000000D3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7555FF7A242A565900829871 /* iosApp */;
+			targetProxy = F1A0000000000000000000D5 /* PBXContainerItemProxy */;
+		};
+		F1A0000000000000000000D4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7555FF7A242A565900829871 /* iosApp */;
+			targetProxy = F1A0000000000000000000D6 /* PBXContainerItemProxy */;
 		};
 		DDC3B2AA943F01F037479D3F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1224,6 +1360,82 @@
 			};
 			name = Release;
 		};
+		F1A0000000000000000000E3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AB3632DC29227652001CCB65 /* Config.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.carlom.Klardrop.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Klardrop.app/Klardrop";
+			};
+			name = Debug;
+		};
+		F1A0000000000000000000E4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AB3632DC29227652001CCB65 /* Config.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.carlom.Klardrop.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Klardrop.app/Klardrop";
+			};
+			name = Release;
+		};
+		F1A0000000000000000000E5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AB3632DC29227652001CCB65 /* Config.xcconfig */;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.carlom.Klardrop.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = iosApp;
+			};
+			name = Debug;
+		};
+		F1A0000000000000000000E6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = AB3632DC29227652001CCB65 /* Config.xcconfig */;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.carlom.Klardrop.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = iosApp;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1262,6 +1474,24 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
+		};
+		F1A0000000000000000000E1 /* Build configuration list for PBXNativeTarget "iosAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F1A0000000000000000000E3 /* Debug */,
+				F1A0000000000000000000E4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F1A0000000000000000000E2 /* Build configuration list for PBXNativeTarget "iosAppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F1A0000000000000000000E5 /* Debug */,
+				F1A0000000000000000000E6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
 		};
 		895F401966368D6A2FC91E58 /* Build configuration list for PBXNativeTarget "KlardropShare" */ = {
 			isa = XCConfigurationList;

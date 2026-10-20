@@ -1265,7 +1265,7 @@ object ControlPlane : ControlPlaneService {
               put("unreadCount", unreadCountsFlow.value[device.deviceId] ?: 0L)
               putNullable("pairingError", device.pairingError)
               putJsonArray("connectionTypes") {
-                device.connectionTypes.forEach { add(JsonPrimitive(it.name)) }
+                device.connectionTypes.forEach { add(JsonPrimitive(it.type.name)) }
               }
             },
           )

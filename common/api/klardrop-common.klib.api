@@ -1141,6 +1141,19 @@ final class com.carlom.klardrop.common.connectivity/ConnectivityRestrictionMonit
     constructor <init>(com.carlom.klardrop.common.connectivity/ConnectivityRestrictions = ...) // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionMonitor.<init>|<init>(com.carlom.klardrop.common.connectivity.ConnectivityRestrictions){}[0]
 }
 
+final class com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason { // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason|null[0]
+    constructor <init>(com.carlom.klardrop.common.connectivity/ConnectivityRestriction) // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason.<init>|<init>(com.carlom.klardrop.common.connectivity.ConnectivityRestriction){}[0]
+
+    final val restriction // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason.restriction|{}restriction[0]
+        final fun <get-restriction>(): com.carlom.klardrop.common.connectivity/ConnectivityRestriction // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason.restriction.<get-restriction>|<get-restriction>(){}[0]
+
+    final fun component1(): com.carlom.klardrop.common.connectivity/ConnectivityRestriction // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason.component1|component1(){}[0]
+    final fun copy(com.carlom.klardrop.common.connectivity/ConnectivityRestriction = ...): com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason.copy|copy(com.carlom.klardrop.common.connectivity.ConnectivityRestriction){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason.toString|toString(){}[0]
+}
+
 final class com.carlom.klardrop.common.connectivity/ConnectivityRestrictions { // com.carlom.klardrop.common.connectivity/ConnectivityRestrictions|null[0]
     constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ...) // com.carlom.klardrop.common.connectivity/ConnectivityRestrictions.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean){}[0]
 
@@ -1153,7 +1166,7 @@ final class com.carlom.klardrop.common.connectivity/ConnectivityRestrictions { /
     final val meteredNetworkDenied // com.carlom.klardrop.common.connectivity/ConnectivityRestrictions.meteredNetworkDenied|{}meteredNetworkDenied[0]
         final fun <get-meteredNetworkDenied>(): kotlin/Boolean // com.carlom.klardrop.common.connectivity/ConnectivityRestrictions.meteredNetworkDenied.<get-meteredNetworkDenied>|<get-meteredNetworkDenied>(){}[0]
     final val reasons // com.carlom.klardrop.common.connectivity/ConnectivityRestrictions.reasons|{}reasons[0]
-        final fun <get-reasons>(): kotlin.collections/Set<com.carlom.klardrop.common.connectivity/ConnectivityRestriction> // com.carlom.klardrop.common.connectivity/ConnectivityRestrictions.reasons.<get-reasons>|<get-reasons>(){}[0]
+        final fun <get-reasons>(): kotlin.collections/List<com.carlom.klardrop.common.connectivity/ConnectivityRestrictionReason> // com.carlom.klardrop.common.connectivity/ConnectivityRestrictions.reasons.<get-reasons>|<get-reasons>(){}[0]
     final val restricted // com.carlom.klardrop.common.connectivity/ConnectivityRestrictions.restricted|{}restricted[0]
         final fun <get-restricted>(): kotlin/Boolean // com.carlom.klardrop.common.connectivity/ConnectivityRestrictions.restricted.<get-restricted>|<get-restricted>(){}[0]
 
@@ -1432,6 +1445,22 @@ final class com.carlom.klardrop.common.notifications/Notifier { // com.carlom.kl
     final fun show(com.carlom.klardrop.common.notifications/AppNotification) // com.carlom.klardrop.common.notifications/Notifier.show|show(com.carlom.klardrop.common.notifications.AppNotification){}[0]
 }
 
+final class com.carlom.klardrop.common.permissions/CapabilityGrant { // com.carlom.klardrop.common.permissions/CapabilityGrant|null[0]
+    constructor <init>(com.carlom.klardrop.common.permissions/Capability, com.carlom.klardrop.common.permissions/CapabilityStatus) // com.carlom.klardrop.common.permissions/CapabilityGrant.<init>|<init>(com.carlom.klardrop.common.permissions.Capability;com.carlom.klardrop.common.permissions.CapabilityStatus){}[0]
+
+    final val capability // com.carlom.klardrop.common.permissions/CapabilityGrant.capability|{}capability[0]
+        final fun <get-capability>(): com.carlom.klardrop.common.permissions/Capability // com.carlom.klardrop.common.permissions/CapabilityGrant.capability.<get-capability>|<get-capability>(){}[0]
+    final val status // com.carlom.klardrop.common.permissions/CapabilityGrant.status|{}status[0]
+        final fun <get-status>(): com.carlom.klardrop.common.permissions/CapabilityStatus // com.carlom.klardrop.common.permissions/CapabilityGrant.status.<get-status>|<get-status>(){}[0]
+
+    final fun component1(): com.carlom.klardrop.common.permissions/Capability // com.carlom.klardrop.common.permissions/CapabilityGrant.component1|component1(){}[0]
+    final fun component2(): com.carlom.klardrop.common.permissions/CapabilityStatus // com.carlom.klardrop.common.permissions/CapabilityGrant.component2|component2(){}[0]
+    final fun copy(com.carlom.klardrop.common.permissions/Capability = ..., com.carlom.klardrop.common.permissions/CapabilityStatus = ...): com.carlom.klardrop.common.permissions/CapabilityGrant // com.carlom.klardrop.common.permissions/CapabilityGrant.copy|copy(com.carlom.klardrop.common.permissions.Capability;com.carlom.klardrop.common.permissions.CapabilityStatus){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.permissions/CapabilityGrant.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.permissions/CapabilityGrant.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop.common.permissions/CapabilityGrant.toString|toString(){}[0]
+}
+
 final class com.carlom.klardrop.common.permissions/EducationalNote { // com.carlom.klardrop.common.permissions/EducationalNote|null[0]
     constructor <init>(kotlin/String, kotlin/String) // com.carlom.klardrop.common.permissions/EducationalNote.<init>|<init>(kotlin.String;kotlin.String){}[0]
 
@@ -1456,20 +1485,21 @@ final class com.carlom.klardrop.common.permissions/PermissionsMonitor { // com.c
 }
 
 final class com.carlom.klardrop.common.permissions/PermissionsState { // com.carlom.klardrop.common.permissions/PermissionsState|null[0]
-    constructor <init>(kotlin.collections/Map<com.carlom.klardrop.common.permissions/Capability, com.carlom.klardrop.common.permissions/CapabilityStatus> = ..., kotlin.collections/List<com.carlom.klardrop.common.permissions/EducationalNote> = ...) // com.carlom.klardrop.common.permissions/PermissionsState.<init>|<init>(kotlin.collections.Map<com.carlom.klardrop.common.permissions.Capability,com.carlom.klardrop.common.permissions.CapabilityStatus>;kotlin.collections.List<com.carlom.klardrop.common.permissions.EducationalNote>){}[0]
+    constructor <init>(kotlin.collections/List<com.carlom.klardrop.common.permissions/CapabilityGrant> = ..., kotlin.collections/List<com.carlom.klardrop.common.permissions/EducationalNote> = ...) // com.carlom.klardrop.common.permissions/PermissionsState.<init>|<init>(kotlin.collections.List<com.carlom.klardrop.common.permissions.CapabilityGrant>;kotlin.collections.List<com.carlom.klardrop.common.permissions.EducationalNote>){}[0]
 
     final val capabilities // com.carlom.klardrop.common.permissions/PermissionsState.capabilities|{}capabilities[0]
-        final fun <get-capabilities>(): kotlin.collections/Map<com.carlom.klardrop.common.permissions/Capability, com.carlom.klardrop.common.permissions/CapabilityStatus> // com.carlom.klardrop.common.permissions/PermissionsState.capabilities.<get-capabilities>|<get-capabilities>(){}[0]
+        final fun <get-capabilities>(): kotlin.collections/List<com.carlom.klardrop.common.permissions/CapabilityGrant> // com.carlom.klardrop.common.permissions/PermissionsState.capabilities.<get-capabilities>|<get-capabilities>(){}[0]
     final val educationalNotes // com.carlom.klardrop.common.permissions/PermissionsState.educationalNotes|{}educationalNotes[0]
         final fun <get-educationalNotes>(): kotlin.collections/List<com.carlom.klardrop.common.permissions/EducationalNote> // com.carlom.klardrop.common.permissions/PermissionsState.educationalNotes.<get-educationalNotes>|<get-educationalNotes>(){}[0]
     final val isComplete // com.carlom.klardrop.common.permissions/PermissionsState.isComplete|{}isComplete[0]
         final fun <get-isComplete>(): kotlin/Boolean // com.carlom.klardrop.common.permissions/PermissionsState.isComplete.<get-isComplete>|<get-isComplete>(){}[0]
 
-    final fun component1(): kotlin.collections/Map<com.carlom.klardrop.common.permissions/Capability, com.carlom.klardrop.common.permissions/CapabilityStatus> // com.carlom.klardrop.common.permissions/PermissionsState.component1|component1(){}[0]
+    final fun component1(): kotlin.collections/List<com.carlom.klardrop.common.permissions/CapabilityGrant> // com.carlom.klardrop.common.permissions/PermissionsState.component1|component1(){}[0]
     final fun component2(): kotlin.collections/List<com.carlom.klardrop.common.permissions/EducationalNote> // com.carlom.klardrop.common.permissions/PermissionsState.component2|component2(){}[0]
-    final fun copy(kotlin.collections/Map<com.carlom.klardrop.common.permissions/Capability, com.carlom.klardrop.common.permissions/CapabilityStatus> = ..., kotlin.collections/List<com.carlom.klardrop.common.permissions/EducationalNote> = ...): com.carlom.klardrop.common.permissions/PermissionsState // com.carlom.klardrop.common.permissions/PermissionsState.copy|copy(kotlin.collections.Map<com.carlom.klardrop.common.permissions.Capability,com.carlom.klardrop.common.permissions.CapabilityStatus>;kotlin.collections.List<com.carlom.klardrop.common.permissions.EducationalNote>){}[0]
+    final fun copy(kotlin.collections/List<com.carlom.klardrop.common.permissions/CapabilityGrant> = ..., kotlin.collections/List<com.carlom.klardrop.common.permissions/EducationalNote> = ...): com.carlom.klardrop.common.permissions/PermissionsState // com.carlom.klardrop.common.permissions/PermissionsState.copy|copy(kotlin.collections.List<com.carlom.klardrop.common.permissions.CapabilityGrant>;kotlin.collections.List<com.carlom.klardrop.common.permissions.EducationalNote>){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.permissions/PermissionsState.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.permissions/PermissionsState.hashCode|hashCode(){}[0]
+    final fun statusOf(com.carlom.klardrop.common.permissions/Capability): com.carlom.klardrop.common.permissions/CapabilityStatus? // com.carlom.klardrop.common.permissions/PermissionsState.statusOf|statusOf(com.carlom.klardrop.common.permissions.Capability){}[0]
     final fun toString(): kotlin/String // com.carlom.klardrop.common.permissions/PermissionsState.toString|toString(){}[0]
 
     final object Companion { // com.carlom.klardrop.common.permissions/PermissionsState.Companion|null[0]

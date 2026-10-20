@@ -20,15 +20,14 @@ struct PermissionsPanelView: View {
 
     private var pendingCapabilities: [Capability] {
         state.capabilities
-            .filter { (_, status) in
+            .filter { grant in
                 // CapabilityStatus is a swift-export Swift enum — switch directly.
-                switch status {
+                switch grant.status {
                 case .Denied, .Unknown: return true
                 default: return false
                 }
-
             }
-            .map { $0.key }
+            .map { $0.capability }
     }
 
     private var visibleNotes: [EducationalNote] {

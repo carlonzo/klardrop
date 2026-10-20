@@ -28,9 +28,8 @@ fun PermissionsPanel(
 
     val pendingCapabilities = remember(state) {
         state.capabilities
-            .filter { (_, status) -> status == CapabilityStatus.Denied || status == CapabilityStatus.Unknown }
-            .keys
-            .toList()
+            .filter { it.status == CapabilityStatus.Denied || it.status == CapabilityStatus.Unknown }
+            .map { it.capability }
     }
 
     val visibleNotes = remember(state, dismissedNotes) {

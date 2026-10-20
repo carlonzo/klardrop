@@ -67,7 +67,9 @@ public class ShowDevicesControllerHelper(
               deviceId = deviceInfo.deviceId,
               deviceName = deviceInfo.name,
               deviceType = deviceInfo.deviceType,
-              connectionTypes = device.deviceConnections.map { it.deviceConnectionType }.distinct(),
+              connectionTypes = device.deviceConnections
+                .map { DeviceConnectionKind(it.deviceConnectionType) }
+                .distinct(),
               hasUnreadMessages = unreadCount > 0,
               trustStatus = trustStatus,
               reachability = reachabilityMap[deviceInfo.deviceId] ?: Reachability.Unknown,

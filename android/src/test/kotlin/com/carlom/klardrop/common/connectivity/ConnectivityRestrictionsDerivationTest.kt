@@ -28,7 +28,7 @@ class ConnectivityRestrictionsDerivationTest {
     assertTrue(r.restricted)
     assertEquals(
       setOf(ConnectivityRestriction.BatterySaverBlocking, ConnectivityRestriction.BatteryOptimizationNotExempt),
-      r.reasons,
+      r.reasons.map { it.restriction }.toSet(),
     )
   }
 
@@ -43,7 +43,7 @@ class ConnectivityRestrictionsDerivationTest {
     assertFalse(r.batterySaverBlocking)
     assertFalse(r.batteryOptimizationNotExempt)
     assertFalse(r.restricted)
-    assertEquals(emptySet<ConnectivityRestriction>(), r.reasons)
+    assertEquals(emptySet<ConnectivityRestriction>(), r.reasons.map { it.restriction }.toSet())
   }
 
   @Test
@@ -60,7 +60,10 @@ class ConnectivityRestrictionsDerivationTest {
     // banner, or every app that was never whitelisted shows a permanent warning.
     assertFalse(r.restricted)
     assertNull(r.activeBlocker)
-    assertEquals(setOf(ConnectivityRestriction.BatteryOptimizationNotExempt), r.reasons)
+    assertEquals(
+      setOf(ConnectivityRestriction.BatteryOptimizationNotExempt),
+      r.reasons.map { it.restriction }.toSet(),
+    )
   }
 
   @Test
@@ -73,7 +76,10 @@ class ConnectivityRestrictionsDerivationTest {
     )
     assertTrue(r.meteredNetworkDenied)
     assertTrue(r.restricted)
-    assertEquals(setOf(ConnectivityRestriction.MeteredNetworkDenied), r.reasons)
+    assertEquals(
+      setOf(ConnectivityRestriction.MeteredNetworkDenied),
+      r.reasons.map { it.restriction }.toSet(),
+    )
   }
 
   @Test
@@ -116,7 +122,7 @@ class ConnectivityRestrictionsDerivationTest {
         ConnectivityRestriction.BatteryOptimizationNotExempt,
         ConnectivityRestriction.MeteredNetworkDenied,
       ),
-      r.reasons,
+      r.reasons.map { it.restriction }.toSet(),
     )
   }
 

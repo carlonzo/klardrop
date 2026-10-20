@@ -29,15 +29,33 @@ public expect class PermissionsMonitor {
   public fun refresh(): Unit
 }
 
+/**
+ * One capability and the status the platform last observed for it.
+ *
+ * This is a class on purpose. swift-export bridges a Kotlin [Map] as an
+ * `NSDictionary` and then force-casts it to `Dictionary<Key, Value>`. A Kotlin
+ * enum is a Swift enum, but the dictionary still holds the Obj-C object, boxed
+ * as `AnyHashable`, so `Map<Capability, CapabilityStatus>` aborts in that cast
+ * (KLARDROP-KJ). A list of these records bridges as an array of objects, and
+ * each enum is read back through its own property.
+ */
+public data class CapabilityGrant(
+  public val capability: Capability,
+  public val status: CapabilityStatus,
+)
+
 public data class PermissionsState(
-  public val capabilities: Map<Capability, CapabilityStatus> = emptyMap(),
+  public val capabilities: List<CapabilityGrant> = emptyList(),
   public val educationalNotes: List<EducationalNote> = emptyList(),
 ) {
   /** True when nothing actionable is missing — drives panel auto-hide. */
   public val isComplete: Boolean
-    get() = capabilities.values.all {
-      it == CapabilityStatus.Granted || it == CapabilityStatus.NotApplicable
+    get() = capabilities.all {
+      it.status == CapabilityStatus.Granted || it.status == CapabilityStatus.NotApplicable
     } && educationalNotes.isEmpty()
+
+  public fun statusOf(capability: Capability): CapabilityStatus? =
+    capabilities.firstOrNull { it.capability == capability }?.status
 
   public companion object {
     public val EMPTY: PermissionsState = PermissionsState()
@@ -48,7 +66,7 @@ public data class PermissionsState(
  * Capabilities Klardrop needs at the OS-permission level. Each [Capability]
  * maps onto whatever underlying permission(s) the platform exposes; for
  * platforms that don't surface a given capability as a permission (e.g. mDNS
- * on Linux JVM is unrestricted), the entry simply isn't included in the map.
+ * on Linux JVM is unrestricted), that capability simply isn't included.
  */
 public enum class Capability {
   /** Local network / mDNS visibility. macOS, iOS. */
