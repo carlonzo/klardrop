@@ -6,7 +6,7 @@
     ":automergePatch"
   ],
   "automerge": true,
-  "platformAutomerge": true,
+  "platformAutomerge": false,
   "packageRules": [
     {
       "description": "The Compose Gradle plugin is published before its libraries reach Maven Central; wait so the PR resolves",
