@@ -79,9 +79,9 @@ private fun dsnParseFailed(reason: String): ParsedDsn? {
 // ---------------------------------------------------------------------------
 
 /**
- * Builds a Sentry envelope (3 newline-terminated JSON lines) for [throwable]. JSON is built
- * with kotlinx.serialization so string escaping (control chars, quotes) is correct for
- * anything that ends up in it — exception messages and log lines are not our text.
+ * Builds a Sentry envelope (header, event item, then the log-tail attachment item) for
+ * [throwable]. JSON is built with kotlinx.serialization so string escaping (control chars,
+ * quotes) is correct for anything that ends up in it — exception messages and log lines are not our text.
  *
  * The envelope format is documented at https://develop.sentry.dev/sdk/envelopes/
  */
@@ -100,9 +100,6 @@ internal fun buildSentryEnvelope(
 
   val exType = throwable::class.simpleName ?: throwable::class.qualifiedName ?: "Throwable"
   val exMsg = throwable.message.orEmpty()
-
-  // Log tail carried as extra for context width beyond breadcrumbs.
-  val logTail = LogBuffer.snapshot(200).joinToString("\n")
 
   val header = buildJsonObject {
     put("event_id", eventId)
@@ -141,7 +138,6 @@ internal fun buildSentryEnvelope(
       }
     }
     putJsonObject("extra") {
-      put("log_tail", logTail)
       // Raw Kotlin/Native trace, not parsed into Sentry frames: K/N's `kfun:...+123
       // (/path/File.kt:42:13)` format doesn't match any Sentry frame convention, so a
       // best-effort parser would just mis-render — the raw text is more useful as-is.
@@ -149,12 +145,29 @@ internal fun buildSentryEnvelope(
     }
   }.toString()
 
-  return "$header\n$itemHeader\n$event\n".encodeToByteArray()
+  return "$header\n$itemHeader\n$event\n${logTailAttachmentItem()}".encodeToByteArray()
 }
 
 /**
- * Builds a Sentry envelope (5 newline-terminated JSON lines: header, event item header,
- * event, user_report item header, user_report payload) for a user-authored problem report.
+ * The [LogBuffer] tail as an envelope attachment item rather than an event extra: Sentry's
+ * default scrubber blanks a whole string value when any part looks sensitive, which wiped the
+ * entire tail. Attachments aren't scrubbed by default. `length` is the UTF-8 byte count, which
+ * lets the payload contain newlines.
+ */
+private fun logTailAttachmentItem(): String {
+  val logTail = CrashReporter.logTailText()
+  val header = buildJsonObject {
+    put("type", "attachment")
+    put("length", logTail.encodeToByteArray().size)
+    put("filename", CrashReporter.LOG_TAIL_FILENAME)
+    put("content_type", "text/plain")
+  }
+  return "$header\n$logTail\n"
+}
+
+/**
+ * Builds a Sentry envelope (header, event item header, event, user_report item header,
+ * user_report payload, then the log-tail attachment item) for a user-authored problem report.
  * Mirrors the SDK path in [CrashReporter.reportUserFeedback]: a message event ("User report")
  * that a [io.sentry.kotlin.multiplatform.protocol.UserFeedback]-shaped `user_report` item
  * attaches to via the shared event id. Never applies the crash [EVENT_CAP]/dedupe gate —
@@ -173,8 +186,6 @@ internal fun buildSentryFeedbackEnvelope(
   val eventId = Uuid.random().toHexString()
   val timestamp = Clock.System.now().toString()
   val environment = CrashReporterConfig.environmentFor(appVersion)
-  val logTail = LogBuffer.snapshot(200).joinToString("\n")
-
   val header = buildJsonObject {
     put("event_id", eventId)
     put("dsn", parsedDsn.originalDsn)
@@ -205,9 +216,6 @@ internal fun buildSentryFeedbackEnvelope(
       put("id", userId)
       put("username", userName)
     }
-    putJsonObject("extra") {
-      put("log_tail", logTail)
-    }
   }.toString()
 
   val userReportItemHeader = buildJsonObject {
@@ -221,7 +229,7 @@ internal fun buildSentryFeedbackEnvelope(
     put("comments", comments)
   }.toString()
 
-  return "$header\n$eventItemHeader\n$event\n$userReportItemHeader\n$userReport\n".encodeToByteArray()
+  return "$header\n$eventItemHeader\n$event\n$userReportItemHeader\n$userReport\n${logTailAttachmentItem()}".encodeToByteArray()
 }
 
 // ---------------------------------------------------------------------------
