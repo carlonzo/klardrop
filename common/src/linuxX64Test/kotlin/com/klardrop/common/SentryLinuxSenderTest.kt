@@ -8,6 +8,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import com.carlom.klardrop.common.utils.LogBuffer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -59,8 +60,36 @@ class SentryLinuxSenderTest {
 
   // --- Envelope builder ---
 
+  /**
+   * Splits an envelope into [envelope header, item header, payload, item header, payload, ...].
+   * An item header with `length` is followed by exactly that many payload bytes (which may contain
+   * newlines); otherwise the payload runs to the next newline.
+   */
+  private fun envelopeParts(bytes: ByteArray): List<String> {
+    var pos = 0
+    fun readLine(): String {
+      var end = pos
+      while (bytes[end] != '\n'.code.toByte()) end++
+      return bytes.decodeToString(pos, end).also { pos = end + 1 }
+    }
+    val parts = mutableListOf(readLine())
+    while (pos < bytes.size) {
+      val itemHeader = readLine()
+      parts += itemHeader
+      val length = Json.parseToJsonElement(itemHeader).jsonObject["length"]?.jsonPrimitive?.int
+      if (length == null) {
+        parts += readLine()
+      } else {
+        parts += bytes.decodeToString(pos, pos + length)
+        assertEquals('\n'.code.toByte(), bytes[pos + length], "payload must be newline-terminated")
+        pos += length + 1
+      }
+    }
+    return parts
+  }
+
   @Test
-  fun envelopeHasThreeLinesAndExpectedFields() {
+  fun envelopeHasEventAndLogTailAttachment() {
     val dsn = parseDsn("https://key@host.example/42", "1.2.3")!!
     val envelope = buildSentryEnvelope(
       parsedDsn = dsn,
@@ -70,12 +99,12 @@ class SentryLinuxSenderTest {
       userId = "device-1",
       userName = "My Laptop",
       osType = "omarchy",
-    ).decodeToString()
+    )
 
-    val lines = envelope.trimEnd('\n').split("\n")
-    assertEquals(3, lines.size)
+    val parts = envelopeParts(envelope)
+    assertEquals(5, parts.size)
 
-    val (header, itemHeader, event) = lines
+    val (header, itemHeader, event) = parts
     assertTrue(header.contains("\"dsn\":\"https://key@host.example/42\""))
     val eventIdMatch = Regex("\"event_id\":\"([0-9a-f]{32})\"").find(header)
     assertNotNull(eventIdMatch, "event_id must be 32 lowercase hex chars")
@@ -91,8 +120,31 @@ class SentryLinuxSenderTest {
     assertTrue(event.contains("\"username\":\"My Laptop\""))
     assertTrue(event.contains("\"type\":\"IllegalStateException\""))
     assertTrue(event.contains("\"value\":\"boom\""))
-    assertTrue(event.contains("\"log_tail\""))
+    assertFalse(event.contains("\"log_tail\""), "log tail travels as an attachment, not an extra")
     assertTrue(event.contains("\"stacktrace\""))
+    assertEquals("attachment", Json.parseToJsonElement(parts[3]).jsonObject["type"]!!.jsonPrimitive.content)
+  }
+
+  /**
+   * Sentry's default scrubber blanked the whole `log_tail` extra whenever one line contained e.g.
+   * "authenticated=". The tail now goes out verbatim as an attachment; multi-line and non-ASCII
+   * content must survive the byte-length framing.
+   */
+  @Test
+  fun logTailAttachmentCarriesMultiLineTailVerbatim() {
+    LogBuffer.append("[Client]: Connection established with 79317778; starting UKEY2 handshake")
+    LogBuffer.append("[KlardropEncryptedTransport]: handshake complete (authenticated=true) — mina’s MacBook")
+    val dsn = parseDsn("https://key@host.example/42", "1.0")!!
+    val parts = envelopeParts(
+      buildSentryFeedbackEnvelope(dsn, "x", null, null, "1.0", "id", "user", "omarchy"),
+    )
+
+    assertEquals(7, parts.size)
+    val attachmentHeader = Json.parseToJsonElement(parts[5]).jsonObject
+    assertEquals("attachment", attachmentHeader["type"]!!.jsonPrimitive.content)
+    assertEquals("log_tail.txt", attachmentHeader["filename"]!!.jsonPrimitive.content)
+    assertEquals(CrashReporter.logTailText(), parts[6])
+    assertTrue(parts[6].contains("authenticated=true"))
   }
 
   /**
@@ -114,24 +166,25 @@ class SentryLinuxSenderTest {
       userId = nasty,
       userName = "user",
       osType = "omarchy",
-    ).decodeToString()
+    )
 
-    val lines = envelope.trimEnd('\n').split("\n")
-    assertEquals(3, lines.size)
-    val parsedLines = lines.map { Json.parseToJsonElement(it) } // throws if any line isn't valid JSON
+    val parts = envelopeParts(envelope)
+    assertEquals(5, parts.size)
+    // throws if any JSON part isn't valid JSON (parts[4] is the raw text attachment)
+    val parsedLines = parts.take(4).map { Json.parseToJsonElement(it) }
 
     val event = parsedLines[2].jsonObject
     val exceptionValue = event["exception"]!!.jsonObject["values"]!!
       .jsonArray[0].jsonObject["value"]!!.jsonPrimitive.content
     assertEquals(nasty, exceptionValue)
     assertEquals(nasty, event["user"]!!.jsonObject["id"]!!.jsonPrimitive.content)
-    assertEquals(nasty, event["extra"]!!.jsonObject["log_tail"]!!.jsonPrimitive.content)
+    assertTrue(parts[4].contains(nasty))
   }
 
   // --- Feedback envelope builder ---
 
   @Test
-  fun feedbackEnvelopeHasFiveLinesAndExpectedFields() {
+  fun feedbackEnvelopeHasEventUserReportAndLogTail() {
     val dsn = parseDsn("https://key@host.example/42", "1.2.3")!!
     val envelope = buildSentryFeedbackEnvelope(
       parsedDsn = dsn,
@@ -142,11 +195,12 @@ class SentryLinuxSenderTest {
       userId = "device-1",
       userName = "My Laptop",
       osType = "omarchy",
-    ).decodeToString()
+    )
 
-    val lines = envelope.trimEnd('\n').split("\n")
-    assertEquals(5, lines.size)
-    val parsedLines = lines.map { Json.parseToJsonElement(it) } // throws if any line isn't valid JSON
+    val parts = envelopeParts(envelope)
+    assertEquals(7, parts.size)
+    // throws if any JSON part isn't valid JSON (parts[6] is the raw text attachment)
+    val parsedLines = parts.take(6).map { Json.parseToJsonElement(it) }
 
     val header = parsedLines[0].jsonObject
     val headerEventId = header["event_id"]!!.jsonPrimitive.content

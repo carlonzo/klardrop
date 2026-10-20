@@ -4,6 +4,7 @@ import com.carlom.klardrop.common.KlardropVersion
 import com.carlom.klardrop.common.utils.LogBuffer
 import com.carlom.klardrop.common.utils.isExpectedNetworkNoise
 import com.carlom.klardrop.common.utils.isKnownNoiseName
+import io.sentry.kotlin.multiplatform.Attachment
 import io.sentry.kotlin.multiplatform.Sentry
 import io.sentry.kotlin.multiplatform.SentryEvent
 import io.sentry.kotlin.multiplatform.SentryLevel
@@ -91,7 +92,7 @@ public object CrashReporter {
    * which means the last 100 breadcrumbs — every [com.carlom.klardrop.common.utils.log] call, see
    * `logger.kt` — ride along with the report. Breadcrumbs churn fast during reconnect storms, so
    * the report additionally carries the [LogBuffer] tail (up to [LOG_TAIL_LINES] recent lines) as
-   * the `log_tail` extra — a wider window that survives the storm the user is reporting about.
+   * the `log_tail.txt` attachment — a wider window that survives the storm the user is reporting about.
    *
    * Every report groups under one Sentry issue (same message title) and carries `report:user`, so
    * they can be found without trawling crashes. [ReportOutcome.Disabled] is returned rather than
@@ -115,8 +116,10 @@ public object CrashReporter {
     val eventId = Sentry.captureMessage(USER_REPORT_TITLE) { scope ->
       scope.level = SentryLevel.INFO
       scope.setTag("report", "user")
-      // ponytail: joined string, not structured lines — Sentry KMP setExtra only takes String.
-      scope.setExtra(LOG_TAIL_EXTRA, LogBuffer.snapshot(LOG_TAIL_LINES).joinToString("\n"))
+      // An attachment, not an extra: Sentry's default scrubber blanks a whole string value when
+      // any of it looks sensitive (e.g. "authenticated=" in a UKEY2 line), which wiped the entire
+      // tail on every report from a connected session. Attachments aren't scrubbed by default.
+      scope.addAttachment(Attachment(logTailText().encodeToByteArray(), LOG_TAIL_FILENAME, "text/plain"))
     }
     // A dropped event (sampling, an inbound filter, rate limit) yields the nil id, and feedback
     // attached to it would be unreachable — say it failed rather than pretend otherwise.
@@ -134,7 +137,7 @@ public object CrashReporter {
   internal fun leaveBreadcrumb(message: String, type: BreadcrumbType = BreadcrumbType.MANUAL) {
     if (!started) return
     // No-op for the linux sender: it has no scope to attach breadcrumbs to, and
-    // carries the LogBuffer tail as the `log_tail` extra on the event instead.
+    // carries the LogBuffer tail as the `log_tail.txt` attachment on the event instead.
     if (linuxSender != null) return
     Sentry.addBreadcrumb(
       Breadcrumb().apply {
@@ -172,8 +175,10 @@ public object CrashReporter {
   }
 
   private const val USER_REPORT_TITLE = "User report"
-  private const val LOG_TAIL_EXTRA = "log_tail"
+  internal const val LOG_TAIL_FILENAME = "log_tail.txt"
   private const val LOG_TAIL_LINES = 200
+
+  internal fun logTailText(): String = LogBuffer.snapshot(LOG_TAIL_LINES).joinToString("\n")
 }
 
 /** Result of [CrashReporter.reportUserFeedback], so the UI can tell the user the truth. */
