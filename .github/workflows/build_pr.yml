@@ -38,13 +38,15 @@ jobs:
         run: |
           set -euo pipefail
           python3 .github/path_filters.py --self-test
-          # Filter-Probe is a one-commit verification hook. A line
-          # "Filter-Probe: <path>" in the head commit message classifies that
-          # path instead of the whole pull-request diff, so a probe can show
-          # skips while this branch still contains the workflow file. Revert
-          # the commit that adds the hook; do not leave it on main.
-          if git log -1 --format=%B | grep -q '^Filter-Probe:'; then
-            git log -1 --format=%B | sed -n 's/^Filter-Probe: *//p' > /tmp/changed-paths.txt
+          # pull_request checkouts are a merge commit, so git log -1 is not the
+          # head commit. Read that commit's message from the API. A line
+          # "Filter-Probe: <path>" classifies that path instead of the whole
+          # pull-request diff, so a probe can show skips while this branch
+          # still contains the workflow file. Revert the commits that add the
+          # hook; do not leave it on main.
+          MESSAGE="$(gh api "repos/${{ github.repository }}/commits/${{ github.event.pull_request.head.sha }}" --jq .commit.message)"
+          if printf '%s\n' "$MESSAGE" | grep -q '^Filter-Probe:'; then
+            printf '%s\n' "$MESSAGE" | sed -n 's/^Filter-Probe: *//p' > /tmp/changed-paths.txt
             echo "Path-filter probe; classifying only:"
             cat /tmp/changed-paths.txt
           else
