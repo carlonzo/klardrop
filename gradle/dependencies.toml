@@ -6,7 +6,7 @@ agp = "9.4.1"
 # CocoaPods), which is what the Sentry swap below unblocked.
 kotlin = "2.4.21"
 coroutines = "1.11.0"
-serialization = "1.11.0"
+serialization = "1.12.0"
 jetbrains-compose = "1.12.2"
 okio = "3.18.2"
 ktor = "3.6.0"
