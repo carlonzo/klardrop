@@ -69,7 +69,9 @@ public typealias ConnectivityRestrictions = ExportedKotlinPackages.com.carlom.kl
 public typealias ConnectivityRestriction = ExportedKotlinPackages.com.carlom.klardrop.common.connectivity.ConnectivityRestriction
 public typealias ConnectivityRestrictionReason = ExportedKotlinPackages.com.carlom.klardrop.common.connectivity.ConnectivityRestrictionReason
 public typealias DeviceConnectionKind = ExportedKotlinPackages.com.carlom.klardrop.DeviceConnectionKind
-public typealias DeviceConnectionType = ExportedKotlinPackages.com.carlom.klardrop.common.discovery.DeviceConnection.DeviceConnectionType
+// Nested inside the sealed DeviceConnection. swift-export exposes that enum as a
+// public mangled type; the typealias on DeviceConnection itself is internal.
+public typealias DeviceConnectionType = KlardropCommon._ExportedKotlinPackages_com_carlom_klardrop_common_discovery_DeviceConnection_DeviceConnectionType
 
 // Share
 public typealias ShareSheetDismissTrigger = ExportedKotlinPackages.com.carlom.klardrop.common.share.ShareSheetDismissTrigger
