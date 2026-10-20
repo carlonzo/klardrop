@@ -331,6 +331,23 @@ jobs:
           path: '**/build/test-results/**/TEST-*.xml'
           reporter: java-junit
 
+      # Same :desktop:jvmJar / :desktop:jvmTest the Linux job compiles, on the
+      # Apple Silicon host. It used to be its own macos-26 job so it could
+      # overlap this one. On run 39479916747 that second job waited 15m01s,
+      # never received a runner (runner_id 0, no steps), and GitHub cancelled
+      # it: "The job was not acquired by Runner of type hosted even after
+      # multiple attempts", while this job held the only macos-26 runner.
+      # The workflow concurrency group did not do it (this job kept running)
+      # and neither did a timeout (no step had started; the step timeout is
+      # 45 minutes). One macos-26 job per PR avoids the queue. JDK 25 is still
+      # the selected JDK here; the Apple app build below switches to 21.
+      # iosApp-only PRs skip this step (desktop_jvm is false) without asking
+      # for another runner.
+      - name: Compile macOS JVM host (desktop)
+        if: needs.changes.outputs.desktop_jvm == 'true'
+        timeout-minutes: 45
+        run: ./gradlew :desktop:jvmJar :desktop:jvmTest
+
       # embedSwiftExportForXcode runs Gradle pinned to JDK 21.
       - name: Set up JDK 21 (Apple app build uses the project's pinned JDK)
         uses: actions/setup-java@v6
@@ -454,34 +471,14 @@ jobs:
         shell: bash
         run: cargo fmt --all --check
 
-  # The Linux job compiles the same JVM target. This job is the macOS host
-  # itself: :desktop:jvmJar / :desktop:jvmTest on Apple Silicon. It stays its
-  # own runner so it overlaps the iOS job instead of lengthening it.
-  desktop-jvm-host-macos:
-    name: Compile macOS JVM host (desktop)
-    needs: changes
-    if: needs.changes.outputs.desktop_jvm == 'true'
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v6
-        with:
-          java-version: '25'
-          distribution: 'zulu'
-          java-package: jdk
-
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Build the macOS JVM host
-        timeout-minutes: 45
-        run: ./gradlew :desktop:jvmJar :desktop:jvmTest
-
   # Single stable required check. `skipped` is a pass: path filters skip jobs
-  # on purpose. `failure` and `cancelled` are not. `!cancelled()` keeps a
-  # superseded PR run from posting a red CI check after concurrency cancels it,
-  # and still runs when a needed job failed.
+  # on purpose. Anything else — failure, cancelled, or a job that never
+  # started — fails this check.
+  #
+  # `if: always()` is required. `if: !cancelled()` does not run when a needed
+  # job was cancelled, and a skipped CI check counts as a success for branch
+  # protection and for Renovate. That is how a macos-26 job GitHub cancelled
+  # before assigning a runner would have left CI green.
   ci:
     name: CI
     needs:
@@ -489,8 +486,7 @@ jobs:
       - build-linux
       - build-macos
       - rust-macos
-      - desktop-jvm-host-macos
-    if: ${{ !cancelled() }}
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate job results
@@ -499,7 +495,6 @@ jobs:
           RESULT_LINUX: ${{ needs.build-linux.result }}
           RESULT_MACOS: ${{ needs.build-macos.result }}
           RESULT_RUST_MACOS: ${{ needs.rust-macos.result }}
-          RESULT_DESKTOP_JVM: ${{ needs.desktop-jvm-host-macos.result }}
         run: |
           set -euo pipefail
           fail=0
@@ -519,7 +514,6 @@ jobs:
           check "Build & test (Linux)" "$RESULT_LINUX"
           check "Test (macOS / iOS)" "$RESULT_MACOS"
           check "Rust client (macos-14)" "$RESULT_RUST_MACOS"
-          check "Compile macOS JVM host (desktop)" "$RESULT_DESKTOP_JVM"
           if [[ "$fail" -ne 0 ]]; then
             exit 1
           fi
