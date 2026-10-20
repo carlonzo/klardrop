@@ -1,5 +1,6 @@
 //! Entry point: parse, dispatch, map a [`CliError`] onto the documented exit
 //! code.
+//! Path-filter probe comment. Revert this commit.
 //!
 //! Output discipline lives in [`envelope::Output`]: with `--json`, stdout holds
 //! exactly one JSON value; every diagnostic goes to stderr.
