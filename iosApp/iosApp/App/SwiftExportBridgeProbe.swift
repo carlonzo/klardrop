@@ -43,14 +43,22 @@ enum SwiftExportBridgeProbe {
             reason.restriction == ConnectivityRestriction.BatterySaverBlocking
         }
 
+        // swift-export does not keep Kotlin default arguments, so every
+        // DeviceUi parameter is passed. Nested singletons are the public
+        // mangled types; the typealias on the parent is internal.
         let device = DeviceUi(
             deviceId: "probe-device",
             deviceName: "Probe",
             deviceType: DeviceType.MOBILE,
+            activityState: presentation._ExportedKotlinPackages_com_carlom_klardrop_ActivityState_Idle.shared,
             connectionTypes: [
                 DeviceConnectionKind(type: DeviceConnectionType.KLARDROP),
                 DeviceConnectionKind(type: DeviceConnectionType.BLE),
-            ]
+            ],
+            hasUnreadMessages: false,
+            trustStatus: presentation._ExportedKotlinPackages_com_carlom_klardrop_TrustStatus_Unknown.shared,
+            reachability: Reachability.Unknown.shared,
+            pairingError: nil
         )
         let sawKlardrop = device.connectionTypes.contains { kind in
             kind.type == DeviceConnectionType.KLARDROP
