@@ -195,4 +195,47 @@ class ConnectionsPoolNetworkDebounceTest {
             "BLE session MUST be closed after the debounce window elapses",
         )
     }
+
+    /**
+     * KLARDROP-KH: macOS emits [NetworkChangeEvent.Resumed] whenever the window gains focus, which
+     * is exactly when the user switches over to accept an incoming file. It must not flush the
+     * socket that transfer is waiting on.
+     */
+    @Test
+    fun appResumeDoesNotFlushPool() = runTest(timeout = 10.seconds) {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val coroutines = testCoroutines(this, dispatcher)
+        val networkEvents = MutableSharedFlow<NetworkChangeEvent>(extraBufferCapacity = 8)
+        val pool = ConnectionsPoolImpl(coroutines = coroutines, networkEvents = networkEvents)
+
+        val (messenger, session) = fakeMessenger(coroutines, "device-3")
+        pool.updateConnection("device-3", messenger)
+        runCurrent()
+
+        networkEvents.emit(NetworkChangeEvent.Resumed)
+        advanceTimeBy(600.milliseconds)
+
+        assertTrue(session.isOpen, "BLE session must stay open on app resume")
+        assertTrue(pool.reachability.value["device-3"] == Reachability.Reachable)
+    }
+
+    /** A Resumed inside a real change's debounce window must not cancel that flush. */
+    @Test
+    fun appResumeDoesNotCancelPendingRealFlush() = runTest(timeout = 10.seconds) {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val coroutines = testCoroutines(this, dispatcher)
+        val networkEvents = MutableSharedFlow<NetworkChangeEvent>(extraBufferCapacity = 8)
+        val pool = ConnectionsPoolImpl(coroutines = coroutines, networkEvents = networkEvents)
+
+        val (messenger, session) = fakeMessenger(coroutines, "device-4")
+        pool.updateConnection("device-4", messenger)
+        runCurrent()
+
+        networkEvents.emit(NetworkChangeEvent.Changed)
+        advanceTimeBy(300.milliseconds)
+        networkEvents.emit(NetworkChangeEvent.Resumed)
+        advanceTimeBy(300.milliseconds)
+
+        assertTrue(session.isOpen.not(), "the real change must still flush")
+    }
 }

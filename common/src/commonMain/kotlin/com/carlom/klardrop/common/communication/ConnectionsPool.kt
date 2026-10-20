@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -143,6 +144,9 @@ internal class ConnectionsPoolImpl(
     val scope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
     var debounceJob: Job? = null
     events
+      // Only a real change can leave sockets dead. Filtered before the debounce so a Resumed
+      // can't cancel a pending Changed flush.
+      .filter { it == NetworkChangeEvent.Changed }
       .onEach {
         // Cancel any in-flight debounce timer so back-to-back events within the window
         // collapse into a single flush.
