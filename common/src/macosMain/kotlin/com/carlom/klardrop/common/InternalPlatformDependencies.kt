@@ -6,6 +6,7 @@ import com.carlom.klardrop.common.features.ClipboardReaderWriter
 import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.features.FallbackClipboardConnectionInfoJoiner
 import com.carlom.klardrop.common.mdns.ServiceDiscoveryMdns
+import com.carlom.klardrop.common.network.NetworkChangeEvent
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
 import com.carlom.klardrop.common.notifications.ForegroundState
 import com.carlom.klardrop.common.notifications.Notifier
@@ -65,7 +66,8 @@ public actual class InternalPlatformDependencies(private val applicationInfo: Ap
       `object` = null,
       queue = NSOperationQueue.mainQueue,
     ) { _ ->
-      monitor.trigger()
+      // Focus only: the network didn't change, so keep live sockets (and pending transfers).
+      monitor.trigger(NetworkChangeEvent.Resumed)
     }
     NSWorkspace.sharedWorkspace.notificationCenter.addObserverForName(
       name = NSWorkspaceDidWakeNotification,

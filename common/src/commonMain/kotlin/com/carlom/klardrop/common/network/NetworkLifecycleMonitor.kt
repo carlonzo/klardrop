@@ -20,4 +20,11 @@ internal expect class NetworkLifecycleMonitor {
 internal sealed interface NetworkChangeEvent {
   /** The set of available network interfaces / connectivity has changed. */
   data object Changed : NetworkChangeEvent
+
+  /**
+   * The app came back to the foreground; the network itself didn't change. Discovery rebuilds its
+   * publishes, but live sockets are left alone — flushing them here killed transfers waiting on
+   * the user to accept, since accepting is exactly when the window gains focus (KLARDROP-KH).
+   */
+  data object Resumed : NetworkChangeEvent
 }

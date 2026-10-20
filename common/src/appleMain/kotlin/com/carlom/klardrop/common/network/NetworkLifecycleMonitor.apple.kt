@@ -20,11 +20,11 @@ internal actual class NetworkLifecycleMonitor {
   actual fun observe(): Flow<NetworkChangeEvent> = flow
 
   /**
-   * Emit a synthetic [NetworkChangeEvent.Changed]. Caller can use this to force
-   * downstream consumers to rebuild — currently used by the iOS app-lifecycle observer
-   * to recover Bonjour publishes after foreground.
+   * Emit a synthetic [event]. Caller can use this to force downstream consumers to
+   * rebuild — currently used by the app-lifecycle observers to recover Bonjour publishes
+   * after foreground.
    */
-  fun trigger() {
-    flow.tryEmit(NetworkChangeEvent.Changed)
+  fun trigger(event: NetworkChangeEvent = NetworkChangeEvent.Changed) {
+    flow.tryEmit(event)
   }
 }
