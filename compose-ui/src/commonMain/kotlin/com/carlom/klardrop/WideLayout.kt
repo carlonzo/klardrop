@@ -76,7 +76,6 @@ import com.carlom.klardrop.components.UpdateBanner
 import com.carlom.klardrop.components.UpdateSettingsSection
 import com.carlom.klardrop.theme.KdTheme
 import com.carlom.klardrop.theme.LocalContentInsets
-import com.carlom.klardrop.theme.LocalPlatformSettings
 
 private val DesktopSidebarWidth = 300.dp
 private val TabletSidebarWidth = 320.dp
@@ -631,11 +630,6 @@ private fun SettingsPane(
                         tint = colors.text2,
                     )
                 }
-            }
-
-            LocalPlatformSettings.current?.let { platformSettings ->
-                Spacer(Modifier.height(spacing.s4))
-                platformSettings()
             }
 
             if (supportsBackgroundDiscovery) {
