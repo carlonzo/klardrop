@@ -662,6 +662,14 @@ EOF
     # before it knows the id exists — see "Installing by hand" in the shell docs.
     if command -v omarchy-shell >/dev/null 2>&1; then
       omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+      # The rescan is asynchronous: enabling before the shell has registered the
+      # id is rejected ("unknown plugin") and leaves the plugin's IPC target
+      # missing, so `klardrop-omarchy-open` fails with "Target not found.".
+      local i
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        omarchy-shell shell listPlugins 2>/dev/null | grep -q '"id":"klardrop.omarchy"' && break
+        sleep 0.5
+      done
     fi
     if command -v omarchy >/dev/null 2>&1; then
       # `enable` also drops a bar-widget plugin into the bar (defaultSection, or

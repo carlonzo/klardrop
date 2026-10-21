@@ -184,11 +184,11 @@ export ARGV_LOG="$TMP/argv.log"
 
 cat > "$STUBS/uname" <<'EOF'
 #!/usr/bin/env bash
-if [ -n "${TEST_UNAME_M:-}" ]; then
-  if [ "${1:-}" = "-m" ]; then
-    echo "$TEST_UNAME_M"
-    exit 0
-  fi
+# Default to x86_64 (the default fixture tarball) so the suite doesn't depend on
+# the host architecture; tests override it with TEST_UNAME_M.
+if [ "${1:-}" = "-m" ]; then
+  echo "${TEST_UNAME_M:-x86_64}"
+  exit 0
 fi
 exec /usr/bin/uname "$@"
 EOF
