@@ -24,7 +24,6 @@ import com.carlom.klardrop.desktop.SingleInstance
 import com.carlom.klardrop.theme.AppTheme
 import com.klardrop.common.initCrashReporter
 import io.github.vinceglb.filekit.FileKit
-import java.awt.Desktop
 import java.awt.EventQueue
 import java.awt.Taskbar
 import java.awt.Window as AwtWindow
@@ -127,14 +126,9 @@ fun main(args: Array<String>) {
   // Combined with title="" and rootPane client properties below, this drops the
   // title text and the title-bar border, leaving the traffic-light buttons
   // floating over the dark content.
-  val initialAppIconMode = MacAppIconSettings.load()
   if (System.getProperty("os.name").lowercase().contains("mac")) {
     System.setProperty("apple.awt.application.appearance", "system")
     System.setProperty("apple.awt.application.name", KlardropVersion.APP_NAME)
-    // Start without a dock icon instead of hiding it after launch, so it never flashes.
-    if (!initialAppIconMode.showsDockIcon) {
-      System.setProperty("apple.awt.UIElement", "true")
-    }
   }
 
   // Set the dock / taskbar / Alt-Tab icon at runtime. The bundler-supplied
@@ -198,33 +192,6 @@ fun main(args: Array<String>) {
     }
 
     val isMacOs = remember { System.getProperty("os.name").lowercase().contains("mac") }
-    var appIconMode by remember { mutableStateOf(initialAppIconMode) }
-    val showTray = trayAvailable && (!isMacOs || appIconMode.showsMenuBarIcon)
-    // Closing only hides the window when something is left to reopen it from.
-    val canHideWindow = showTray || (isMacOs && appIconMode.showsDockIcon)
-
-    // Without a dock icon, toFront() doesn't activate the app, so the window would open behind others.
-    val bringWindowToFront = {
-      if (isMacOs && !appIconMode.showsDockIcon) MacDock.activate()
-      activeWindow?.toFront()
-      activeWindow?.requestFocusInWindow()
-    }
-
-    // macOS: clicking the dock icon reopens the window hidden by closing it.
-    DisposableEffect(isMacOs) {
-      val listener = java.awt.desktop.AppReopenedListener {
-        EventQueue.invokeLater {
-          isWindowVisible = true
-          bringWindowToFront()
-        }
-      }
-      val desktop = if (isMacOs && Desktop.isDesktopSupported()) Desktop.getDesktop() else null
-      val supported = desktop?.isSupported(Desktop.Action.APP_EVENT_REOPENED) == true
-      if (supported) desktop.addAppEventListener(listener)
-      onDispose {
-        if (supported) desktop.removeAppEventListener(listener)
-      }
-    }
 
     val updateStatus by k.updateStatus().collectAsState()
     val updateInstall by k.updateInstallProgress().collectAsState()
@@ -252,14 +219,16 @@ fun main(args: Array<String>) {
       instanceGuard.onFocus = {
         EventQueue.invokeLater {
           isWindowVisible = true
-          bringWindowToFront()
+          activeWindow?.toFront()
+          activeWindow?.requestFocusInWindow()
         }
       }
       instanceGuard.onSendFiles = { files ->
         EventQueue.invokeLater {
           pendingShareFiles = files
           isWindowVisible = true
-          bringWindowToFront()
+          activeWindow?.toFront()
+          activeWindow?.requestFocusInWindow()
         }
       }
     }
@@ -275,7 +244,7 @@ fun main(args: Array<String>) {
       }
     }
 
-    if (showTray) {
+    if (trayAvailable) {
       KlardropTray(
         peers = peers,
         isWindowVisible = isWindowVisible,
@@ -283,7 +252,8 @@ fun main(args: Array<String>) {
         onToggleWindow = { isWindowVisible = !isWindowVisible },
         onShowWindow = {
           isWindowVisible = true
-          bringWindowToFront()
+          activeWindow?.toFront()
+          activeWindow?.requestFocusInWindow()
         },
       )
     }
@@ -293,7 +263,7 @@ fun main(args: Array<String>) {
         title = "",
         icon = painterResource("icons/app-icon.svg"),
         onCloseRequest = {
-          if (canHideWindow) {
+          if (trayAvailable) {
             isWindowVisible = false
           } else {
             exitApplication()
@@ -311,7 +281,6 @@ fun main(args: Array<String>) {
         }
 
         LaunchedEffect(window) {
-          if (isMacOs && !appIconMode.showsDockIcon) MacDock.activate()
           window.toFront()
           window.requestFocusInWindow()
 
@@ -349,22 +318,6 @@ fun main(args: Array<String>) {
                 }
               }
             },
-            platformSettings = if (isMacOs) {
-              {
-                MacAppIconSettingsSection(
-                  mode = appIconMode,
-                  onModeChange = { mode ->
-                    if (mode != appIconMode) {
-                      if (mode.showsDockIcon != appIconMode.showsDockIcon) {
-                        MacDock.setDockIconVisible(mode.showsDockIcon)
-                      }
-                      appIconMode = mode
-                      MacAppIconSettings.save(mode)
-                    }
-                  },
-                )
-              }
-            } else null,
           )
         }
 

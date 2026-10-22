@@ -83,7 +83,6 @@ import com.carlom.klardrop.components.UpdateSettingsSection
 import com.carlom.klardrop.components.toKdShareDevice
 import com.carlom.klardrop.theme.KdEaseOut
 import com.carlom.klardrop.theme.KdTheme
-import com.carlom.klardrop.theme.LocalPlatformSettings
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.PickerResultLauncher
@@ -516,11 +515,6 @@ private fun SettingsSheet(
         ) {
             Text(text = "Settings", style = typography.title.copy(color = colors.text))
             Spacer(Modifier.height(spacing.s4))
-
-            LocalPlatformSettings.current?.let { platformSettings ->
-                platformSettings()
-                Spacer(Modifier.height(spacing.s4))
-            }
 
             if (showBackgroundDiscoveryToggle) {
                 Row(
