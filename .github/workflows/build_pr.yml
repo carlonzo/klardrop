@@ -439,7 +439,7 @@ jobs:
     name: Rust client (macos-14)
     needs: changes
     if: needs.changes.outputs.rust_macos == 'true'
-    runs-on: macos-14
+    runs-on: macos-26
     defaults:
       run:
         working-directory: cli-rust
