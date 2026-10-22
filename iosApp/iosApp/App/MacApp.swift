@@ -18,6 +18,10 @@ import presentation
 // The single DiscoveryAppModel is owned here (not in RootView) so the menu and
 // the window share the one DiscoveryController, and discovery keeps running
 // while the window is closed.
+//
+// Which of the dock icon and the menu bar glyph are shown is the user's choice
+// (MacAppIconMode, Settings window). At least one is always present, so the
+// app can always be brought back.
 // ---------------------------------------------------------------------------
 
 @main
@@ -30,6 +34,9 @@ struct KlardropMacApp: App {
     // Held for the process lifetime: the menu bar must keep showing devices even
     // after the main window is closed.
     @State private var model: DiscoveryAppModel
+
+    @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var appDelegate
+    @AppStorage(MacAppIconMode.storageKey) private var appIconMode: MacAppIconMode = .both
 
     init() {
         // Constructing the bootstrap also starts Sentry (see KlardropBootstrap).
@@ -100,10 +107,23 @@ struct KlardropMacApp: App {
             SidebarCommands()
         }
 
-        MenuBarExtra {
+        MenuBarExtra(isInserted: Binding(
+            get: { appIconMode.showsMenuBarIcon },
+            // macOS clears this when the user ⌘-drags the glyph out of the menu bar;
+            // keep the dock icon so the app stays reachable.
+            set: { inserted in if !inserted { appIconMode = .dockOnly } }
+        )) {
             MenuBarContent(model: model)
         } label: {
             Image(nsImage: MenuBarIconFactory.dropTemplateImage())
+        }
+        .onChange(of: appIconMode) { _, mode in
+            mode.applyActivationPolicy()
+        }
+
+        Settings {
+            MacSettingsView()
+                .kdColorsEnvironment()
         }
     }
 
@@ -123,6 +143,7 @@ private struct MenuBarContent: View {
 
     let model: DiscoveryAppModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Button("Open Klardrop") {
@@ -147,6 +168,13 @@ private struct MenuBarContent: View {
 
         Divider()
 
+        Button("Settings…") {
+            // Without a dock icon the app isn't active, so the window would open behind others.
+            NSApp.activate(ignoringOtherApps: true)
+            openSettings()
+        }
+        .keyboardShortcut(",")
+
         Button("Quit Klardrop") {
             NSApp.terminate(nil)
         }
@@ -169,6 +197,83 @@ private struct MenuBarContent: View {
         model.selectedChat = route
         model.onDeviceTap(device)
         model.setActiveChatDeviceId(device.deviceId)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MacAppIconMode — where Klardrop shows itself while running.
+//
+// The dock icon follows NSApp's activation policy (.regular shows it,
+// .accessory hides it); the menu bar glyph follows MenuBarExtra(isInserted:).
+// Persisted in UserDefaults through @AppStorage.
+// ---------------------------------------------------------------------------
+
+enum MacAppIconMode: String, CaseIterable, Identifiable {
+    case menuBarOnly
+    case dockOnly
+    case both
+
+    static let storageKey = "macAppIconMode"
+
+    static var stored: MacAppIconMode {
+        UserDefaults.standard.string(forKey: storageKey).flatMap(MacAppIconMode.init(rawValue:)) ?? .both
+    }
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .menuBarOnly: return "Menu bar only"
+        case .dockOnly:    return "Dock only"
+        case .both:        return "Menu bar and Dock"
+        }
+    }
+
+    var showsDockIcon: Bool { self != .menuBarOnly }
+    var showsMenuBarIcon: Bool { self != .dockOnly }
+
+    @MainActor
+    func applyActivationPolicy() {
+        let policy: NSApplication.ActivationPolicy = showsDockIcon ? .regular : .accessory
+        guard NSApp.activationPolicy() != policy else { return }
+        NSApp.setActivationPolicy(policy)
+        // Changing the policy deactivates the app; bring it back so its windows stay in front.
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+final class MacAppDelegate: NSObject, NSApplicationDelegate {
+
+    // Applied before launch finishes so a menu-bar-only app never shows a dock icon.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        if !MacAppIconMode.stored.showsDockIcon {
+            NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    // An accessory app isn't activated at launch, so its first window would open behind others.
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        if !MacAppIconMode.stored.showsDockIcon {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+}
+
+private struct MacSettingsView: View {
+
+    @AppStorage(MacAppIconMode.storageKey) private var appIconMode: MacAppIconMode = .both
+
+    var body: some View {
+        Form {
+            Picker("Show Klardrop in:", selection: $appIconMode) {
+                ForEach(MacAppIconMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.radioGroup)
+        }
+        .padding(KdSpacing.s5)
+        .frame(width: 360)
     }
 }
 
