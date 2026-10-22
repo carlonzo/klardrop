@@ -184,11 +184,11 @@ export ARGV_LOG="$TMP/argv.log"
 
 cat > "$STUBS/uname" <<'EOF'
 #!/usr/bin/env bash
-if [ -n "${TEST_UNAME_M:-}" ]; then
-  if [ "${1:-}" = "-m" ]; then
-    echo "$TEST_UNAME_M"
-    exit 0
-  fi
+# Default to x86_64 (the default fixture tarball) so the suite doesn't depend on
+# the host architecture; tests override it with TEST_UNAME_M.
+if [ "${1:-}" = "-m" ]; then
+  echo "${TEST_UNAME_M:-x86_64}"
+  exit 0
 fi
 exec /usr/bin/uname "$@"
 EOF
@@ -403,6 +403,64 @@ EOF
   chmod +x "$STUBS/$cmd"
 done
 
+# omarchy-shell is not a pure logger: listPlugins has to report whether
+# klardrop.omarchy is registered, because the installer polls that before
+# `omarchy plugin enable`. OMARCHY_PLUGIN_VISIBLE_AFTER (default 1) is how many
+# listPlugins calls after rescanPlugins include the id. 0 never includes it,
+# so the installer must still enable after its poll budget.
+cat > "$STUBS/omarchy-shell" <<EOF
+#!/usr/bin/env bash
+printf '%s %s\n' "omarchy-shell" "\$*" >> "$ARGV_LOG"
+count_file="$TMP/omarchy-plugin-polls"
+if [ "\${1:-}" = "shell" ] && [ "\${2:-}" = "rescanPlugins" ]; then
+  printf '0\n' > "\$count_file"
+fi
+if [ "\${1:-}" = "shell" ] && [ "\${2:-}" = "listPlugins" ]; then
+  count=0
+  if [ -f "\$count_file" ]; then
+    count="\$(cat "\$count_file")"
+  fi
+  count=\$((count + 1))
+  printf '%s\n' "\$count" > "\$count_file"
+  after="\${OMARCHY_PLUGIN_VISIBLE_AFTER:-1}"
+  if [ "\$after" -gt 0 ] && [ "\$count" -ge "\$after" ]; then
+    printf '%s\n' '[{"id":"klardrop.omarchy"}]'
+  else
+    printf '%s\n' '[{"id":"other.plugin"}]'
+  fi
+fi
+exit 0
+EOF
+chmod +x "$STUBS/omarchy-shell"
+
+# expected_polls: listPlugins invocations strictly between rescanPlugins and
+# `omarchy plugin enable` in this install's argv log.
+assert_plugin_registered_before_enable() {
+  local expected="$1"
+  python3 - "$ARGV_LOG" "$expected" <<'PY' || fail "plugin enable did not wait for listPlugins to report klardrop.omarchy"
+import sys
+log_path, expected = sys.argv[1], int(sys.argv[2])
+lines = open(log_path, encoding="utf-8").read().splitlines()
+rescan = [i for i, line in enumerate(lines) if line == "omarchy-shell shell rescanPlugins"]
+enable = [i for i, line in enumerate(lines) if line == "omarchy plugin enable klardrop.omarchy"]
+if len(rescan) != 1 or len(enable) != 1:
+    raise SystemExit(
+        "expected one rescanPlugins and one plugin enable, "
+        f"saw rescan={len(rescan)} enable={len(enable)}"
+    )
+polls = [
+    i for i, line in enumerate(lines)
+    if line == "omarchy-shell shell listPlugins" and rescan[0] < i < enable[0]
+]
+if len(polls) != expected:
+    raise SystemExit(
+        f"expected {expected} listPlugins poll(s) between rescan and enable, saw {len(polls)}"
+    )
+if not polls or not (rescan[0] < polls[-1] < enable[0]):
+    raise SystemExit("plugin enable ran before listPlugins reported the id")
+PY
+}
+
 # --- Isolated HOME & Runtime -------------------------------------------------
 HOME_DIR="$TMP/home"
 RUN_DIR="$TMP/run"
@@ -526,6 +584,9 @@ fi
 grep -q "^systemctl --user enable --now klardrop.service$" "$ARGV_LOG" || fail "did not enable+start the systemd unit"
 grep -q "^omarchy-shell shell rescanPlugins$" "$ARGV_LOG" || fail "did not rescan plugins before enabling"
 grep -q "^omarchy plugin enable klardrop.omarchy$" "$ARGV_LOG" || fail "did not enable the plugin via the real CLI"
+# Default stub publishes the id on the first poll, so enable must follow that
+# single listPlugins and must not spin the whole 5s budget.
+assert_plugin_registered_before_enable 1
 
 check_valid_jsonc || fail "menu file is not valid JSONC after install"
 grep -q "My personal stuff" "$MENU_FILE" || fail "pre-existing menu comment lost"
@@ -535,6 +596,34 @@ grep -q '"action":"omarchy-shell klardrop.omarchy toggle"' "$MENU_FILE" || fail 
 [ "$(grep -c "BEGIN klardrop.omarchy" "$MENU_FILE")" -eq 1 ] || fail "expected exactly one klardrop block after install"
 
 pass "install (--omarchy)"
+
+# =============================================================================
+# 1b. Plugin enable waits until listPlugins reports klardrop.omarchy
+# =============================================================================
+# Registration lags rescan by two polls. Enabling on the empty polls is the
+# race this wait exists to close; enabling only after the third poll shows the
+# installer actually reads the listing.
+rm -f "$ARGV_LOG"
+export OMARCHY_PLUGIN_VISIBLE_AFTER=3
+run_installer --omarchy >"$TMP/plugin-wait.out" 2>"$TMP/plugin-wait.err" \
+  || fail "install with delayed plugin registration failed: $(cat "$TMP/plugin-wait.err")"
+unset OMARCHY_PLUGIN_VISIBLE_AFTER
+assert_plugin_registered_before_enable 3
+grep -q "Klardrop bar widget enabled." "$TMP/plugin-wait.out" \
+  || fail "delayed registration did not reach a successful plugin enable"
+pass "plugin enable waits until listPlugins reports klardrop.omarchy"
+
+# The shell never registers the id. The installer must still try to enable,
+# and only after the full poll budget (10), not on the first empty listing.
+rm -f "$ARGV_LOG"
+export OMARCHY_PLUGIN_VISIBLE_AFTER=0
+run_installer --omarchy >"$TMP/plugin-timeout.out" 2>"$TMP/plugin-timeout.err" \
+  || fail "install with unregistered plugin failed: $(cat "$TMP/plugin-timeout.err")"
+unset OMARCHY_PLUGIN_VISIBLE_AFTER
+assert_plugin_registered_before_enable 10
+grep -q "^omarchy plugin enable klardrop.omarchy$" "$ARGV_LOG" \
+  || fail "installer gave up on plugin enable when listPlugins never reported the id"
+pass "plugin enable still runs after the registration poll budget"
 
 # =============================================================================
 # 2. Launcher helper (klardrop-omarchy-open)
