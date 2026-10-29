@@ -1,5 +1,5 @@
 [versions]
-agp = "9.4.1"
+agp = "9.5.0"
 # swift-export (which replaces SKIE — see :presentation) supports sealed classes
 # since 2.4.20, covering the last SKIE feature we depended on (`onEnum(of:)` is now
 # `.sealedType()`). swift-export needs direct integration (it does not support
