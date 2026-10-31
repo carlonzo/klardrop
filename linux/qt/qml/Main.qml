@@ -17,6 +17,14 @@ ApplicationWindow {
 
     property var unpairTargetDevice: null
 
+    // Same rules as compose-ui dropOverlayLabel(). Names are rendered as PlainText.
+    function dropLabel(urls, deviceName) {
+        if (!urls || urls.length === 0) return "Send file to " + deviceName
+        if (urls.length > 1) return "Send " + urls.length + " files to " + deviceName
+        var name = decodeURIComponent(urls[0].toString().replace(/\/+$/, "").split("/").pop())
+        return "Send file " + name + " to " + deviceName
+    }
+
     function sendMessage() {
         if (!client.connected || client.sendingText) return
         var draft = messageField.text
@@ -745,7 +753,11 @@ ApplicationWindow {
                 enabled: client.selectedDeviceId.length > 0 && client.connected
                 keys: ["text/uri-list"]
 
-                onEntered: dropOverlay.visible = true
+                property string label: ""
+                onEntered: function(drag) {
+                    label = window.dropLabel(drag.urls, client.selectedDeviceName)
+                    dropOverlay.visible = true
+                }
                 onExited: dropOverlay.visible = false
                 onDropped: function(drop) {
                     dropOverlay.visible = false
@@ -775,7 +787,9 @@ ApplicationWindow {
                         }
 
                         Label {
-                            text: "Drop files to send to " + client.selectedDeviceName
+                            text: chatDropArea.label
+                            elide: Text.ElideMiddle
+                            Layout.maximumWidth: chatDropArea.width - 32
                             textFormat: Text.PlainText
                             font.bold: true
                             font.pixelSize: 18

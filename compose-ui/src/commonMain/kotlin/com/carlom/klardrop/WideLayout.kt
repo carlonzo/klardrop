@@ -471,7 +471,7 @@ private fun SidebarDeviceRow(
             .padding(horizontal = KdTheme.spacing.s2, vertical = 1.dp)
             .dropTargetForSending(
                 onDataDropped = onDropData,
-                onDragStateChange = { dropHovered = it },
+                onDragStateChange = { dropHovered = it != null },
             ),
     )
 }
