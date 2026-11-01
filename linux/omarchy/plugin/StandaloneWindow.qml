@@ -121,6 +121,14 @@ FloatingWindow {
     }
   }
 
+  // Same rules as compose-ui dropOverlayLabel(). Names are rendered as PlainText.
+  function dropLabel(urls, deviceName) {
+    if (!urls || urls.length === 0) return "Send file to " + deviceName
+    if (urls.length > 1) return "Send " + urls.length + " files to " + deviceName
+    var name = decodeURIComponent(urls[0].toString().replace(/\/+$/, "").split("/").pop())
+    return "Send file " + name + " to " + deviceName
+  }
+
   function clearSelection() {
     if (window.selectedDeviceId !== "" && window.service) window.service.setActiveChat("", null)
     window.selectedDeviceId = ""
@@ -905,13 +913,17 @@ FloatingWindow {
             visible: window.selectedDeviceId !== ""
 
             property bool dragHover: false
+            property string dropLabel: ""
 
             DropArea {
               id: chatDropArea
               anchors.fill: parent
               enabled: window.selectedDeviceId !== ""
               keys: ["text/uri-list"]
-              onEntered: chatPane.dragHover = true
+              onEntered: function(drag) {
+                chatPane.dropLabel = window.dropLabel(drag.urls, window.selectedDeviceName)
+                chatPane.dragHover = true
+              }
               onExited: chatPane.dragHover = false
               onDropped: function(drop) {
                 chatPane.dragHover = false
@@ -931,7 +943,10 @@ FloatingWindow {
               Text {
                 anchors.centerIn: parent
                 textFormat: Text.PlainText
-                text: "Drop to send"
+                width: parent.width - Style.spacing.md * 2
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideMiddle
+                text: chatPane.dropLabel
                 color: window.accent
                 font.family: window.fontFamily
                 font.pixelSize: Style.font.title

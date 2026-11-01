@@ -132,8 +132,10 @@ class SentryLinuxSenderTest {
    */
   @Test
   fun logTailAttachmentCarriesMultiLineTailVerbatim() {
-    LogBuffer.append("[Client]: Connection established with 79317778; starting UKEY2 handshake")
-    LogBuffer.append("[KlardropEncryptedTransport]: handshake complete (authenticated=true) — mina’s MacBook")
+    val first = "[Client]: Connection established with 79317778; starting UKEY2 handshake"
+    val second = "[KlardropEncryptedTransport]: handshake complete (authenticated=true) — mina’s MacBook"
+    LogBuffer.append(first)
+    LogBuffer.append(second)
     val dsn = parseDsn("https://key@host.example/42", "1.0")!!
     val parts = envelopeParts(
       buildSentryFeedbackEnvelope(dsn, "x", null, null, "1.0", "id", "user", "omarchy"),
@@ -143,8 +145,11 @@ class SentryLinuxSenderTest {
     val attachmentHeader = Json.parseToJsonElement(parts[5]).jsonObject
     assertEquals("attachment", attachmentHeader["type"]!!.jsonPrimitive.content)
     assertEquals("log_tail.txt", attachmentHeader["filename"]!!.jsonPrimitive.content)
-    assertEquals(CrashReporter.logTailText(), parts[6])
-    assertTrue(parts[6].contains("authenticated=true"))
+    // Not compared to a fresh logTailText(): coroutines leaked by other test classes keep
+    // logging into the shared LogBuffer, so a second snapshot can differ from the first.
+    assertTrue(parts[6].contains(first))
+    assertTrue(parts[6].contains(second))
+    assertTrue(parts[6].contains('\n'))
   }
 
   /**

@@ -11,6 +11,10 @@ import _PhotosUI_SwiftUI
 #if canImport(Photos)
 import Photos
 #endif
+#if os(macOS)
+import AppKit
+import UniformTypeIdentifiers
+#endif
 import presentation
 
 // ---------------------------------------------------------------------------
@@ -48,6 +52,10 @@ struct DeviceChatScreen: View {
     @State private var showChooser = false
     #endif
     @State private var showToast: String? = nil
+    #if os(macOS)
+    /// Overlay text while files hover over the chat; nil when nothing is dragged over it.
+    @State private var dropLabel: String? = nil
+    #endif
 
     private func onAttachTapped() {
         // Mobile/tablet (iOS/iPadOS) open the Gallery/Files/Paste chooser; macOS
@@ -255,6 +263,31 @@ struct DeviceChatScreen: View {
             Task { await handlePhotoItems(items) }
         }
         #endif
+        #if os(macOS)
+        .onDrop(of: [.fileURL], delegate: ChatFileDropDelegate(
+            deviceName: deviceName,
+            label: $dropLabel,
+            onDrop: { sendURLs($0) }
+        ))
+        .overlay {
+            if let dropLabel {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10).fill(kd.bg0.opacity(0.85))
+                    RoundedRectangle(cornerRadius: 10).fill(kd.accent.opacity(0.16))
+                    RoundedRectangle(cornerRadius: 10).strokeBorder(kd.accent, lineWidth: 2)
+                    Text(dropLabel)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(kd.accent)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                        .padding(KdSpacing.s4)
+                }
+                .padding(KdSpacing.s2)
+                .allowsHitTesting(false)
+            }
+        }
+        #endif
         // Toast overlay
         .overlay(alignment: .top) {
             if let toast = showToast {
@@ -274,27 +307,34 @@ struct DeviceChatScreen: View {
     private func handleFileImportResult(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            Task {
-                var platformFiles: [PlatformFile] = []
-                for url in urls {
-                    guard url.startAccessingSecurityScopedResource() else { continue }
-                    defer { url.stopAccessingSecurityScopedResource() }
-                    do {
-                        let tempDir = FileManager.default.temporaryDirectory
-                            .appendingPathComponent(UUID().uuidString)
-                        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-                        let dest = tempDir.appendingPathComponent(url.lastPathComponent)
-                        try FileManager.default.copyItem(at: url, to: dest)
-                        let pf = platformFileFromPath(path: dest.path)
-                        platformFiles.append(pf)
-                    } catch {}
-                }
-                if !platformFiles.isEmpty {
-                    model.sendFiles(platformFiles)
-                }
-            }
+            sendURLs(urls)
         case .failure:
             break
+        }
+    }
+
+    /// Copies picked/dropped files into the temp dir (they may be security-scoped) and sends them.
+    private func sendURLs(_ urls: [URL]) {
+        Task {
+            var platformFiles: [PlatformFile] = []
+            for url in urls {
+                // Dropped Finder URLs are often not security-scoped: this returns false
+                // yet the file is readable, so try the copy either way.
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    let tempDir = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(UUID().uuidString)
+                    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+                    let dest = tempDir.appendingPathComponent(url.lastPathComponent)
+                    try FileManager.default.copyItem(at: url, to: dest)
+                    let pf = platformFileFromPath(path: dest.path)
+                    platformFiles.append(pf)
+                } catch {}
+            }
+            if !platformFiles.isEmpty {
+                model.sendFiles(platformFiles)
+            }
         }
     }
 
@@ -318,6 +358,53 @@ struct DeviceChatScreen: View {
     }
     #endif
 }
+
+#if os(macOS)
+// MARK: - File drop (macOS)
+
+/// Same rules as compose-ui dropOverlayLabel().
+private func dropOverlayLabel(fileNames: [String], count: Int, deviceName: String) -> String {
+    if count > 1 { return "Send \(count) files to \(deviceName)" }
+    if let name = fileNames.first, count == 1 { return "Send file \(name) to \(deviceName)" }
+    return "Send file to \(deviceName)"
+}
+
+private struct ChatFileDropDelegate: DropDelegate {
+    let deviceName: String
+    @Binding var label: String?
+    let onDrop: ([URL]) -> Void
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.fileURL]) }
+
+    func dropEntered(info: DropInfo) {
+        // Item providers can't load URLs before the drop, but the drag pasteboard can be read.
+        let urls = NSPasteboard(name: .drag).readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL] ?? []
+        let count = max(urls.count, info.itemProviders(for: [.fileURL]).count)
+        label = dropOverlayLabel(fileNames: urls.map(\.lastPathComponent), count: count, deviceName: deviceName)
+    }
+
+    func dropExited(info: DropInfo) { label = nil }
+
+    func performDrop(info: DropInfo) -> Bool {
+        label = nil
+        let providers = info.itemProviders(for: [.fileURL])
+        Task { @MainActor in
+            var urls: [URL] = []
+            for provider in providers {
+                let url: URL? = await withCheckedContinuation { cont in
+                    _ = provider.loadObject(ofClass: URL.self) { url, _ in cont.resume(returning: url) }
+                }
+                if let url { urls.append(url) }
+            }
+            if !urls.isEmpty { onDrop(urls) }
+        }
+        return true
+    }
+}
+#endif
 
 // MARK: - IncomingAuthBannerView (private to chat screen)
 

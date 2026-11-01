@@ -2,6 +2,7 @@ package com.carlom.klardrop.chat
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,7 +47,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.carlom.klardrop.DropHover
 import com.carlom.klardrop.OnDataToSend
+import com.carlom.klardrop.dropOverlayLabel
 import com.carlom.klardrop.ReceiveNotification
 import com.carlom.klardrop.common.CommonPlatformDependencies
 import com.carlom.klardrop.common.utils.OsType
@@ -111,7 +114,7 @@ fun DeviceChatScreen(
     val pendingAuth by viewModel.pendingAuth.collectAsState()
     val reachability by viewModel.reachability.collectAsState()
     var textToSend by remember { mutableStateOf("") }
-    var dropHovered by remember { mutableStateOf(false) }
+    var dropHover by remember { mutableStateOf<DropHover?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -179,7 +182,7 @@ fun DeviceChatScreen(
                 is OnDataToSend.Text -> if (data.text.isNotBlank()) viewModel.sendTextMessage(data.text)
             }
         },
-        onDragStateChange = { dropHovered = it },
+        onDragStateChange = { dropHover = it },
     )
 
     val colors = KdTheme.colors
@@ -191,8 +194,8 @@ fun DeviceChatScreen(
     // owns the full window and provides its own bg.
     val chatBackground = if (mode == DeviceChatMode.Pane) Color.Transparent else colors.bg0
 
+    Box(dropModifier) {
     Scaffold(
-        modifier = dropModifier,
         topBar = {
             // In Pane mode the wide layout renders its own ChatHeader above the chat
             // pane (see WideLayout's right-side Column), so a header here would stack
@@ -218,13 +221,11 @@ fun DeviceChatScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = chatBackground,
     ) { paddingValues ->
-        val dropTint = if (dropHovered) colors.accentBg else chatBackground
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = paddingValues.calculateTopPadding())
-                .background(dropTint),
+                .background(chatBackground),
         ) {
             // Incoming accept/reject prompt. In Pane mode the global IncomingBannerStack (rendered
             // by WideLayout above the chat) already shows the card, so only surface it here in the
@@ -320,6 +321,33 @@ fun DeviceChatScreen(
                 )
             }
         }
+    }
+    dropHover?.let { DropOverlay(dropOverlayLabel(it, deviceName)) }
+    }
+}
+
+/** Full-pane hint shown while files hover over the chat. */
+@Composable
+private fun DropOverlay(label: String) {
+    val colors = KdTheme.colors
+    val radii = KdTheme.radii
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(KdTheme.spacing.s2)
+            .clip(radii.shapeMd)
+            .background(colors.bg0.copy(alpha = 0.85f))
+            .background(colors.accentBg)
+            .border(2.dp, colors.accent, radii.shapeMd),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = KdTheme.typography.title.copy(color = colors.accent),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(KdTheme.spacing.s4),
+        )
     }
 }
 
