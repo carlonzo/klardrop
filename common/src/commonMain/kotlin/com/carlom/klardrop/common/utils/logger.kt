@@ -2,7 +2,8 @@ package com.carlom.klardrop.common.utils
 
 import com.klardrop.common.BreadcrumbType
 import com.klardrop.common.CrashReporter
-import kotlin.concurrent.Volatile
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 
 public fun log(message: String) {
   nativeLogger("Klardrop", message)
@@ -44,28 +45,30 @@ internal expect fun nativeLoggerException(tag: String, message: String, throwabl
 
 /**
  * In-process ring of recent [log] lines so the debug control API can dump them
- * without scraping logcat / stdout. Best-effort: concurrent appends may drop a
- * line rather than block the caller.
+ * without scraping logcat / stdout. Lock-free: concurrent appends retry instead
+ * of dropping a line, so crash reports carry every line that was logged.
  */
+@OptIn(ExperimentalAtomicApi::class)
 public object LogBuffer {
   private const val CAPACITY = 2000
 
-  @Volatile
-  private var lines: List<String> = emptyList()
+  private val lines = AtomicReference<List<String>>(emptyList())
 
   public fun append(line: String) {
-    val current = lines
-    val next = if (current.size < CAPACITY) current + line else current.drop(1) + line
-    lines = next
+    while (true) {
+      val current = lines.load()
+      val next = if (current.size < CAPACITY) current + line else current.drop(1) + line
+      if (lines.compareAndSet(current, next)) return
+    }
   }
 
   public fun snapshot(limit: Int = CAPACITY): List<String> {
-    val current = lines
+    val current = lines.load()
     if (limit >= current.size) return current
     return current.takeLast(limit)
   }
 
   public fun clear() {
-    lines = emptyList()
+    lines.store(emptyList())
   }
 }
