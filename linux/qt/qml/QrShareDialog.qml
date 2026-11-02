@@ -8,7 +8,7 @@ Dialog {
     focus: true
     anchors.centerIn: parent
     width: Math.min(parent.width - 32, 380)
-    title: "QR Code File Sharing"
+    title: "QR code file sharing"
     standardButtons: Dialog.NoButton
 
     property var qrResult: client.activeQrShareResult
@@ -164,7 +164,7 @@ Dialog {
             spacing: 8
 
             Button {
-                text: "Stop Sharing"
+                text: "Stop sharing"
                 highlighted: true
                 onClicked: {
                     client.stopQrShare()

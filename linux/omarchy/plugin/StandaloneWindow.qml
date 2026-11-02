@@ -447,7 +447,7 @@ FloatingWindow {
           top: parent.top
           margins: Style.spacing.sm
         }
-        spacing: Style.spacing.xs
+        spacing: Style.spacing.sm
         visible: window.service && (
           window.service.incomingRequests.length > 0
           || window.service.notifications.length > 0
@@ -485,14 +485,15 @@ FloatingWindow {
         }
 
         Repeater {
-          model: window.service ? window.service.notifications : []
+          model: window.service ? Math.min(window.service.notifications.length, window.service.bannerCap) : 0
 
           NotificationRow {
-            required property var modelData
+            required property int index
+            readonly property var modelData: window.service.notifications[index]
             width: parent.width
             deviceId: modelData.deviceId || ""
-            deviceName: modelData.deviceName || ""
-            message: (modelData.deviceName || modelData.deviceId || "A device") + " no longer trusts this device"
+            deviceName: window.service.deviceDisplayName(modelData.deviceId, modelData.deviceName)
+            message: window.service.deviceDisplayName(modelData.deviceId, modelData.deviceName) + " no longer trusts this device"
             foreground: window.foreground
             accent: window.accent
             urgent: window.urgent
@@ -503,10 +504,15 @@ FloatingWindow {
         }
 
         Repeater {
-          model: window.service ? window.service.incomingRequests : []
+          model: {
+            if (!window.service) return 0
+            var cap = window.service.bannerCap - Math.min(window.service.notifications.length, window.service.bannerCap)
+            return Math.max(0, Math.min(window.service.incomingRequests.length, cap))
+          }
 
           IncomingRequestRow {
-            required property var modelData
+            required property int index
+            readonly property var modelData: window.service.incomingRequests[index]
             width: parent.width
             deviceId: modelData.deviceId || ""
             deviceName: modelData.deviceName || ""
@@ -524,6 +530,30 @@ FloatingWindow {
             onRejectRequested: window.service.rejectIncoming(modelData.receiveId, null)
             onOpenRequested: window.service.openIncoming(modelData.receiveId, null)
             onDismissRequested: window.service.dismissIncoming(modelData.receiveId, null)
+          }
+        }
+
+        Row {
+          visible: !!(window.service && window.service.bannerOverflow > 0)
+          width: parent.width
+          spacing: Style.spacing.sm
+
+          Text {
+            width: parent.width - dismissAllBtn.width - Style.spacing.sm
+            text: (window.service ? window.service.bannerOverflow : 0) + " more"
+            color: window.dim
+            font.family: window.fontFamily
+            font.pixelSize: Style.font.caption
+            elide: Text.ElideRight
+            anchors.verticalCenter: parent.verticalCenter
+          }
+
+          Button {
+            id: dismissAllBtn
+            text: "Dismiss all"
+            fontFamily: window.fontFamily
+            fontSize: Style.font.caption
+            onClicked: window.service.dismissAllBanners()
           }
         }
       }
@@ -563,25 +593,68 @@ FloatingWindow {
             Column {
               id: leftColumn
               width: parent.width
-              spacing: Style.spacing.md
+              spacing: Style.spacing.sm
 
-              PanelHero {
+              // Custom hero: PanelHero paints `detail` as a bordered chip beside
+              // the title (which elides the name) and uppercases `meta`. "This
+              // device" is a plain secondary line under the full-width name.
+              Item {
+                id: selfHero
                 width: parent.width
-                title: window.service && window.service.selfDevice ? window.service.selfDevice.deviceName : "Klardrop"
-                meta: window.service && window.service.selfDevice
-                  ? ("This device · ID: " + window.service.selfDevice.deviceId)
-                  : "This device"
-                fontFamily: window.fontFamily
-                foreground: window.foreground
-                iconComponent: Component {
+                implicitHeight: Math.max(selfIcon.implicitHeight, selfLabels.implicitHeight, selfTrailing.implicitHeight)
+                height: implicitHeight
+
+                Text {
+                  id: selfIcon
+                  anchors.left: parent.left
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: window.service
+                    ? window.service.deviceGlyph(window.service.selfDevice ? window.service.selfDevice.deviceType : "")
+                    : "󰒋"
+                  font.family: window.fontFamily
+                  font.pixelSize: Style.font.display
+                  color: window.foreground
+                }
+
+                Column {
+                  id: selfLabels
+                  anchors.left: selfIcon.right
+                  anchors.leftMargin: Style.space(14)
+                  anchors.right: parent.right
+                  anchors.rightMargin: (selfTrailing.item && selfTrailing.item.visible)
+                    ? selfTrailing.width + Style.space(12) : 0
+                  anchors.verticalCenter: parent.verticalCenter
+                  spacing: Style.space(2)
+
                   Text {
-                    text: "󰅟"
-                    font.family: window.fontFamily
-                    font.pixelSize: Style.font.display
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: (window.service && window.service.selfDevice && window.service.selfDevice.deviceName)
+                      ? window.service.selfDevice.deviceName : "Klardrop"
                     color: window.foreground
+                    font.family: window.fontFamily
+                    font.pixelSize: Style.font.title
+                    font.bold: true
+                    elide: Text.ElideRight
+                  }
+
+                  Text {
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    text: "This device"
+                    color: window.dim
+                    font.family: window.fontFamily
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
                   }
                 }
-                trailingControl: discoveryToggleComp
+
+                Loader {
+                  id: selfTrailing
+                  sourceComponent: discoveryToggleComp
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                }
               }
 
               Component {
@@ -780,24 +853,21 @@ FloatingWindow {
                 }
               }
 
-              Column {
+              Row {
                 width: parent.width
-                spacing: Style.spacing.xs
                 visible: !window.reportProblemOpen
 
-                Text {
-                  textFormat: Text.PlainText
-                  text: "Report a problem"
-                  color: window.accent
-                  font.family: window.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.underline: true
+                Item {
+                  width: Math.max(0, parent.width - reportProblemBtn.width)
+                  height: reportProblemBtn.height
+                }
 
-                  MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: window.reportProblemOpen = true
-                  }
+                Button {
+                  id: reportProblemBtn
+                  text: "Report a problem"
+                  fontFamily: window.fontFamily
+                  fontSize: Style.font.caption
+                  onClicked: window.reportProblemOpen = true
                 }
               }
 

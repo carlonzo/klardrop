@@ -222,7 +222,7 @@ Panel {
             // Incoming requests
             Column {
               width: parent.width
-              spacing: Style.spacing.xs
+              spacing: Style.spacing.sm
               visible: service.incomingRequests.length > 0
 
               PanelSectionHeader {
@@ -232,10 +232,11 @@ Panel {
               }
 
               Repeater {
-                model: service.incomingRequests
+                model: Math.min(service.incomingRequests.length, service.bannerCap)
 
                 IncomingRequestRow {
-                  required property var modelData
+                  required property int index
+                  readonly property var modelData: service.incomingRequests[index]
                   width: parent.width
                   deviceId: modelData.deviceId || ""
                   deviceName: modelData.deviceName || ""
@@ -255,12 +256,36 @@ Panel {
                   onDismissRequested: service.dismissIncoming(modelData.receiveId, null)
                 }
               }
+
+              Row {
+                visible: service.incomingRequests.length > service.bannerCap
+                width: parent.width
+                spacing: Style.spacing.sm
+
+                Text {
+                  width: parent.width - panelDismissAll.width - Style.spacing.sm
+                  text: (service.incomingRequests.length - service.bannerCap) + " more"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  elide: Text.ElideRight
+                  anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Button {
+                  id: panelDismissAll
+                  text: "Dismiss all"
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.caption
+                  onClicked: service.dismissAllIncoming()
+                }
+              }
             }
 
             // In-flight file transfers
             Column {
               width: parent.width
-              spacing: Style.spacing.xs
+              spacing: Style.spacing.sm
               visible: service.transfers.length > 0
 
               PanelSectionHeader {

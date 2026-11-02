@@ -17,7 +17,7 @@ BorderSurface {
   // notification ("<device> no longer trusts this device") and a
   // pairing-dialog error (the daemon's own errorMessage) without this file
   // hardcoding either wording.
-  property string message: (root.deviceName || root.deviceId || "A device") + " no longer trusts this device"
+  property string message: (root.deviceName || "A paired device") + " no longer trusts this device"
   // Hides the "Pair again" action for a plain error card that isn't about
   // trust (e.g. "device unreachable" while pairing).
   property bool showPairAction: true
