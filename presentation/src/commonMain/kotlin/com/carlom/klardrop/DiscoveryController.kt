@@ -73,6 +73,9 @@ public class DiscoveryController internal constructor(
   private val connectivityRestrictionMonitor: ConnectivityRestrictionMonitor,
   private val notifier: Notifier,
   private val foregroundState: ForegroundState,
+  /** [com.carlom.klardrop.common.receiver.MessageReceiver.latestUpdates]: retained per-device
+   *  receive state, so a prompt that arrived before this controller existed still badges its row. */
+  latestReceives: StateFlow<Map<String, ReceiveMessageUpdate>>,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
 
   public constructor(commonComponent: CommonComponent) : this(
@@ -93,6 +96,7 @@ public class DiscoveryController internal constructor(
     commonComponent.connectivityRestrictionMonitor(),
     commonComponent.notifier(),
     commonComponent.foregroundState(),
+    commonComponent.messageReceiver().latestUpdates,
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
@@ -104,6 +108,10 @@ public class DiscoveryController internal constructor(
    * Accessed only from [controllerScope] (single-threaded main dispatcher).
    */
   private val pairingErrors = mutableMapOf<String, String>()
+
+  /** Devices with a transfer awaiting the user's accept/reject. Merged into the rows the same way
+   *  as [pairingErrors], for the same reason. Main-dispatcher confined. */
+  private var pendingIncoming = emptySet<String>()
 
   private val showDevicesHelper = ShowDevicesControllerHelper(
     controllerScope,
@@ -207,8 +215,29 @@ public class DiscoveryController internal constructor(
         screenStateFlow.update { state ->
           state.copy(
             devices = it.toList().map { device ->
-              device.copy(pairingError = pairingErrors[device.deviceId])
+              device.copy(
+                pairingError = pairingErrors[device.deviceId],
+                hasPendingIncoming = device.deviceId in pendingIncoming,
+              )
             }
+          )
+        }
+      }
+    }
+
+    // Badge rows whose device is waiting on an accept/reject. Read from the retained receive
+    // state rather than [messenger.receive] (no replay), which a controller created after the
+    // request landed — e.g. Android's Activity recreated under the background service — misses.
+    // Same Text/File rule as the banner, so control frames never badge a row.
+    controllerScope.launch {
+      latestReceives.collect { receives ->
+        pendingIncoming = receives.filterValues { update ->
+          update.status is ReceiveMessageStatus.PendingAuthorization &&
+            update.messages.any { it is TextMessage || it is FileMessage }
+        }.keys
+        screenStateFlow.update { state ->
+          state.copy(
+            devices = state.devices.map { it.copy(hasPendingIncoming = it.deviceId in pendingIncoming) }
           )
         }
       }
@@ -289,6 +318,8 @@ public class DiscoveryController internal constructor(
             // Tapping the body brings the app forward; the persisted
             // pairingDialogState will render automatically. Nothing extra to do.
           }
+          // Resolved by IncomingRequestNotifications in common, which owns that notification.
+          is NotificationAction.TransferDecided -> Unit
         }
       }
     }
@@ -1034,6 +1065,9 @@ public data class DeviceUi(
    * discovery-tick rebuilds of this model); cleared on the next pairing interaction.
    */
   public val pairingError: String? = null,
+  /** This device is waiting for the user to accept or reject a message/file (it got
+   *  ACK_AWAITING_USER). Tapping the row opens the chat, which renders the prompt. */
+  public val hasPendingIncoming: Boolean = false,
 )
 
 public sealed interface TrustStatus {

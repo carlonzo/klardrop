@@ -3,6 +3,7 @@ package com.carlom.klardrop.common
 import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.communication.platformTransferAnchor
 import com.carlom.klardrop.common.di.CommonComponent
+import com.carlom.klardrop.common.notifications.IncomingRequestNotifications
 
 import com.klardrop.common.CrashReporter
 import com.carlom.klardrop.common.utils.installUnhandledExceptionGuard
@@ -88,6 +89,17 @@ public class Klardrop(
       runCatching { commonComponent.messageRepository().markStaleSendingAsFailed() }
         .onFailure { log("Klardrop", "Failed to sweep stale SENDING messages", it) }
     }
+
+    // System notification for transfers awaiting the user's accept/reject. Started before the
+    // server so it is already subscribed when the first request lands, and here rather than in
+    // the UI so it also covers Android's no-Activity background service.
+    val notifier = commonComponent.notifier()
+    IncomingRequestNotifications(
+      receives = commonComponent.messageReceiver().notifier,
+      show = notifier::show,
+      cancel = notifier::cancel,
+      actions = notifier.actions,
+    ).start(appScope)
 
     val discoveryNetwork = commonComponent.discoveryNetwork()
 

@@ -1262,6 +1262,7 @@ object ControlPlane : ControlPlaneService {
               put("trustStatus", device.trustStatus.label())
               put("reachability", device.reachability.label())
               put("hasUnread", device.hasUnreadMessages)
+              put("pendingIncoming", device.hasPendingIncoming)
               put("unreadCount", unreadCountsFlow.value[device.deviceId] ?: 0L)
               putNullable("pairingError", device.pairingError)
               putJsonArray("connectionTypes") {

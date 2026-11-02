@@ -787,7 +787,7 @@ private fun chatHeaderSubText(device: DeviceUi): String = when {
 // Same rule for the sidebar row: nothing under the name when the device is
 // trusted and reachable — the status dot is enough. Untrusted devices keep a
 // hint because they don't show the dot.
-private fun deviceSubLabel(device: DeviceUi): String? = when (device.trustStatus) {
+private fun deviceSubLabel(device: DeviceUi): String? = if (device.hasPendingIncoming) PENDING_INCOMING_LABEL else when (device.trustStatus) {
     TrustStatus.Trusted -> when (device.reachability) {
         Reachability.Reachable, Reachability.Unknown -> null
         Reachability.Unreachable -> "Offline"

@@ -19,7 +19,9 @@ import platform.UserNotifications.UNNotificationActionOptionNone
 import platform.UserNotifications.UNNotificationCategory
 import platform.UserNotifications.UNNotificationCategoryOptionNone
 import platform.UserNotifications.UNNotificationDefaultActionIdentifier
+import platform.UserNotifications.UNNotificationPresentationOptionBanner
 import platform.UserNotifications.UNNotificationPresentationOptionNone
+import platform.UserNotifications.UNNotificationPresentationOptionSound
 import platform.UserNotifications.UNNotificationPresentationOptions
 import platform.UserNotifications.UNNotificationRequest
 import platform.UserNotifications.UNNotificationResponse
@@ -63,6 +65,8 @@ public actual class Notifier {
         UNNotificationDefaultActionIdentifier -> NotificationAction.Opened(notificationId)
         ACTION_PAIRING_ACCEPT -> NotificationAction.PairingAccepted(notificationId, deviceId)
         ACTION_PAIRING_REJECT -> NotificationAction.PairingRejected(notificationId, deviceId)
+        ACTION_TRANSFER_ACCEPT -> NotificationAction.TransferDecided(notificationId, accepted = true)
+        ACTION_TRANSFER_REJECT -> NotificationAction.TransferDecided(notificationId, accepted = false)
         else -> null
       }
       if (mapped != null) {
@@ -77,9 +81,14 @@ public actual class Notifier {
       willPresentNotification: UNNotification,
       withCompletionHandler: (UNNotificationPresentationOptions) -> Unit,
     ) {
-      // We only enqueue notifications when the app is backgrounded, so
-      // there's nothing to present in-app. Suppress in case one races.
-      withCompletionHandler(UNNotificationPresentationOptionNone)
+      // Pairing requests are only enqueued while backgrounded (the in-app dialog covers the
+      // foreground), so suppress one that races. Incoming-transfer requests are posted in the
+      // foreground too, because the in-app prompt is only on the discovery and chat screens.
+      val incoming = willPresentNotification.request.content.categoryIdentifier == CATEGORY_INCOMING
+      withCompletionHandler(
+        if (incoming) UNNotificationPresentationOptionBanner or UNNotificationPresentationOptionSound
+        else UNNotificationPresentationOptionNone
+      )
     }
   }
 
@@ -92,6 +101,7 @@ public actual class Notifier {
   public actual fun show(notification: AppNotification): Unit {
     when (notification) {
       is AppNotification.IncomingPairing -> showIncomingPairing(notification)
+      is AppNotification.IncomingTransfer -> showIncomingTransfer(notification)
     }
   }
 
@@ -100,15 +110,28 @@ public actual class Notifier {
     center.removePendingNotificationRequestsWithIdentifiers(listOf(id))
   }
 
+  private fun showIncomingTransfer(notification: AppNotification.IncomingTransfer) {
+    val what = notification.fileName?.let { "the file \"$it\"" } ?: "a message"
+    submit(notification.id, UNMutableNotificationContent().apply {
+      setTitle("Incoming from ${notification.deviceName}")
+      setBody("This unpaired device wants to send you $what.")
+      setCategoryIdentifier(CATEGORY_INCOMING)
+      setUserInfo(mapOf(KEY_DEVICE_ID to notification.deviceId))
+    })
+  }
+
   private fun showIncomingPairing(notification: AppNotification.IncomingPairing) {
-    val content = UNMutableNotificationContent().apply {
+    submit(notification.id, UNMutableNotificationContent().apply {
       setTitle("Pairing request")
       setBody("${notification.deviceName} wants to pair with this device.")
       setCategoryIdentifier(CATEGORY_PAIRING)
       setUserInfo(mapOf(KEY_DEVICE_ID to notification.deviceId))
-    }
+    })
+  }
+
+  private fun submit(id: String, content: UNMutableNotificationContent) {
     val request = UNNotificationRequest.requestWithIdentifier(
-      identifier = notification.id,
+      identifier = id,
       content = content,
       trigger = null,
     )
@@ -136,7 +159,24 @@ public actual class Notifier {
       intentIdentifiers = emptyList<String>(),
       options = UNNotificationCategoryOptionNone,
     )
-    center.setNotificationCategories(setOf(pairingCategory))
+    val incomingCategory = UNNotificationCategory.categoryWithIdentifier(
+      identifier = CATEGORY_INCOMING,
+      actions = listOf(
+        UNNotificationAction.actionWithIdentifier(
+          identifier = ACTION_TRANSFER_ACCEPT,
+          title = "Accept",
+          options = UNNotificationActionOptionForeground,
+        ),
+        UNNotificationAction.actionWithIdentifier(
+          identifier = ACTION_TRANSFER_REJECT,
+          title = "Reject",
+          options = UNNotificationActionOptionDestructive,
+        ),
+      ),
+      intentIdentifiers = emptyList<String>(),
+      options = UNNotificationCategoryOptionNone,
+    )
+    center.setNotificationCategories(setOf(pairingCategory, incomingCategory))
   }
 
   private fun requestAuthorizationIfNeeded() {
@@ -154,6 +194,9 @@ public actual class Notifier {
     const val CATEGORY_PAIRING = "klardrop.pairing"
     const val ACTION_PAIRING_ACCEPT = "klardrop.pairing.accept"
     const val ACTION_PAIRING_REJECT = "klardrop.pairing.reject"
+    const val CATEGORY_INCOMING = "klardrop.incoming"
+    const val ACTION_TRANSFER_ACCEPT = "klardrop.incoming.accept"
+    const val ACTION_TRANSFER_REJECT = "klardrop.incoming.reject"
     const val KEY_DEVICE_ID = "deviceId"
   }
 }

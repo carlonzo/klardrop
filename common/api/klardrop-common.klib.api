@@ -623,6 +623,28 @@ sealed interface com.carlom.klardrop.common.notifications/AppNotification { // c
         final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.notifications/AppNotification.IncomingPairing.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.carlom.klardrop.common.notifications/AppNotification.IncomingPairing.toString|toString(){}[0]
     }
+
+    final class IncomingTransfer : com.carlom.klardrop.common.notifications/AppNotification { // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer|null[0]
+        constructor <init>(kotlin/String, kotlin/String, kotlin/String, kotlin/String?) // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.<init>|<init>(kotlin.String;kotlin.String;kotlin.String;kotlin.String?){}[0]
+
+        final val deviceId // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.deviceId|{}deviceId[0]
+            final fun <get-deviceId>(): kotlin/String // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.deviceId.<get-deviceId>|<get-deviceId>(){}[0]
+        final val deviceName // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.deviceName|{}deviceName[0]
+            final fun <get-deviceName>(): kotlin/String // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.deviceName.<get-deviceName>|<get-deviceName>(){}[0]
+        final val fileName // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.fileName|{}fileName[0]
+            final fun <get-fileName>(): kotlin/String? // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.fileName.<get-fileName>|<get-fileName>(){}[0]
+        final val id // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.id|{}id[0]
+            final fun <get-id>(): kotlin/String // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.id.<get-id>|<get-id>(){}[0]
+
+        final fun component1(): kotlin/String // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.component1|component1(){}[0]
+        final fun component2(): kotlin/String // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.component2|component2(){}[0]
+        final fun component3(): kotlin/String // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.component3|component3(){}[0]
+        final fun component4(): kotlin/String? // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.component4|component4(){}[0]
+        final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin/String = ..., kotlin/String? = ...): com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.copy|copy(kotlin.String;kotlin.String;kotlin.String;kotlin.String?){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop.common.notifications/AppNotification.IncomingTransfer.toString|toString(){}[0]
+    }
 }
 
 sealed interface com.carlom.klardrop.common.notifications/NotificationAction { // com.carlom.klardrop.common.notifications/NotificationAction|null[0]
@@ -672,6 +694,22 @@ sealed interface com.carlom.klardrop.common.notifications/NotificationAction { /
         final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.notifications/NotificationAction.PairingRejected.equals|equals(kotlin.Any?){}[0]
         final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.notifications/NotificationAction.PairingRejected.hashCode|hashCode(){}[0]
         final fun toString(): kotlin/String // com.carlom.klardrop.common.notifications/NotificationAction.PairingRejected.toString|toString(){}[0]
+    }
+
+    final class TransferDecided : com.carlom.klardrop.common.notifications/NotificationAction { // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided|null[0]
+        constructor <init>(kotlin/String, kotlin/Boolean) // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.<init>|<init>(kotlin.String;kotlin.Boolean){}[0]
+
+        final val accepted // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.accepted|{}accepted[0]
+            final fun <get-accepted>(): kotlin/Boolean // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.accepted.<get-accepted>|<get-accepted>(){}[0]
+        final val notificationId // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.notificationId|{}notificationId[0]
+            final fun <get-notificationId>(): kotlin/String // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.notificationId.<get-notificationId>|<get-notificationId>(){}[0]
+
+        final fun component1(): kotlin/String // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.component1|component1(){}[0]
+        final fun component2(): kotlin/Boolean // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.component2|component2(){}[0]
+        final fun copy(kotlin/String = ..., kotlin/Boolean = ...): com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.copy|copy(kotlin.String;kotlin.Boolean){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop.common.notifications/NotificationAction.TransferDecided.toString|toString(){}[0]
     }
 }
 

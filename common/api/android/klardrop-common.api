@@ -804,6 +804,23 @@ public final class com/carlom/klardrop/common/notifications/AppNotification$Inco
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class com/carlom/klardrop/common/notifications/AppNotification$IncomingTransfer : com/carlom/klardrop/common/notifications/AppNotification {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/carlom/klardrop/common/notifications/AppNotification$IncomingTransfer;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/notifications/AppNotification$IncomingTransfer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/notifications/AppNotification$IncomingTransfer;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceId ()Ljava/lang/String;
+	public final fun getDeviceName ()Ljava/lang/String;
+	public final fun getFileName ()Ljava/lang/String;
+	public fun getId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class com/carlom/klardrop/common/notifications/ForegroundState {
 	public fun <init> (Landroid/content/Context;)V
 	public final fun isForeground ()Lkotlinx/coroutines/flow/StateFlow;
@@ -845,6 +862,19 @@ public final class com/carlom/klardrop/common/notifications/NotificationAction$P
 	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/notifications/NotificationAction$PairingRejected;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/notifications/NotificationAction$PairingRejected;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDeviceId ()Ljava/lang/String;
+	public fun getNotificationId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/notifications/NotificationAction$TransferDecided : com/carlom/klardrop/common/notifications/NotificationAction {
+	public fun <init> (Ljava/lang/String;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/lang/String;Z)Lcom/carlom/klardrop/common/notifications/NotificationAction$TransferDecided;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/notifications/NotificationAction$TransferDecided;Ljava/lang/String;ZILjava/lang/Object;)Lcom/carlom/klardrop/common/notifications/NotificationAction$TransferDecided;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAccepted ()Z
 	public fun getNotificationId ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;

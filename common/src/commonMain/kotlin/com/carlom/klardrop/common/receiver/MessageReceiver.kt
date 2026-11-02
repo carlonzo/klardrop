@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.DeviceType
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -64,8 +65,10 @@ internal class MessageReceiverImpl(
     // chat screen) can read the CURRENT receive state for a device at any time — [notifier]
     // is replay-less and is missed by a screen opened after the prompt fired. Each produced
     // flow is followed until its transfer finishes, after which the collector ends (bounding
-    // collector growth); the device's last update is retained in the map.
-    receiverScope.launch {
+    // collector growth); the device's last update is retained in the map. UNDISPATCHED so the
+    // subscription exists before the constructor returns: [_notifier] has no replay, and a
+    // dispatched launch could lose the very first receive (often the pending prompt) to the race.
+    receiverScope.launch(start = CoroutineStart.UNDISPATCHED) {
       _notifier.collect { (deviceId, flow) ->
         launch {
           flow.transformWhile { update ->
