@@ -290,18 +290,26 @@ struct KlardropNav: View {
                 .buttonStyle(.plain)
 
                 AppMenuButton(
-                    #if os(macOS)
-                    onOpenSettings: {
-                        NSApp.activate(ignoringOtherApps: true)
-                        openSettings()
-                    },
-                    #endif
+                    onOpenSettings: openSettingsAction,
                     onReportProblem: { showReportProblem = true }
                 )
                     .padding(.trailing, KdSpacing.s2)
             }
         }
         .scrollContentBackground(.hidden)
+    }
+
+    /// Settings only exists as a window on macOS; nil hides the menu item elsewhere.
+    /// (`#if` can't wrap a single call argument, so it lives here.)
+    private var openSettingsAction: (() -> Void)? {
+        #if os(macOS)
+        return {
+            NSApp.activate(ignoringOtherApps: true)
+            openSettings()
+        }
+        #else
+        return nil
+        #endif
     }
 
     // MARK: - Add-device prompt row (empty "My devices")
