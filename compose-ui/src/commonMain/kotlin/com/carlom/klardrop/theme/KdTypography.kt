@@ -1,5 +1,13 @@
+// ai-design-check-ignore-file type-scale radius-scale -- this file defines the design tokens (Apple-aligned 11/13/15/17/20/28 type, 6/10/14/18 radii); screens use the tokens
 package com.carlom.klardrop.theme
 
+import androidx.compose.runtime.Composable
+import com.klardrop.resources.Res
+import com.klardrop.resources.manrope_400
+import com.klardrop.resources.manrope_500
+import com.klardrop.resources.manrope_600
+import com.klardrop.resources.manrope_700
+import org.jetbrains.compose.resources.Font
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -9,7 +17,7 @@ import androidx.compose.ui.unit.sp
 // ---------------------------------------------------------------------------
 // KdTypography — type roles matching spec/tokens.css
 //
-// Manrope → FontFamily.SansSerif  (system UI sans — no bundled font)
+// Manrope → bundled static weights (composeResources/font, OFL), see kdSansFamily()
 // JetBrains Mono → FontFamily.Monospace  (system mono — no bundled font)
 // ---------------------------------------------------------------------------
 
@@ -30,41 +38,41 @@ data class KdTypography(
     val mono: TextStyle,
 )
 
-val KdDefaultTypography = KdTypography(
+fun kdTypography(sans: FontFamily) = KdTypography(
     display = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = sans,
         fontWeight = FontWeight.Bold,
         fontSize = 28.sp,
         lineHeight = 32.sp,
         letterSpacing = (-0.02).em,
     ),
     title = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = sans,
         fontWeight = FontWeight.Bold,
         fontSize = 20.sp,
         lineHeight = 26.sp,
         letterSpacing = (-0.01).em,
     ),
     headline = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = sans,
         fontWeight = FontWeight(600),
         fontSize = 17.sp,
         lineHeight = 22.sp,
     ),
     body = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = sans,
         fontWeight = FontWeight(500),
         fontSize = 15.sp,
         lineHeight = 21.sp,
     ),
     caption = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = sans,
         fontWeight = FontWeight(500),
         fontSize = 13.sp,
         lineHeight = 17.sp,
     ),
     overline = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = sans,
         fontWeight = FontWeight(600),
         fontSize = 11.sp,
         lineHeight = 14.sp,
@@ -76,4 +84,13 @@ val KdDefaultTypography = KdTypography(
         fontSize = 12.sp,
         lineHeight = 16.sp,
     ),
+)
+
+/** Manrope, the spec's UI face. Static instances: variable fonts need Android API 26+. */
+@Composable
+fun kdSansFamily(): FontFamily = FontFamily(
+    Font(Res.font.manrope_400, FontWeight.Normal),
+    Font(Res.font.manrope_500, FontWeight.Medium),
+    Font(Res.font.manrope_600, FontWeight.SemiBold),
+    Font(Res.font.manrope_700, FontWeight.Bold),
 )

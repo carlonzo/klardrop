@@ -1,3 +1,4 @@
+// ai-design-check-ignore-file type-scale radius-scale -- this file defines the design tokens (Apple-aligned 11/13/15/17/20/28 type, 6/10/14/18 radii); screens use the tokens
 package com.carlom.klardrop.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape

@@ -1,3 +1,4 @@
+// ai-design-check-ignore-file type-scale radius-scale -- this file defines the design tokens (Apple-aligned 11/13/15/17/20/28 type, 6/10/14/18 radii); screens use the tokens
 package com.carlom.klardrop.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -65,14 +66,17 @@ fun AppTheme(
         )
     }
 
-    // Bridge KD type roles to Material3 type scale
+    // Bridge KD type roles to Material3 type scale (Manrope, so Material
+    // components such as buttons and menus match the KD screens)
+    val sans = kdSansFamily()
     val typography = Typography(
-        displayLarge  = TextStyle(fontWeight = FontWeight.Bold, fontSize = 28.sp, lineHeight = 32.sp),
-        titleLarge    = TextStyle(fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 26.sp),
-        titleMedium   = TextStyle(fontWeight = FontWeight(600), fontSize = 17.sp, lineHeight = 22.sp),
-        bodyLarge     = TextStyle(fontWeight = FontWeight(500), fontSize = 15.sp, lineHeight = 21.sp),
-        bodyMedium    = TextStyle(fontWeight = FontWeight(500), fontSize = 13.sp, lineHeight = 17.sp),
-        labelSmall    = TextStyle(fontWeight = FontWeight(600), fontSize = 11.sp, lineHeight = 14.sp),
+        displayLarge  = TextStyle(fontFamily = sans, fontWeight = FontWeight.Bold, fontSize = 28.sp, lineHeight = 32.sp),
+        titleLarge    = TextStyle(fontFamily = sans, fontWeight = FontWeight.Bold, fontSize = 20.sp, lineHeight = 26.sp),
+        titleMedium   = TextStyle(fontFamily = sans, fontWeight = FontWeight(600), fontSize = 17.sp, lineHeight = 22.sp),
+        bodyLarge     = TextStyle(fontFamily = sans, fontWeight = FontWeight(500), fontSize = 15.sp, lineHeight = 21.sp),
+        bodyMedium    = TextStyle(fontFamily = sans, fontWeight = FontWeight(500), fontSize = 13.sp, lineHeight = 17.sp),
+        labelLarge    = TextStyle(fontFamily = sans, fontWeight = FontWeight(600), fontSize = 15.sp, lineHeight = 21.sp),
+        labelSmall    = TextStyle(fontFamily = sans, fontWeight = FontWeight(600), fontSize = 11.sp, lineHeight = 14.sp),
     )
 
     // Bridge KD radii to Material3 shapes
