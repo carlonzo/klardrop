@@ -592,6 +592,9 @@ check_valid_jsonc || fail "menu file is not valid JSONC after install"
 grep -q "My personal stuff" "$MENU_FILE" || fail "pre-existing menu comment lost"
 grep -q '"personal.notes"' "$MENU_FILE" || fail "pre-existing menu entry lost"
 grep -q "trigger.share.klardrop-file" "$MENU_FILE" || fail "trigger.share.klardrop-file missing"
+# Nerd Font glyphs must land as single UTF-8 code points, not double-encoded mojibake (perl -CSD bug).
+grep -qF '"trigger.share.klardrop-file": {"icon":""' "$MENU_FILE" || fail "klardrop-file icon glyph is mangled"
+grep -qF '"trigger.share.klardrop": {"icon":"󰅟"' "$MENU_FILE" || fail "klardrop panel icon glyph is mangled"
 grep -q '"action":"omarchy-shell klardrop.omarchy toggle"' "$MENU_FILE" || fail "trigger.share.klardrop does not call the panel toggle IPC"
 [ "$(grep -c "BEGIN klardrop.omarchy" "$MENU_FILE")" -eq 1 ] || fail "expected exactly one klardrop block after install"
 
