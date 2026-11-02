@@ -30,7 +30,9 @@ import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandler
 import com.carlom.klardrop.common.network.NetworkLifecycleMonitor
+import com.carlom.klardrop.common.persistence.KnownEndpointsRepository
 import com.carlom.klardrop.common.persistence.MessageRepository
+import com.carlom.klardrop.common.discovery.TailnetDiscovery
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.receiver.MessageReceiverImpl
 import com.carlom.klardrop.common.trust.ClipboardSyncManager
@@ -74,6 +76,11 @@ internal class CommunicationModule(
    * and Nearby inbound for Nearby ones) alike.
    */
   private val transferAnchor: TransferAnchor = TransferAnchor.None,
+  /** Where peers listen, for tailnet discovery. Null disables both recording and discovery. */
+  private val knownEndpoints: KnownEndpointsRepository? = null,
+  /** The port every Klardrop install tries first, probed on tailnet peers we haven't met yet. */
+  private val defaultListenPort: Int = 0,
+  private val foreground: StateFlow<Boolean>? = null,
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -155,6 +162,7 @@ internal class CommunicationModule(
       heartbeatConfig,
       bleTransport,
       serverPort,
+      knownEndpoints,
     )
   }
 
@@ -222,7 +230,25 @@ internal class CommunicationModule(
       ackTimeoutConfig,
       heartbeatConfig,
       serverPort,
+      knownEndpoints,
     )
+  }
+
+  private val tailnetDiscovery by lazy {
+    knownEndpoints?.let {
+      TailnetDiscovery(
+        coroutines = coroutines,
+        visibleDevices = visibleDevices,
+        connectionsPool = connectionsPool,
+        currentDeviceProvider = currentDeviceProvider,
+        knownEndpoints = it,
+        defaultPort = defaultListenPort,
+        probe = client::probeHandshake,
+        isTrusted = trustManager::isTrusted,
+        nowMs = clock::currentTimeMillis,
+        foreground = foreground,
+      )
+    }
   }
 
   private val messenger: Messenger by lazy {
@@ -258,6 +284,7 @@ internal class CommunicationModule(
   fun bleServerListener() = bleServerListener
   fun bleEagerConnector() = bleEagerConnector
   fun eagerReachabilityConnector() = eagerReachabilityConnector
+  fun tailnetDiscovery() = tailnetDiscovery
   fun messenger() = messenger
   fun messageReceiver() = messageReceiver
   fun trustManager() = trustManager

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import platform.Foundation.NSNotification
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
+import platform.Foundation.NSThread
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationDidBecomeActiveNotification
 import platform.UIKit.UIApplicationWillResignActiveNotification
@@ -18,7 +19,9 @@ public actual class ForegroundState {
   public actual val isForeground: StateFlow<Boolean> = flow.asStateFlow()
 
   init {
-    flow.value = UIApplication.sharedApplication.applicationState.value == 0L
+    // applicationState is main-thread-only, and this can be built lazily from an IO coroutine.
+    val readState = { flow.value = UIApplication.sharedApplication.applicationState.value == 0L }
+    if (NSThread.isMainThread) readState() else NSOperationQueue.mainQueue.addOperationWithBlock(readState)
 
     val center = NSNotificationCenter.defaultCenter
     val queue = NSOperationQueue.mainQueue

@@ -1111,7 +1111,7 @@ final class com.carlom.klardrop.common.communication.message/TextMessage : com.c
 
 final class com.carlom.klardrop.common.communication/Server { // com.carlom.klardrop.common.communication/Server|null[0]
     final fun stopServer() // com.carlom.klardrop.common.communication/Server.stopServer|stopServer(){}[0]
-    final suspend fun startServer(): com.carlom.klardrop.common.communication/Server.ServerConfig // com.carlom.klardrop.common.communication/Server.startServer|startServer(){}[0]
+    final suspend fun startServer(kotlin.collections/List<kotlin/Int> = ...): com.carlom.klardrop.common.communication/Server.ServerConfig // com.carlom.klardrop.common.communication/Server.startServer|startServer(kotlin.collections.List<kotlin.Int>){}[0]
 
     final class ServerConfig { // com.carlom.klardrop.common.communication/Server.ServerConfig|null[0]
         constructor <init>(kotlin/String, kotlin/Int) // com.carlom.klardrop.common.communication/Server.ServerConfig.<init>|<init>(kotlin.String;kotlin.Int){}[0]
@@ -1961,7 +1961,7 @@ final class com.carlom.klardrop.common.utils/ResolvedFileData { // com.carlom.kl
 }
 
 final class com.carlom.klardrop.common/ApplicationInfo { // com.carlom.klardrop.common/ApplicationInfo|null[0]
-    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int? = ..., kotlin/String = ...) // com.carlom.klardrop.common/ApplicationInfo.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int?;kotlin.String){}[0]
+    constructor <init>(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int? = ..., kotlin/Int = ..., kotlin/String = ...) // com.carlom.klardrop.common/ApplicationInfo.<init>|<init>(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int?;kotlin.Int;kotlin.String){}[0]
 
     final val appVersion // com.carlom.klardrop.common/ApplicationInfo.appVersion|{}appVersion[0]
         final fun <get-appVersion>(): kotlin/String // com.carlom.klardrop.common/ApplicationInfo.appVersion.<get-appVersion>|<get-appVersion>(){}[0]
@@ -1979,6 +1979,8 @@ final class com.carlom.klardrop.common/ApplicationInfo { // com.carlom.klardrop.
         final fun <get-enableNearbyServer>(): kotlin/Boolean // com.carlom.klardrop.common/ApplicationInfo.enableNearbyServer.<get-enableNearbyServer>|<get-enableNearbyServer>(){}[0]
     final val isDebug // com.carlom.klardrop.common/ApplicationInfo.isDebug|{}isDebug[0]
         final fun <get-isDebug>(): kotlin/Boolean // com.carlom.klardrop.common/ApplicationInfo.isDebug.<get-isDebug>|<get-isDebug>(){}[0]
+    final val listenPort // com.carlom.klardrop.common/ApplicationInfo.listenPort|{}listenPort[0]
+        final fun <get-listenPort>(): kotlin/Int // com.carlom.klardrop.common/ApplicationInfo.listenPort.<get-listenPort>|<get-listenPort>(){}[0]
 
     final fun component1(): kotlin/Boolean // com.carlom.klardrop.common/ApplicationInfo.component1|component1(){}[0]
     final fun component2(): kotlin/Boolean // com.carlom.klardrop.common/ApplicationInfo.component2|component2(){}[0]
@@ -1987,8 +1989,9 @@ final class com.carlom.klardrop.common/ApplicationInfo { // com.carlom.klardrop.
     final fun component5(): kotlin/Boolean // com.carlom.klardrop.common/ApplicationInfo.component5|component5(){}[0]
     final fun component6(): kotlin/Boolean // com.carlom.klardrop.common/ApplicationInfo.component6|component6(){}[0]
     final fun component7(): kotlin/Int? // com.carlom.klardrop.common/ApplicationInfo.component7|component7(){}[0]
-    final fun component8(): kotlin/String // com.carlom.klardrop.common/ApplicationInfo.component8|component8(){}[0]
-    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int? = ..., kotlin/String = ...): com.carlom.klardrop.common/ApplicationInfo // com.carlom.klardrop.common/ApplicationInfo.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int?;kotlin.String){}[0]
+    final fun component8(): kotlin/Int // com.carlom.klardrop.common/ApplicationInfo.component8|component8(){}[0]
+    final fun component9(): kotlin/String // com.carlom.klardrop.common/ApplicationInfo.component9|component9(){}[0]
+    final fun copy(kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Boolean = ..., kotlin/Int? = ..., kotlin/Int = ..., kotlin/String = ...): com.carlom.klardrop.common/ApplicationInfo // com.carlom.klardrop.common/ApplicationInfo.copy|copy(kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Boolean;kotlin.Int?;kotlin.Int;kotlin.String){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common/ApplicationInfo.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.carlom.klardrop.common/ApplicationInfo.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.carlom.klardrop.common/ApplicationInfo.toString|toString(){}[0]
@@ -2088,6 +2091,9 @@ final object com.klardrop.common/CrashReporter { // com.klardrop.common/CrashRep
     final fun notify(kotlin/Throwable, kotlin/Boolean = ...) // com.klardrop.common/CrashReporter.notify|notify(kotlin.Throwable;kotlin.Boolean){}[0]
     final fun reportUserFeedback(kotlin/String, kotlin/String? = ..., kotlin/String? = ...): com.klardrop.common/ReportOutcome // com.klardrop.common/CrashReporter.reportUserFeedback|reportUserFeedback(kotlin.String;kotlin.String?;kotlin.String?){}[0]
 }
+
+final const val com.carlom.klardrop.common/DEFAULT_LISTEN_PORT // com.carlom.klardrop.common/DEFAULT_LISTEN_PORT|{}DEFAULT_LISTEN_PORT[0]
+    final fun <get-DEFAULT_LISTEN_PORT>(): kotlin/Int // com.carlom.klardrop.common/DEFAULT_LISTEN_PORT.<get-DEFAULT_LISTEN_PORT>|<get-DEFAULT_LISTEN_PORT>(){}[0]
 
 final fun (com.carlom.klardrop.common.communication.message/FileMessage).com.carlom.klardrop.common.communication.message/toSendRequest(io.github.vinceglb.filekit/PlatformFile): com.carlom.klardrop.common.communication.message/FileMessage.FileSendRequest // com.carlom.klardrop.common.communication.message/toSendRequest|toSendRequest@com.carlom.klardrop.common.communication.message.FileMessage(io.github.vinceglb.filekit.PlatformFile){}[0]
 final fun (com.carlom.klardrop.common.communication.message/Message).com.carlom.klardrop.common.communication.message/toSimpleSendRequest(): com.carlom.klardrop.common.communication.message/SendMessageRequest // com.carlom.klardrop.common.communication.message/toSimpleSendRequest|toSimpleSendRequest@com.carlom.klardrop.common.communication.message.Message(){}[0]

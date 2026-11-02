@@ -40,6 +40,25 @@ picks the best transport per connection.
 | **Klardrop TCP** (mDNS `_klardrop._tcp.`) | jmDNS / NSD | Both peers on the same Wi-Fi LAN | Fast |
 | **Nearby Share TCP** (mDNS `_FC9F5ED42C8A._tcp.`) | jmDNS / NSD | Cross-app interop (e.g., Google Quick Share) | Fast |
 | **Bluetooth Low Energy (BLE)** | Service-UUID scan | Wi-Fi unreachable; falls back to BLE GATT | Slow (≤ ~244-byte chunks) |
+| **Klardrop TCP over Tailscale** | Unicast probe of tailnet peers (`TailnetDiscovery`) | Peers on the same tailnet but not the same LAN | Fast |
+
+### Tailscale
+
+The tailnet carries no multicast, so mDNS never sees peers there. Instead:
+
+- **Port.** The server binds `47470` (`DEFAULT_LISTEN_PORT`) first. If another process holds it, the
+  server uses this device's remembered fallback port, or a fresh one that becomes the fallback.
+  The bound port is sent as `listenPort` in every handshake.
+- **Known endpoints.** Every handshake also carries the sender's tailnet IPv4s (`tailnetAddresses`).
+  After an authenticated (UKEY2) connection, both sides store the peer's port and tailnet
+  addresses (`KnownEndpointsRepository`, kept for 30 days).
+- **Probing.** While this device has a 100.64.0.0/10 address of its own, `TailnetDiscovery` runs a
+  sweep at start, on every return to the foreground, and every minute (every 5 minutes in
+  background mode). Desktop and Linux add the online peers of the same Tailscale user from
+  `tailscale status --json`. Mobile and the sandboxed macOS app can't list tailnet peers, so they
+  probe remembered addresses only. A probe is a cleartext greeting exchange that is closed before
+  UKEY2. A peer that answers is added to the visible devices, and the eager reachability
+  connector makes the real encrypted connection.
 
 ### Bluetooth as a fallback medium
 

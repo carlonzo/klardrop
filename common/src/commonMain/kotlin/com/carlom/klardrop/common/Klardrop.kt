@@ -95,7 +95,7 @@ public class Klardrop(
     if (applicationInfo.enableKlardropServer || applicationInfo.enableNearbyServer) {
       appScope.launch(commonComponent.coroutines().ioDispatcher) {
 
-        val serverConfig = commonComponent.server().startServer()
+        val serverConfig = startServerOnPreferredPort()
         val serverPort = serverConfig.port
         // The live port, which a future server restart moves — the watchdog below must read
         // this rather than the startup value it published from, or it can never see drift.
@@ -173,6 +173,23 @@ public class Klardrop(
     }
   }
 
+  /**
+   * Binds [ApplicationInfo.listenPort], else this device's remembered fallback, else a fresh
+   * port that becomes the new fallback — so the port stays stable across restarts either way.
+   */
+  private suspend fun startServerOnPreferredPort(): com.carlom.klardrop.common.communication.Server.ServerConfig {
+    val defaultPort = applicationInfo.listenPort
+    if (defaultPort <= 0) return commonComponent.server().startServer()
+    val endpoints = commonComponent.knownEndpointsRepository()
+    val fallbackPort = runCatching { endpoints.fallbackListenPort() }.getOrDefault(0)
+    val config = commonComponent.server().startServer(listOf(defaultPort, fallbackPort))
+    if (config.port != defaultPort && config.port != fallbackPort) {
+      log("Klardrop", "Default port $defaultPort is taken; remembering ${config.port} as the fallback")
+      runCatching { endpoints.saveFallbackListenPort(config.port) }
+    }
+    return config
+  }
+
   // Browse only the transports this process is willing to use. Called again on every
   // BACKGROUND <-> FOREGROUND switch: a running mDNS browse is left alone, BLE and the re-probe
   // restart at the new cadence.
@@ -197,6 +214,11 @@ public class Klardrop(
     // implies "reachable" — without this the user only finds out at send time
     // that the cached mDNS address is dead.
     commonComponent.eagerReachabilityConnector()?.start(lowPower)
+
+    // mDNS doesn't cross Tailscale; probe remembered and online tailnet peers directly.
+    if (applicationInfo.enableKlardropServer) {
+      commonComponent.tailnetDiscovery()?.start(lowPower)
+    }
   }
 
   private fun stopDiscovery(discoveryNetwork: DiscoveryNetwork) {
@@ -204,6 +226,7 @@ public class Klardrop(
     discoveryNetwork.stopBrowsing()
     discoveryNetwork.stopPublishBle()
     commonComponent.eagerReachabilityConnector()?.stop()
+    commonComponent.tailnetDiscovery()?.stop()
   }
 
   public fun visibleDevices(): com.carlom.klardrop.common.discovery.VisibleDevices = commonComponent.visibleDevices()

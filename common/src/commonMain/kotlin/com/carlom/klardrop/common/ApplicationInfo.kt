@@ -26,5 +26,16 @@ public data class ApplicationInfo(
    */
   public val controlPort: Int? = null,
 
+  /**
+   * TCP port the Klardrop server tries first. Being the same on every install lets a peer that
+   * knows only our tailnet address find us. When another process holds it, the server moves to a
+   * remembered fallback port (or a fresh one) and peers learn it from the handshake. 0 = always
+   * an ephemeral port.
+   */
+  public val listenPort: Int = DEFAULT_LISTEN_PORT,
+
   public val appVersion: String = KlardropVersion.VERSION
 )
+
+/** See [ApplicationInfo.listenPort]. Unassigned by IANA. */
+public const val DEFAULT_LISTEN_PORT: Int = 47470
