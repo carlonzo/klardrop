@@ -49,10 +49,10 @@ struct ShareSheetView: View {
 
             Spacer().frame(height: KdSpacing.s4)
 
-            // "Your Devices" horizontal scroll
+            // "Your devices" horizontal scroll
             if !trustedDevices.isEmpty || onShareViaQr != nil {
                 if !trustedDevices.isEmpty {
-                    SectionHeadView(label: "Your Devices", count: trustedDevices.count) { EmptyView() }
+                    SectionHeadView(label: "Your devices", count: trustedDevices.count) { EmptyView() }
                         .padding(.horizontal, KdSpacing.s4)
                 }
 

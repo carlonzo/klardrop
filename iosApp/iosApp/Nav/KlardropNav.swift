@@ -30,6 +30,9 @@ struct KlardropNav: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     @Environment(\.kdColors) private var kd
+    #if os(macOS)
+    @Environment(\.openSettings) private var openSettings
+    #endif
 
     /// Drives the rename sheet presented from the iPad sidebar footer button.
     @State private var showRenameSheet = false
@@ -268,10 +271,11 @@ struct KlardropNav: View {
                     showRenameSheet = true
                 } label: {
                     HStack(spacing: KdSpacing.s3) {
-                        DeviceAvatarView(kind: .mac, style: .tinted, status: .ok, size: 40)
+                        DeviceAvatarView(kind: currentDeviceKind, style: .tinted, status: .ok, size: 40)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(localName.isEmpty ? "This device" : localName)
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
                                 .foregroundColor(kd.text)
                                 .lineLimit(1)
                         }
@@ -285,7 +289,15 @@ struct KlardropNav: View {
                 }
                 .buttonStyle(.plain)
 
-                AppMenuButton(onReportProblem: { showReportProblem = true })
+                AppMenuButton(
+                    #if os(macOS)
+                    onOpenSettings: {
+                        NSApp.activate(ignoringOtherApps: true)
+                        openSettings()
+                    },
+                    #endif
+                    onReportProblem: { showReportProblem = true }
+                )
                     .padding(.trailing, KdSpacing.s2)
             }
         }
@@ -363,10 +375,18 @@ struct KlardropNav: View {
         return isTrusted(device)
     }
 
-    /// Avatar kind for the chat header — the discovered device's kind, or a generic
-    /// phone if it's no longer in the list (better than the "unknown" placeholder).
+    private var currentDeviceKind: KdDeviceKind {
+        #if os(macOS)
+        return .mac
+        #elseif os(iOS)
+        return UIDevice.current.userInterfaceIdiom == .pad ? .tablet : .iphone
+        #endif
+    }
+
+    /// Avatar kind for the chat header — the discovered device's kind, or unknown
+    /// if it's no longer in the list (never assume a phone).
     private func deviceKind(for deviceId: String) -> KdDeviceKind {
-        model.state.devices.first(where: { $0.deviceId == deviceId })?.deviceKind ?? .iphone
+        model.state.devices.first(where: { $0.deviceId == deviceId })?.deviceKind ?? .unknown
     }
 }
 

@@ -74,7 +74,7 @@ struct BannerView<Trailing: View>: View {
             trailing()
         }
         .padding(.horizontal, KdSpacing.s3)
-        .padding(.vertical, 10)
+        .padding(.vertical, KdSpacing.s3)
         .background(bgColor)
         .clipShape(KdShape.md)
     }

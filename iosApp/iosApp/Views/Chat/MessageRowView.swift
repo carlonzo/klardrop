@@ -105,14 +105,12 @@ private struct TextMessageBubble: View {
                         .kdStyle(.body, color: kd.accent)
                         .underline(true, color: kd.accent)
                         .onTapGesture { model.openUrl(url) }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
                     // Regular text: clipped at KdBubbleMaxContentHeight
                     Text(message.content)
                         .kdStyle(.body, color: kd.text, multiline: true)
                         .textSelection(.enabled)
                         .lineLimit(nil)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .frame(maxHeight: KdBubbleMaxContentHeight, alignment: .topLeading)
                         .clipped()
                         .background(
@@ -403,7 +401,6 @@ private struct UnknownMessageBubble: View {
         BubbleView(direction: direction, timestamp: timestamp) {
             Text("Unsupported message (\(message.messageType))")
                 .kdStyle(.caption, color: kd.err)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

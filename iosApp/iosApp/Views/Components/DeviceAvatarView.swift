@@ -40,7 +40,7 @@ struct DeviceAvatarView: View {
         case .android: return "iphone"          // No Android glyph in SF Symbols; use iphone shape
         case .pc:      return "desktopcomputer"
         case .tablet:  return "ipad"
-        case .unknown: return "questionmark.square.dashed"
+        case .unknown: return "laptopcomputer.and.iphone"
         }
     }
 

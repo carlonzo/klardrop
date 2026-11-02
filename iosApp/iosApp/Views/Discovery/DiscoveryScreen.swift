@@ -176,6 +176,7 @@ extension DeviceUi: @retroactive Identifiable {
 struct DiscoveryHeaderView: View {
     let currentDeviceName: String
     let onEditIdentity: () -> Void
+    var onOpenSettings: (() -> Void)? = nil
     let onReportProblem: () -> Void
 
     @Environment(\.kdColors) private var kd
@@ -189,7 +190,7 @@ struct DiscoveryHeaderView: View {
                     .kdStyle(.display, color: kd.text)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                AppMenuButton(onReportProblem: onReportProblem)
+                AppMenuButton(onOpenSettings: onOpenSettings, onReportProblem: onReportProblem)
             }
 
             ThisDevicePillView(

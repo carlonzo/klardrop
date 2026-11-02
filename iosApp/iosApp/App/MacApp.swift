@@ -168,10 +168,12 @@ private struct MenuBarContent: View {
 
         Divider()
 
-        Button("Settings…") {
+        Button {
             // Without a dock icon the app isn't active, so the window would open behind others.
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
+        } label: {
+            Label("Settings…", systemImage: "gear")
         }
         .keyboardShortcut(",")
 

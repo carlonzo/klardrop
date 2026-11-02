@@ -48,7 +48,7 @@ extension SectionHeadView where Trailing == EmptyView {
 
 #Preview {
     VStack(spacing: 0) {
-        SectionHeadView(label: "My Devices", count: 3)
+        SectionHeadView(label: "My devices", count: 3)
         SectionHeadView(label: "Nearby") {
             Button("Edit") {}
                 .font(KdTypeRole.caption.font)
