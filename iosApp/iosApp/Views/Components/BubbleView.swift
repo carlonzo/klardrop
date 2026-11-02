@@ -34,6 +34,7 @@ struct BubbleView<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     @Environment(\.kdColors) private var kd
+    @Environment(\.maxBubbleWidth) private var maxBubbleWidth
 
     // MARK: - Derived tokens
 
@@ -71,27 +72,42 @@ struct BubbleView<Content: View>: View {
 
                 Spacer(minLength: KdSpacing.s1)
 
-                // Foot row: timestamp + delivery (right-aligned)
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    Text(timestamp + deliveryLabel)
-                        .kdStyle(.caption, color: kd.text3)
-                }
+                // Hidden placeholder reserves vertical space for the timestamp row
+                // so the bubble height accounts for it without right-aligning the text.
+                Text(timestamp + deliveryLabel)
+                    .kdStyle(.caption, color: kd.text3)
+                    .hidden()
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            // Fixed 300pt max bubble width. Left/right gravity is handled by the
-            // surrounding HStack spacers (incoming → leading, outgoing → trailing).
-            // NOTE: do not use containerRelativeFrame here — on macOS it resolves
-            // against the window width, not the split-view detail pane, which let
-            // bubbles slide left underneath the sidebar.
-            .frame(maxWidth: 300, alignment: .leading)
+            .overlay(alignment: .bottomTrailing) {
+                // Visible timestamp drawn as an overlay so text stays leading-aligned
+                // while the foot row still hugs the bottom-trailing corner.
+                Text(timestamp + deliveryLabel)
+                    .kdStyle(.caption, color: kd.text3)
+            }
+            .padding(.horizontal, KdSpacing.s3)
+            .padding(.vertical, KdSpacing.s2)
+            // Capped at min(78% pane width, 560pt) via maxBubbleWidth environment. Left/right
+            // gravity is handled by the surrounding HStack spacers.
+            .frame(maxWidth: maxBubbleWidth, alignment: .leading)
             .background(bgColor)
             .clipShape(BubbleShape(direction: direction))
 
             if direction == .incoming { Spacer(minLength: 0) }
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - MaxBubbleWidth Environment
+
+private struct MaxBubbleWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 560
+}
+
+extension EnvironmentValues {
+    var maxBubbleWidth: CGFloat {
+        get { self[MaxBubbleWidthKey.self] }
+        set { self[MaxBubbleWidthKey.self] = newValue }
     }
 }
 
@@ -160,8 +176,8 @@ extension BubbleView where Content == EmptyView {
 
 #Preview {
     VStack(spacing: KdSpacing.s3) {
-        BubbleView(text: "Hello there!", direction: .incoming, timestamp: "10:32")
-        BubbleView(text: "Hey! Sending a file now.", direction: .outgoing, timestamp: "10:33", delivery: .sent)
+        BubbleView(text: "Hello there.", direction: .incoming, timestamp: "10:32")
+        BubbleView(text: "Hey. Sending a file now.", direction: .outgoing, timestamp: "10:33", delivery: .sent)
     }
     .padding()
     .background(Color(hex: 0x181B20))

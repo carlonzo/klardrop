@@ -15,18 +15,15 @@ ItemDelegate {
     highlighted: root.isSelected
 
     contentItem: RowLayout {
-        spacing: 10
+        spacing: 8
 
-        // Device Icon
-        Label {
-            text: {
-                if (!root.device) return "💻"
-                var t = String(root.device.deviceType || "").toUpperCase()
-                if (t === "MOBILE") return "📱"
-                if (t === "DESKTOP") return "💻"
-                return "📡"
+        TintedIcon {
+            source: {
+                if (root.device && String(root.device.deviceType || "").toUpperCase() === "MOBILE")
+                    return "qrc:/icons/smartphone.svg"
+                return "qrc:/icons/laptop.svg"
             }
-            font.pixelSize: 18
+            size: 18
             Layout.alignment: Qt.AlignVCenter
         }
 
@@ -37,7 +34,7 @@ ItemDelegate {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 6
+                spacing: 4
 
                 Label {
                     text: root.device ? (root.device.deviceName || root.device.deviceId) : ""
@@ -91,7 +88,8 @@ ItemDelegate {
                         return r.charAt(0).toUpperCase() + r.slice(1)
                     }
                     font.pixelSize: 11
-                    color: "#777"
+                    color: root.highlighted ? palette.highlightedText : "#777"
+                    opacity: root.highlighted ? 0.75 : 1
                 }
             }
         }

@@ -42,7 +42,7 @@ struct UpdateBannerView: View {
         let fallbackLabel: String = {
             switch action.sealedType() {
             case .runCommand:
-                return copied ? "Copied!" : "Copy command"
+                return copied ? "Copied" : "Copy command"
             case .openUrl:
                 return "Download"
             }
@@ -109,11 +109,12 @@ struct UpdateBannerView: View {
                     .foregroundColor(kd.text3)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(kd.bg2))
+                    .contentShape(Rectangle().inset(by: -10))
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, KdSpacing.s3)
-        .padding(.vertical, 10)
+        .padding(.vertical, KdSpacing.s3)
         .background(kd.accent.opacity(0.10))
         .clipShape(KdShape.md)
         .padding(.horizontal, KdSpacing.s3)

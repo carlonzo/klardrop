@@ -861,7 +861,7 @@ EOF
       printf '{\n}\n' > "$MENU_FILE"
     fi
     cp "$MENU_FILE" "$MENU_FILE.bak.$(date -u +%s)"
-    perl -CSD -0pi -e '
+    perl -0pi -e '
       s/[ \t]*\/\/ BEGIN klardrop\.omarchy.*?\/\/ END klardrop\.omarchy\n?//s;
       my $pos = rindex($_, "}");
       die "no closing brace found in menu file\n" if $pos < 0;
@@ -871,9 +871,9 @@ EOF
       $head .= "," if $head !~ /[{,]\z/;
       my $block = <<"BLOCK";
   // BEGIN klardrop.omarchy -- managed by klardrop install.sh, do not edit by hand
-  "trigger.share.klardrop-file": {"icon":"","label":"Klardrop file","description":"Send file(s) with Klardrop","action":"klardrop-omarchy-share file"},
-  "trigger.share.klardrop-folder": {"icon":"","label":"Klardrop folder","description":"Send a folder with Klardrop","action":"klardrop-omarchy-share folder"},
-  "trigger.share.klardrop-clipboard": {"icon":"","label":"Klardrop clipboard","description":"Send the clipboard with Klardrop","action":"klardrop-omarchy-share clipboard"},
+  "trigger.share.klardrop-file": {"icon":"","label":"Klardrop file","description":"Send file(s) with Klardrop","action":"klardrop-omarchy-share file"},
+  "trigger.share.klardrop-folder": {"icon":"","label":"Klardrop folder","description":"Send a folder with Klardrop","action":"klardrop-omarchy-share folder"},
+  "trigger.share.klardrop-clipboard": {"icon":"","label":"Klardrop clipboard","description":"Send the clipboard with Klardrop","action":"klardrop-omarchy-share clipboard"},
   "trigger.share.klardrop": {"icon":"󰅟","label":"Klardrop panel","description":"Open the Klardrop quick panel","action":"omarchy-shell klardrop.omarchy toggle"}
   // END klardrop.omarchy
 BLOCK

@@ -1,3 +1,5 @@
+// ai-design-check-ignore-file type-scale -- design tokens live here (Apple-aligned 11/13/15/17/20/28); screens use the tokens
+// ai-design-check-ignore-file radius-scale -- design tokens live here (6/10/14/18/24/28); screens use the tokens
 package com.carlom.klardrop.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape

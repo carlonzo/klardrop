@@ -42,6 +42,7 @@ struct QuickActionButton: View {
                 .frame(width: 28, height: 28)
                 .background(kd.bg2.opacity(0.6))
                 .clipShape(Capsule())
+                .contentShape(Rectangle().inset(by: -8))
         }
         .accessibilityLabel(accessibility)
         .buttonStyle(.plain)
@@ -58,7 +59,7 @@ struct QuickActionButton: View {
             QuickActionButton(systemImage: "arrow.up.left.and.arrow.down.right", accessibility: "Expand") {}
         }
 
-        BubbleView(text: "Sent!", direction: .outgoing, timestamp: "10:33")
+        BubbleView(text: "Sent", direction: .outgoing, timestamp: "10:33")
         BubbleQuickActionsView(direction: .outgoing) {
             QuickActionButton(systemImage: "doc.on.doc", accessibility: "Copy") {}
         }

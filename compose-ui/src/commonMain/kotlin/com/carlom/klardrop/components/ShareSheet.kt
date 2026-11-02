@@ -19,7 +19,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.outlined.QrCode
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -113,7 +113,7 @@ fun ShareSheet(
         // "Your devices" section / Quick destinations
         if (trustedDevices.isNotEmpty() || onShareViaQr != null) {
             if (trustedDevices.isNotEmpty()) {
-                SectionHead(label = "Your Devices", count = trustedDevices.size)
+                SectionHead(label = "Your devices", count = trustedDevices.size)
             }
 
             LazyRow(
@@ -260,7 +260,7 @@ private fun QrDestinationTile(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Default.QrCode,
+                imageVector = Icons.Outlined.QrCode,
                 contentDescription = "Share via QR",
                 modifier = Modifier.size(24.dp),
                 tint = colors.text,

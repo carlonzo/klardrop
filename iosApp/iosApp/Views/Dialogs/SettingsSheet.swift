@@ -8,6 +8,8 @@ import presentation
 // else 'No settings available'. On iOS showBackgroundDiscoveryToggle is false
 // (controller.supportsBackgroundDiscovery == false) so it shows the empty
 // message — kept for parity with discovery_screen.kt SettingsSheet.
+// The Settings entry-point (AppMenuButton) is only wired up on macOS, where
+// a Settings window exists; iOS never opens this sheet.
 //
 // ReportProblemSheet lives here too (same cluster): it is what the overflow
 // menu in the discovery header / sidebar footer opens. Mirrors
@@ -218,19 +220,25 @@ struct ReportProblemSheet: View {
 // MARK: - AppMenuButton
 
 /// App-level overflow menu — the "..." in the discovery header (compact) and the sidebar footer
-/// (regular / macOS). Its only entry is "Report a problem": SettingsSheet above has nothing on it
-/// for Apple platforms, so a gear would open a dead end.
+/// (regular / macOS). Always shows "Report a problem" (ladybug). The "Settings" entry is only
+/// wired up on macOS, where a Settings window exists; pass `onOpenSettings: nil` on iOS.
 ///
 /// Mirrors: compose-ui/.../WideLayout.kt AppMenu.
 struct AppMenuButton: View {
+    var onOpenSettings: (() -> Void)? = nil
     let onReportProblem: () -> Void
 
     @Environment(\.kdColors) private var kd
 
     var body: some View {
         Menu {
+            if let onOpenSettings {
+                Button(action: onOpenSettings) {
+                    Label("Settings\u{2026}", systemImage: "gear")
+                }
+            }
             Button(action: onReportProblem) {
-                Label("Report a problem", systemImage: "exclamationmark.bubble")
+                Label("Report a problem", systemImage: "ladybug")
             }
         } label: {
             Image(systemName: "ellipsis")

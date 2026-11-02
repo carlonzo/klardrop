@@ -1,6 +1,7 @@
 package com.carlom.klardrop.theme
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -65,9 +66,11 @@ fun ProvideKdTheme(
     content: @Composable () -> Unit,
 ) {
     val colors = if (useDark) KdDarkColors else KdLightColors
+    val sans = kdSansFamily()
+    val typography = remember(sans) { kdTypography(sans) }
     CompositionLocalProvider(
         LocalKdColors provides colors,
-        LocalKdTypography provides KdDefaultTypography,
+        LocalKdTypography provides typography,
         LocalKdSpacing provides KdDefaultSpacing,
         LocalKdRadii provides KdDefaultRadii,
         LocalKdMotion provides KdDefaultMotion,

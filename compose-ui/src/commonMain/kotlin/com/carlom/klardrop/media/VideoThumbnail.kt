@@ -67,13 +67,13 @@ fun VideoPreview(
         modifier = Modifier
           .widthIn(max = maxWidth)
           .heightIn(max = maxHeight)
-          .clip(RoundedCornerShape(10.dp)),
+          .clip(KdTheme.radii.shapeSm),
       )
     } else {
       Box(
         modifier = Modifier
           .size(width = PlaceholderWidth, height = PlaceholderHeight)
-          .clip(RoundedCornerShape(10.dp))
+          .clip(KdTheme.radii.shapeSm)
           .background(colors.bg2),
       )
     }
@@ -84,7 +84,7 @@ fun VideoPreview(
       tint = colors.textInv,
       modifier = Modifier
         .background(Color.Black.copy(alpha = 0.45f), CircleShape)
-        .padding(6.dp)
+        .padding(KdTheme.spacing.s2)
         .size(28.dp),
     )
   }

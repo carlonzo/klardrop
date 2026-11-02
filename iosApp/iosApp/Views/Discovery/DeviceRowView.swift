@@ -89,7 +89,8 @@ struct DeviceRowView<Trailing: View>: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
-                        .font(.system(size: isCard ? 17 : 15, weight: nameFontWeight))
+                        .font(isCard ? .body : .subheadline)
+                        .fontWeight(nameFontWeight)
                         .foregroundColor(nameColor)
                         .lineLimit(1)
 
@@ -160,7 +161,8 @@ extension DeviceRowView where Trailing == EmptyView {
             onTap: {}
         ) {
             Text("+ Pair")
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote)
+                .fontWeight(.medium)
                 .foregroundColor(.gray)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)

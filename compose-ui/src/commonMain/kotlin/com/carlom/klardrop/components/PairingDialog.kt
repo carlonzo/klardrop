@@ -13,6 +13,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -35,6 +37,9 @@ import com.carlom.klardrop.theme.kdElevation
  *    spec's two-avatar layout with a 4-digit code that must match on both ends.
  *    Reserved for future use when the pairing protocol exposes a session-derived code.
  */
+/** True when a [PairingDialog] is hosted in a bottom sheet (see TrustDialogs.PairingShell). */
+internal val LocalPairingInSheet = staticCompositionLocalOf { false }
+
 @Composable
 fun PairingDialog(
     remoteDeviceName: String,
@@ -63,10 +68,12 @@ fun PairingDialog(
     }
     val resolvedConfirm = confirmLabel ?: if (verifying) "Codes match" else "Accept"
 
+    // Inside a bottom sheet the sheet is already the surface; a second card would nest.
+    val flat = LocalPairingInSheet.current
     Surface(
-        modifier = modifier.kdElevation(level = 3, shape = radii.shapeXl),
+        modifier = if (flat) modifier else modifier.kdElevation(level = 3, shape = radii.shapeXl),
         shape = radii.shapeXl,
-        color = colors.bg2,
+        color = if (flat) Color.Transparent else colors.bg2,
     ) {
         Column(
             modifier = Modifier
@@ -115,7 +122,7 @@ fun PairingDialog(
                 Text(
                     text = verificationCode!!.take(4),
                     style = typography.mono.copy(
-                        fontSize = 22.sp,
+                        fontSize = typography.title.fontSize,
                         fontWeight = FontWeight.SemiBold,
                         fontFamily = FontFamily.Monospace,
                         color = colors.trust,

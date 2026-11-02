@@ -72,7 +72,7 @@ fun UpdateSettingsSection(
   val available = status as? UpdateStatus.Available
   var copied by remember(available?.version) { mutableStateOf(false) }
 
-  // The "Copied!" confirmation is transient — put the command back on the button
+  // The "Copied" confirmation is transient — put the command back on the button
   // so a second copy is possible without reopening the sheet.
   LaunchedEffect(copied) {
     if (copied) {
@@ -272,7 +272,7 @@ private fun ManualUpdateAction(
           .padding(horizontal = spacing.s2, vertical = spacing.s2),
       )
       PillButton(
-        label = if (copied) "Copied!" else "Copy command",
+        label = if (copied) "Copied" else "Copy command",
         onClick = { onAction(action) },
       )
     }

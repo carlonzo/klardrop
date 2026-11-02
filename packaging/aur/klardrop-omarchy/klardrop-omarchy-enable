@@ -37,7 +37,7 @@ fi
 if [ -f "$MENU_FILE" ]; then
   if command -v perl >/dev/null 2>&1; then
     cp "$MENU_FILE" "$MENU_FILE.bak.$(date -u +%s)"
-    perl -CSD -0pi -e '
+    perl -0pi -e '
       s/[ \t]*\/\/ BEGIN klardrop\.omarchy.*?\/\/ END klardrop\.omarchy\n?//s;
       my $pos = rindex($_, "}");
       die "no closing brace found in menu file\n" if $pos < 0;

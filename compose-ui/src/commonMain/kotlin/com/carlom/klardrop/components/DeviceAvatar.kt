@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -89,8 +91,10 @@ fun DeviceAvatar(
                     modifier = Modifier.size(glyphSize),
                     tint = glyphColor,
                 )
+                // Unknown type: a neutral glyph, not a phone (a laptop we haven't
+                // typed yet must not read as a phone).
                 KdDeviceKind.Unknown -> Icon(
-                    painter = painterResource(Res.drawable.mobile),
+                    imageVector = Icons.Outlined.Devices,
                     contentDescription = "Unknown device",
                     modifier = Modifier.size(glyphSize),
                     tint = glyphColor,

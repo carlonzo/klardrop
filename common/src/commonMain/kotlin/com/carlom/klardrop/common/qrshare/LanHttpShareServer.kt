@@ -644,7 +644,7 @@ function copyText() {
   var btn = document.getElementById('copy-btn');
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(area.value).then(function() {
-      btn.innerText = 'Copied!';
+      btn.innerText = 'Copied';
       setTimeout(function() { btn.innerText = 'Copy'; }, 2000);
     }).catch(function() {
       fallbackCopy(area, btn);
@@ -659,7 +659,7 @@ function fallbackCopy(area, btn) {
   try {
     var successful = document.execCommand('copy');
     if (successful) {
-      btn.innerText = 'Copied!';
+      btn.innerText = 'Copied';
       setTimeout(function() { btn.innerText = 'Copy'; }, 2000);
     } else {
       btn.innerText = 'Select all';

@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -64,8 +63,8 @@ fun Bubble(
     val typography = KdTheme.typography
     val spacing = KdTheme.spacing
 
-    val bigR = 18.dp
-    val smallR = 6.dp
+    val bigR = KdTheme.radii.lg
+    val smallR = KdTheme.radii.xs
 
     val shape = when (direction) {
         KdBubbleDirection.In ->
@@ -80,7 +79,8 @@ fun Bubble(
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val maxBubbleWidth = maxWidth * 0.78f
+        // 78 % on phones; capped on wide panes so long lines stay readable.
+        val maxBubbleWidth = minOf(maxWidth * 0.78f, 560.dp)
 
         Box(modifier = Modifier.align(
             if (direction == KdBubbleDirection.In) Alignment.TopStart else Alignment.TopEnd
@@ -90,7 +90,7 @@ fun Bubble(
                     .widthIn(max = maxBubbleWidth)
                     .clip(shape)
                     .background(bgColor)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = spacing.s3, vertical = spacing.s2),
             ) {
                 Column {
                     if (content != null) {
@@ -103,21 +103,20 @@ fun Bubble(
                         )
                     }
                     Spacer(Modifier.height(spacing.s1))
-                    // Foot row: timestamp + delivery
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Spacer(Modifier.weight(1f))
-                        val deliveryLabel = when (delivery) {
-                            KdDeliveryState.Sending   -> " · sending"
-                            KdDeliveryState.Sent      -> " · sent"
-                            KdDeliveryState.Delivered -> " · delivered"
-                            KdDeliveryState.Failed    -> " · failed"
-                            null                      -> ""
-                        }
-                        Text(
-                            text = timestamp + deliveryLabel,
-                            style = typography.caption.copy(color = colors.text3),
-                        )
+                    // Foot: timestamp + delivery, end-aligned. No weighted spacer here, it
+                    // would stretch every bubble to its max width.
+                    val deliveryLabel = when (delivery) {
+                        KdDeliveryState.Sending   -> " · sending"
+                        KdDeliveryState.Sent      -> " · sent"
+                        KdDeliveryState.Delivered -> " · delivered"
+                        KdDeliveryState.Failed    -> " · failed"
+                        null                      -> ""
                     }
+                    Text(
+                        text = timestamp + deliveryLabel,
+                        style = typography.caption.copy(color = colors.text3),
+                        modifier = Modifier.align(Alignment.End),
+                    )
                 }
             }
         }

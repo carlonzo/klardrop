@@ -62,6 +62,9 @@ Item {
   readonly property var incomingRequests: state && state.incoming ? state.incoming : []
   readonly property var transfers: state && state.transfers ? state.transfers : []
   readonly property var notifications: state && state.notifications ? state.notifications : []
+  readonly property int bannerCap: 3
+  readonly property int bannerTotal: notifications.length + incomingRequests.length
+  readonly property int bannerOverflow: Math.max(0, bannerTotal - bannerCap)
   readonly property var updateState: state && state.update ? state.update : null
   readonly property bool hasPendingBadge: incomingRequests.length > 0 || (!!pairingDialog && !pairingDialog.isError)
   readonly property bool backgroundDiscoveryEnabled: state && state.settings && state.settings.backgroundDiscoveryEnabled !== undefined
@@ -332,6 +335,46 @@ Item {
     var payload = { description: description }
     if (email) payload.email = email
     request("POST", "/report-problem", payload, callback)
+  }
+
+  function deviceDisplayName(deviceId, deviceName) {
+    var name = deviceName ? String(deviceName) : ""
+    if (name.length > 0) return name
+    var id = deviceId ? String(deviceId) : ""
+    if (id.length > 0) {
+      for (var i = 0; i < devices.length; i++) {
+        if (String(devices[i].deviceId) === id) {
+          var n = devices[i].deviceName ? String(devices[i].deviceName) : ""
+          if (n.length > 0) return n
+        }
+      }
+    }
+    return "A paired device"
+  }
+
+  function incomingIsPending(item) {
+    if (!item) return false
+    var status = item.status || (item.pendingAuth ? "PendingAuthorization" : "Started")
+    return !!item.pendingAuth || status === "PendingAuthorization"
+  }
+
+  function dismissAllNotifications() {
+    var ids = []
+    for (var i = 0; i < notifications.length; i++) ids.push(notifications[i].id)
+    for (var j = 0; j < ids.length; j++) dismissNotification(ids[j], null)
+  }
+
+  function dismissAllIncoming() {
+    var ids = []
+    for (var i = 0; i < incomingRequests.length; i++) {
+      if (!incomingIsPending(incomingRequests[i])) ids.push(incomingRequests[i].receiveId)
+    }
+    for (var j = 0; j < ids.length; j++) dismissIncoming(ids[j], null)
+  }
+
+  function dismissAllBanners() {
+    dismissAllNotifications()
+    dismissAllIncoming()
   }
 
   function dismissNotification(id, callback) {

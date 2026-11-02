@@ -38,7 +38,8 @@ struct IncomingTransferCardView: View {
             if let fname = fileName {
                 HStack(spacing: KdSpacing.s2) {
                     Text(fname)
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.caption.monospaced())
+                        .fontWeight(.medium)
                         .foregroundColor(kd.text)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)

@@ -79,7 +79,7 @@ struct TextMessageViewerView: View {
         .sheet(isPresented: .constant(true)) {
             TextMessageViewerView(
                 text: "This is a very long message that overflows the bubble height. " +
-                      String(repeating: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ", count: 8),
+                      String(repeating: "Here are the shared meeting notes and design specifications for review. ", count: 8),
                 onCopy: {},
                 onDismiss: {}
             )

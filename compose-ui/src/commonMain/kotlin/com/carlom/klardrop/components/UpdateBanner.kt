@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,7 +68,7 @@ fun UpdateBanner(
   // Self-update states take priority over the manual action; on failure we fall
   // back to the action (copy command / download).
   val fallbackLabel = when (action) {
-    is UpdateAction.RunCommand -> if (copied) "Copied!" else "Copy command"
+    is UpdateAction.RunCommand -> if (copied) "Copied" else "Copy command"
     is UpdateAction.OpenUrl -> "Download"
   }
   val fallbackDetail = when (action) {
@@ -101,7 +101,7 @@ fun UpdateBanner(
       .padding(horizontal = spacing.s3, vertical = spacing.s2)
       .clip(radii.shapeMd)
       .background(colors.accent.copy(alpha = 0.10f))
-      .padding(horizontal = spacing.s3, vertical = 10.dp),
+      .padding(spacing.s3),
     verticalAlignment = Alignment.CenterVertically,
   ) {
     Box(
@@ -112,7 +112,7 @@ fun UpdateBanner(
       contentAlignment = Alignment.Center,
     ) {
       Icon(
-        imageVector = Icons.Filled.Info,
+        imageVector = Icons.Outlined.Info,
         contentDescription = null,
         modifier = Modifier.size(16.dp),
         tint = colors.accent,
@@ -167,7 +167,7 @@ fun UpdateBanner(
       contentAlignment = Alignment.Center,
     ) {
       Icon(
-        imageVector = Icons.Filled.Close,
+        imageVector = Icons.Outlined.Close,
         contentDescription = "Dismiss",
         tint = colors.text3,
         modifier = Modifier.size(spacing.s4),

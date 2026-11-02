@@ -154,6 +154,7 @@ struct DeviceChatScreen: View {
                     ChatEmptyStateView(
                         deviceName: deviceName,
                         isOwned: isOwned,
+                        kind: deviceKind,
                         onPickFiles: { showFilePicker = true },
                         onPickPhotos: { /* handled by PhotosPicker onChange */ }
                     )
@@ -216,11 +217,11 @@ struct DeviceChatScreen: View {
                     )
                     VStack(alignment: .leading, spacing: 1) {
                         Text(deviceName)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.headline)
                             .foregroundColor(kd.text)
                             .lineLimit(1)
                         Text(headerSubText.isEmpty ? " " : headerSubText)
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(isOffline ? kd.err : kd.trust)
                             .lineLimit(1)
                             .opacity(headerSubText.isEmpty ? 0 : 1)
@@ -272,11 +273,11 @@ struct DeviceChatScreen: View {
         .overlay {
             if let dropLabel {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10).fill(kd.bg0.opacity(0.85))
-                    RoundedRectangle(cornerRadius: 10).fill(kd.accent.opacity(0.16))
-                    RoundedRectangle(cornerRadius: 10).strokeBorder(kd.accent, lineWidth: 2)
+                    RoundedRectangle(cornerRadius: KdRadii.sm, style: .continuous).fill(kd.bg0.opacity(0.85))
+                    RoundedRectangle(cornerRadius: KdRadii.sm, style: .continuous).fill(kd.accent.opacity(0.16))
+                    RoundedRectangle(cornerRadius: KdRadii.sm, style: .continuous).strokeBorder(kd.accent, lineWidth: 2)
                     Text(dropLabel)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.headline)
                         .foregroundColor(kd.accent)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -471,7 +472,7 @@ private struct TransferStatusStripView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, KdSpacing.s3)
-        .padding(.vertical, 10)
+        .padding(.vertical, KdSpacing.s3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(kd.accent.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: KdRadii.md, style: .continuous))
@@ -484,6 +485,7 @@ private struct ChatEmptyStateView: View {
 
     let deviceName: String
     let isOwned: Bool
+    var kind: KdDeviceKind = .unknown
     let onPickFiles: () -> Void
     let onPickPhotos: () -> Void
 
@@ -495,7 +497,7 @@ private struct ChatEmptyStateView: View {
     var body: some View {
         VStack(spacing: KdSpacing.gap) {
             DeviceAvatarView(
-                kind: .unknown,
+                kind: kind,
                 style: isOwned ? .tinted : .neutral,
                 size: KdSpacing.heroAvatar
             )
@@ -579,41 +581,46 @@ private struct MessageListView: View {
     @Environment(\.kdColors) private var kd
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
-                        // Previous (older) message is the one before this in oldest-first order.
-                        let older = index > 0 ? messages[index - 1] : nil
+        GeometryReader { geo in
+            let maxBubbleWidth = min(geo.size.width * 0.78, 560)
 
-                        let showDayDivider = older == nil
-                            || ChatTimeFormat.dayKey(older!.timestamp) != ChatTimeFormat.dayKey(message.timestamp)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
+                            // Previous (older) message is the one before this in oldest-first order.
+                            let older = index > 0 ? messages[index - 1] : nil
 
-                        let isFirstOfGroup = older == nil
-                            || older!.isSender != message.isSender
-                            || message.timestamp - older!.timestamp > groupGapMillis
+                            let showDayDivider = older == nil
+                                || ChatTimeFormat.dayKey(older!.timestamp) != ChatTimeFormat.dayKey(message.timestamp)
 
-                        // Day divider sits above the first message of a new day.
-                        if showDayDivider {
-                            DateChipView(label: ChatTimeFormat.day(message.timestamp))
-                                .padding(.vertical, KdSpacing.s3)
+                            let isFirstOfGroup = older == nil
+                                || older!.isSender != message.isSender
+                                || message.timestamp - older!.timestamp > groupGapMillis
+
+                            // Day divider sits above the first message of a new day.
+                            if showDayDivider {
+                                DateChipView(label: ChatTimeFormat.day(message.timestamp))
+                                    .padding(.vertical, KdSpacing.s3)
+                            }
+
+                            MessageRowView(message: message, model: model, isFirstOfGroup: isFirstOfGroup)
+                                .padding(.horizontal, KdSpacing.s3)
+                                .id(message.id)
                         }
-
-                        MessageRowView(message: message, model: model, isFirstOfGroup: isFirstOfGroup)
-                            .padding(.horizontal, KdSpacing.s3)
-                            .id(message.id)
+                    }
+                    .padding(.vertical, KdSpacing.s3)
+                }
+                .scrollContentBackground(.hidden)
+                .defaultScrollAnchor(.bottom)
+                .opacity(isOffline ? 0.7 : 1.0)
+                .onChange(of: messages.count) { _, _ in
+                    if let lastId = messages.last?.id {
+                        withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
                     }
                 }
-                .padding(.vertical, KdSpacing.s3)
             }
-            .scrollContentBackground(.hidden)
-            .defaultScrollAnchor(.bottom)
-            .opacity(isOffline ? 0.7 : 1.0)
-            .onChange(of: messages.count) { _, _ in
-                if let lastId = messages.last?.id {
-                    withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
-                }
-            }
+            .environment(\.maxBubbleWidth, maxBubbleWidth)
         }
     }
 }

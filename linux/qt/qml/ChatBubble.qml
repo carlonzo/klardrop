@@ -32,8 +32,8 @@ Item {
         ColumnLayout {
             id: contentCol
             anchors.fill: parent
-            anchors.margins: 10
-            spacing: 6
+            anchors.margins: 8
+            spacing: 4
 
             // File Card if file message
             ColumnLayout {
@@ -45,9 +45,10 @@ Item {
                     Layout.fillWidth: true
                     spacing: 8
 
-                    Label {
-                        text: "📁"
-                        font.pixelSize: 22
+                    TintedIcon {
+                        source: "qrc:/icons/folder.svg"
+                        size: 22
+                        Layout.alignment: Qt.AlignVCenter
                     }
 
                     ColumnLayout {
@@ -74,17 +75,17 @@ Item {
 
                 RowLayout {
                     Layout.alignment: Qt.AlignRight
-                    spacing: 6
+                    spacing: 4
 
                     Button {
-                        text: "Open File"
+                        text: "Open file"
                         visible: root.fileObj && root.fileObj.filePath && root.fileObj.filePath.length > 0 && root.fileObj.status === "COMPLETED"
                         font.pixelSize: 11
                         onClicked: client.openLocalFile(root.fileObj.filePath)
                     }
 
                     Button {
-                        text: "Open Folder"
+                        text: "Open folder"
                         visible: root.fileObj && root.fileObj.filePath && root.fileObj.filePath.length > 0 && root.fileObj.status === "COMPLETED"
                         font.pixelSize: 11
                         onClicked: client.revealLocalFile(root.fileObj.filePath)
@@ -120,11 +121,15 @@ Item {
                 spacing: 6
 
                 ToolButton {
-                    text: "📋"
                     visible: root.msg && root.msg.content && root.msg.content.length > 0
-                    font.pixelSize: 11
+                    display: AbstractButton.IconOnly
+                    padding: 4
                     ToolTip.visible: hovered
                     ToolTip.text: "Copy message"
+                    contentItem: TintedIcon {
+                        source: "qrc:/icons/clipboard.svg"
+                        size: 14
+                    }
                     onClicked: client.copyToClipboard(root.msg.content)
                 }
 
@@ -141,7 +146,7 @@ Item {
                         var st = root.msg.deliveryStatus
                         if (st === "DELIVERED") return "✓✓"
                         if (st === "SENT") return "✓"
-                        if (st === "FAILED") return "⚠ Failed"
+                        if (st === "FAILED") return "Failed"
                         return "…"
                     }
                     font.pixelSize: 10
