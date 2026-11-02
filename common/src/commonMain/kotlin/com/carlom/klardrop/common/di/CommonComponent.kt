@@ -23,6 +23,7 @@ import com.carlom.klardrop.common.discovery.VisibleDevicesImpl
 import com.carlom.klardrop.common.features.ClipboardManager
 import com.carlom.klardrop.common.features.ConnectionInfoJoiner
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
+import com.carlom.klardrop.common.persistence.KnownEndpointsRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.MessageRepository
 import com.carlom.klardrop.common.persistence.di.StorageModule
@@ -70,6 +71,10 @@ public class CommonComponent(
     storageModule.messageRepository()
   }
 
+  private val knownEndpointsRepository: KnownEndpointsRepository by lazy {
+    storageModule.knownEndpointsRepository()
+  }
+
   private val coroutines: Coroutines by lazy { CoroutinesImpl() }
   private val clock: Clock by lazy { Clock() }
   private val protoBuf = ProtoBuf
@@ -97,6 +102,9 @@ public class CommonComponent(
       bleTransport = internalPlatformDependency.bleTransport(),
       networkLifecycleMonitor = internalPlatformDependency.networkLifecycleMonitor(),
       transferAnchor = transferAnchor,
+      knownEndpoints = knownEndpointsRepository,
+      defaultListenPort = applicationInfo.listenPort,
+      foreground = internalPlatformDependency.foregroundState().isForeground,
     )
   }
 
@@ -152,6 +160,8 @@ public class CommonComponent(
   internal fun bleServerListener() = communicationModule.bleServerListener()
   internal fun bleEagerConnector() = communicationModule.bleEagerConnector()
   internal fun eagerReachabilityConnector() = communicationModule.eagerReachabilityConnector()
+  internal fun tailnetDiscovery() = communicationModule.tailnetDiscovery()
+  internal fun knownEndpointsRepository() = knownEndpointsRepository
   public fun coroutines(): Coroutines = coroutines
   public fun visibleDevices(): VisibleDevices = visibleDevices
   public fun messenger(): com.carlom.klardrop.common.communication.Messenger = communicationModule.messenger()

@@ -3,6 +3,7 @@ package com.carlom.klardrop.common.communication.message
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.common.utils.OsType
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.protobuf.ProtoNumber
 import kotlin.random.Random
 
 /**
@@ -41,8 +42,20 @@ internal data class HandshakeMessage(
    * without waiting for the next TrustedMessage.
    */
   internal val claimsTrust: Boolean = false,
+  /**
+   * The sender's Tailscale (100.64.0.0/10) IPv4 addresses, so a peer met on the LAN can later
+   * be dialed over the tailnet. Empty when the sender isn't on a tailnet or is an older build.
+   *
+   * Field numbers from here on are pinned: [type] and [hasPayload] below are serialized too, after
+   * the constructor properties, so an auto-numbered new field would shift them and older peers
+   * would fail to decode the handshake.
+   */
+  @ProtoNumber(11)
+  internal val tailnetAddresses: List<String> = emptyList(),
 ) : Message() {
+  @ProtoNumber(9)
   override val type: MessageType = MessageType.HANDSHAKE
+  @ProtoNumber(10)
   override val hasPayload: Boolean = false
 }
 

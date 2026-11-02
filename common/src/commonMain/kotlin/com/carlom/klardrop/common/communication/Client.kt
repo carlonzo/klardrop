@@ -8,6 +8,9 @@ import com.carlom.klardrop.common.communication.router.MessagesRouter
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.discovery.localTailnetIpv4s
+import com.carlom.klardrop.common.discovery.recordHandshake
+import com.carlom.klardrop.common.persistence.KnownEndpointsRepository
 import com.carlom.klardrop.common.trust.TrustManager
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
@@ -160,6 +163,8 @@ internal class ClientImpl internal constructor(
    * state for the peer's inbound SYN to our listener. 0 disables punch-through entirely.
    */
   private val serverPort: StateFlow<Int> = MutableStateFlow(0),
+  /** Persists the peer's port and tailnet addresses after an authenticated dial. */
+  private val knownEndpoints: KnownEndpointsRepository? = null,
 ) : Client {
 
   private val clientScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
@@ -498,6 +503,45 @@ internal class ClientImpl internal constructor(
   }
 
   /**
+   * Asks whoever listens on [address]:[port] who they are: connect, exchange the cleartext
+   * greetings, close. Nothing is encrypted or authenticated yet, so the answer is only a hint
+   * (like an mDNS record) that a Klardrop peer is there; the real dial verifies it. The peer
+   * gives up on its UKEY2 read when we close and never records us, so a probe can't change its
+   * visible devices or trust. Null when nothing answers or it isn't a Klardrop peer.
+   */
+  internal suspend fun probeHandshake(address: String, port: Int): HandshakeMessage? = coroutines.ioDispatcher {
+    var socket: io.ktor.network.sockets.Socket? = null
+    try {
+      withTimeout(TCP_CONNECT_TIMEOUT_MS * 2) {
+        val active = aSocket(selectorManager).tcp().connect(address, port).also { socket = it }
+        val self = currentDeviceProvider.get()
+        active.openWriteChannel(autoFlush = true).sendMessage(
+          HandshakeMessage(
+            deviceId = self.shortDeviceId,
+            deviceName = self.deviceName,
+            osType = self.osType,
+            deviceType = self.deviceType,
+            supportsEncryption = true,
+            listenPort = serverPort.value,
+          ),
+          serializer,
+        )
+        (active.openReadChannel().readMessage(serializer) as? HandshakeMessage)
+          ?.takeIf { it.supportsEncryption }
+      }
+    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+      null
+    } catch (e: kotlinx.coroutines.CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      logLocal("Client", "Probe of $address:$port failed", e)
+      null
+    } finally {
+      socket?.close()
+    }
+  }
+
+  /**
    * Shared post-connect phase of a dial: greeting exchange, UKEY2 initiator handshake,
    * endpoint-race gate, and pool registration. Used by [establishConnection] for normal
    * dials and by the T10 punch-through tests for pre-connected (locally bound) sockets.
@@ -528,6 +572,7 @@ internal class ClientImpl internal constructor(
         supportsEncryption = true,
         listenPort = serverPort.value,
         claimsTrust = trustManager.isTrusted(deviceId),
+        tailnetAddresses = localTailnetIpv4s(),
       )
       val writeChannel = activeSocket.openWriteChannel(autoFlush = true)
       // Bound the handshake write to match the connect and read phases.  On most
@@ -628,6 +673,10 @@ internal class ClientImpl internal constructor(
         // Store the connection in the client's pool keyed by the server's device ID. From this
         // point on the socket is owned by the pool/messenger, not by this attempt.
         connectionsPool.updateConnection(deviceId, connectionMessenger)
+        // Off the connect path: a DataStore edit (an fsync on Android) shouldn't delay the first read.
+        knownEndpoints?.let { endpoints ->
+          clientScope.launch { endpoints.recordHandshake(serverHandshakeMessage, address, dialedPort = port) }
+        }
         com.carlom.klardrop.common.trust.dropSupersededTrust(
           keepDeviceId = deviceId,
           address = address,

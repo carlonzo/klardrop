@@ -145,6 +145,8 @@ kotlin {
         implementation(deps.androidx.datastore.core)
         implementation(deps.androidx.datastore.core.okio)
         implementation(deps.kotlinx.serialization.protobuf)
+        // `tailscale status --json` parsing for tailnet discovery; also the linuxX64 Sentry envelopes.
+        implementation(deps.kotlinx.serialization.json)
         implementation(deps.ukey2)
         implementation(deps.filekit.core)
         implementation(deps.sqldelight.runtime)
@@ -193,9 +195,6 @@ kotlin {
     val linuxMain by getting {
       dependencies {
         implementation(deps.sqldelight.native.driver)
-        // Sentry envelope JSON for the linuxX64 crash sender (SentryLinuxSender.linux.kt) —
-        // the linuxX64 Sentry SDK klib is a no-op stub, so this target builds its own envelopes.
-        implementation(deps.kotlinx.serialization.json)
       }
     }
 

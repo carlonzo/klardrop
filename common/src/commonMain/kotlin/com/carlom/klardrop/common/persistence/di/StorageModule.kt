@@ -8,6 +8,8 @@ import com.carlom.klardrop.common.database.AppDatabase
 import com.carlom.klardrop.common.database.DriverFactory
 import com.carlom.klardrop.common.persistence.KnownDevicesRepository
 import com.carlom.klardrop.common.persistence.KnownDevicesRepositoryImpl
+import com.carlom.klardrop.common.persistence.KnownEndpointsRepository
+import com.carlom.klardrop.common.persistence.KnownEndpointsRepositoryImpl
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepository
 import com.carlom.klardrop.common.persistence.LocalPropertiesRepositoryImpl
 import com.carlom.klardrop.common.persistence.MessageRepository
@@ -37,6 +39,7 @@ internal class StorageModule(
   private companion object {
     const val propertiesFileName = "properties.preferences_pb"
     const val knownDevicesFileName = "known_devices.preferences_pb"
+    const val knownEndpointsFileName = "known_endpoints.preferences_pb"
   }
 
   private fun getPreferencesDatastore(filePath: (() -> okio.Path)): DataStore<Preferences> {
@@ -68,6 +71,15 @@ internal class StorageModule(
         knownDevicesFileName
       )
     }, coroutines)
+  }
+
+  fun knownEndpointsRepository(): KnownEndpointsRepository {
+    return KnownEndpointsRepositoryImpl(getPreferencesDatastore {
+      storageFilePath(
+        { platformFileSystem.getInternalStoragePath() },
+        knownEndpointsFileName
+      )
+    }, coroutines, clock::currentTimeMillis)
   }
 
   fun messageRepository(): MessageRepository {

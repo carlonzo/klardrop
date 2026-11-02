@@ -9,6 +9,9 @@ import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DeviceConnection
 import com.carlom.klardrop.common.discovery.DeviceInfo
 import com.carlom.klardrop.common.discovery.VisibleDevices
+import com.carlom.klardrop.common.discovery.localTailnetIpv4s
+import com.carlom.klardrop.common.discovery.recordHandshake
+import com.carlom.klardrop.common.persistence.KnownEndpointsRepository
 import com.carlom.klardrop.common.mdns.NearbyReceiverConnectionHandler
 import com.carlom.klardrop.common.receiver.MessageReceiver
 import com.carlom.klardrop.common.trust.TrustManager
@@ -101,7 +104,8 @@ public class Server internal constructor(
    * client's T10 punch-through dial reads it to bind its sockets to our listening port.
    */
   private val serverPort: MutableStateFlow<Int>? = null,
-  private val preferredPort: Int = 0,
+  /** Persists the peer's port and tailnet addresses after an authenticated inbound handshake. */
+  private val knownEndpoints: KnownEndpointsRepository? = null,
 ) {
   public data class ServerConfig(public val host: String, public val port: Int)
 
@@ -127,10 +131,18 @@ public class Server internal constructor(
    * to the user as "discovery works but nothing ever connects". Punch-through is a
    * best-effort optimisation; the server is not, so an unavailable option degrades to a
    * plain bind instead of taking the listener down with it.
+   *
+   * [preferredPorts] are tried in order before an ephemeral port. Each is first claimed without
+   * SO_REUSEPORT: with it, a second Klardrop process on this host could co-bind a port another
+   * one already listens on and the kernel would split inbound connections between the two.
    */
-  private suspend fun bindListener(selectorManager: SelectorManager): ServerSocket {
-    val portsToTry = if (preferredPort > 0) listOf(preferredPort, 0) else listOf(0)
+  private suspend fun bindListener(selectorManager: SelectorManager, preferredPorts: List<Int>): ServerSocket {
+    val portsToTry = preferredPorts.filter { it > 0 }.distinct() + 0
     for (port in portsToTry) {
+      if (port > 0 && !isPortFree(selectorManager, port)) {
+        log("Server", "Port $port is in use; trying next")
+        continue
+      }
       val socket = try {
         aSocket(selectorManager).tcp().bind("0.0.0.0", port) {
           reuseAddress = true
@@ -155,14 +167,26 @@ public class Server internal constructor(
     error("Failed to bind server socket to any port")
   }
 
+  // ponytail: check-then-bind leaves a tiny window where another process can take the port first;
+  // both then share it via SO_REUSEPORT. Acceptable for a start-up race between two instances.
+  private suspend fun isPortFree(selectorManager: SelectorManager, port: Int): Boolean = try {
+    aSocket(selectorManager).tcp().bind("0.0.0.0", port) { reuseAddress = true }.close()
+    true
+  } catch (e: kotlinx.coroutines.CancellationException) {
+    throw e
+  } catch (_: Exception) {
+    false
+  }
+
   /**
    * Starts the unified server that handles both protocols.
    *
+   * @param preferredPorts ports to try, in order, before falling back to an ephemeral one.
    * @return ServerConfig containing the host and port the server is listening on
    */
-  public suspend fun startServer(): ServerConfig {
+  public suspend fun startServer(preferredPorts: List<Int> = emptyList()): ServerConfig {
     val selectorManager = SelectorManager(coroutines.ioDispatcher)
-    val serverSocket = bindListener(selectorManager)
+    val serverSocket = bindListener(selectorManager, preferredPorts)
 
     val localAddress = serverSocket.localAddress as InetSocketAddress
     val actualPort = localAddress.port
@@ -353,6 +377,7 @@ public class Server internal constructor(
       supportsEncryption = true,
       listenPort = serverPort?.value ?: 0,
       claimsTrust = trustManager.isTrusted(request.deviceId),
+      tailnetAddresses = localTailnetIpv4s(),
     )
     log("Server", "Sending Klardrop greetings back to ${request.deviceId} on $remoteAddress")
     writeChannel.sendMessage(intro, serializer)
@@ -413,6 +438,8 @@ public class Server internal constructor(
     val host = address.extractNumericHost()
     if (host.isBlank()) return
     val port = handshake.listenPort
+    // Off the connect path: a DataStore edit (an fsync on Android) shouldn't delay the first read.
+    knownEndpoints?.let { endpoints -> serverScope.launch { endpoints.recordHandshake(handshake, host) } }
     if (port <= 0) {
       log("Server", "Inbound ${handshake.deviceId} from $host has no listenPort; not adding a dialable endpoint")
       return
