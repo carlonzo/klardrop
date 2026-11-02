@@ -249,12 +249,58 @@ class DiscoveryControllerPairingQueueTest {
     }
   }
 
+  /**
+   * A transfer parked on accept/reject badges its sender's row, from the retained receive state
+   * (so it works for a controller created after the prompt fired), survives a discovery-tick
+   * rebuild of the rows, and clears once the transfer is decided.
+   */
+  @Test
+  fun pendingIncomingTransferBadgesTheSendersRow() = runTest(dispatcher) {
+    val visibleDevices = FakeVisibleDevices()
+    val sender = DiscoveryDevice(
+      deviceInfo = com.carlom.klardrop.common.discovery.DeviceInfo(
+        deviceId = "sender",
+        name = "Laptop",
+        deviceType = com.carlom.klardrop.common.utils.DeviceType.DESKTOP,
+      ),
+      deviceConnections = listOf(DeviceConnection.KlardropConnection(address = "10.0.2.3", port = 1)),
+      lastSeenTimestamp = 0L,
+    )
+    val pending = ReceiveMessageUpdate(
+      device = sender.deviceInfo,
+      messages = listOf(com.carlom.klardrop.common.communication.message.TextMessage(text = "hi")),
+      status = com.carlom.klardrop.common.receiver.ReceiveMessageStatus.PendingAuthorization {},
+    )
+    // Already pending before the controller exists — the case the replay-less flow misses.
+    val latestReceives = MutableStateFlow(mapOf("sender" to pending))
+    val controller = newController(visibleDevices = visibleDevices, latestReceives = latestReceives)
+    fun row() = controller.screenStateFlow.value.devices.first { it.deviceId == "sender" }
+    try {
+      visibleDevices.push(sender)
+      advanceUntilIdle()
+      assertEquals(true, row().hasPendingIncoming)
+
+      visibleDevices.push(sender.copy(lastSeenTimestamp = 1L))
+      advanceUntilIdle()
+      assertEquals(true, row().hasPendingIncoming, "a discovery tick must not drop the badge")
+
+      latestReceives.value = mapOf(
+        "sender" to pending.copy(status = com.carlom.klardrop.common.receiver.ReceiveMessageStatus.Completed)
+      )
+      advanceUntilIdle()
+      assertEquals(false, row().hasPendingIncoming)
+    } finally {
+      controller.dispose()
+    }
+  }
+
   private fun newController(
     connectivityRestrictionMonitor: com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor =
       com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor(),
     visibleDevices: FakeVisibleDevices = FakeVisibleDevices(),
     pairingProtocolCoordinator: PairingProtocolCoordinator? = null,
     trustStorage: InMemoryTrustStorage = InMemoryTrustStorage(),
+    latestReceives: StateFlow<Map<String, ReceiveMessageUpdate>> = MutableStateFlow(emptyMap()),
   ): DiscoveryController {
     val coroutines = FakeCoroutines(dispatcher)
     val trustManager = TrustManager(
@@ -291,6 +337,7 @@ class DiscoveryControllerPairingQueueTest {
       connectivityRestrictionMonitor = connectivityRestrictionMonitor,
       notifier = com.carlom.klardrop.common.notifications.Notifier(),
       foregroundState = com.carlom.klardrop.common.notifications.ForegroundState(),
+      latestReceives = latestReceives,
     )
   }
 }

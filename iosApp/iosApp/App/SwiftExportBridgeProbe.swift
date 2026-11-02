@@ -58,7 +58,8 @@ enum SwiftExportBridgeProbe {
             hasUnreadMessages: false,
             trustStatus: presentation._ExportedKotlinPackages_com_carlom_klardrop_TrustStatus_Unknown.shared,
             reachability: Reachability.Unknown.shared,
-            pairingError: nil
+            pairingError: nil,
+            hasPendingIncoming: false
         )
         let sawKlardrop = device.connectionTypes.contains { kind in
             kind.type == DeviceConnectionType.KLARDROP

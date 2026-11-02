@@ -45,6 +45,9 @@ public actual class Notifier {
 
     when (notification) {
       is AppNotification.IncomingPairing -> showIncomingPairing(notification)
+      // Not wired on this CLI/daemon target yet: `listen` auto-accepts pending transfers, so a
+      // notify-send prompt would just flash and be cancelled.
+      is AppNotification.IncomingTransfer -> Unit
     }
   }
 

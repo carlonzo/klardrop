@@ -585,7 +585,7 @@ private fun YourDevicesSection(
                     status = device.reachabilityStatus(),
                     variant = KdRowVariant.Card,
                     trailing = {
-                        if (device.hasUnreadMessages) {
+                        if (device.hasUnreadMessages || device.hasPendingIncoming) {
                             UnreadBadge()
                             Spacer(Modifier.width(spacing.s2))
                         }
@@ -703,6 +703,10 @@ private fun NearbySection(
                         status = device.reachabilityStatus(),
                         variant = KdRowVariant.Card,
                         trailing = {
+                            if (device.hasPendingIncoming) {
+                                UnreadBadge()
+                                Spacer(Modifier.width(spacing.s2))
+                            }
                             if (device.trustStatus == TrustStatus.Untrusted || device.trustStatus == TrustStatus.Unknown) {
                                 PairButton(onClick = { onDeviceActionListener.onAddToTrusted(device) })
                             }
@@ -949,7 +953,10 @@ internal fun ConnectivityRestrictionBanner(
 // Sub-line policy: only show text when something is happening or wrong. The
 // green/red status dot is the canonical "is this device reachable" signal;
 // writing "Online" / "Nearby" next to it is noise.
-private fun deviceSubText(device: DeviceUi): String? = when (device.trustStatus) {
+/** Row sub-label while [DeviceUi.hasPendingIncoming]: the row opens the chat that holds the prompt. */
+internal const val PENDING_INCOMING_LABEL: String = "Wants to send you something · tap to review"
+
+private fun deviceSubText(device: DeviceUi): String? = if (device.hasPendingIncoming) PENDING_INCOMING_LABEL else when (device.trustStatus) {
     TrustStatus.Trusted -> when (val a = device.activityState) {
         is ActivityState.Sending -> "Sending…"
         is ActivityState.SentCompleted -> if (a.error) "Failed" else null

@@ -48,6 +48,8 @@ extension DeviceUi {
     /// Caption shown under the device name. Returns nil when no text is needed
     /// (the status dot conveys reachability visually; writing "Online" is noise).
     var subText: String? {
+        // Mirrors compose-ui's PENDING_INCOMING_LABEL: the row opens the chat holding the prompt.
+        if hasPendingIncoming { return "Wants to send you something \u{00B7} tap to review" }
         switch trustStatus.sealedType() {
         case .trusted:
             switch activityState.sealedType() {

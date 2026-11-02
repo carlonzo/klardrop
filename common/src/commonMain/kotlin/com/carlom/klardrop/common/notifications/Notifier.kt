@@ -43,6 +43,23 @@ public sealed interface AppNotification {
     public val deviceId: String,
     public val deviceName: String,
   ) : AppNotification
+
+  /**
+   * An untrusted device is waiting for the user to accept or reject a text or
+   * file (the receiver's AWAITING_USER state). Posted by
+   * [IncomingRequestNotifications] regardless of foreground, so the request
+   * is visible even when the in-app prompt isn't on screen. [id] is per
+   * transfer, never the device id, so it can't collide with [IncomingPairing].
+   * The message body is deliberately not included: it's untrusted content
+   * and the notification can render on the lock screen.
+   */
+  public data class IncomingTransfer(
+    override val id: String,
+    public val deviceId: String,
+    public val deviceName: String,
+    /** Null for a text message. */
+    public val fileName: String?,
+  ) : AppNotification
 }
 
 /**
@@ -67,5 +84,11 @@ public sealed interface NotificationAction {
   public data class PairingRejected(
     override val notificationId: String,
     public val deviceId: String,
+  ) : NotificationAction
+
+  /** User accepted (or rejected) an [AppNotification.IncomingTransfer] from the notification. */
+  public data class TransferDecided(
+    override val notificationId: String,
+    public val accepted: Boolean,
   ) : NotificationAction
 }

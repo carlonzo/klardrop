@@ -270,7 +270,7 @@ private struct YourDevicesSectionView: View {
                             }
                         ) {
                             HStack(spacing: KdSpacing.s2) {
-                                if device.hasUnreadMessages {
+                                if device.hasUnreadMessages || device.hasPendingIncoming {
                                     UnreadBadgeView()
                                 }
                                 TrustedDeviceMenuView(onForget: { onForgetClick(device) })
@@ -328,6 +328,9 @@ private struct NearbySectionView: View {
                                     return false
                                 }
                             }()
+                            if device.hasPendingIncoming {
+                                UnreadBadgeView()
+                            }
                             if showPair {
                                 PairButtonView(onClick: { onPendingLink(device) })
                             }
