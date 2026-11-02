@@ -14,11 +14,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.window.Dialog
 import com.carlom.klardrop.components.KdDeviceKind
+import com.carlom.klardrop.components.LocalPairingInSheet
 import com.carlom.klardrop.components.PairingDialog
 import com.carlom.klardrop.theme.KdTheme
 import com.carlom.klardrop.theme.kdElevation
@@ -165,7 +167,7 @@ private fun PairingShell(
           .fillMaxWidth()
           .padding(start = spacing.s4, end = spacing.s4, bottom = spacing.s6),
       ) {
-        content()
+        CompositionLocalProvider(LocalPairingInSheet provides true) { content() }
       }
     }
   }

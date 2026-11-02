@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.outlined.InsertDriveFile
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -81,7 +81,7 @@ fun FileCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Default.InsertDriveFile,
+                    imageVector = Icons.Outlined.InsertDriveFile,
                     contentDescription = null,
                     modifier = Modifier.size(22.dp),
                     tint = colors.text2,
@@ -90,14 +90,14 @@ fun FileCard(
 
             Spacer(Modifier.width(spacing.s3))
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f, fill = false)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = fileName,
                         style = typography.mono.copy(color = colors.text),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f, fill = false),
                     )
 
                     // Trailing check for Done

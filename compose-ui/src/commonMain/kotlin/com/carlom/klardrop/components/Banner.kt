@@ -13,7 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,7 +61,7 @@ fun Banner(
 
     val icon = when (tone) {
         KdBannerTone.Ok   -> Icons.Default.CheckCircle
-        KdBannerTone.Warn -> Icons.Default.Warning
+        KdBannerTone.Warn -> Icons.Outlined.Warning
         KdBannerTone.Err  -> Icons.Default.Error
     }
 
@@ -70,7 +70,7 @@ fun Banner(
             .fillMaxWidth()
             .clip(radii.shapeMd)
             .background(bgColor)
-            .padding(horizontal = spacing.s3, vertical = 10.dp),
+            .padding(spacing.s3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 28 dp icon tile

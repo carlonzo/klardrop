@@ -14,6 +14,8 @@ import com.carlom.klardrop.TrustStatus
 import com.carlom.klardrop.UiDependencies
 import com.carlom.klardrop.WideLayout
 import com.carlom.klardrop.chat.DeviceChatScreen
+import com.carlom.klardrop.components.KdDeviceKind
+import com.carlom.klardrop.toKdDeviceKind
 
 @Composable
 actual fun KlardropNavigator(
@@ -50,9 +52,8 @@ actual fun KlardropNavigator(
     val (deviceId, deviceName) = currentTarget
     val vm = remember(deviceId) { uiDependencies.deviceChatViewModelFactory(deviceId) }
     val state by discoveryController.screenStateFlow.collectAsState()
-    val isOwned = state.devices
-      .firstOrNull { it.deviceId == deviceId }
-      ?.trustStatus == TrustStatus.Trusted
+    val device = state.devices.firstOrNull { it.deviceId == deviceId }
+    val isOwned = device?.trustStatus == TrustStatus.Trusted
     DeviceChatScreen(
       deviceName = deviceName,
       isOwned = isOwned,
@@ -60,6 +61,7 @@ actual fun KlardropNavigator(
       onBackClicked = { chatTarget = null },
       onOpenFileRequest = { path -> vm.openFileClicked(path) },
       onOpenUrlRequest = { url -> vm.openUrlClicked(url) },
+      kind = device?.deviceType?.toKdDeviceKind() ?: KdDeviceKind.Unknown,
     )
   }
 }

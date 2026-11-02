@@ -19,13 +19,14 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Devices
-import androidx.compose.material.icons.filled.LaptopMac
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.LaptopMac
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -307,7 +308,7 @@ private fun WideContent(
                                 modifier = Modifier.size(32.dp),
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Add,
+                                    imageVector = Icons.Outlined.Add,
                                     contentDescription = "Add device",
                                     tint = colors.text2,
                                     modifier = Modifier.size(16.dp),
@@ -387,7 +388,7 @@ private fun WideContent(
                 ConnectivityRestrictionBanner(
                     restrictions = connectivityRestrictions,
                     onRequestExemption = onRequestExemption,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = KdTheme.spacing.s2, vertical = KdTheme.spacing.s1),
                 )
             }
 
@@ -427,6 +428,7 @@ private fun WideContent(
                         onOpenFileRequest = { path -> chatViewModel.openFileClicked(path) },
                         onOpenUrlRequest = { url -> chatViewModel.openUrlClicked(url) },
                         mode = DeviceChatMode.Pane,
+                        kind = activeDevice.deviceType.toKdDeviceKind(),
                     )
                 } else {
                     WideEmptyPane()
@@ -488,7 +490,7 @@ private fun SidebarRowMenu(onForget: () -> Unit) {
             modifier = Modifier.size(28.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.MoreVert,
+                imageVector = Icons.Outlined.MoreVert,
                 contentDescription = "Device options",
                 tint = colors.text2,
                 modifier = Modifier.size(16.dp),
@@ -534,7 +536,7 @@ private fun AppMenu(
             modifier = Modifier.size(28.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.MoreVert,
+                imageVector = Icons.Outlined.MoreVert,
                 contentDescription = "More options",
                 tint = colors.text3,
                 modifier = Modifier.size(16.dp),
@@ -553,7 +555,7 @@ private fun AppMenu(
                 },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.Settings,
+                        imageVector = Icons.Outlined.Settings,
                         contentDescription = null,
                         tint = colors.text2,
                         modifier = Modifier.size(18.dp),
@@ -569,6 +571,14 @@ private fun AppMenu(
                     Text(
                         text = "Report a problem",
                         style = typography.body.copy(color = colors.text),
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Outlined.BugReport,
+                        contentDescription = null,
+                        tint = colors.text2,
+                        modifier = Modifier.size(18.dp),
                     )
                 },
                 onClick = {
@@ -625,7 +635,7 @@ private fun SettingsPane(
                 )
                 IconButton(onClick = onClose) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        imageVector = Icons.Outlined.Close,
                         contentDescription = "Close",
                         tint = colors.text2,
                     )
@@ -690,7 +700,7 @@ private fun AddDevicePromptRow(onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(spacing.s2),
     ) {
         Icon(
-            imageVector = Icons.Default.Add,
+            imageVector = Icons.Outlined.Add,
             contentDescription = null,
             tint = KdTheme.colors.accent,
             modifier = Modifier.size(16.dp),
@@ -735,7 +745,7 @@ private fun WideEmptyPane(modifier: Modifier = Modifier) {
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Default.Devices,
+                    imageVector = Icons.Outlined.Devices,
                     contentDescription = null,
                     tint = colors.trust,
                     modifier = Modifier.size(36.dp),
@@ -762,9 +772,9 @@ private fun WideEmptyPane(modifier: Modifier = Modifier) {
 }
 
 internal fun deviceIcon(type: DeviceType): ImageVector = when (type) {
-    DeviceType.MOBILE -> Icons.Filled.Smartphone
-    DeviceType.DESKTOP -> Icons.Filled.LaptopMac
-    else -> Icons.Filled.Devices
+    DeviceType.MOBILE -> Icons.Outlined.Smartphone
+    DeviceType.DESKTOP -> Icons.Outlined.LaptopMac
+    else -> Icons.Outlined.Devices
 }
 
 private fun Reachability.toKdStatus(): KdStatus? = when (this) {

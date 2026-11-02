@@ -18,7 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -179,7 +179,7 @@ fun QrShareSheet(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ErrorOutline,
+                                imageVector = Icons.Outlined.ErrorOutline,
                                 contentDescription = "Error",
                                 tint = colors.err,
                                 modifier = Modifier.size(28.dp),

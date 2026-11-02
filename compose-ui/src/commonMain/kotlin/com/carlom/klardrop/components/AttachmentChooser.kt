@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.InsertDriveFile
-import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.InsertDriveFile
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -114,19 +114,19 @@ private fun ChooserContent(
             horizontalArrangement = Arrangement.spacedBy(spacing.s2),
         ) {
             ActionTile(
-                icon = Icons.Default.PhotoLibrary,
+                icon = Icons.Outlined.PhotoLibrary,
                 label = "Gallery",
                 onClick = { onGallery(); onDismiss() },
                 modifier = Modifier.weight(1f),
             )
             ActionTile(
-                icon = Icons.Default.InsertDriveFile,
+                icon = Icons.Outlined.InsertDriveFile,
                 label = "Files",
                 onClick = { onFiles(); onDismiss() },
                 modifier = Modifier.weight(1f),
             )
             ActionTile(
-                icon = Icons.Default.ContentPaste,
+                icon = Icons.Outlined.ContentPaste,
                 label = "Paste",
                 onClick = { onPaste(); onDismiss() },
                 modifier = Modifier.weight(1f),

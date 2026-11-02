@@ -15,7 +15,7 @@ import androidx.compose.foundation.shape.ZeroCornerSize
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -113,7 +113,7 @@ private fun TextMessageViewerContent(
         ) {
             TextButton(onClick = onCopy) {
                 Icon(
-                    imageVector = Icons.Default.ContentCopy,
+                    imageVector = Icons.Outlined.ContentCopy,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                     tint = colors.accent,

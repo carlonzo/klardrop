@@ -34,10 +34,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -422,7 +422,7 @@ private fun DiscoveryHeader(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Settings,
+                    imageVector = Icons.Outlined.Settings,
                     contentDescription = "Settings",
                     tint = colors.text2,
                     modifier = Modifier.size(spacing.s5),
@@ -479,7 +479,7 @@ private fun ThisDevicePill(
             overflow = TextOverflow.Ellipsis,
         )
         Icon(
-            imageVector = Icons.Filled.Edit,
+            imageVector = Icons.Outlined.Edit,
             contentDescription = "Rename this device",
             tint = colors.text3,
             modifier = Modifier.size(spacing.s4),
@@ -616,7 +616,7 @@ private fun AddDeviceButton(onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(spacing.s1),
     ) {
         Icon(
-            imageVector = Icons.Filled.Add,
+            imageVector = Icons.Outlined.Add,
             contentDescription = null,
             tint = colors.text2,
             modifier = Modifier.size(spacing.s4),
@@ -642,7 +642,7 @@ private fun TrustedDeviceMenu(onForget: () -> Unit) {
             modifier = Modifier.size(spacing.s6),
         ) {
             Icon(
-                imageVector = Icons.Filled.MoreVert,
+                imageVector = Icons.Outlined.MoreVert,
                 contentDescription = "Device options",
                 tint = colors.text2,
                 modifier = Modifier.size(spacing.s4),

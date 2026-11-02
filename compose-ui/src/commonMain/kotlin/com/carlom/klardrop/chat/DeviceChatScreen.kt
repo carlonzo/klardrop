@@ -23,9 +23,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.OpenInFull
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -108,6 +108,7 @@ fun DeviceChatScreen(
     onOpenFileRequest: (filePath: String) -> Unit,
     onOpenUrlRequest: (url: String) -> Unit,
     mode: DeviceChatMode = DeviceChatMode.Screen,
+    kind: KdDeviceKind = KdDeviceKind.Unknown,
 ) {
     val messagesState by viewModel.messages.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
@@ -208,7 +209,7 @@ fun DeviceChatScreen(
                 ChatHeader(
                     deviceName = deviceName,
                     subText = headerSubText,
-                    kind = KdDeviceKind.Unknown,
+                    kind = kind,
                     avatarStyle = headerAvatarStyle,
                     status = headerStatus,
                     isReachable = !isOffline,
@@ -264,6 +265,7 @@ fun DeviceChatScreen(
                 ChatEmptyState(
                     deviceName = deviceName,
                     isOwned = isOwned,
+                    kind = kind,
                     onPickFiles = { filePickerLauncher.launch() },
                     onPickPhotos = { imagePickerLauncher.launch() },
                     modifier = Modifier.weight(1f),
@@ -371,7 +373,7 @@ private fun TransferStatusStrip(
             .fillMaxWidth()
             .clip(radii.shapeMd)
             .background(colors.accent.copy(alpha = 0.10f))
-            .padding(horizontal = spacing.s3, vertical = 10.dp),
+            .padding(spacing.s3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CircularProgressIndicator(
@@ -394,6 +396,7 @@ private fun TransferStatusStrip(
 private fun ChatEmptyState(
     deviceName: String,
     isOwned: Boolean,
+    kind: KdDeviceKind,
     onPickFiles: () -> Unit,
     onPickPhotos: () -> Unit,
     modifier: Modifier = Modifier,
@@ -411,7 +414,7 @@ private fun ChatEmptyState(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             DeviceAvatar(
-                kind = KdDeviceKind.Unknown,
+                kind = kind,
                 style = if (isOwned) KdAvatarStyle.Tinted else KdAvatarStyle.Neutral,
                 size = spacing.heroAvatar,
             )
@@ -639,7 +642,6 @@ private fun TextMessageBubble(
                             textDecoration = TextDecoration.Underline,
                         ),
                         modifier = Modifier
-                            .fillMaxWidth()
                             .combinedClickable(onClick = { onOpenUrlRequest(openableUrl) }),
                     )
                 },
@@ -667,13 +669,13 @@ private fun TextMessageBubble(
 
         BubbleQuickActions(direction = direction) {
             QuickActionButton(
-                icon = Icons.Default.ContentCopy,
+                icon = Icons.Outlined.ContentCopy,
                 contentDescription = "Copy text",
                 onClick = { onCopyText(message.content) },
             )
             if (overflowing) {
                 QuickActionButton(
-                    icon = Icons.Default.OpenInFull,
+                    icon = Icons.Outlined.OpenInFull,
                     contentDescription = "Show full message",
                     onClick = { showViewer = true },
                 )
@@ -803,7 +805,7 @@ private fun FileMessageBubble(
                         modifier = Modifier
                             .widthIn(max = 320.dp)
                             .heightIn(max = KdBubbleMaxContentHeight)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(KdTheme.radii.shapeSm)
                             .then(openClick),
                     )
                     Spacer(Modifier.height(KdTheme.spacing.s1))
@@ -844,7 +846,7 @@ private fun FileMessageBubble(
         if (openablePath != null) {
             BubbleQuickActions(direction = direction) {
                 QuickActionButton(
-                    icon = Icons.AutoMirrored.Filled.OpenInNew,
+                    icon = Icons.AutoMirrored.Outlined.OpenInNew,
                     contentDescription = "Open file",
                     onClick = { onOpenFileRequest(openablePath) },
                 )

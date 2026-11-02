@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,7 +71,7 @@ fun MessageInput(
                 modifier = Modifier.size(40.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Default.AttachFile,
+                    imageVector = Icons.Outlined.AttachFile,
                     contentDescription = "Attach",
                     tint = colors.text2.copy(alpha = alpha),
                 )
