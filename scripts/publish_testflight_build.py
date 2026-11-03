@@ -59,11 +59,14 @@ def find_app_id(bundle_id, tok):
     return apps[0]["id"]
 
 
-def wait_for_build(app_id, build_number, marketing_version, tok, timeout_minutes, poll_seconds):
+def wait_for_build(app_id, build_number, marketing_version, platform, tok, timeout_minutes, poll_seconds):
     deadline = time.time() + timeout_minutes * 60
     path = ("/v1/builds?filter[app]=" + app_id
             + "&filter[version]=" + urllib.parse.quote(build_number)
             + "&filter[preReleaseVersion.version]=" + urllib.parse.quote(marketing_version)
+            # iOS and macOS share the bundle id (universal purchase) and the build number, so
+            # without the platform the iOS run could pick up the macOS build or vice versa.
+            + "&filter[preReleaseVersion.platform]=" + platform
             + "&limit=1")
     while True:
         found = api("GET", path, tok)["data"]
@@ -98,6 +101,8 @@ def main():
     ap.add_argument("--build-number", required=True, help="CFBundleVersion of the uploaded build")
     ap.add_argument("--marketing-version", required=True, help="CFBundleShortVersionString of the uploaded build")
     ap.add_argument("--group-name", required=True)
+    ap.add_argument("--platform", default="IOS", choices=("IOS", "MAC_OS"),
+                    help="App Store Connect platform of the uploaded build")
     ap.add_argument("--timeout-minutes", type=int, default=45,
                      help="how long to wait for Apple to finish processing the upload")
     ap.add_argument("--poll-seconds", type=int, default=30)
@@ -105,7 +110,7 @@ def main():
 
     tok = make_token(open(a.p8).read(), a.key_id, a.issuer)
     app_id = find_app_id(a.bundle_id, tok)
-    build_id = wait_for_build(app_id, a.build_number, a.marketing_version, tok, a.timeout_minutes, a.poll_seconds)
+    build_id = wait_for_build(app_id, a.build_number, a.marketing_version, a.platform, tok, a.timeout_minutes, a.poll_seconds)
     group_id = find_group_id(app_id, a.group_name, tok)
 
     api("POST", f"/v1/builds/{build_id}/relationships/betaGroups", tok, {

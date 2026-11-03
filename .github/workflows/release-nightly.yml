@@ -624,7 +624,232 @@ jobs:
             --key-id "$API_KEY_ID" --issuer "$API_ISSUER" \
             --bundle-id "com.carlom.Klardrop" \
             --build-number "$BUILD" --marketing-version "$VERSION" \
-            --group-name "Klardrop External Testers"
+            --group-name "Klardrop External Testers" --platform IOS
+
+  # macOS → Mac App Store / TestFlight. Same unsigned-archive → App Store export flow as the
+  # `ios` job; the `macos` job below keeps shipping the notarized Developer ID DMG. Both come
+  # from the same sources (bundle id com.carlom.Klardrop, universal purchase with iOS), so
+  # this needs the macOS platform added to the Klardrop app record in App Store Connect.
+  #
+  # Signing: the app + share extension are signed with the Apple Distribution cert the `ios`
+  # job already uses; the uploaded .pkg needs a separate Mac Installer Distribution cert
+  # (MAC_INSTALLER_P12_BASE64 / MAC_INSTALLER_P12_PASSWORD). Without it the job skips.
+  #
+  # Not in `publish`'s needs: a Mac App Store failure must not hold back the DMG, Play and
+  # the GitHub prerelease. Runs on macos-26 + latest Xcode because App Store Connect rejects
+  # uploads built with an old SDK (Developer ID builds don't have that check).
+  macos-appstore:
+    needs: gate
+    if: needs.gate.outputs.proceed == 'true'
+    runs-on: macos-26
+    env:
+      # Same version wiring as the `ios` job — see the comments there.
+      GRADLE_VERSION_ARGS: >-
+        -Pklardrop.version=${{ needs.gate.outputs.semver }}
+        -Pklardrop.packageVersion=${{ needs.gate.outputs.base }}
+        -Pklardrop.versionCode=${{ needs.gate.outputs.versionCode }}
+      ORG_GRADLE_PROJECT_klardropVersion: ${{ needs.gate.outputs.semver }}
+      ORG_GRADLE_PROJECT_klardropSentryDsn: ${{ secrets.SENTRY_DSN }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Detect Mac App Store signing secrets
+        id: signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}" ] || [ -z "${{ secrets.MAC_INSTALLER_P12_BASE64 }}" ] \
+             || [ -z "${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}" ]; then
+            echo "Apple Distribution / Mac Installer Distribution cert or API key absent — skipping Mac App Store upload."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Select latest stable Xcode
+        if: steps.signing.outputs.enabled == 'true'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      # JDK 21 for the Run Script phase that builds the Kotlin framework during archive.
+      - uses: actions/setup-java@v6
+        if: steps.signing.outputs.enabled == 'true'
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+      - uses: gradle/actions/setup-gradle@v6
+        if: steps.signing.outputs.enabled == 'true'
+      - name: Cache Kotlin/Native (~/.konan)
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/dependencies.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Import Apple Distribution + Mac Installer Distribution certs
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          DIST_P12:      ${{ secrets.APPLE_DISTRIBUTION_P12_BASE64 }}
+          DIST_P12_PW:   ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
+          INST_P12:      ${{ secrets.MAC_INSTALLER_P12_BASE64 }}
+          INST_P12_PW:   ${{ secrets.MAC_INSTALLER_P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/build.keychain"
+          KCPW="$(openssl rand -hex 16)"
+          security create-keychain -p "$KCPW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KCPW" "$KC"
+          echo "$DIST_P12" | base64 -d > "$RUNNER_TEMP/dist.p12"
+          echo "$INST_P12" | base64 -d > "$RUNNER_TEMP/installer.p12"
+          security import "$RUNNER_TEMP/dist.p12" -k "$KC" -P "$DIST_P12_PW" -T /usr/bin/codesign -T /usr/bin/productbuild
+          security import "$RUNNER_TEMP/installer.p12" -k "$KC" -P "$INST_P12_PW" -T /usr/bin/codesign -T /usr/bin/productbuild
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KCPW" "$KC"
+          security find-identity -v "$KC" | grep -q "Mac Installer Distribution\|3rd Party Mac Developer Installer" \
+            || { echo "::error::MAC_INSTALLER_P12_BASE64 holds no Mac Installer Distribution identity"; exit 1; }
+      - name: Write App Store Connect API key
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8_BASE64 }}
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/keys"
+          echo "$API_KEY_P8" | base64 -d > "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8"
+      # Unsigned archive for the same reason as the `ios` job: signing at archive time makes
+      # Xcode mint development certificates until the account runs out of slots. arm64-only
+      # like the `macos` job (the Kotlin framework is built for the runner's arch); the App
+      # Store then lists the app for Apple silicon Macs only.
+      - name: Archive KlardropMac (unsigned)
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          VERSION: ${{ needs.gate.outputs.base }}
+          BUILD:   ${{ needs.gate.outputs.versionCode }}
+        run: |
+          set -euo pipefail
+          xcodebuild -workspace iosApp/iosApp.xcworkspace -scheme KlardropMac \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD"
+      # The unsigned archive carries no entitlements, and -exportArchive re-signs from the
+      # archive's entitlement set — so without this the App Store build would ship without the
+      # App Sandbox (rejected on upload) and without its App Group / keychain group. Plant the
+      # repo entitlements with an ad-hoc signature, $(AppIdentifierPrefix) expanded, exactly as
+      # the `ios` job does for its App Group. Export then re-signs with Apple Distribution.
+      - name: Plant entitlements on the unsigned archive
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/KlardropMac.xcarchive/Products/Applications/Klardrop.app"
+          APPEX="$APP/Contents/PlugIns/KlardropMacShare.appex"
+          test -d "$APP" || { echo "::error::archived app not at $APP"; exit 1; }
+          test -d "$APPEX" || { echo "::error::archived share extension not at $APPEX"; exit 1; }
+
+          plant() {
+            local bundle="$1" src="$2" ent
+            ent="$RUNNER_TEMP/$(basename "$bundle").entitlements"
+            sed "s/\$(AppIdentifierPrefix)/${TEAM_ID}./g" "$src" > "$ent"
+            cp "$ent" "$bundle/Contents/archived-expanded-entitlements.xcent"
+            codesign --force --sign - --entitlements "$ent" "$bundle"
+            codesign -d --entitlements - --xml "$bundle" 2>/dev/null | grep -q 'com.apple.security.app-sandbox' \
+              || { echo "::error::failed to plant entitlements on $bundle from $src"; exit 1; }
+          }
+          # extension first so the app's outer ad-hoc signature seals it
+          plant "$APPEX" "iosApp/Klardrop Mac Share/KlardropMacShare.entitlements"
+          plant "$APP" "iosApp/iosApp/KlardropMac.entitlements"
+      # Export to disk first so the signed .pkg can be checked before it ships; the upload is a
+      # second export of the same archive (xcodebuild can only upload from an archive).
+      # -allowProvisioningUpdates + the API key lets Xcode create the Mac App Store profiles.
+      - name: Export signed .pkg
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          TEAM_ID:    ${{ secrets.APPLE_TEAM_ID }}
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          for dest in export upload; do
+            cat > "$RUNNER_TEMP/Options-$dest.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>method</key><string>app-store-connect</string>
+          <key>teamID</key><string>${TEAM_ID}</string>
+          <key>signingStyle</key><string>automatic</string>
+          <key>destination</key><string>${dest}</string>
+          <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          done
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/Options-export.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER"
+      # Fail before uploading a build Apple would reject or that can't reach its shared
+      # container: both bundles Apple Distribution-signed, sandboxed, with the App Group, and
+      # the .pkg signed by the installer identity.
+      - name: Verify the exported package
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          PKG="$(ls "$RUNNER_TEMP/export"/*.pkg | head -1)"
+          echo "Exported: $PKG"
+          pkgutil --check-signature "$PKG" | tee /dev/stderr \
+            | grep -q "Mac Installer Distribution\|3rd Party Mac Developer Installer" \
+            || { echo "::error::$PKG is not signed with a Mac Installer Distribution certificate"; exit 1; }
+          rm -rf "$RUNNER_TEMP/pkg" && pkgutil --expand-full "$PKG" "$RUNNER_TEMP/pkg"
+          APP="$(find "$RUNNER_TEMP/pkg" -maxdepth 4 -name 'Klardrop.app' -type d | head -1)"
+          test -n "$APP" || { echo "::error::no Klardrop.app inside $PKG"; exit 1; }
+          failed=0
+          for b in "$APP" "$APP/Contents/PlugIns/KlardropMacShare.appex"; do
+            ents="$(codesign -d --entitlements - --xml "$b" 2>/dev/null || true)"
+            codesign -dvv "$b" 2>&1 | grep -q 'Authority=Apple Distribution' \
+              || { echo "::error::$b is not signed with an Apple Distribution certificate"; failed=1; }
+            grep -q 'com.apple.security.app-sandbox' <<<"$ents" \
+              || { echo "::error::$b lost the App Sandbox entitlement"; failed=1; }
+            grep -q 'group.com.carlom.Klardrop' <<<"$ents" \
+              || { echo "::error::$b lost the group.com.carlom.Klardrop App Group"; failed=1; }
+            test -f "$b/Contents/embedded.provisionprofile" \
+              || { echo "::error::$b has no embedded Mac App Store provisioning profile"; failed=1; }
+          done
+          exit "$failed"
+      - name: Upload to App Store Connect
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/KlardropMac.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/Options-upload.plist" \
+            -exportPath "$RUNNER_TEMP/upload" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8" \
+            -authenticationKeyID "$API_KEY_ID" \
+            -authenticationKeyIssuerID "$API_ISSUER"
+      - name: Add build to TestFlight "Klardrop External Testers" group
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          VERSION:    ${{ needs.gate.outputs.base }}
+          BUILD:      ${{ needs.gate.outputs.versionCode }}
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyjwt cryptography
+          "$RUNNER_TEMP/venv/bin/python" scripts/publish_testflight_build.py \
+            --p8 "$RUNNER_TEMP/keys/AuthKey_${API_KEY_ID}.p8" \
+            --key-id "$API_KEY_ID" --issuer "$API_ISSUER" \
+            --bundle-id "com.carlom.Klardrop" \
+            --build-number "$BUILD" --marketing-version "$VERSION" \
+            --group-name "Klardrop External Testers" --platform MAC_OS
 
   # Linux universal tarball (system JRE — jars + wrapper, no jlink runtime),
   # uploaded as an artifact the `publish` job attaches to the nightly prerelease.
