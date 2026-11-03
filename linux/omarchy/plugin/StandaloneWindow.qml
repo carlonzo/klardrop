@@ -750,6 +750,8 @@ FloatingWindow {
                     id: deviceRow
                     width: parent.width
                     paired: true
+                    showSendButtons: false
+                    showMessageButton: false
                     selected: window.selectedDeviceId === trustedRowWrap.modelData.deviceId
                     deviceId: trustedRowWrap.modelData.deviceId || ""
                     deviceName: trustedRowWrap.modelData.deviceName || ""
@@ -761,12 +763,6 @@ FloatingWindow {
                     urgent: window.urgent
                     dim: window.dim
                     fontFamily: window.fontFamily
-                    onSendFilesRequested: window.sendFiles(trustedRowWrap.modelData.deviceId)
-                    onSendClipboardRequested: window.service.sendClipboard(trustedRowWrap.modelData.deviceId, null)
-                    onSendMessageRequested: {
-                      window.selectDevice(trustedRowWrap.modelData.deviceId, trustedRowWrap.modelData.deviceName)
-                      composerField.forceActiveFocus()
-                    }
                     onForgetRequested: window.forgetTargetDevice = trustedRowWrap.modelData
                     onFilesDropped: function(urls) {
                       window.sendDroppedFiles(trustedRowWrap.modelData.deviceId, urls)
@@ -1216,12 +1212,14 @@ FloatingWindow {
               }
 
               Button {
+                anchors.verticalCenter: parent.verticalCenter
                 text: "Send"
                 fontFamily: window.fontFamily
                 onClicked: window.sendComposerText()
               }
 
               PanelActionButton {
+                anchors.verticalCenter: parent.verticalCenter
                 iconText: "󰉋"
                 tooltipText: "Send files"
                 fontFamily: window.fontFamily
@@ -1229,6 +1227,7 @@ FloatingWindow {
               }
 
               PanelActionButton {
+                anchors.verticalCenter: parent.verticalCenter
                 iconText: "󰅌"
                 tooltipText: "Send clipboard"
                 fontFamily: window.fontFamily

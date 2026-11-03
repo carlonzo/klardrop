@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Checks for a newer Klardrop release and exposes a [status] flow the UI can
@@ -85,7 +86,9 @@ public class UpdateChecker(
     periodicJob = scope.launch {
       while (isActive) {
         runCheck()
-        delay(recheckInterval)
+        // A failed check (e.g. at boot, before DNS is up) retries soon instead of
+        // showing "couldn't reach" until the next regular re-check hours later.
+        delay(if (_status.value is UpdateStatus.Failed) FAILED_RETRY_INTERVAL else recheckInterval)
       }
     }
   }
@@ -298,6 +301,7 @@ public class UpdateChecker(
     /** How often [start]'s loop re-checks. Long enough to be invisible, short enough
      * that a machine left running for days still learns about a release the same day. */
     public val DEFAULT_RECHECK_INTERVAL: Duration = 6.hours
+    internal val FAILED_RETRY_INTERVAL: Duration = 2.minutes
 
     /** `latest.json` platform keys, written by the release workflow. */
     public const val ASSET_MACOS: String = "macos"

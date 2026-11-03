@@ -178,11 +178,13 @@ Item {
         }
       }
     }
-    var payload = null
+    // QML's xhr.send(null) sends the literal string "null", which the daemon
+    // rejects as a non-object body; send no body at all instead.
     if (body !== null && body !== undefined) {
-      payload = typeof body === "string" ? body : JSON.stringify(body)
+      xhr.send(typeof body === "string" ? body : JSON.stringify(body))
+    } else {
+      xhr.send()
     }
-    xhr.send(payload)
   }
 
   function pollState(since) {

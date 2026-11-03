@@ -307,6 +307,7 @@
   .dl .t{ text-align:left; line-height:1.15; }
   .dl .t small{ display:block; font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted-2); }
   .dl .t b{ font-weight:600; font-size:16px; }
+  .dl.detected{ border-color:var(--accent); background:var(--bg-2); }
   .dl-foot{ margin-top:22px; font-family:var(--font-mono); font-size:12px; color:var(--muted-2); letter-spacing:.03em; }
   .dl-foot a{ color:var(--accent-text); border-bottom:1px solid var(--accent-dim); }
 
@@ -414,58 +415,6 @@
     font-family:var(--font-mono); font-size:12.5px; color:var(--accent-text);
     background:var(--bg-3); padding:2px 6px; border-radius:5px; border:1px solid var(--line);
   }
-  .linux-grid{
-    margin-top:22px;
-    display:grid;
-    grid-template-columns:repeat(2, 1fr);
-    gap:18px;
-  }
-  .linux-pkg-card{
-    display:flex; flex-direction:column; justify-content:space-between;
-    padding:28px 26px 26px;
-  }
-  .linux-pkg-head{
-    display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px;
-  }
-  .linux-pkg-title h3{
-    font-family:var(--font-display); font-weight:600; font-size:20px; letter-spacing:-.01em;
-  }
-  .linux-pkg-tag{
-    display:block; font-family:var(--font-mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
-    color:var(--muted-2); margin-top:3px;
-  }
-  .linux-pkg-tag b{ color:var(--accent-text); font-weight:500; }
-  .linux-pkg-icon{
-    width:40px; height:40px; border-radius:10px; background:var(--bg-3);
-    border:1px solid var(--line-2); display:grid; place-items:center; color:var(--accent); flex:none;
-  }
-  .linux-pkg-icon svg{ width:22px; height:22px; }
-  .linux-pkg-desc{
-    font-size:14.5px; color:var(--muted); line-height:1.5; margin-bottom:18px; flex:1; text-wrap:pretty;
-  }
-  .linux-pkg-action{
-    display:flex; flex-direction:column; gap:12px;
-  }
-  .linux-cmd-wrap{
-    display:flex; flex-direction:column; gap:6px;
-  }
-  .linux-cmd-label{
-    font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
-    color:var(--muted-2);
-  }
-  .linux-dl-btn{
-    width:100%; justify-content:center; padding:12px 18px; font-size:15px; text-align:center;
-  }
-  .linux-size{
-    font-family:var(--font-mono); font-size:12.5px; opacity:.85; font-weight:400;
-  }
-  .linux-card-hint{
-    margin-top:10px; font-family:var(--font-mono); font-size:11.5px; color:var(--muted-2);
-  }
-  .linux-card-hint code{
-    color:var(--accent-text); background:var(--bg-3); padding:1px 5px; border-radius:4px;
-  }
-
   /* footer */
   footer{ border-top:1px solid var(--line); padding:40px 0 60px; }
   .foot-in{ display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap; }
@@ -478,7 +427,6 @@
     .hero-grid{ grid-template-columns:1fr; gap:36px; }
     .scene{ height:360px; }
     .feat-grid{ grid-template-columns:1fr; }
-    .linux-grid{ grid-template-columns:1fr; }
     .linux-hero-card{ padding:26px 20px; }
     .nav-links{ display:none; }
     .trow{ grid-template-columns:1fr 40px 1fr; }
@@ -695,12 +643,12 @@
 </section>
 
 <!-- ======= LINUX DOWNLOADS ======= -->
-<section class="blk linux-section" id="linux">
+<section class="blk linux-section" id="linux" hidden>
   <div class="wrap">
     <div class="sec-head">
-      <p class="sec-tag">Linux Downloads &amp; Packages</p>
+      <p class="sec-tag">Linux</p>
       <h2>Get Klardrop on Linux.</h2>
-      <p class="sec-sub">Install via your distribution's package manager, or use our self-updating universal installer.</p>
+      <p class="sec-sub">One command installs Klardrop and keeps it updated.</p>
     </div>
 
     <!-- Primary Universal Installer card -->
@@ -717,107 +665,6 @@
       <p class="linux-note">Installs per-user to <code>~/.local</code> (no root required) and self-updates in place. Ubuntu 24.04 / Qt 6.4 baseline; other distros require compatible native libraries and Qt 6 modules, checked before install (no verified all-distro claim). Legacy JVM flavor available via <code>--jvm</code>.</p>
     </div>
 
-    <!-- Distro Packages Grid -->
-    <div class="linux-grid">
-      <!-- Arch Linux (AUR) -->
-      <div class="card linux-pkg-card">
-        <div class="linux-pkg-head">
-          <div class="linux-pkg-title">
-            <h3>Arch Linux</h3>
-            <span class="linux-pkg-tag">AUR · <b>Legacy JVM (Compat)</b></span>
-          </div>
-          <div class="linux-pkg-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5L2.2 21.5h4.6l2.1-4.2c1.2.7 2.2 1.1 3.3 1.1 1.1 0 2.1-.4 3.3-1.1l2.1 4.2h4.6L12 2.5zm0 5.8l2.9 5.8c-.9-.4-1.9-.7-2.9-.7s-2 .3-2.9.7L12 8.3z"/></svg>
-          </div>
-        </div>
-        <p class="linux-pkg-desc">The published AUR package <code>klardrop-bin</code> currently packages the legacy JVM desktop app (requires <code>java-runtime&gt;=21</code>). Maintained for compatibility until native packages are migrated. For native Qt/Omarchy builds, use the universal installer.</p>
-        <div class="linux-pkg-action">
-          <div class="linux-cmd-wrap">
-            <div class="linux-cmd-label">Install command</div>
-            <div class="code">
-              <code>yay -S klardrop-bin</code>
-              <button class="copy" type="button" data-copy="yay -S klardrop-bin" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
-            </div>
-          </div>
-          <p class="linux-card-hint">Published AUR package remains legacy JVM · Use universal script for native GUI</p>
-        </div>
-      </div>
-
-      <!-- Debian · Ubuntu · Mint -->
-      <div class="card linux-pkg-card">
-        <div class="linux-pkg-head">
-          <div class="linux-pkg-title">
-            <h3>Debian · Ubuntu · Mint</h3>
-            <span class="linux-pkg-tag">Native · <b>Qt GUI (Default)</b></span>
-          </div>
-          <div class="linux-pkg-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9.5"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="15.5" cy="6" r="1.5" fill="currentColor"/><circle cx="15.5" cy="18" r="1.5" fill="currentColor"/><path d="M6.8 12a5.5 5.5 0 0 0 6.7 5.3M13.5 6.7a5.5 5.5 0 0 1 0 10.6M13.5 6.7A5.5 5.5 0 0 0 6.8 12"/></svg>
-          </div>
-        </div>
-        <p class="linux-pkg-desc">Installs native Klardrop with standalone Qt Quick desktop GUI (no Java required) via the universal installer. Ubuntu 24.04 / Qt 6.4 baseline; installer preflight checks required runtime libraries before install (no physical QA claimed across every distribution variant).</p>
-        <div class="linux-pkg-action">
-          <div class="linux-cmd-wrap">
-            <div class="linux-cmd-label">Universal install command</div>
-            <div class="code">
-              <code>curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash</code>
-              <button class="copy" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
-            </div>
-          </div>
-          <p class="linux-card-hint">Installs to ~/.local · Runtime preflight checks dependencies automatically</p>
-        </div>
-      </div>
-
-      <!-- Fedora · RHEL · openSUSE -->
-      <div class="card linux-pkg-card">
-        <div class="linux-pkg-head">
-          <div class="linux-pkg-title">
-            <h3>Fedora · RHEL · openSUSE</h3>
-            <span class="linux-pkg-tag">Native · <b>Qt GUI (Default)</b></span>
-          </div>
-          <div class="linux-pkg-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m16.5 9.4-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12.5 20.71 7"/><line x1="12" y1="22.5" x2="12" y2="12.5"/></svg>
-          </div>
-        </div>
-        <p class="linux-pkg-desc">Installs native Klardrop with standalone Qt Quick desktop GUI (no Java required) via the universal installer. Requires compatible native libraries and Qt 6 modules checked by installer preflight before install (Ubuntu 24.04 baseline; no physical QA claimed on every RPM distribution).</p>
-        <div class="linux-pkg-action">
-          <div class="linux-cmd-wrap">
-            <div class="linux-cmd-label">Universal install command</div>
-            <div class="code">
-              <code>curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash</code>
-              <button class="copy" type="button" data-copy="curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh | bash" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
-            </div>
-          </div>
-          <p class="linux-card-hint">Installs to ~/.local · Runtime preflight checks dependencies automatically</p>
-        </div>
-      </div>
-
-      <!-- Legacy JVM Tarball -->
-      <div class="card linux-pkg-card">
-        <div class="linux-pkg-head">
-          <div class="linux-pkg-title">
-            <h3>Legacy JVM Tarball</h3>
-            <span class="linux-pkg-tag">Compatibility <b>.tar.gz</b> · x86_64</span>
-          </div>
-          <div class="linux-pkg-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
-          </div>
-        </div>
-        <p class="linux-pkg-desc">Legacy standalone archive of jars plus a launcher that execs system Java 21+. Maintained for explicit <code>--jvm</code> compatibility until separate package migration.</p>
-        <div class="linux-pkg-action">
-          <a class="btn btn-primary linux-dl-btn" id="linux-tarball-btn" href="https://github.com/carlonzo/klardrop/releases/latest/download/klardrop-linux-x64.tar.gz" rel="noopener">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 18.5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <span>Download .tar.gz (JVM)</span><span class="linux-size" id="linux-tarball-size"></span>
-          </a>
-          <div class="linux-cmd-wrap">
-            <div class="linux-cmd-label">Extract &amp; run (requires Java 21+)</div>
-            <div class="code">
-              <code>tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop-linux-x64/klardrop/bin/klardrop</code>
-              <button class="copy" type="button" data-copy="tar -xzf klardrop-linux-x64.tar.gz &amp;&amp; ./klardrop-linux-x64/klardrop/bin/klardrop" aria-label="Copy to clipboard" title="Copy"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15V6.2A2.2 2.2 0 0 1 7.2 4H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -897,7 +744,6 @@
     // Install script lives in the repo; the raw URL resolves once packaging/install.sh is on main.
     const INSTALL_SH    = `https://raw.githubusercontent.com/${REPO}/main/packaging/install.sh`;
     const BREW_CMD      = "brew install --cask carlonzo/klardrop/klardrop";
-    const AUR_CMD       = "yay -S klardrop-bin";
     const BREW_NIGHTLY  = "brew install --cask carlonzo/klardrop/klardrop-nightly";
     // Nightly channel: rolling `nightly` tag. The DMG filename is version-stamped, so
     // resolve it from the nightly latest.json; fall back to the nightly release page.
@@ -974,23 +820,15 @@
       const panes = items.map((t,i) => `<div class="mpane${i===0?' on':''}" data-pane="${t.id}">${t.panel}</div>`).join("");
       return `<div class="mtabs">${heads}</div>${panes}`;
     }
-    // a Linux download channel: install command + tarball link. `packages` adds the
-    // AUR command (AUR currently carries the legacy JVM package).
-    function linuxChannel(cmd, tarballUrl, size, note, packages, isNightly){
-      let extra = "";
-      if (packages) {
-        extra = `<div class="modal-or">or legacy JVM package manager</div>`
-          + `<div><div class="opt-label">Arch Linux (AUR) · Legacy JVM (Java 21 required · x64)</div>${codeBlock(AUR_CMD)}</div>`
-          + `<div style="text-align:center;margin-top:6px;"><a href="#linux" class="dl-note" style="color:var(--accent-text);text-decoration:underline;" onclick="document.getElementById('dlModal').classList.remove('open');document.body.style.overflow=''">View all Linux packages &amp; commands →</a></div>`;
-      }
+    // a Linux download channel: install command + legacy JVM tarball link.
+    function linuxChannel(cmd, tarballUrl, size, note){
       return `<div><div class="opt-label">Install with one command</div>${codeBlock(cmd)}`
         + `<p class="dl-note" style="text-align:left">${note}</p></div>`
         + `<p class="dl-note" style="text-align:left">${LINUX_BINARIES_NOTE}</p>`
         + `<div class="modal-or">or download legacy JVM tarball</div>`
         + `<div class="sub-links">`
         + `<a href="${esc(tarballUrl)}" rel="noopener"><small>Legacy JVM · Java 21 required · x64</small>.tar.gz${size}</a>`
-        + `</div>`
-        + extra;
+        + `</div>`;
     }
     // a macOS download channel: .dmg button + Homebrew command
     function macChannel(dmgLabel, dmgUrl, note, brew){
@@ -1017,23 +855,15 @@
           return tabs([
             { id:"stable", label:"Stable", panel: linuxChannel(CURL_CMD,
                 urlFor("linux-tarball", LINUX_TARBALL), sizeFor("linux-tarball"),
-                "Downloads the latest native release (Ubuntu 24.04 / Qt 6.4 baseline; preflight checks dependencies), installs to <code>~/.local</code> with desktop GUI, and configures the systemd user service. Uninstall later with the same command plus <code>-s -- --uninstall</code>.",
-                true, false) },
+                "Downloads the latest native release (Ubuntu 24.04 / Qt 6.4 baseline; preflight checks dependencies), installs to <code>~/.local</code> with desktop GUI, and configures the systemd user service. Uninstall later with the same command plus <code>-s -- --uninstall</code>.") },
             { id:"nightly", label:"Nightly", panel: linuxChannel(CURL_NIGHTLY,
                 nurlFor("linux-tarball", NIGHTLY_TARBALL), nsizeFor("linux-tarball"),
-                "Latest tester build — newest features, less tested. Installs native release to <code>~/.local</code> (Ubuntu 24.04 / Qt 6.4 baseline) and self-updates on the nightly channel.",
-                true, true) },
+                "Latest tester build — newest features, less tested. Installs native release to <code>~/.local</code> (Ubuntu 24.04 / Qt 6.4 baseline) and self-updates on the nightly channel.") },
           ]);
-        case "android": {
-          const playReady = PLAY_STORE_URL && !PLAY_STORE_URL.includes('<');
-          const playRow = playReady
-            ? `<div class="modal-or">or get it on Google Play</div>`
-              + `<div class="sub-links"><a href="${esc(PLAY_STORE_URL)}" target="_blank" rel="noopener"><small>Recommended</small>Google Play →</a></div>`
-            : `<div class="modal-or">Google Play — coming soon</div>`;
-          return primaryDownload("Download .apk" + sizeFor("android"), urlFor("android", ANDROID_APK),
-              "Android 7.0+ · sideload the APK (you may need to allow installs from your browser).")
-            + playRow;
-        }
+        case "android":
+          return primaryDownload("Get it on Google Play", PLAY_STORE_URL, "Android 7.0+ · updates through the Play Store.")
+            + `<div class="modal-or">or sideload the APK</div>`
+            + `<div class="sub-links"><a href="${esc(urlFor("android", ANDROID_APK))}" rel="noopener"><small>Android 7.0+ · allow installs from your browser</small>.apk${sizeFor("android")}</a></div>`;
         case "ios": {
           const appStoreReady = APP_STORE_URL && !APP_STORE_URL.includes('<');
           const stablePanel = appStoreReady
@@ -1078,6 +908,23 @@
       if(lastFocus) lastFocus.focus();
     }
 
+    // Put the visitor's platform first (the rest stay as "other platforms") and
+    // only show the Linux install section to Linux visitors.
+    const ua = navigator.userAgent;
+    const DETECTED =
+      /Android/i.test(ua) ? "android"
+      : (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) ? "ios"
+      : /Macintosh|Mac OS X/.test(ua) ? "macos"
+      : /Windows/.test(ua) ? "windows"
+      : (/Linux|X11/.test(ua) && !/CrOS/.test(ua)) ? "linux"
+      : null;
+    const detectedBtn = DETECTED && document.querySelector(`.dl[data-platform="${DETECTED}"]`);
+    if (detectedBtn) {
+      detectedBtn.classList.add('detected');
+      detectedBtn.parentElement.prepend(detectedBtn);
+    }
+    if (DETECTED === "linux") document.getElementById('linux').hidden = false;
+
     // Platforms with a real download open the modal. Android offers the APK now
     // (plus Play once published); iOS is store-only and stays a store button.
     const MODAL = new Set(['macos','windows','linux','android','ios']);
@@ -1117,19 +964,6 @@
       setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = COPY_ICON; }, 1600);
     });
 
-    // dynamically update Linux tarball link and size from latest.json
-    function updateLinuxDownloads(d){
-      if(!d || !d.platforms) return;
-      const tgz = d.platforms['linux-tarball'];
-
-      if(tgz && tgz.url){
-        const btn = document.getElementById('linux-tarball-btn');
-        if(btn) btn.href = tgz.url;
-        const sz = document.getElementById('linux-tarball-size');
-        if(sz && tgz.size) sz.textContent = fmtSize(tgz.size);
-      }
-    }
-
     // fetch latest.json so download links & version resolve to the newest release.
     // If it fails (e.g. no release yet), buttons gracefully fall back to the releases page.
     function loadLatest(){
@@ -1137,7 +971,6 @@
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(d => {
           DATA = d;
-          updateLinuxDownloads(d);
         })
         .catch(() => { DATA = null; });
     }
@@ -1147,7 +980,6 @@
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(d => {
         NDATA = d;
-        if(!DATA) updateLinuxDownloads(d);
       })
       .catch(() => { NDATA = null; });
   })();

@@ -629,6 +629,26 @@ grep -q "^omarchy plugin enable klardrop.omarchy$" "$ARGV_LOG" \
 pass "plugin enable still runs after the registration poll budget"
 
 # =============================================================================
+# 1c. --refresh-integration (run by the in-app self-updater after its swap)
+# =============================================================================
+# Rewrites installer-owned files from an extracted tree; must not download,
+# touch the binaries/plugin, or restart the daemon (the updater does that).
+rm -f "$ARGV_LOG" "$SERVICE" "$HELPER" "$OPEN_HELPER" "$SHARE_PICK_HELPER" "$DESKTOP"
+echo "sentinel engine" > "$ENGINE"
+run_installer --refresh-integration="$STAGE_X64" >"$TMP/refresh.out" 2>"$TMP/refresh.err" \
+  || fail "--refresh-integration failed: $(cat "$TMP/refresh.err")"
+[ -f "$SERVICE" ] || fail "refresh did not rewrite the systemd unit"
+[ -x "$HELPER" ] && [ -x "$OPEN_HELPER" ] && [ -x "$SHARE_PICK_HELPER" ] || fail "refresh did not rewrite the helpers"
+[ -f "$DESKTOP" ] || fail "refresh did not rewrite the .desktop entry"
+grep -q "sentinel engine" "$ENGINE" || fail "refresh must not replace the engine binary"
+grep -q "restart klardrop.service" "$ARGV_LOG" 2>/dev/null && fail "refresh must not restart the daemon"
+[ "$(grep -c "BEGIN klardrop.omarchy" "$MENU_FILE")" -eq 1 ] || fail "refresh must keep exactly one menu block"
+run_installer --jvm --refresh-integration="$STAGE_X64" >/dev/null 2>&1 && fail "--refresh-integration must refuse the JVM flavor"
+# Restore a real install for the sections below.
+run_installer --omarchy >/dev/null 2>"$TMP/refresh-restore.err" || fail "reinstall after refresh test failed: $(cat "$TMP/refresh-restore.err")"
+pass "--refresh-integration rewrites installer-owned files only"
+
+# =============================================================================
 # 2. Launcher helper (klardrop-omarchy-open)
 # =============================================================================
 rm -f "$ARGV_LOG"
