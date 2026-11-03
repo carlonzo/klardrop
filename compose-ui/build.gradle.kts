@@ -55,6 +55,8 @@ kotlin {
         implementation(compose.preview)
         implementation(compose.uiTooling)
         implementation(deps.androidx.activity.compose)
+        implementation(deps.androidx.navigation3.runtime)
+        implementation(deps.androidx.navigation3.ui)
       }
     }
 
