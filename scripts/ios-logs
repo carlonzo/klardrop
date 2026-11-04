@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Relaunch Klardrop on the USB-connected iPhone and stream its own stdout/stderr (NSLog, unredacted).
+# The system log (idevicesyslog) shows the app's lines as <private>; this does not.
+# Needs pymobiledevice3 (~/pymobile3-venv from omarchy-apple-dev); no root (userspace tunnel).
+# Usage: scripts/ios-logs [seconds] [bundle-id]   (seconds default 60; 0 = until Ctrl-C)
+set -euo pipefail
+secs=${1:-60}; bid=${2:-com.carlom.Klardrop}
+P="$HOME/pymobile3-venv/bin/pymobiledevice3"; [ -x "$P" ] || P=pymobiledevice3
+cmd=("$P" developer dvt launch --userspace --stream "$bid")
+if [ "$secs" = 0 ]; then exec "${cmd[@]}"; else timeout "$secs" "${cmd[@]}" || [ $? = 124 ]; fi
