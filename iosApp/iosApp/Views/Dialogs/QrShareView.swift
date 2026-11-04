@@ -246,12 +246,8 @@ struct QrShareView: View {
                 self.qrImage = nil
             }
         }
-        #if os(iOS)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.hidden)
-        .presentationCornerRadius(KdRadii.sheet)
-        .presentationBackground(kd.bg1)
-        #else
+        // iOS presentation (detents/background) is owned by the host sheet (ShareInboxSheet).
+        #if os(macOS)
         .frame(minWidth: 420, minHeight: 360)
         .background(kd.bg1)
         #endif

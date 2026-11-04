@@ -517,7 +517,7 @@ internal class NearbyReceiverConnectionHandler(
       messagesToReceive[fileMetadata.payload_id!!] = FileMessage(
         fileName = fileMetadata.name!!,
         fileSize = fileMetadata.size!!,
-        mimeType = fileMetadata.mime_type ?: FileTypeUtils.getMimeTypeFromExtension(fileMetadata.name)
+        mimeType = fileMetadata.mime_type ?: FileTypeUtils.getMimeTypeFromExtension(fileMetadata.name?.substringAfterLast(".", ""))
       )
 
     }

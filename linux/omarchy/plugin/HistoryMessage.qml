@@ -43,7 +43,11 @@ Item {
   property string fontFamily: Style.font.family
 
   readonly property bool hasFile: fileName !== ""
+  // Extension fallback: older transfers of ".JPG" files were stored as
+  // application/octet-stream (the mime lookup was case-sensitive).
   readonly property bool isImageFile: root.mimeType.indexOf("image/") === 0
+    || ((root.mimeType === "" || root.mimeType === "application/octet-stream")
+        && /\.(jpe?g|png|gif|webp|bmp|heic|heif)$/i.test(root.fileName))
   readonly property bool isVideoFile: root.mimeType.indexOf("video/") === 0
   readonly property bool canRetryFile: root.isSender && root.hasFile
     && (root.fileStatus === "FAILED" || root.fileStatus === "REJECTED")
@@ -125,7 +129,9 @@ Item {
       // the bounding box below is what actually keeps a huge photo from
       // rendering at native resolution inside the bubble.
       Item {
+        // Hidden once loading fails (file moved/deleted): an empty gray box otherwise.
         visible: root.hasFile && root.isImageFile && root.filePath !== ""
+          && previewImage.status !== Image.Error
         width: Style.space(220)
         height: Style.space(220)
 
@@ -136,6 +142,7 @@ Item {
           asynchronous: true
           cache: false
           fillMode: Image.PreserveAspectFit
+          autoTransform: true // honor EXIF orientation (iPhone photos are often stored rotated)
           sourceSize.width: 320
           sourceSize.height: 320
         }
@@ -161,6 +168,7 @@ Item {
           asynchronous: true
           cache: false
           fillMode: Image.PreserveAspectFit
+          autoTransform: true // honor EXIF orientation (iPhone photos are often stored rotated)
           sourceSize.width: 320
           sourceSize.height: 320
         }

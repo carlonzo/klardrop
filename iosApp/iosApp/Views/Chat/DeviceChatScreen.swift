@@ -670,7 +670,7 @@ private struct AttachmentChooserView: View {
             Text("Add attachment")
                 .kdStyle(.headline, color: kd.text)
                 .padding(.horizontal, KdSpacing.s4)
-                .padding(.top, KdSpacing.s4)
+                .padding(.top, KdSpacing.s5)
 
             HStack(spacing: KdSpacing.s2) {
                 // Gallery — native photo picker (no permission prompt needed)
@@ -715,8 +715,8 @@ private struct AttachmentChooserView: View {
             }
             .padding(.bottom, KdSpacing.s4)
         }
-        .frame(minWidth: 340, maxWidth: .infinity, alignment: .leading)
-        .background(kd.bg1)
+        // Content hugs the top; the sheet itself is the only background.
+        .frame(minWidth: 340, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .fileImporter(
             isPresented: $showFilesImporter,
             allowedContentTypes: [.item],
@@ -728,8 +728,9 @@ private struct AttachmentChooserView: View {
             }
             isPresented = false
         }
-        .presentationDetents([.height(300)])
+        .presentationDetents([.height(280)])
         .presentationDragIndicator(.visible)
+        .presentationBackground(kd.bg1)
         .presentationCompactAdaptation(.sheet)
     }
 }
@@ -744,14 +745,14 @@ private struct AttachmentTile: View {
     var body: some View {
         VStack(spacing: KdSpacing.s2) {
             Image(systemName: icon)
-                .font(.system(size: 22, weight: .regular))
-                .foregroundColor(kd.text2)
-            Text(label).kdStyle(.body, color: kd.text2)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundColor(kd.accent)
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(kd.accent.opacity(0.14)))
+            Text(label).kdStyle(.caption, color: kd.text2)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, KdSpacing.s4)
-        .background(kd.bg2)
-        .clipShape(RoundedRectangle(cornerRadius: KdRadii.md, style: .continuous))
+        .contentShape(Rectangle())
     }
 }
 

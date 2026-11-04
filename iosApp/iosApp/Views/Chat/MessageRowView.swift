@@ -253,8 +253,10 @@ private struct FileMessageBubble: View {
         return ChatTimeFormat.bytesFormatted(total)
     }
 
+    // From the file name, not file_path: received media on iOS lives at "ph:/<localIdentifier>"
+    // (no extension), so path-based detection missed images whose mime was octet-stream.
     private var fileExtension: String {
-        (fileTransfer?.file_path ?? "")
+        (fileTransfer?.file_name ?? fileTransfer?.file_path ?? "")
             .split(separator: ".")
             .last
             .map(String.init)?.lowercased() ?? ""
@@ -432,6 +434,7 @@ private struct FileThumbnailView: View {
     var maxHeight: CGFloat
 
     @State private var image: KdPlatformImage?
+    @State private var loadFailed = false
 
     var body: some View {
         Group {
@@ -453,6 +456,12 @@ private struct FileThumbnailView: View {
                 .frame(maxWidth: 320, maxHeight: maxHeight)
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: KdRadii.sm, style: .continuous))
+            } else if !loadFailed {
+                // Placeholder while loading. It must be a real view: with an empty Group
+                // SwiftUI never runs the .task below, so the thumbnail never loaded.
+                RoundedRectangle(cornerRadius: KdRadii.sm, style: .continuous)
+                    .fill(Color.secondary.opacity(0.15))
+                    .frame(width: 200, height: 150)
             }
         }
         .task(id: path) {
@@ -461,6 +470,7 @@ private struct FileThumbnailView: View {
             } else {
                 image = await loadFileThumbnail(path: path, isVideo: isVideo)
             }
+            loadFailed = image == nil
         }
     }
 }
@@ -473,10 +483,32 @@ private let thumbLog = Logger(subsystem: "com.carlom.Klardrop", category: "thumb
 /// unencoded char (e.g. a space) — producing a URL for a file literally named "file:", so
 /// both ImageIO and AVAsset silently failed. Strip the scheme and decode instead.
 private func fileURL(from path: String) -> URL {
-    guard path.hasPrefix("file://") else { return URL(fileURLWithPath: path) }
-    if let u = URL(string: path), u.isFileURL { return u }
-    let tail = String(path.dropFirst("file://".count))
-    return URL(fileURLWithPath: tail.removingPercentEncoding ?? tail)
+    let url: URL
+    if !path.hasPrefix("file://") {
+        url = URL(fileURLWithPath: path)
+    } else if let u = URL(string: path), u.isFileURL {
+        url = u
+    } else {
+        let tail = String(path.dropFirst("file://".count))
+        url = URL(fileURLWithPath: tail.removingPercentEncoding ?? tail)
+    }
+    return rehomedToCurrentContainer(url)
+}
+
+/// iOS moves the app container to a new UUID on every reinstall/update, so persisted absolute
+/// paths (e.g. sent files copied to tmp) go stale. Re-root ".../Data/Application/<UUID>/…"
+/// onto the current container when the stored path no longer exists.
+private func rehomedToCurrentContainer(_ url: URL) -> URL {
+    #if os(iOS)
+    let p = url.path
+    guard !FileManager.default.fileExists(atPath: p),
+          let r = p.range(of: "/Data/Application/") else { return url }
+    let afterUuid = p[r.upperBound...].drop(while: { $0 != "/" })
+    let moved = URL(fileURLWithPath: NSHomeDirectory() + afterUuid)
+    return FileManager.default.fileExists(atPath: moved.path) ? moved : url
+    #else
+    return url
+    #endif
 }
 
 /// Loads a downsized thumbnail for a local file path — image via ImageIO, video via
