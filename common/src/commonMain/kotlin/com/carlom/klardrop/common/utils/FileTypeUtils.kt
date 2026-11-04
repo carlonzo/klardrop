@@ -109,7 +109,8 @@ public object FileTypeUtils {
   public fun getMimeTypeFromExtension(extension: String?): String {
     if (extension == null) return DEFAULT_MIME_TYPE
 
-    return mimeTypes[extension] ?: run {
+    // Case-insensitive: iPhone photos arrive as ".JPG"/".HEIC"; the map keys are lowercase.
+    return mimeTypes[extension.lowercase()] ?: run {
       // Falling back to octet-stream is harmless — receivers detect by magic
       // bytes when this matters. Worth a local log so we can grow the map over
       // time, but not worth a Sentry event.

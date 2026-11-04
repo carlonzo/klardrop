@@ -65,8 +65,10 @@ internal actual class LanTlsListener actual constructor() {
 
         val certResult = QrTlsCertGenerator.generate(ipv4)
 
+        // SecPKCS12Import rejects our hand-built .p12 on iOS; fall back to adding the raw
+        // key + cert to the keychain and fetching the paired identity back.
         val importedIdentity = importPkcs12Identity(certResult.pkcs12Der)
-            ?: throw IllegalStateException("Failed to import self-signed PKCS#12 identity into Keychain")
+            ?: keychainIdentity(certResult)
         identity = importedIdentity
 
         val secId = sec_identity_create(importedIdentity)
@@ -341,17 +343,86 @@ internal actual class LanTlsListener actual constructor() {
                 log("LanTlsListener", "SecPKCS12Import failed: $status")
                 return null
             }
-            val items = itemsVar.value ?: return null
+            val items = itemsVar.value ?: return null.also { log("LanTlsListener", "SecPKCS12Import: no items") }
             val count = CFArrayGetCount(items)
-            if (count <= 0) return null
+            if (count <= 0) return null.also { log("LanTlsListener", "SecPKCS12Import: empty items") }
             val dict = CFArrayGetValueAtIndex(items, 0) as? CFDictionaryRef ?: return null
-            val idRef = CFDictionaryGetValue(dict, kSecImportItemIdentity) as? SecIdentityRef ?: return null
+            val idRef = CFDictionaryGetValue(dict, kSecImportItemIdentity) as? SecIdentityRef
+                ?: return null.also { log("LanTlsListener", "SecPKCS12Import: no identity in result") }
             CFRetain(idRef)
             idRef
         } finally {
             CFRelease(options)
             CFRelease(cfData)
         }
+    }
+
+    /**
+     * Adds the EC private key (ANSI X9.63: 04‖X‖Y‖D) and certificate to the keychain under one
+     * label, then reads the matching identity back. Throws with the failing step + OSStatus.
+     */
+    private fun keychainIdentity(cert: QrTlsCertResult): SecIdentityRef = memScoped {
+        fun fail(step: String, status: Int): Nothing =
+            throw IllegalStateException("QR TLS identity: $step failed (OSStatus $status)")
+
+        val d = ecPrivateScalar(cert.privateKeyPkcs8Der)
+            ?: throw IllegalStateException("QR TLS identity: could not read EC private key")
+        val x963 = cert.publicKeyRaw + d
+        val label = CFStringCreateWithCString(null, KEYCHAIN_LABEL, kCFStringEncodingUTF8)!!
+
+        fun dict() = CFDictionaryCreateMutable(null, 0, kCFTypeDictionaryKeyCallBacks.ptr, kCFTypeDictionaryValueCallBacks.ptr)!!
+        fun cfData(b: ByteArray) = b.usePinned { CFDataCreate(null, it.addressOf(0).reinterpret(), b.size.toLong())!! }
+
+        // Clear leftovers from a previous run that didn't clean up (else errSecDuplicateItem).
+        for (cls in listOf(kSecClassKey, kSecClassCertificate)) {
+            val q = dict()
+            CFDictionarySetValue(q, kSecClass, cls)
+            CFDictionarySetValue(q, kSecAttrLabel, label)
+            SecItemDelete(q)
+            CFRelease(q)
+        }
+
+        val keyAttrs = dict()
+        CFDictionarySetValue(keyAttrs, kSecAttrKeyType, kSecAttrKeyTypeECSECPrimeRandom)
+        CFDictionarySetValue(keyAttrs, kSecAttrKeyClass, kSecAttrKeyClassPrivate)
+        val keyData = cfData(x963)
+        val errVar = alloc<CFErrorRefVar>()
+        val key = SecKeyCreateWithData(keyData, keyAttrs, errVar.ptr)
+        CFRelease(keyData)
+        CFRelease(keyAttrs)
+        if (key == null) fail("SecKeyCreateWithData", errVar.value?.let { CFErrorGetCode(it).toInt() } ?: -1)
+
+        val certData = cfData(cert.certDer)
+        val secCert = SecCertificateCreateWithData(null, certData)
+        CFRelease(certData)
+        if (secCert == null) { CFRelease(key); fail("SecCertificateCreateWithData", -1) }
+
+        for ((cls, ref) in listOf(kSecClassKey to key, kSecClassCertificate to secCert)) {
+            val add = dict()
+            CFDictionarySetValue(add, kSecClass, cls)
+            CFDictionarySetValue(add, kSecValueRef, ref)
+            CFDictionarySetValue(add, kSecAttrLabel, label)
+            val st = SecItemAdd(add, null)
+            CFRelease(add)
+            if (st != errSecSuccess && st != errSecDuplicateItem) {
+                CFRelease(key); CFRelease(secCert)
+                fail("SecItemAdd(${if (cls == kSecClassKey) "key" else "cert"})", st)
+            }
+        }
+        CFRelease(key)
+        CFRelease(secCert)
+
+        val q = dict()
+        CFDictionarySetValue(q, kSecClass, kSecClassIdentity)
+        CFDictionarySetValue(q, kSecAttrLabel, label)
+        CFDictionarySetValue(q, kSecReturnRef, kCFBooleanTrue)
+        val out = alloc<CFTypeRefVar>()
+        val st = SecItemCopyMatching(q, out.ptr)
+        CFRelease(q)
+        CFRelease(label)
+        if (st != errSecSuccess) fail("SecItemCopyMatching(identity)", st)
+        @Suppress("UNCHECKED_CAST")
+        (out.value as? SecIdentityRef) ?: fail("SecItemCopyMatching returned no identity", st)
     }
 
     private fun deleteKeychainIdentity(id: SecIdentityRef) = memScoped {
@@ -378,4 +449,15 @@ internal actual class LanTlsListener actual constructor() {
             }
         }
     }
+}
+
+private const val KEYCHAIN_LABEL = "com.carlom.klardrop.qrshare"
+
+/** The 32-byte P-256 scalar D from PKCS#8: the inner ECPrivateKey is `02 01 01 04 20 <D>`. */
+internal fun ecPrivateScalar(pkcs8: ByteArray): ByteArray? {
+    val marker = byteArrayOf(0x02, 0x01, 0x01, 0x04, 0x20)
+    for (i in 0..pkcs8.size - marker.size - 32) {
+        if ((marker.indices).all { pkcs8[i + it] == marker[it] }) return pkcs8.copyOfRange(i + 5, i + 37)
+    }
+    return null
 }

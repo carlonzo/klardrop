@@ -49,54 +49,58 @@ struct ShareSheetView: View {
 
             Spacer().frame(height: KdSpacing.s4)
 
-            // "Your devices" horizontal scroll
-            if !trustedDevices.isEmpty || onShareViaQr != nil {
-                if !trustedDevices.isEmpty {
-                    SectionHeadView(label: "Your devices", count: trustedDevices.count) { EmptyView() }
-                        .padding(.horizontal, KdSpacing.s4)
-                }
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: KdSpacing.s3) {
-                        ForEach(trustedDevices) { device in
-                            TrustedDeviceTileView(
-                                device: device,
-                                isSelected: device.id == selectedId,
-                                onTap: { onSelect(device); selectedId = device.id }
-                            )
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // "Your devices" horizontal scroll
+                    if !trustedDevices.isEmpty || onShareViaQr != nil {
+                        if !trustedDevices.isEmpty {
+                            SectionHeadView(label: "Your devices", count: trustedDevices.count) { EmptyView() }
+                                .padding(.horizontal, KdSpacing.s4)
                         }
-                        if let onShareViaQr {
-                            QrDestinationTileView(onTap: onShareViaQr)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: KdSpacing.s3) {
+                                ForEach(trustedDevices) { device in
+                                    TrustedDeviceTileView(
+                                        device: device,
+                                        isSelected: device.id == selectedId,
+                                        onTap: { onSelect(device); selectedId = device.id }
+                                    )
+                                }
+                                if let onShareViaQr {
+                                    QrDestinationTileView(onTap: onShareViaQr)
+                                }
+                            }
+                            .padding(.horizontal, KdSpacing.s4)
                         }
+                        .padding(.vertical, KdSpacing.s2)
+
+                        Spacer().frame(height: KdSpacing.s4)
                     }
-                    .padding(.horizontal, KdSpacing.s4)
-                }
-                .padding(.vertical, KdSpacing.s2)
 
-                Spacer().frame(height: KdSpacing.s4)
-            }
+                    // "Nearby" list
+                    if !nearbyDevices.isEmpty {
+                        SectionHeadView(label: "Nearby", count: nearbyDevices.count) { EmptyView() }
+                            .padding(.horizontal, KdSpacing.s4)
 
-            // "Nearby" list
-            if !nearbyDevices.isEmpty {
-                SectionHeadView(label: "Nearby", count: nearbyDevices.count) { EmptyView() }
-                    .padding(.horizontal, KdSpacing.s4)
+                        VStack(spacing: 0) {
+                            ForEach(nearbyDevices) { device in
+                                DeviceRowView(
+                                    name: device.name,
+                                    subText: "1-time send \u{00B7} accept on receiver",
+                                    kind: device.kind,
+                                    avatarStyle: .neutral,
+                                    rowState: device.id == selectedId ? .active : .idle,
+                                    status: device.status,
+                                    onTap: { onSelect(device); selectedId = device.id }
+                                )
+                                .padding(.horizontal, KdSpacing.s3)
+                            }
+                        }
 
-                VStack(spacing: 0) {
-                    ForEach(nearbyDevices) { device in
-                        DeviceRowView(
-                            name: device.name,
-                            subText: "1-time send \u{00B7} accept on receiver",
-                            kind: device.kind,
-                            avatarStyle: .neutral,
-                            rowState: device.id == selectedId ? .active : .idle,
-                            status: device.status,
-                            onTap: { onSelect(device); selectedId = device.id }
-                        )
-                        .padding(.horizontal, KdSpacing.s3)
+                        Spacer().frame(height: KdSpacing.s4)
                     }
                 }
-
-                Spacer().frame(height: KdSpacing.s4)
             }
 
             // Primary CTA
@@ -116,12 +120,8 @@ struct ShareSheetView: View {
 
             Spacer().frame(height: KdSpacing.s7)
         }
-        #if os(iOS)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.hidden) // hand-drawn above
-        .presentationCornerRadius(KdRadii.sheet)
-        .presentationBackground(kd.bg1)
-        #else
+        // iOS presentation (detents/background) is owned by the host sheet (ShareInboxSheet).
+        #if os(macOS)
         .frame(minWidth: 420, minHeight: 360)
         .background(kd.bg1)
         #endif

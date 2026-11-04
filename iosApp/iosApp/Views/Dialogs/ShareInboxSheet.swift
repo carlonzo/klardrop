@@ -131,9 +131,13 @@ struct ShareInboxSheet: View {
                 )
             }
         }
+        // Content hugs the top so a taller sheet never floats it mid-screen.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .interactiveDismissDisabled(!swipeDismissAllowed)
         #if os(iOS)
-        .presentationDetents([.medium, .large])
+        // Device picker is a fixed half sheet (dragging it to full screen broke the
+        // layout); the QR view needs the full height to show code + instructions.
+        .presentationDetents(isQrActive ? [.large] : [.medium])
         .presentationDragIndicator(.hidden)
         .presentationCornerRadius(KdRadii.sheet)
         .presentationBackground(kd.bg1)
