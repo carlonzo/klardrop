@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -71,6 +72,7 @@ actual fun KlardropNavigator(
       discoveryController = discoveryController,
       uiDependencies = uiDependencies,
       onRequestExemption = onRequestExemption,
+      backHandler = { enabled, onBack -> BackHandler(enabled, onBack) },
     )
     return
   }

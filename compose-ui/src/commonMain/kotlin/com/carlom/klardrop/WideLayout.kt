@@ -89,6 +89,9 @@ fun WideLayout(
     uiDependencies: UiDependencies,
     sidebarWidth: Dp = DesktopSidebarWidth,
     onRequestExemption: (ConnectivityRestriction) -> Unit = {},
+    // Android passes its BackHandler so system back closes the open chat instead of
+    // leaving the app. Desktop has no system back, so the default does nothing.
+    backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit = { _, _ -> },
 ) {
     val state by discoveryController.screenStateFlow.collectAsState()
     val connectivityRestrictions by discoveryController.connectivityRestrictions.collectAsState()
@@ -113,6 +116,8 @@ fun WideLayout(
     LaunchedEffect(activeDeviceId) {
         discoveryController.setActiveChatDeviceId(activeDeviceId)
     }
+
+    backHandler(activeDeviceId != null) { activeDeviceId = null }
 
     val keyboardFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
