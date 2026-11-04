@@ -92,7 +92,7 @@ private fun extractFirstFrame(path: String): ImageBitmap? {
 
 private fun findFfmpeg(): String? {
   val candidates = buildList {
-    // PATH first, then the usual package-manager locations — a bundled .app / .deb launch
+    // PATH first, then the usual install locations — a bundled .app / desktop launch
     // often starts with a minimal PATH that omits /opt/homebrew and /usr/local.
     add("ffmpeg")
     add("/opt/homebrew/bin/ffmpeg")

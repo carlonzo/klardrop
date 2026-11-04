@@ -21,22 +21,12 @@ packaging/
     test-omarchy-install.sh             # comprehensive test suite for native, Omarchy, and Qt flows
   homebrew/
     klardrop.rb                         # macOS cask template (@VERSION@ / @SHA256@ rendered by CI)
-  aur/
-    PKGBUILD                            # Arch klardrop-bin template (JVM desktop app)
-    klardrop-native-bin/
-      PKGBUILD                          # Arch klardrop-native-bin template (headless native engine)
-    klardrop-omarchy/
-      PKGBUILD                          # Arch klardrop-omarchy template (Omarchy shell integration)
-      klardrop-omarchy-enable           # per-user activation script
-      klardrop-omarchy-disable          # per-user deactivation script
-    klardrop-qt-bin/
-      PKGBUILD                          # Arch klardrop-qt-bin template (standalone Qt Quick frontend)
   README.md
 ```
 
 ## Channels
 
-### Linux — `install.sh` (primary)
+### Linux — `install.sh` (the only supported install)
 
 A single script, run straight from the terminal:
 
@@ -47,7 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/in
 #### Flavors & Architecture Matrix
 
 - **Native engine (`--native`, `--omarchy`, `--qt`):** Built for both **`x86_64`** (`x64`) and **`aarch64` / `arm64`** (`arm64`).
-- **JVM desktop application (`--jvm`, `klardrop-bin`):** Published for **`x86_64` only**.
+- **JVM desktop application (`--jvm`):** Published for **`x86_64` only**.
 
 Flavors:
 1. **Auto-detection (default):**
@@ -98,7 +88,7 @@ Before making any filesystem or service mutations, `install.sh` verifies require
 
 #### Safety Guards & Atomic Upgrades
 
-- **Package manager protection:** `install.sh` queries `pacman -Qo`, `dpkg-query -S`, and `rpm -qf` for both `~/.local/bin/klardrop` and `~/.local/bin/klardrop-engine`. If either existing binary is owned by a system package manager, `install.sh` halts to prevent overwriting (or, on `--uninstall`, deleting) package-managed files.
+- **System package protection:** `install.sh` queries `pacman -Qo`, `dpkg-query -S`, and `rpm -qf` for both `~/.local/bin/klardrop` and `~/.local/bin/klardrop-engine`. If either existing binary is owned by a system package manager, `install.sh` halts to prevent overwriting (or, on `--uninstall`, deleting) them. Klardrop is not distributed through any package manager; this only protects leftovers from older AUR packages.
 - **Unrelated binary & service protection:** If `~/.local/bin/klardrop` or `~/.local/bin/klardrop-engine` exists without an installer marker or service unit, the installer refuses to overwrite or remove it. A symlink on the engine path is refused outright (the client path is the one legacy exception: a JVM app-image launcher symlink there is legitimate migration evidence). Unrelated service units are similarly protected from overwrite or removal independently of whether the binaries exist. In addition, explicit `--jvm --uninstall` refuses to delete an identified native install.
 - **Running daemon / app detection:**
   - JVM app running: detected via `pgrep -f "klardrop.launcher="` before mutations, requiring the user to quit.
@@ -152,31 +142,13 @@ install (see "macOS signing").
 brew install --cask carlonzo/klardrop/klardrop
 ```
 
-### Linux — native packages (AUR & package managers)
-
-Klardrop provides packaging definitions under `packaging/aur/`:
-
-| Channel | Type | Status | Description |
-|---------|------|--------|-------------|
-| AUR `klardrop-bin` | JVM desktop app | Published | Repackages the universal JVM desktop app into `/opt/klardrop` + `/usr/bin/klardrop`. Bumped by CI on every stable release (`yay -S klardrop-bin`). |
-| AUR `klardrop-native-bin` | Native engine + CLI | Published | Repackages the native binaries for `x86_64` and `aarch64`, conflicts with `klardrop-bin`, declares runtime dependencies (`avahi`, `sqlite`, `openssl`, `systemd-libs`), subprocess optdepends (`curl`, `libnotify`, `wl-clipboard`, `libsecret`, `ffmpeg`, `qrencode`, `xdg-utils`), installs `/usr/bin/klardrop` (Rust client) and `/usr/bin/klardrop-engine` (engine), and installs `/usr/lib/systemd/user/klardrop.service` pointing to `/usr/bin/klardrop-engine daemon` (`WantedBy=default.target` with no `After=default.target`). |
-| AUR `klardrop-omarchy` | Omarchy integration | Published | Minimal optional package providing the Omarchy shell plugin (bar widget & quick panel) to `/usr/share/klardrop/omarchy-plugin` and per-user activation scripts (`klardrop-omarchy-enable` / `klardrop-omarchy-disable`). Full application menu integration, file manager context actions, and Nautilus extensions are supplied by the full installer (`install.sh --omarchy`). |
-| AUR `klardrop-qt-bin` | Standalone Qt Quick GUI | Published | Standalone Qt Quick desktop frontend package for Arch Linux (`packaging/aur/klardrop-qt-bin/PKGBUILD`). Precompiled binary package depending on `klardrop-native-bin`, `qt6-base`, `qt6-declarative`, providing and conflicting with `klardrop-qt`, and installing desktop entry + icons. |
-
-> [!NOTE]
-> All four packages are rendered and pushed by `.github/workflows/release.yml` on every stable release: the templates are filled with the tag version and the **real per-arch sha256 digests** of the published native tarballs (`SHA_X64` / `SHA_ARM64` in the `Render native PKGBUILDs + .SRCINFO` step), and any placeholder left unrendered fails the release. `yay -S klardrop-native-bin`, `yay -S klardrop-qt-bin` and `yay -S klardrop-omarchy` therefore install the current release, exactly like `yay -S klardrop-bin`.
->
-> The only thing that gates the native push is whether the AUR repositories exist: each of the three is checked with `git ls-remote`, and a repository that has not been created yet is skipped with a warning instead of failing the release. Create the three repos once and they are maintained from then on.
-
-The in-app and native self-updater inspects the binary via `pacman -Qo`, `dpkg-query -S`, or `rpm -qf` and refuses to overwrite package-managed binaries, directing users to their package manager instead.
-
 ### Headless engine vs Desktop GUI
 
 - **Native Linux Engine (`--native`):** Headless background service. Provides `klardrop daemon` (forwards to `klardrop-engine`), `klardrop share --to <device-id> <files>`, the explicit `klardrop share --pick <files>` device picker used by the desktop entry, Nautilus action and Omarchy menu helper, and local CLI functionality.
   `klardrop-share-pick` is the terminal-spawning bridge used by the GUI callers (desktop entry + Nautilus), which have no tty of their own.
 - **Omarchy Desktop (`--omarchy`):** UI is provided by the native `klardrop.omarchy` QML shell plugin.
 - **Standalone Qt Quick Frontend (`--qt`):** Standalone Qt Quick desktop frontend connecting to the local daemon over loopback HTTP. Default desktop GUI on non-Omarchy Linux systems. Launched explicitly by user, minimizes to system tray if available, single-instance activation.
-- **JVM Compose Desktop (`--jvm` or `klardrop-bin`):** Legacy universal JVM desktop application bundling the Compose Multiplatform UI (`--jvm` explicit compatibility flag). Maintained for backwards compatibility and system-wide installs; the published package repository channel remains `yay -S klardrop-bin` (the legacy JVM app), while `klardrop-native-bin` / `klardrop-qt-bin` are the current native channels.
+- **JVM Compose Desktop (`--jvm`):** Legacy universal JVM desktop application bundling the Compose Multiplatform UI (`--jvm` explicit compatibility flag). Maintained for backwards compatibility and system-wide installs.
 
 ### Testing
 
@@ -286,27 +258,16 @@ Three surfaces show the result:
   a background share target, is most of the time.
 
 What the update button does depends on how this copy was installed. Klardrop detects
-that at runtime (`detectInstallChannel`) rather than assuming, because every system
-package manager owns its own files: writing over them would leave the package database
-lying about what is installed.
+that at runtime (`detectInstallChannel`) rather than assuming. Klardrop is not shipped
+through any Linux package manager; a launcher a system package still owns (e.g. a
+leftover AUR install) is treated as a manual install, so the updater never writes over it.
 
 | Detected channel | How it's detected | What the app offers |
 |------------------|-------------------|---------------------|
 | Linux `install.sh`, user-writable | launcher under `~/.local/lib/klardrop` or `/opt/klardrop` | **Self-update**: downloads the tarball, verifies sha256, stages it, then a **Restart** button swaps the app-image and relaunches — no terminal, no sudo |
 | Linux `install.sh`, root-owned `/opt` | as above but not writable | the one-line `curl … \| bash` reinstall |
-| Debian / Ubuntu | `dpkg-query -S` owns the launcher | `curl -fsSLO <deb> && sudo apt install ./<deb>` |
-| Fedora / openSUSE | `rpm -qf` owns the launcher | `curl -fsSLO <rpm> && sudo rpm -Uvh ./<rpm>` |
-| Arch | `pacman -Qo` owns the launcher | `yay -S klardrop-bin` (or `yay -S klardrop-native-bin` on native) |
-| Flatpak | `$FLATPAK_ID` / `/.flatpak-info` | `flatpak update com.carlom.Klardrop` |
-| Snap | `$SNAP` or a `/snap/…` launcher | `sudo snap refresh klardrop` |
-| AppImage | `$APPIMAGE` or a `/tmp/.mount_…` launcher | download link |
-| Nix | launcher in `/nix/store` | `nix profile upgrade klardrop` |
 | macOS Homebrew | `brew list --cask klardrop` | `brew upgrade --cask klardrop` |
-| Unsigned DMG / Windows MSI / unknown | fallthrough | download link for the platform asset |
-
-Flatpak, Snap, AppImage and Nix are detected but not published by this repo — if a
-downstream packager ships one, the app gives that channel's own upgrade command
-instead of misdirecting the user to a tarball.
+| Owned by a system package / unsigned DMG / Windows MSI / unknown | fallthrough | download link for the platform asset |
 
 Commands are offered as copy-to-clipboard (the app never runs a privileged command
 itself). A failed self-update falls back to the channel's command, and an "update
@@ -320,12 +281,10 @@ minified release build; the release workflow boots the minified app-image as a g
 | Channel  | Setup | CI secret |
 |----------|-------|-----------|
 | Homebrew | Create the `carlonzo/homebrew-klardrop` tap repo, and a token that can push to it. | `HOMEBREW_TAP_TOKEN` |
-| AUR | Register the `klardrop-bin` package on aur.archlinux.org and add the matching SSH private key. Optionally pin the host key with `AUR_KNOWN_HOSTS` (`ssh-keyscan aur.archlinux.org`, verified against the AUR's published fingerprint); without it the job trusts the key on first use. | `AUR_SSH_PRIVATE_KEY`, `AUR_KNOWN_HOSTS` (optional) |
 | install.sh | None — served from `raw.githubusercontent.com` once on `main`. | — |
-| .deb / .rpm | Not published (they would embed a JRE). Use install.sh or AUR. | — |
 
-Both the Homebrew and AUR bump jobs are gated on their secret and on the version being
-a stable `X.Y.Z`, so an unconfigured channel is skipped, not failed.
+The Homebrew bump job is gated on its secret and on the version being a stable `X.Y.Z`,
+so an unconfigured tap is skipped, not failed.
 
 ## macOS signing
 

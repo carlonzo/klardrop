@@ -58,30 +58,29 @@ internal fun currentExecutablePath(): String? {
 private fun runExitCode(vararg cmd: String): Int =
   runCatching { execProcess(cmd.toList()).exitCode }.getOrDefault(-1)
 
+/**
+ * Whether a system package database claims [path] (e.g. a leftover AUR install).
+ * A guard only: install.sh is the only supported install, and the updater never
+ * writes over files a package manager still believes it owns.
+ */
 @OptIn(ExperimentalForeignApi::class)
-internal fun detectFilePackageChannel(path: String): InstallChannel? {
-  if (access(path, F_OK) != 0) return null
-  if (runExitCode("pacman", "-Qo", path) == 0) return InstallChannel.PACMAN
-  if (runExitCode("dpkg-query", "-S", path) == 0) return InstallChannel.DEB
-  if (runExitCode("rpm", "-qf", path) == 0) return InstallChannel.RPM
-  return null
+internal fun isFilePackageManaged(path: String): Boolean {
+  if (access(path, F_OK) != 0) return false
+  return runExitCode("pacman", "-Qo", path) == 0 ||
+    runExitCode("dpkg-query", "-S", path) == 0 ||
+    runExitCode("rpm", "-qf", path) == 0
 }
-
-internal fun isFilePackageManaged(
-  path: String,
-  packageChecker: (String) -> InstallChannel? = ::detectFilePackageChannel,
-): Boolean = packageChecker(path) != null
 
 @OptIn(ExperimentalForeignApi::class)
 internal fun detectLinuxInstallChannel(
   exePath: String?,
   home: String? = getenv("HOME")?.toKString(),
-  packageChecker: (String) -> InstallChannel? = ::detectFilePackageChannel,
+  packageChecker: (String) -> Boolean = ::isFilePackageManaged,
 ): InstallChannel {
   if (exePath == null || home.isNullOrBlank()) return InstallChannel.MANUAL
 
-  val pkgChannel = packageChecker(exePath)
-  if (pkgChannel != null) return pkgChannel
+  // System-owned: never self-update over it.
+  if (packageChecker(exePath)) return InstallChannel.MANUAL
 
   // The tarball channel owns TWO files, and they are always written and replaced
   // together: `klardrop-engine` (this Kotlin/Native daemon) and `klardrop` (the

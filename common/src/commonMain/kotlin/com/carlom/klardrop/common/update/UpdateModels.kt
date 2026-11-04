@@ -11,13 +11,6 @@ public enum class InstallChannel(public val displayName: String) {
   BREW("Homebrew"),          // macOS Homebrew cask
   DMG("macOS disk image"),   // macOS: downloaded .dmg by hand
   TARBALL("install.sh"),     // Linux: install.sh script (self-updatable in place)
-  DEB("apt / dpkg"),         // Linux: the .deb, installed by dpkg/apt
-  RPM("rpm"),                // Linux: the .rpm, installed by rpm/dnf/zypper
-  PACMAN("AUR"),             // Arch: pacman-owned, i.e. the klardrop-bin AUR package
-  FLATPAK("Flatpak"),        // Linux: running inside a Flatpak sandbox
-  SNAP("Snap"),              // Linux: running from a snap mount
-  APPIMAGE("AppImage"),      // Linux: launched from an AppImage
-  NIX("Nix"),                // Linux: /nix/store-resident build
   MSI("Windows installer"),  // Windows: the .msi
   MANUAL("manual install"),  // installed some other way
   UNKNOWN("unknown"),        // couldn't tell / not a desktop build

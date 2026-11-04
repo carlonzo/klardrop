@@ -34,8 +34,6 @@ class UpdateCheckerTest {
     notes = "https://example/notes/$version",
     platforms = mapOf(
       "linux-tarball" to ReleaseAsset("https://example/klardrop-linux-x64.tar.gz"),
-      "linux-deb" to ReleaseAsset("https://example/klardrop_1.0.0_amd64.deb"),
-      "linux-rpm" to ReleaseAsset("https://example/klardrop-1.0.0.x86_64.rpm"),
       "macos" to ReleaseAsset("https://example/klardrop.dmg"),
       "windows" to ReleaseAsset("https://example/klardrop.msi"),
     ),
@@ -170,98 +168,6 @@ class UpdateCheckerTest {
   }
 
   // --- install channels ------------------------------------------------------
-  // Each system package manager owns its own files, so the only correct advice is
-  // that manager's own upgrade path. Getting this wrong is worse than saying nothing:
-  // it tells the user to overwrite files a package database still claims to own.
-
-  @Test
-  fun debChannelDownloadsThePackageAndHandsItToApt() = runTest {
-    val dispatcher = StandardTestDispatcher(testScheduler)
-    val checker = checker(dispatcher, channel = InstallChannel.DEB)
-    checker.checkNow()
-    advanceUntilIdle()
-
-    val status = checker.status.value
-    assertIs<UpdateStatus.Available>(status)
-    assertEquals(
-      UpdateAction.RunCommand(
-        "curl -fsSLO https://example/klardrop_1.0.0_amd64.deb && sudo apt install ./klardrop_1.0.0_amd64.deb"
-      ),
-      status.action,
-    )
-  }
-
-  @Test
-  fun rpmChannelDownloadsThePackageAndUpgradesInPlace() = runTest {
-    val dispatcher = StandardTestDispatcher(testScheduler)
-    val checker = checker(dispatcher, channel = InstallChannel.RPM)
-    checker.checkNow()
-    advanceUntilIdle()
-
-    val status = checker.status.value
-    assertIs<UpdateStatus.Available>(status)
-    assertEquals(
-      UpdateAction.RunCommand(
-        "curl -fsSLO https://example/klardrop-1.0.0.x86_64.rpm && sudo rpm -Uvh ./klardrop-1.0.0.x86_64.rpm"
-      ),
-      status.action,
-    )
-  }
-
-  @Test
-  fun packageManagerChannelsUseTheirOwnUpgradeCommand() = runTest {
-    val expected = mapOf(
-      InstallChannel.PACMAN to "yay -S ${UpdateChecker.AUR_PACKAGE}",
-      InstallChannel.FLATPAK to "flatpak update com.carlom.Klardrop",
-      InstallChannel.SNAP to "sudo snap refresh klardrop",
-      InstallChannel.NIX to "nix profile upgrade klardrop",
-    )
-    for ((channel, command) in expected) {
-      val dispatcher = StandardTestDispatcher(testScheduler)
-      val checker = checker(dispatcher, channel = channel)
-      checker.checkNow()
-      advanceUntilIdle()
-
-      val status = checker.status.value
-      assertIs<UpdateStatus.Available>(status, "channel $channel")
-      assertEquals(UpdateAction.RunCommand(command), status.action, "channel $channel")
-    }
-  }
-
-  @Test
-  fun pacmanChannelWithNativeAssetKeyUsesNativeAurPackage() = runTest {
-    for (nativeKey in listOf(UpdateChecker.ASSET_LINUX_NATIVE_X64, UpdateChecker.ASSET_LINUX_NATIVE_ARM64)) {
-      val dispatcher = StandardTestDispatcher(testScheduler)
-      val checker = checker(
-        dispatcher,
-        channel = InstallChannel.PACMAN,
-        assetKey = nativeKey,
-      )
-      checker.checkNow()
-      advanceUntilIdle()
-
-      val status = checker.status.value
-      assertIs<UpdateStatus.Available>(status, "nativeKey $nativeKey")
-      assertEquals(UpdateAction.RunCommand("yay -S klardrop-native-bin"), status.action, "nativeKey $nativeKey")
-    }
-  }
-
-  @Test
-  fun channelWithoutItsAssetFallsBackToADownloadLink() = runTest {
-    val dispatcher = StandardTestDispatcher(testScheduler)
-    // A release that predates the .rpm channel: no linux-rpm asset to point at.
-    val withoutRpm = manifest("0.2.0").let { it.copy(platforms = it.platforms - "linux-rpm") }
-    val checker = checker(dispatcher, channel = InstallChannel.RPM, fetched = withoutRpm)
-    checker.checkNow()
-    advanceUntilIdle()
-
-    val status = checker.status.value
-    assertIs<UpdateStatus.Available>(status)
-    assertEquals(
-      UpdateAction.OpenUrl("https://example/klardrop-linux-x64.tar.gz"),
-      status.action,
-    )
-  }
 
   @Test
   fun windowsWithoutAnMsiFallsBackToTheReleaseNotes() = runTest {

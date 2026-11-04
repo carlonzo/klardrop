@@ -47,7 +47,7 @@ private const val PROBE_TIMEOUT_SECONDS = 5L
 
 private fun findFfmpeg(): String? {
   val candidates = listOf(
-    // PATH first, then the usual package-manager locations — a bundled .app / .deb launch
+    // PATH first, then the usual install locations — a bundled .app / desktop launch
     // often starts with a minimal PATH that omits /opt/homebrew and /usr/local.
     "ffmpeg",
     "/opt/homebrew/bin/ffmpeg",
