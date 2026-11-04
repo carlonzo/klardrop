@@ -163,6 +163,11 @@ done
 
 echo "$VERSION" > "$STAGE/VERSION"
 
+# The in-app self-updater runs this release's own installer with
+# --refresh-integration, so the systemd unit, helpers and menu entries follow
+# the release instead of staying at whatever the first install wrote.
+install -m 755 packaging/install.sh "$STAGE/share/klardrop/install.sh"
+
 # `klardrop-fixture-daemon` is a cli-rust test binary and must never ship. It cannot
 # reach here from the sources copied above, but the guard makes that structural rather
 # than assumed: if a future copy step ever drags it in, staging fails instead.

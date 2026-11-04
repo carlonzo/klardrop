@@ -382,11 +382,11 @@ with tarfile.open('$evilTarball', mode='w:gz') as tar:
 
       installer.downloadAndStage(ReleaseAsset("https://example.com/asset.tar.gz", sha)) {}
 
-      // Staged binary should exist, but stagedDir should NOT exist for headless generic install!
+      // The extracted tree is always staged: it carries install.sh for --refresh-integration.
       val stagedBin = "$tempHome/.local/bin/.klardrop.new"
       val stagedDir = "$tempHome/.local/bin/.klardrop-staged-tree"
       assertTrue(isRegularFile(stagedBin), "Staged binary must exist")
-      assertFalse(fileExists(stagedDir), "Staged tree must NOT be retained for generic install")
+      assertTrue(isDirectory(stagedDir), "Staged tree is retained for the integration refresh")
 
       installer.applyAndRestart()
 
@@ -630,6 +630,10 @@ with tarfile.open('$evilTarball', mode='w:gz') as tar:
       chmod("$extractRoot/bin/klardrop-engine", mode0755)
       execProcess(listOf("sh", "-c", "echo 'new-binary' > '$extractRoot/bin/klardrop'"))
       chmod("$extractRoot/bin/klardrop", mode0755)
+      // The release's own installer: the updater must run it to refresh integration files.
+      val refreshLog = "$tempDir/refresh.log"
+      execProcess(listOf("mkdir", "-p", "$extractRoot/share/klardrop"))
+      execProcess(listOf("sh", "-c", "printf '%s\\n' '#!/bin/bash' 'echo \"\$@\" > $refreshLog' > '$extractRoot/share/klardrop/install.sh'"))
 
       val fakeTarball = "$tempDir/klardrop-native-linux-x64.tar.gz"
       execProcess(listOf("tar", "-czf", fakeTarball, "-C", stage, "klardrop-native-linux-x64"))
@@ -647,17 +651,22 @@ with tarfile.open('$evilTarball', mode='w:gz') as tar:
 
       installer.downloadAndStage(ReleaseAsset("https://example.com/asset.tar.gz", sha)) {}
 
-      // Staged binary exists, but stagedDir does not
+      // Staged binary and the staged tree both exist
       val stagedBin = "$binDir/.klardrop.new"
       val stagedDir = "$binDir/.klardrop-staged-tree"
       assertTrue(isRegularFile(stagedBin), "Staged binary must exist")
-      assertFalse(fileExists(stagedDir), "Staged plugin tree must NOT exist for headless tarball")
+      assertTrue(isDirectory(stagedDir), "Staged tree is retained for the integration refresh")
 
       installer.applyAndRestart()
 
       val updatedBin = execProcess(listOf("cat", "$binDir/klardrop")).stdoutString.trim()
       assertEquals("new-binary", updatedBin)
       assertTrue(fileExists(restartLog), "Daemon should have restarted")
+      assertEquals(
+        "--refresh-integration=$stagedDir",
+        execProcess(listOf("cat", refreshLog)).stdoutString.trim(),
+        "the release's install.sh must be run to refresh installer-owned files",
+      )
       assertFalse(isDirectory("$tempHome/.config/omarchy"), "~/.config/omarchy must NOT be created")
     } finally {
       execProcess(listOf("rm", "-rf", tempDir))
@@ -697,7 +706,7 @@ with tarfile.open('$evilTarball', mode='w:gz') as tar:
 
       installer.downloadAndStage(ReleaseAsset("https://example.com/asset.tar.gz", sha)) {}
 
-      assertFalse(fileExists(staleStagedDir), "Stale stagedDir must be removed even when no plugin is installed")
+      assertFalse(fileExists("$staleStagedDir/old/file"), "Stale stagedDir contents must be replaced by the new stage")
     } finally {
       execProcess(listOf("rm", "-rf", tempDir))
     }

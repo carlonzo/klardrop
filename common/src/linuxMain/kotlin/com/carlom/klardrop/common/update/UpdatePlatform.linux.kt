@@ -715,15 +715,13 @@ internal class LinuxNativeTarballInstaller(
       // 6. Stage next to target. Both binaries are copied out of the SAME extracted
       // tree, so the staged pair can only ever be the pair this release shipped.
       rmRf(stagedDir, stagedEngine, stagedClient, stagedQtBin, stagedQtLauncher)
-      val treeRoot = if (hasPluginInstalled || flavor == LinuxFlavor.QT) {
-        val mvResult = execProcess(listOf("mv", extractRoot, stagedDir))
-        if (mvResult.exitCode != 0) {
-          throw IllegalStateException("Failed to stage extracted tree (exit ${mvResult.exitCode})")
-        }
-        stagedDir
-      } else {
-        extractRoot
+      // Always keep the tree: besides the plugin/Qt files it carries the release's
+      // install.sh, which applyAndRestart runs to refresh installer-owned files.
+      val mvResult = execProcess(listOf("mv", extractRoot, stagedDir))
+      if (mvResult.exitCode != 0) {
+        throw IllegalStateException("Failed to stage extracted tree (exit ${mvResult.exitCode})")
       }
+      val treeRoot = stagedDir
       for (slot in binarySlots()) {
         val cpResult = execProcess(listOf("cp", "-p", "$treeRoot/${slot.relative}", slot.staged))
         if (cpResult.exitCode != 0) {
@@ -993,6 +991,18 @@ internal class LinuxNativeTarballInstaller(
     for (unit in units) {
       val backup = unit.backup ?: continue
       if (fileExists(backup)) unlink(backup)
+    }
+
+    // The binaries/plugin are swapped; let this release's own installer rewrite the
+    // files it owns (systemd unit, helpers, .desktop entries, menu extension), so
+    // integration changes reach self-updated installs. Best-effort: older tarballs
+    // don't ship it, and a failure here must not undo a successful update.
+    val releaseInstaller = "$stagedDir/share/klardrop/install.sh"
+    if (isRegularFile(releaseInstaller)) {
+      runCatching {
+        val r = execProcess(listOf("bash", releaseInstaller, "--refresh-integration=$stagedDir"), timeoutMillis = 60_000L)
+        if (r.exitCode != 0) log("UpdateInstaller", "integration refresh failed (exit ${r.exitCode}): ${r.stderrString.take(500)}")
+      }.onFailure { log("UpdateInstaller", "integration refresh failed", it) }
     }
 
     // Clean up staged tree (best-effort)

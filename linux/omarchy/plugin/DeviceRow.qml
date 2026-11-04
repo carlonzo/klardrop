@@ -24,6 +24,9 @@ BorderSurface {
   // and unpairing now live in the standalone window's sidebar.
   property bool showMessageButton: true
   property bool showForgetButton: true
+  // The standalone window opens a device screen on row click, which has its own
+  // send controls; only the bar panel needs per-row send buttons.
+  property bool showSendButtons: true
 
   property color foreground: Color.foreground
   property color accent: Color.accent
@@ -87,8 +90,8 @@ BorderSurface {
     Column {
       anchors.verticalCenter: parent.verticalCenter
       // Base overhead (icon column, margins) plus ~24px per visible action
-      // button; sendFiles/sendClipboard are always shown, the rest optional.
-      readonly property int visiblePairedButtons: 2
+      // button.
+      readonly property int visiblePairedButtons: (root.showSendButtons ? 2 : 0)
         + (root.showMessageButton ? 1 : 0)
         + (root.showForgetButton ? 1 : 0)
       readonly property int badgeReserve: root.showUnreadBadge ? Style.space(28) : 0
@@ -143,6 +146,7 @@ BorderSurface {
       visible: root.paired
 
       PanelActionButton {
+        visible: root.showSendButtons
         iconText: "󰉋"
         tooltipText: "Send files"
         fontFamily: root.fontFamily
@@ -150,6 +154,7 @@ BorderSurface {
       }
 
       PanelActionButton {
+        visible: root.showSendButtons
         iconText: "󰅌"
         tooltipText: "Send clipboard"
         fontFamily: root.fontFamily

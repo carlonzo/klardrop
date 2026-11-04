@@ -42,6 +42,7 @@ FORCE_OMARCHY=0
 FORCE_NATIVE=0
 FORCE_QT=0
 RESTART_DAEMON=0
+REFRESH_SRC=""
 CHANNEL_SET_NIGHTLY=0
 CHANNEL_SET_STABLE=0
 
@@ -55,6 +56,10 @@ for arg in "$@"; do
     --qt)             FORCE_QT=1 ;;
     --jvm)            FORCE_JVM=1 ;;
     --restart-daemon) RESTART_DAEMON=1 ;;
+    # Used by the in-app self-updater after it swapped the binaries/plugin from an
+    # extracted tarball: rewrite only the files this script owns (systemd unit,
+    # helpers, .desktop entries, menu extension) so they follow the new release.
+    --refresh-integration=*) REFRESH_SRC="${arg#*=}" ;;
     *)                die "unknown option '$arg'" ;;
   esac
 done
@@ -194,6 +199,13 @@ else
   else
     FLAVOR="qt"
   fi
+fi
+
+if [ -n "$REFRESH_SRC" ]; then
+  if [ "$ACTION" != "install" ] || [ "$FLAVOR" = "jvm" ]; then
+    die "--refresh-integration is only valid for native daemon installations."
+  fi
+  [ -d "$REFRESH_SRC" ] || die "--refresh-integration: '$REFRESH_SRC' is not a directory."
 fi
 
 if [ "$RESTART_DAEMON" = 1 ]; then
@@ -523,6 +535,27 @@ LockPersonality=true
 [Install]
 WantedBy=default.target
 EOF
+    fi
+  }
+
+  install_qt_desktop_file() {
+    mkdir -p "$APPS_DIR"
+    # Desktop entry spec: quote and escape backslashes, quotes, dollar, backtick, percent
+    desktop_src="$src/share/klardrop/applications/klardrop.desktop"
+    escaped_exec="$(escape_desktop_exec_path "$KLARDROP_QT_LAUNCHER")"
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        Exec=*)
+          printf 'Exec=/usr/bin/env "%s"\n' "$escaped_exec"
+          ;;
+        *)
+          printf '%s\n' "$line"
+          ;;
+      esac
+    done < "$desktop_src" > "$DESKTOP_FILE"
+    chmod 644 "$DESKTOP_FILE"
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "$APPS_DIR" 2>/dev/null || true
     fi
   }
 
@@ -1271,6 +1304,27 @@ BLOCK
   elif command -v wget >/dev/null 2>&1; then dl() { wget -qO "$2" "$1"; }
   else die "need 'curl' or 'wget' to download."; fi
 
+  if [ -n "$REFRESH_SRC" ]; then
+    src="$REFRESH_SRC"
+    install_systemd_unit
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl --user daemon-reload 2>/dev/null || true
+    fi
+    if [ "$FLAVOR" = "omarchy" ]; then
+      install_menu_helper
+      install_open_helper
+      install_share_pick_helper
+      install_desktop_entry
+      install_app_desktop_entry
+      install_nautilus_extension
+      merge_menu_extension
+    elif [ "$FLAVOR" = "qt" ]; then
+      install_qt_desktop_file
+    fi
+    say "Klardrop integration refreshed ($FLAVOR)."
+    exit 0
+  fi
+
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
 
@@ -1559,24 +1613,7 @@ Please install the required Qt6 QML packages:
     install -m 755 "$src/bin/klardrop-qt" "$tmp_qt_bin"
     mv -f "$tmp_qt_bin" "$KLARDROP_QT_BIN"
     install -m 755 "$src/bin/klardrop-qt-launcher" "$KLARDROP_QT_LAUNCHER"
-    mkdir -p "$APPS_DIR"
-    # Desktop entry spec: quote and escape backslashes, quotes, dollar, backtick, percent
-    desktop_src="$src/share/klardrop/applications/klardrop.desktop"
-    escaped_exec="$(escape_desktop_exec_path "$KLARDROP_QT_LAUNCHER")"
-    while IFS= read -r line || [ -n "$line" ]; do
-      case "$line" in
-        Exec=*)
-          printf 'Exec=/usr/bin/env "%s"\n' "$escaped_exec"
-          ;;
-        *)
-          printf '%s\n' "$line"
-          ;;
-      esac
-    done < "$desktop_src" > "$DESKTOP_FILE"
-    chmod 644 "$DESKTOP_FILE"
-    if command -v update-desktop-database >/dev/null 2>&1; then
-      update-desktop-database "$APPS_DIR" 2>/dev/null || true
-    fi
+    install_qt_desktop_file
     [ -d "$src/share/klardrop/icons" ] && install_icons "$src/share/klardrop/icons"
     say "Klardrop (native, standalone Qt) installed: $(cat "$src/VERSION" 2>/dev/null || echo unknown version)"
   else

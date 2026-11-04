@@ -2,6 +2,7 @@
 
 package com.carlom.klardrop.common.features
 
+import com.carlom.klardrop.common.update.listDirectory
 import com.carlom.klardrop.common.utils.execProcess
 import com.carlom.klardrop.common.utils.execStreamingLines
 import com.carlom.klardrop.common.utils.log
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import platform.posix.getenv
+import platform.posix.setenv
 
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
@@ -22,6 +24,7 @@ import kotlin.time.TimeSource
 internal actual class ClipboardReaderWriter : ClipboardSource {
 
   actual override fun read(): String {
+    ensureWaylandDisplay()
     return try {
       val result = execProcess(listOf("wl-paste", "--no-newline", "--type", "text"))
       if (result.exitCode == 0) result.stdoutString else ""
@@ -33,6 +36,7 @@ internal actual class ClipboardReaderWriter : ClipboardSource {
   actual override fun readForSync(): String = read()
 
   actual override fun write(text: String) {
+    ensureWaylandDisplay()
     try {
       execProcess(listOf("wl-copy"), stdin = text.encodeToByteArray(), captureOutput = false)
     } catch (_: Exception) {
@@ -41,6 +45,7 @@ internal actual class ClipboardReaderWriter : ClipboardSource {
   }
 
   actual override fun changeSignals(): Flow<Unit>? {
+    ensureWaylandDisplay()
     val waylandDisplay = getenv("WAYLAND_DISPLAY")?.toKString()
     if (waylandDisplay.isNullOrEmpty()) {
       return null
@@ -92,3 +97,22 @@ internal actual class ClipboardReaderWriter : ClipboardSource {
     }
   }
 }
+
+/**
+ * The systemd user service can start before the compositor exports WAYLAND_DISPLAY
+ * (e.g. at boot), leaving wl-paste/wl-copy unable to reach the clipboard for the
+ * daemon's whole lifetime. When it's unset, adopt the session's socket from
+ * XDG_RUNTIME_DIR so child processes inherit it.
+ */
+internal fun ensureWaylandDisplay() {
+  if (!getenv("WAYLAND_DISPLAY")?.toKString().isNullOrEmpty()) return
+  val runtimeDir = getenv("XDG_RUNTIME_DIR")?.toKString()?.takeIf { it.isNotEmpty() } ?: return
+  val socket = waylandSocketName(runCatching { listDirectory(runtimeDir) }.getOrDefault(emptyList())) ?: return
+  // ponytail: process-wide setenv can race a concurrent posix_spawn reading environ; it runs
+  // once (afterwards the getenv check returns early). Pass env per-spawn if that ever bites.
+  setenv("WAYLAND_DISPLAY", socket, 0)
+}
+
+/** The lowest-numbered `wayland-N` socket name, ignoring `.lock` files. */
+internal fun waylandSocketName(entries: List<String>): String? =
+  entries.filter { Regex("wayland-\\d+").matches(it) }.minByOrNull { it.removePrefix("wayland-").toInt() }

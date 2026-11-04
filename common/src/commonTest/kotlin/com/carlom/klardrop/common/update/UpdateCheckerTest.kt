@@ -320,6 +320,28 @@ class UpdateCheckerTest {
   }
 
   @Test
+  fun failedCheckRetriesSoonInsteadOfWaitingAFullInterval() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    var offline = true // e.g. the daemon started at boot before DNS was up
+    val checker = checker(
+      dispatcher,
+      fetcher = UpdateManifestFetcher { if (offline) null else manifest("0.2.0") },
+      recheckInterval = 6.hours,
+    )
+
+    checker.start()
+    runCurrent()
+    assertIs<UpdateStatus.Failed>(checker.status.value)
+
+    offline = false
+    advanceTimeBy(UpdateChecker.FAILED_RETRY_INTERVAL + 1.minutes)
+    runCurrent()
+    assertIs<UpdateStatus.Available>(checker.status.value)
+
+    checker.stop()
+  }
+
+  @Test
   fun aLaterFailedCheckDoesNotHideAKnownUpdate() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
     var fail = false
