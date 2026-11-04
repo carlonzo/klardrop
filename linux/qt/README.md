@@ -72,5 +72,4 @@ make -j$(nproc)
 ## Deferred Parity Gates
 1. **Host Installs & Docker Matrix**: Automated testing across multiple physical distros/containers (host testing only; Docker permission unavailable).
 2. **Native Automatic X11 Clipboard / BLE Parity**: Remotely automated clipboard sync and BLE background discovery parity remain future gates.
-3. **Published Package Swap**: The installer default has switched to native (Omarchy / Qt); published package repositories (AUR `klardrop-bin` still JVM, native templates unpublished) remain deferred until separate package migration.
-4. **Video Thumbnails & Problem Reporting**: Thumbnail generation (`/thumbnail`) and problem reporting (`/report-problem`).
+3. **Video Thumbnails & Problem Reporting**: Thumbnail generation (`/thumbnail`) and problem reporting (`/report-problem`).

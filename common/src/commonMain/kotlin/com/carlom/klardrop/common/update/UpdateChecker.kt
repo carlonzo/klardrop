@@ -198,11 +198,7 @@ public class UpdateChecker(
    * Fallback action when the in-app self-updater isn't available (see [install]) —
    * which is every channel but a user-writable install.sh install.
    *
-   * Each system package manager owns its own files, so the only correct instruction
-   * is that manager's own upgrade command; writing over its files behind its back
-   * would leave the package database lying. Where we ship the asset but no repo
-   * (deb, rpm) the command downloads the new package and hands it to the manager.
-   * Channels with nothing to run (a bare .dmg, an AppImage, the MSI) get a download link.
+   * Channels with nothing to run (a bare .dmg, the MSI, a manual install) get a download link.
    */
   private fun actionFor(channel: InstallChannel, manifest: LatestManifest): UpdateAction = when (channel) {
     InstallChannel.BREW -> UpdateAction.RunCommand("brew upgrade --cask klardrop")
@@ -222,53 +218,10 @@ public class UpdateChecker(
       )
     }
 
-    // `apt install ./file.deb` (not `dpkg -i`) so apt resolves any dependency the
-    // bundled-runtime package still declares, and records the upgrade properly.
-    InstallChannel.DEB -> downloadAndRun(manifest, ASSET_LINUX_DEB) { file ->
-      "sudo apt install ./$file"
-    }
-
-    // -U is upgrade-or-install; works the same under dnf and zypper systems.
-    InstallChannel.RPM -> downloadAndRun(manifest, ASSET_LINUX_RPM) { file ->
-      "sudo rpm -Uvh ./$file"
-    }
-
-    // The AUR package is source-of-truth for pacman installs; an AUR helper rebuilds it.
-    InstallChannel.PACMAN -> {
-      val aurPackage = if (assetKey == ASSET_LINUX_NATIVE_X64 || assetKey == ASSET_LINUX_NATIVE_ARM64) {
-        "klardrop-native-bin"
-      } else {
-        AUR_PACKAGE
-      }
-      UpdateAction.RunCommand("yay -S $aurPackage")
-    }
-
-    InstallChannel.FLATPAK -> UpdateAction.RunCommand("flatpak update $FLATPAK_APP_ID")
-
-    InstallChannel.SNAP -> UpdateAction.RunCommand("sudo snap refresh klardrop")
-
-    InstallChannel.NIX -> UpdateAction.RunCommand("nix profile upgrade klardrop")
-
     InstallChannel.DMG,
-    InstallChannel.APPIMAGE,
     InstallChannel.MSI,
     InstallChannel.MANUAL,
     InstallChannel.UNKNOWN -> UpdateAction.OpenUrl(downloadUrl(manifest))
-  }
-
-  /**
-   * A "download the package, then hand it to the package manager" command for [assetKey],
-   * or a plain download link when this release has no such asset (an older release, or a
-   * build where that format didn't publish).
-   */
-  private fun downloadAndRun(
-    manifest: LatestManifest,
-    assetKey: String,
-    command: (fileName: String) -> String,
-  ): UpdateAction {
-    val url = manifest.platforms[assetKey]?.url ?: return UpdateAction.OpenUrl(downloadUrl(manifest))
-    val fileName = url.substringAfterLast('/')
-    return UpdateAction.RunCommand("curl -fsSLO $url && ${command(fileName)}")
   }
 
   /** Best download link for this OS, falling back to the release notes page. */
@@ -279,7 +232,7 @@ public class UpdateChecker(
       // unsigned CI build): that is still a macOS download, and the CLI is the only
       // one of the two that needs no installer.
       OsType.APPLE -> p[ASSET_MACOS] ?: p[ASSET_MACOS_CLI]
-      OsType.LINUX -> p[assetKey] ?: p[ASSET_LINUX_TARBALL] ?: p[ASSET_LINUX_DEB] ?: p[ASSET_LINUX_RPM]
+      OsType.LINUX -> p[assetKey] ?: p[ASSET_LINUX_TARBALL]
       // Windows ships the JVM MSI only: the Rust CLI is Unix-only, so a build
       // with no installer has no binary to offer and falls to the release notes.
       OsType.WINDOWS -> p[ASSET_WINDOWS]
@@ -312,14 +265,6 @@ public class UpdateChecker(
     public const val ASSET_LINUX_TARBALL: String = "linux-tarball"
     public const val ASSET_LINUX_NATIVE_X64: String = "linux-native-x64"
     public const val ASSET_LINUX_NATIVE_ARM64: String = "linux-native-arm64"
-    public const val ASSET_LINUX_DEB: String = "linux-deb"
-    public const val ASSET_LINUX_RPM: String = "linux-rpm"
-
-    /** The AUR package name published by the release workflow. */
-    public const val AUR_PACKAGE: String = "klardrop-bin"
-
-    /** Flatpak application id, matching packaging/linux/com.carlom.Klardrop.metainfo.xml. */
-    public const val FLATPAK_APP_ID: String = "com.carlom.Klardrop"
 
     /** The latest.json URL for a build's update channel ("nightly" vs stable default). */
     public fun manifestUrlForChannel(channel: String): String =

@@ -27,7 +27,7 @@ class UpdatePlatformLinuxTest {
       home = fakeHome,
       packageChecker = {
         checkerCalled = true
-        null
+        false
       },
     )
     assertTrue(checkerCalled)
@@ -35,22 +35,15 @@ class UpdatePlatformLinuxTest {
   }
 
   @Test
-  fun testDetectInstallChannelPackageManaged() {
+  fun testDetectInstallChannelPackageManagedIsManual() {
+    // Even at the install.sh path: a file a system package owns is never self-updated.
     val fakeHome = "/home/testuser"
     assertEquals(
-      InstallChannel.PACMAN,
+      InstallChannel.MANUAL,
       detectLinuxInstallChannel(
-        exePath = "/usr/bin/klardrop",
+        exePath = "$fakeHome/.local/bin/klardrop",
         home = fakeHome,
-        packageChecker = { InstallChannel.PACMAN },
-      ),
-    )
-    assertEquals(
-      InstallChannel.DEB,
-      detectLinuxInstallChannel(
-        exePath = "/usr/bin/klardrop",
-        home = fakeHome,
-        packageChecker = { InstallChannel.DEB },
+        packageChecker = { true },
       ),
     )
   }
@@ -62,24 +55,24 @@ class UpdatePlatformLinuxTest {
     assertEquals(InstallChannel.MANUAL, channel)
 
     val fakeHome = "/home/testuser"
-    // `packageChecker = { null }` everywhere: the default checker shells out to the real
-    // pacman/dpkg/rpm, so on a machine where `klardrop-native-bin` owns
-    // /usr/bin/klardrop this would return PACMAN for an environmental reason.
+    // `packageChecker = { false }` everywhere: the default checker shells out to the real
+    // pacman/dpkg/rpm, so on a machine where a system package owns /usr/bin/klardrop
+    // this could differ for an environmental reason.
     assertEquals(
       InstallChannel.MANUAL,
-      detectLinuxInstallChannel(exePath = "/tmp/build/bin/klardrop", home = fakeHome, packageChecker = { null }),
+      detectLinuxInstallChannel(exePath = "/tmp/build/bin/klardrop", home = fakeHome, packageChecker = { false }),
     )
     assertEquals(
       InstallChannel.MANUAL,
-      detectLinuxInstallChannel(exePath = "/usr/bin/klardrop", home = fakeHome, packageChecker = { null }),
+      detectLinuxInstallChannel(exePath = "/usr/bin/klardrop", home = fakeHome, packageChecker = { false }),
     )
     assertEquals(
       InstallChannel.MANUAL,
-      detectLinuxInstallChannel(exePath = null, home = fakeHome, packageChecker = { null }),
+      detectLinuxInstallChannel(exePath = null, home = fakeHome, packageChecker = { false }),
     )
     assertEquals(
       InstallChannel.MANUAL,
-      detectLinuxInstallChannel(exePath = "$fakeHome/.local/bin/klardrop", home = null, packageChecker = { null }),
+      detectLinuxInstallChannel(exePath = "$fakeHome/.local/bin/klardrop", home = null, packageChecker = { false }),
     )
   }
 
@@ -91,7 +84,7 @@ class UpdatePlatformLinuxTest {
       detectLinuxInstallChannel(
         exePath = "$fakeHome/.local/bin/klardrop",
         home = fakeHome,
-        packageChecker = { null },
+        packageChecker = { false },
       ),
     )
   }
