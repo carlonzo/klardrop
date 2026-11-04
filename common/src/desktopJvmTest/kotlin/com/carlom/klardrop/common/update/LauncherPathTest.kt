@@ -71,10 +71,9 @@ class LauncherPathTest {
   }
 
   @Test
-  fun javaBinaryIsNotATarballOrPacmanInstallRoot() {
+  fun javaBinaryIsNotATarballInstallRoot() {
     // Without -Dklardrop.launcher this is what ProcessHandle reports, and:
     //   linuxInstallRoot("/usr/bin/java") == null  → tarball self-update dies
-    //   pacman -Qo /usr/bin/java → jre-openjdk, not klardrop-bin
     assertNull(linuxInstallRoot("/usr/bin/java", home = "/home/x"))
     assertNull(linuxInstallRoot("/usr/lib/jvm/java-21-openjdk/bin/java", home = "/home/x"))
   }

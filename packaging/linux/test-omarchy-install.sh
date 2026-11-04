@@ -322,7 +322,7 @@ if [ -n "${MOCK_PACKAGE_PATH:-}" ]; then
 fi
 if [ "${PACMAN_OWNS_BINARY:-0}" = 1 ]; then
   if [ "${1:-}" = "-Qo" ]; then
-    echo "$2 is owned by klardrop-native-bin 1.0.0-1"
+    echo "$2 is owned by some-package 1.0.0-1"
     exit 0
   fi
 fi

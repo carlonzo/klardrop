@@ -70,49 +70,26 @@ internal actual fun detectInstallChannel(): InstallChannel {
 }
 
 /**
- * Which Linux packaging owns this process, in order of confidence.
+ * How this Linux JVM copy was installed. install.sh is the only supported way;
+ * anything else (including a file a system package still owns, e.g. a leftover
+ * AUR install) is MANUAL, so the updater never writes over files it doesn't own.
  *
- * The sandbox/bundle markers come first: inside them the launcher path is a
- * sandbox-internal one (`/app/bin/klardrop` under Flatpak) that no host package
- * database can resolve anyway.
- *
- * The package-ownership probes then run BEFORE the install.sh path check, and the
- * order matters. jpackage's .deb and .rpm both install to `/opt/klardrop` — exactly
- * where a root install.sh install lives — so a path check alone cannot tell them
- * apart, and guessing "tarball" would hand a dpkg-owned install the `curl … | bash`
- * reinstall, silently overwriting files dpkg still believes it owns. Only the
- * package database can answer this, so we ask it.
- *
- * Each probe forks a subprocess, so they are skipped for a launcher under $HOME:
- * a per-user install (the common self-updating case) can never belong to a system
- * package, and that is the path we would otherwise pay three forks to rule out.
+ * The ownership probe runs BEFORE the install.sh path check: a root install.sh
+ * install lives at `/opt/klardrop`, which is also where jpackage packages put it.
+ * It forks, so it is skipped for a launcher under $HOME, which no system package
+ * can own.
  */
+/** Whether a system package database claims [path]. A guard only: we never upgrade through one. */
+private fun isOwnedBySystemPackage(path: String): Boolean =
+  listOf(listOf("dpkg-query", "-S", path), listOf("rpm", "-qf", path), listOf("pacman", "-Qo", path))
+    .any { runExitCode(*it.toTypedArray()) == 0 }
+
 private fun detectLinuxChannel(launcher: String): InstallChannel {
   val home = System.getProperty("user.home").orEmpty()
   val underHome = home.isNotEmpty() && launcher.startsWith("$home/")
 
   return when {
-    // Set by the Flatpak runtime for every process in the sandbox; the file exists
-    // in the sandbox even when the variable was scrubbed.
-    System.getenv("FLATPAK_ID") != null || Files.exists(Path.of("/.flatpak-info")) ->
-      InstallChannel.FLATPAK
-
-    // snapd exports these to confined apps, and snaps always run from /snap/<name>/<rev>.
-    System.getenv("SNAP") != null || launcher.startsWith("/snap/") -> InstallChannel.SNAP
-
-    // The AppImage runtime exports $APPIMAGE (absolute path of the .AppImage itself)
-    // and mounts the payload under a /tmp/.mount_* squashfs.
-    System.getenv("APPIMAGE") != null || launcher.startsWith("/tmp/.mount_") ->
-      InstallChannel.APPIMAGE
-
-    // A /nix/store path is immutable by construction — never self-updatable.
-    launcher.startsWith("/nix/store/") -> InstallChannel.NIX
-
-    // "Which package owns this file?" — a hit means that package manager installed
-    // us and must be the one to upgrade us.
-    !underHome && runExitCode("dpkg-query", "-S", launcher) == 0 -> InstallChannel.DEB
-    !underHome && runExitCode("rpm", "-qf", launcher) == 0 -> InstallChannel.RPM
-    !underHome && runExitCode("pacman", "-Qo", launcher) == 0 -> InstallChannel.PACMAN
+    !underHome && isOwnedBySystemPackage(launcher) -> InstallChannel.MANUAL
 
     // Unowned, and under a root the install.sh script manages. The Linux
     // launcher is a shell wrapper inside that tree; -Dklardrop.launcher (see
@@ -175,8 +152,8 @@ internal const val LAUNCHER_ENV = "KLARDROP_LAUNCHER"
  *
  * Linux's system-JRE wrapper must pass the script path via the property/env:
  * without it [processCommand] is `/usr/bin/java`, [linuxInstallRoot] returns
- * null (tarball self-update dies) and `pacman -Qo /usr/bin/java` reports
- * `jre-openjdk` instead of `klardrop-bin`. Windows MSI still uses the
+ * null (tarball self-update dies) and the ownership probe would ask about the
+ * JRE instead of Klardrop. Windows MSI still uses the
  * process command (jpackage's native launcher).
  */
 internal fun resolveLauncherPath(

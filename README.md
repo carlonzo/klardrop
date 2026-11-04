@@ -154,7 +154,7 @@ on every tagged version.
 |---|---|---|
 | macOS    | `.dmg`     | Unsigned during beta — run `xattr -dr com.apple.quarantine /Applications/Klardrop.app` after first launch if Gatekeeper blocks it |
 | Windows  | `.msi`     | Unsigned during beta — SmartScreen will warn on first run |
-| Linux    | Script / AUR | Native GUI via `install.sh` (Qt desktop GUI by default, Omarchy shell integration on Omarchy; no JVM required); AUR `klardrop-bin` remains legacy JVM (JRE 21+) |
+| Linux    | Script     | `curl -fsSL https://raw.githubusercontent.com/carlonzo/klardrop/main/packaging/install.sh \| bash` — the only supported install. Native GUI (Qt desktop GUI by default, Omarchy shell integration on Omarchy; no JVM required), self-updating |
 | Android  | `.apk`     | Sideload; Play Store internal-testing track planned |
 | iOS      | TestFlight | Public invite link forthcoming |
 
@@ -168,9 +168,7 @@ never mixed:
 
 The Linux install script puts both in `~/.local/bin`, and the in-app self-updater
 replaces the pair together — a CLI from one release is never left beside an engine
-from another. The AUR packages follow the same split: `klardrop-native-bin` owns both
-binaries and the systemd unit, `klardrop-qt-bin` depends on it and adds only the Qt
-frontend, and `klardrop-omarchy` adds the shell integration.
+from another.
 
 The desktop app checks for updates on launch via the `latest.json` manifest published
 alongside each release.

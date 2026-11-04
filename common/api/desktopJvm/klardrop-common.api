@@ -1506,17 +1506,10 @@ public final class com/carlom/klardrop/common/trust/TrustedDevice {
 }
 
 public final class com/carlom/klardrop/common/update/InstallChannel : java/lang/Enum {
-	public static final field APPIMAGE Lcom/carlom/klardrop/common/update/InstallChannel;
 	public static final field BREW Lcom/carlom/klardrop/common/update/InstallChannel;
-	public static final field DEB Lcom/carlom/klardrop/common/update/InstallChannel;
 	public static final field DMG Lcom/carlom/klardrop/common/update/InstallChannel;
-	public static final field FLATPAK Lcom/carlom/klardrop/common/update/InstallChannel;
 	public static final field MANUAL Lcom/carlom/klardrop/common/update/InstallChannel;
 	public static final field MSI Lcom/carlom/klardrop/common/update/InstallChannel;
-	public static final field NIX Lcom/carlom/klardrop/common/update/InstallChannel;
-	public static final field PACMAN Lcom/carlom/klardrop/common/update/InstallChannel;
-	public static final field RPM Lcom/carlom/klardrop/common/update/InstallChannel;
-	public static final field SNAP Lcom/carlom/klardrop/common/update/InstallChannel;
 	public static final field TARBALL Lcom/carlom/klardrop/common/update/InstallChannel;
 	public static final field UNKNOWN Lcom/carlom/klardrop/common/update/InstallChannel;
 	public final fun getDisplayName ()Ljava/lang/String;
@@ -1665,18 +1658,14 @@ public final class com/carlom/klardrop/common/update/UpdateAction$RunCommand : c
 }
 
 public final class com/carlom/klardrop/common/update/UpdateChecker {
-	public static final field ASSET_LINUX_DEB Ljava/lang/String;
 	public static final field ASSET_LINUX_NATIVE_ARM64 Ljava/lang/String;
 	public static final field ASSET_LINUX_NATIVE_X64 Ljava/lang/String;
-	public static final field ASSET_LINUX_RPM Ljava/lang/String;
 	public static final field ASSET_LINUX_TARBALL Ljava/lang/String;
 	public static final field ASSET_MACOS Ljava/lang/String;
 	public static final field ASSET_MACOS_CLI Ljava/lang/String;
 	public static final field ASSET_WINDOWS Ljava/lang/String;
-	public static final field AUR_PACKAGE Ljava/lang/String;
 	public static final field Companion Lcom/carlom/klardrop/common/update/UpdateChecker$Companion;
 	public static final field DEFAULT_MANIFEST_URL Ljava/lang/String;
-	public static final field FLATPAK_APP_ID Ljava/lang/String;
 	public static final field INSTALL_SCRIPT_URL Ljava/lang/String;
 	public static final field NIGHTLY_MANIFEST_URL Ljava/lang/String;
 	public static final field RELEASES_PAGE Ljava/lang/String;

@@ -355,7 +355,7 @@ if [ "$FLAVOR" = "native" ] || [ "$FLAVOR" = "omarchy" ] || [ "$FLAVOR" = "qt" ]
       guard_not_nonregular "$bin" "Klardrop client binary"
     fi
     if is_package_owned "$bin"; then
-      die "$bin is managed by a system package manager. Refusing to overwrite. Update via your package manager instead."
+      die "$bin is managed by a system package manager. Refusing to overwrite. Uninstall that package, then re-run this installer."
     fi
     if ! is_our_native_binary "$bin"; then
       die "$bin exists and is not managed by this installer (no installer marker or service unit found). Refusing to overwrite unrelated file."
@@ -741,7 +741,7 @@ EOF
           continue
         fi
         if is_package_owned "$target"; then
-          warn "Skipping icon installation for $target (managed by package manager)."
+          warn "Skipping icon installation for $target (owned by a system package)."
           continue
         fi
         mkdir -p "$ICON_DIR/${s}x${s}/apps"
@@ -1234,7 +1234,7 @@ BLOCK
     for f in "$KLARDROP_QT_BIN" "$KLARDROP_QT_LAUNCHER"; do
       if path_exists "$f"; then
         if is_package_owned "$f"; then
-          die "$f is managed by a system package manager. Refusing to overwrite. Update via your package manager instead."
+          die "$f is managed by a system package manager. Refusing to overwrite. Uninstall that package, then re-run this installer."
         fi
         if [ "$STORED_FLAVOR" != "qt" ]; then
           die "$f exists and is not managed by this installer (no installer marker recording 'qt' flavor found). Refusing to overwrite unrelated file."
@@ -1245,7 +1245,7 @@ BLOCK
     if path_exists "$DESKTOP_FILE"; then
       guard_not_symlink_or_nonregular "$DESKTOP_FILE" "Desktop entry"
       if is_package_owned "$DESKTOP_FILE"; then
-        die "$DESKTOP_FILE is managed by a system package manager. Refusing to overwrite. Update via your package manager instead."
+        die "$DESKTOP_FILE is managed by a system package manager. Refusing to overwrite. Uninstall that package, then re-run this installer."
       fi
       if ! is_our_desktop_file "$DESKTOP_FILE"; then
         die "$DESKTOP_FILE exists and is not managed by this installer. Refusing to overwrite unrelated file."
@@ -1727,13 +1727,13 @@ esac
 # Check package ownership on existing binary
 if [ -e "$BIN_DIR/klardrop" ]; then
   if command -v pacman >/dev/null 2>&1 && pacman -Qo "$BIN_DIR/klardrop" >/dev/null 2>&1; then
-    die "$BIN_DIR/klardrop is managed by pacman. Refusing to overwrite. Update via your package manager instead."
+    die "$BIN_DIR/klardrop is managed by pacman. Refusing to overwrite. Uninstall that package, then re-run this installer."
   fi
   if command -v dpkg-query >/dev/null 2>&1 && dpkg-query -S "$BIN_DIR/klardrop" >/dev/null 2>&1; then
-    die "$BIN_DIR/klardrop is managed by dpkg. Refusing to overwrite. Update via your package manager instead."
+    die "$BIN_DIR/klardrop is managed by dpkg. Refusing to overwrite. Uninstall that package, then re-run this installer."
   fi
   if command -v rpm >/dev/null 2>&1 && rpm -qf "$BIN_DIR/klardrop" >/dev/null 2>&1; then
-    die "$BIN_DIR/klardrop is managed by rpm. Refusing to overwrite. Update via your package manager instead."
+    die "$BIN_DIR/klardrop is managed by rpm. Refusing to overwrite. Uninstall that package, then re-run this installer."
   fi
 fi
 

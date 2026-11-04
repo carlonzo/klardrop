@@ -66,7 +66,7 @@ compose.desktop {
       "-XX:+UseStringDeduplication",
     )
     nativeDistributions {
-      targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
+      targetFormats(TargetFormat.Dmg, TargetFormat.Msi)
       // Local builds install under their own name so a dev build and an installed release can
       // coexist, the same way the Android debug variant does via its applicationId suffix.
       // CI always passes klardrop.version, so only developer machines get the suffix.
@@ -102,13 +102,6 @@ compose.desktop {
       }
       linux {
         iconFile.set(file("icons/Klardrop.png"))
-        // Register an application-menu launcher in the generated .deb/.rpm.
-        shortcut = true
-        menuGroup = "Network"
-        appCategory = "Network"
-        // jpackage refuses to build an RPM without a license type (--linux-rpm-license-type);
-        // it lands in the package's License: field, so it has to match the actual LICENSE.
-        rpmLicenseType = "ASL 2.0"
       }
     }
     buildTypes.release.proguard {
@@ -118,7 +111,7 @@ compose.desktop {
 }
 
 // Compose Desktop distributions are host-locked (DMG only builds on macOS, MSI on
-// Windows, DEB on Linux). On macOS the runtime uses native Bonjour via libdns_sd,
+// Windows). On macOS the runtime uses native Bonjour via libdns_sd,
 // so jmDNS would be dead weight in the bundle — drop it from the runtime classpath
 // when the build host is macOS so it never lands in the .app/.dmg/.pkg.
 val isMacHost: Boolean = run {
