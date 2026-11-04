@@ -98,6 +98,38 @@ class UpdateCheckerTest {
   }
 
   @Test
+  fun channelIsDetectedAtStartNotAfterBinarySwap() = runTest {
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    // Boot-time check fails (no network); by the time it succeeds the installer has
+    // swapped the binary, so a late detection would see MANUAL.
+    var online = false
+    var detected = InstallChannel.TARBALL
+    val checker = UpdateChecker(
+      currentVersion = "0.1.0",
+      osType = OsType.LINUX,
+      fetcher = UpdateManifestFetcher { if (online) manifest("0.2.0") else null },
+      detectChannel = { detected },
+      coroutines = TestCoroutines(dispatcher),
+      installerFactory = { null },
+      assetKey = UpdateChecker.ASSET_LINUX_TARBALL,
+      detectFlavorFlag = { null },
+    )
+    checker.start()
+    runCurrent()
+    assertIs<UpdateStatus.Failed>(checker.status.value)
+
+    detected = InstallChannel.MANUAL
+    online = true
+    checker.checkNow()
+    runCurrent()
+    checker.stop()
+
+    val status = checker.status.value
+    assertIs<UpdateStatus.Available>(status)
+    assertEquals(InstallChannel.TARBALL, status.channel)
+  }
+
+  @Test
   fun manualChannelOpensPlatformAsset() = runTest {
     val dispatcher = StandardTestDispatcher(testScheduler)
     val checker = checker(dispatcher, channel = InstallChannel.MANUAL, osType = OsType.LINUX)

@@ -78,12 +78,23 @@ public class UpdateChecker(
   private var periodicJob: Job? = null
 
   /**
+   * Detected once, at [start]: an installer re-run can swap the binary under this
+   * running process, after which /proc/self/exe points at the deleted old file and
+   * a late detection would wrongly report a manual install (Download, not Update).
+   */
+  private var detectedChannel: InstallChannel? = null
+
+  private fun installChannel(): InstallChannel = detectedChannel
+    ?: runCatching { detectChannel() }.getOrDefault(InstallChannel.UNKNOWN).also { detectedChannel = it }
+
+  /**
    * Check now, then keep re-checking every [recheckInterval] until [stop]. Idempotent:
    * a second call while the loop is running is a no-op. No-op without a [fetcher].
    */
   public fun start() {
     if (fetcher == null || periodicJob?.isActive == true) return
     periodicJob = scope.launch {
+      installChannel()
       while (isActive) {
         runCheck()
         // A failed check (e.g. at boot, before DNS is up) retries soon instead of
@@ -133,7 +144,7 @@ public class UpdateChecker(
         return
       }
 
-      val channel = runCatching { detectChannel() }.getOrDefault(InstallChannel.UNKNOWN)
+      val channel = installChannel()
       log("UpdateChecker", "update available: $currentVersion -> ${manifest.version} via $channel")
       _status.value = UpdateStatus.Available(
         version = manifest.version,

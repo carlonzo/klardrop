@@ -186,7 +186,7 @@ public class Server internal constructor(
    */
   public suspend fun startServer(preferredPorts: List<Int> = emptyList()): ServerConfig {
     val selectorManager = SelectorManager(coroutines.ioDispatcher)
-    val serverSocket = bindListener(selectorManager, preferredPorts)
+    var serverSocket = bindListener(selectorManager, preferredPorts)
 
     val localAddress = serverSocket.localAddress as InetSocketAddress
     val actualPort = localAddress.port
@@ -198,7 +198,24 @@ public class Server internal constructor(
     serverScope.launch {
       try {
         while (isActive) {
-          val socket = serverSocket.accept()
+          val socket = try {
+            serverSocket.accept()
+          } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+          } catch (e: Exception) {
+            // iOS reclaims a suspended app's listening socket, after which accept() fails for good
+            // while Bonjour keeps advertising the port: peers get "connection refused" forever.
+            // Rebind (same port first) instead of going deaf; the port watchdog republishes mDNS
+            // if the port had to change.
+            val port = serverPort?.value ?: actualPort
+            log("Server", "Accept failed on :$port; rebinding the listener", e)
+            serverSocket.close()
+            delay(1_000)
+            serverSocket = bindListener(selectorManager, listOf(port))
+            serverPort?.value = (serverSocket.localAddress as InetSocketAddress).port
+            log("Server", "Listener rebound on :${serverPort?.value}")
+            continue
+          }
           val remoteAddress = socket.remoteAddress.toString()
           log("Server", "New connection from: $remoteAddress")
 
