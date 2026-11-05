@@ -14,6 +14,8 @@ import presentation
 struct DiscoveryScreen: View {
     let model: DiscoveryAppModel
     let onNavigateToChat: (_ deviceId: String, _ deviceName: String) -> Void
+    /// Namespace for the system zoom transition from a device row into its chat (iPhone).
+    var chatZoomNamespace: Namespace.ID? = nil
     /// Opens the report sheet, which KlardropNav owns so it survives navigation.
     let onReportProblem: () -> Void
 
@@ -86,6 +88,7 @@ struct DiscoveryScreen: View {
                         trusted: trustedDevices,
                         model: model,
                         onNavigateToChat: onNavigateToChat,
+                        chatZoomNamespace: chatZoomNamespace,
                         onAddDeviceClick: { showAddDevicePicker = true },
                         onForgetClick: { pendingForgetDevice = $0 },
                         onPendingLink: { pendingLinkDevice = $0 }
@@ -96,6 +99,7 @@ struct DiscoveryScreen: View {
                         devices: nearbyDevices,
                         model: model,
                         onNavigateToChat: onNavigateToChat,
+                        chatZoomNamespace: chatZoomNamespace,
                         onPendingLink: { pendingLinkDevice = $0 }
                     )
 
@@ -241,6 +245,7 @@ private struct YourDevicesSectionView: View {
     let trusted: [DeviceUi]
     let model: DiscoveryAppModel
     let onNavigateToChat: (String, String) -> Void
+    let chatZoomNamespace: Namespace.ID?
     let onAddDeviceClick: () -> Void
     let onForgetClick: (DeviceUi) -> Void
     let onPendingLink: (DeviceUi) -> Void
@@ -277,6 +282,7 @@ private struct YourDevicesSectionView: View {
                                 TrustedDeviceMenuView(onForget: { onForgetClick(device) })
                             }
                         }
+                        .chatZoomSource(device.deviceId, in: chatZoomNamespace)
                     }
                 }
                 .padding(.horizontal, KdSpacing.s5)
@@ -291,6 +297,7 @@ private struct NearbySectionView: View {
     let devices: [DeviceUi]
     let model: DiscoveryAppModel
     let onNavigateToChat: (String, String) -> Void
+    let chatZoomNamespace: Namespace.ID?
     let onPendingLink: (DeviceUi) -> Void
 
     @Environment(\.kdColors) private var kd
@@ -336,6 +343,7 @@ private struct NearbySectionView: View {
                                 PairButtonView(onClick: { onPendingLink(device) })
                             }
                         }
+                        .chatZoomSource(device.deviceId, in: chatZoomNamespace)
                     }
                 }
                 .padding(.horizontal, KdSpacing.s5)
@@ -345,6 +353,24 @@ private struct NearbySectionView: View {
 }
 
 // MARK: - Small component helpers
+
+extension View {
+    /// Marks a device row as the source the chat zooms out of and collapses back into.
+    @ViewBuilder
+    func chatZoomSource(_ deviceId: String, in namespace: Namespace.ID?) -> some View {
+        #if os(iOS)
+        if let namespace {
+            matchedTransitionSource(id: deviceId, in: namespace) { source in
+                source.clipShape(RoundedRectangle(cornerRadius: KdRadii.lg))
+            }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+}
 
 /// Animated "scanning" label shown in the Nearby section header.
 private struct ScanningTickerView: View {

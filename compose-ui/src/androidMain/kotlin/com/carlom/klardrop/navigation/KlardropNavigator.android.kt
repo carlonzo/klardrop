@@ -8,6 +8,16 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import com.carlom.klardrop.theme.KdTheme
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -86,61 +96,91 @@ actual fun KlardropNavigator(
     discoveryController.setActiveChatDeviceId(chatTarget?.deviceId)
   }
 
-  NavDisplay(
-    backStack = backStack,
-    modifier = modifier,
-    onBack = { backStack.removeLastOrNull() },
-    entryProvider = entryProvider {
-      entry<DiscoveryRoute> {
-        val requestedPerms = remember { mutableListOf<String>() }
-        val permsLauncher = rememberLauncherForActivityResult(
-          ActivityResultContracts.RequestMultiplePermissions()
-        ) { results ->
-          discoveryController.refreshPermissions()
-          val activity = context.findActivity()
-          val anyPermanentlyDenied = activity != null && results.any { (perm, granted) ->
-            !granted && !ActivityCompat.shouldShowRequestPermissionRationale(activity, perm)
-          }
-          if (anyPermanentlyDenied) openAppSettings(context)
-          requestedPerms.clear()
-        }
-
-        DiscoveryScreen(
-          isLargeScreen = false,
-          discoveryController = discoveryController,
-          uiDependencies = uiDependencies,
-          onNavigateToChat = { id, name -> backStack.add(ChatRoute(id, name)) },
-          onRequestCapability = { capability ->
-            val perms = capability.androidPermissions()
-            if (perms.isEmpty()) {
-              openAppSettings(context)
-            } else {
-              requestedPerms.clear()
-              requestedPerms.addAll(perms)
-              permsLauncher.launch(perms.toTypedArray())
+  // Material container transform: the chat expands out of its device row and collapses back
+  // into it. The morph is the row's and chat's sharedBounds; the screens themselves hold
+  // still, so Discovery sits underneath. Predictive back seeks the same morph with the
+  // finger, and the back arrow / 3-button back play it in full, so every back looks alike.
+  SharedTransitionLayout(modifier) {
+    val sharedScope = this
+    NavDisplay(
+      backStack = backStack,
+      onBack = { backStack.removeLastOrNull() },
+      sharedTransitionScope = sharedScope,
+      transitionSpec = { stayPut() },
+      popTransitionSpec = { stayPut() },
+      predictivePopTransitionSpec = { stayPut() },
+      entryProvider = entryProvider {
+        entry<DiscoveryRoute> {
+          val requestedPerms = remember { mutableListOf<String>() }
+          val permsLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+          ) { results ->
+            discoveryController.refreshPermissions()
+            val activity = context.findActivity()
+            val anyPermanentlyDenied = activity != null && results.any { (perm, granted) ->
+              !granted && !ActivityCompat.shouldShowRequestPermissionRationale(activity, perm)
             }
-          },
-          onRequestExemption = onRequestExemption,
-        )
-      }
-      entry<ChatRoute> { route ->
-        val vm = remember(route.deviceId) { uiDependencies.deviceChatViewModelFactory(route.deviceId) }
-        val state by discoveryController.screenStateFlow.collectAsState()
-        val device = state.devices.firstOrNull { it.deviceId == route.deviceId }
-        val isOwned = device?.trustStatus == TrustStatus.Trusted
-        DeviceChatScreen(
-          deviceName = route.deviceName,
-          isOwned = isOwned,
-          viewModel = vm,
-          onBackClicked = { backStack.removeLastOrNull() },
-          onOpenFileRequest = { path -> vm.openFileClicked(path) },
-          onOpenUrlRequest = { url -> vm.openUrlClicked(url) },
-          kind = device?.deviceType?.toKdDeviceKind() ?: KdDeviceKind.Unknown,
-        )
-      }
-    },
-  )
+            if (anyPermanentlyDenied) openAppSettings(context)
+            requestedPerms.clear()
+          }
+
+          DiscoveryScreen(
+            isLargeScreen = false,
+            discoveryController = discoveryController,
+            uiDependencies = uiDependencies,
+            onNavigateToChat = { id, name -> backStack.add(ChatRoute(id, name)) },
+            deviceRowModifier = { id -> sharedScope.chatContainer(id) },
+            onRequestCapability = { capability ->
+              val perms = capability.androidPermissions()
+              if (perms.isEmpty()) {
+                openAppSettings(context)
+              } else {
+                requestedPerms.clear()
+                requestedPerms.addAll(perms)
+                permsLauncher.launch(perms.toTypedArray())
+              }
+            },
+            onRequestExemption = onRequestExemption,
+          )
+        }
+        entry<ChatRoute> { route ->
+          val vm = remember(route.deviceId) { uiDependencies.deviceChatViewModelFactory(route.deviceId) }
+          val state by discoveryController.screenStateFlow.collectAsState()
+          val device = state.devices.firstOrNull { it.deviceId == route.deviceId }
+          val isOwned = device?.trustStatus == TrustStatus.Trusted
+          Box(
+            Modifier
+              .then(sharedScope.chatContainer(route.deviceId))
+              .fillMaxSize()
+              .background(KdTheme.colors.bg0),
+          ) {
+            DeviceChatScreen(
+              deviceName = route.deviceName,
+              isOwned = isOwned,
+              viewModel = vm,
+              onBackClicked = { backStack.removeLastOrNull() },
+              onOpenFileRequest = { path -> vm.openFileClicked(path) },
+              onOpenUrlRequest = { url -> vm.openUrlClicked(url) },
+              kind = device?.deviceType?.toKdDeviceKind() ?: KdDeviceKind.Unknown,
+            )
+          }
+        }
+      },
+    )
+  }
 }
+
+/** Screens hold still; the shared bounds carry the motion. */
+private fun stayPut() = EnterTransition.None togetherWith ExitTransition.None
+
+/** Shared bounds linking a device row and its chat; must be called inside a NavEntry. */
+@Composable
+private fun SharedTransitionScope.chatContainer(deviceId: String): Modifier =
+  Modifier.sharedBounds(
+    sharedContentState = rememberSharedContentState("device-chat-$deviceId"),
+    animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+    clipInOverlayDuringTransition = OverlayClip(KdTheme.radii.shapeLg),
+  )
 
 @Serializable
 private data object DiscoveryRoute : NavKey

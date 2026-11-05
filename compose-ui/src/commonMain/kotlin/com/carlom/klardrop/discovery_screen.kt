@@ -98,6 +98,8 @@ fun DiscoveryScreen(
     onNavigateToChat: (deviceId: String, deviceName: String) -> Unit,
     onRequestCapability: (Capability) -> Unit = {},
     onRequestExemption: (ConnectivityRestriction) -> Unit = {},
+    // Hook for the phone navigator's list->chat container transform; keyed by deviceId.
+    deviceRowModifier: @Composable (deviceId: String) -> Modifier = { Modifier },
 ) {
     val discoveryState by discoveryController.screenStateFlow.collectAsState()
     val permissionsState by discoveryController.permissionsState.collectAsState()
@@ -152,6 +154,7 @@ fun DiscoveryScreen(
         onDeviceRename = { newName -> discoveryController.saveCustomDeviceName(newName) },
         onRequestCapability = onRequestCapability,
         onRequestExemption = onRequestExemption,
+        deviceRowModifier = deviceRowModifier,
         onSettingsClick = { showSettings = true },
         updateBanner = {
             UpdateBanner(
@@ -243,6 +246,7 @@ private fun DiscoveryDashboard(
     onRequestExemption: (ConnectivityRestriction) -> Unit = {},
     onSettingsClick: () -> Unit = {},
     updateBanner: @Composable () -> Unit = {},
+    deviceRowModifier: @Composable (deviceId: String) -> Modifier = { Modifier },
 ) {
     var showRenameSheet by remember { mutableStateOf(false) }
     var pendingLink by remember { mutableStateOf<DeviceUi?>(null) }
@@ -327,12 +331,14 @@ private fun DiscoveryDashboard(
                     onDeviceActionListener = gridListener,
                     onAddDeviceClick = { showAddDevicePicker = true },
                     onForgetClick = { device -> pendingForget = device },
+                    deviceRowModifier = deviceRowModifier,
                 )
 
                 NearbySection(
                     devices = others,
                     isLargeScreen = isLargeScreen,
                     onDeviceActionListener = gridListener,
+                    deviceRowModifier = deviceRowModifier,
                 )
 
                 Spacer(Modifier.height(spacing.s6))
@@ -556,6 +562,7 @@ private fun YourDevicesSection(
     onDeviceActionListener: OnDeviceActionListener,
     onAddDeviceClick: () -> Unit,
     onForgetClick: (DeviceUi) -> Unit,
+    deviceRowModifier: @Composable (deviceId: String) -> Modifier,
 ) {
     val spacing = KdTheme.spacing
 
@@ -592,6 +599,7 @@ private fun YourDevicesSection(
                         TrustedDeviceMenu(onForget = { onForgetClick(device) })
                     },
                     onClick = { onDeviceActionListener.onDeviceClick(device) },
+                    modifier = deviceRowModifier(device.deviceId),
                 )
             }
         }
@@ -673,6 +681,7 @@ private fun NearbySection(
     devices: List<DeviceUi>,
     isLargeScreen: Boolean,
     onDeviceActionListener: OnDeviceActionListener,
+    deviceRowModifier: @Composable (deviceId: String) -> Modifier,
 ) {
     val spacing = KdTheme.spacing
     val colors = KdTheme.colors
@@ -712,6 +721,7 @@ private fun NearbySection(
                             }
                         },
                         onClick = { onDeviceActionListener.onDeviceClick(device) },
+                        modifier = deviceRowModifier(device.deviceId),
                     )
                     // Pairing failure surfaced next to the pair button: the row itself is a
                     // fixed-height card, so the red helper text sits directly beneath it.

@@ -47,6 +47,7 @@ struct KlardropNav: View {
     /// Problem report. Presented from here (not the screen) so it survives push/pop and the
     /// compact/regular layout switch, same as the rename sheet below.
     @State private var showReportProblem = false
+    @Namespace private var chatZoom
 
     private var trustedDevices: [DeviceUi] {
         model.state.devices.filter { isTrusted($0) }
@@ -150,6 +151,7 @@ struct KlardropNav: View {
                     let route = ChatRoute(deviceId: deviceId, deviceName: deviceName)
                     model.navigateToChat(route)
                 },
+                chatZoomNamespace: chatZoom,
                 onReportProblem: { showReportProblem = true }
             )
             .navigationDestination(for: ChatRoute.self) { route in
@@ -161,6 +163,11 @@ struct KlardropNav: View {
                     deviceKind: deviceKind(for: route.deviceId)
                 )
                 .id(route.deviceId)
+                #if os(iOS)
+                // System zoom: the chat grows out of its row and, on back (button, edge
+                // swipe or drag down), collapses back into it.
+                .navigationTransition(.zoom(sourceID: route.deviceId, in: chatZoom))
+                #endif
                 .onDisappear {
                     // When the chat screen disappears it has been popped from the
                     // stack (back swipe / button). Clear the active chat device so
