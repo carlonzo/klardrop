@@ -17,7 +17,7 @@ kotlinx-io = "0.9.2"
 sentry-kmp = "0.29.0"
 # Tracks the Sentry *Android Gradle* plugin, which is versioned independently of the
 # KMP SDK above and must not be pinned to it.
-sentry-android = "6.25.0"
+sentry-android = "6.26.0"
 filekit = "0.17.0"
 composenativetray = "2.1.7"
 sqldelight = "2.4.1"
