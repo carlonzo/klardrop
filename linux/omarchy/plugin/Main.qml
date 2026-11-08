@@ -310,8 +310,16 @@ Item {
     request("GET", path, null, callback)
   }
 
+  // Reading a chat also clears that device's finished "received" banners —
+  // the user has seen the message, the banner is now noise.
   function markHistoryRead(deviceId, callback) {
     request("POST", "/history/read", { deviceId: deviceId }, callback)
+    var ids = []
+    for (var i = 0; i < incomingRequests.length; i++) {
+      var item = incomingRequests[i]
+      if (item.deviceId === deviceId && !incomingIsPending(item)) ids.push(item.receiveId)
+    }
+    for (var j = 0; j < ids.length; j++) dismissIncoming(ids[j], null)
   }
 
   // `deviceId` empty/null clears the active chat (e.g. on deselect/close).
@@ -391,8 +399,12 @@ Item {
     request("POST", "/incoming/dismiss", { receiveId: receiveId }, callback)
   }
 
+  // Opening a banner consumes it: dismiss once the open has landed.
   function openIncoming(receiveId, callback) {
-    request("POST", "/incoming/open", { receiveId: receiveId }, callback)
+    request("POST", "/incoming/open", { receiveId: receiveId }, function(err, resp) {
+      if (!err && root.alive) dismissIncoming(receiveId, null)
+      if (callback) callback(err, resp)
+    })
   }
 
   function dismissPairingError(callback) {

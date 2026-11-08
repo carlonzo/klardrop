@@ -101,19 +101,20 @@ FloatingWindow {
 
   // Sync (not reload) the open chat whenever a poll brings new state — only
   // wired up while this window (and thus this Connections) exists. If the
-  // selected device fell out of the trusted list (unpaired/forgotten
-  // elsewhere, e.g. from the bar panel) drop the selection instead of
-  // endlessly syncing a chat for a device that's gone.
+  // selected device left the device list entirely (forgotten and no longer
+  // discovered) drop the selection instead of endlessly syncing a chat for a
+  // device that's gone. Untrusted nearby devices keep their chat open, same
+  // as compose-ui.
   Connections {
     target: window.service
     function onStateUpdated() {
       if (window.selectedDeviceId === "") return
-      var stillPaired = false
-      var paired = window.service.pairedDevices
-      for (var i = 0; i < paired.length; i++) {
-        if (paired[i].deviceId === window.selectedDeviceId) { stillPaired = true; break }
+      var stillListed = false
+      var devices = window.service.devices
+      for (var i = 0; i < devices.length; i++) {
+        if (devices[i].deviceId === window.selectedDeviceId) { stillListed = true; break }
       }
-      if (!stillPaired) {
+      if (!stillListed) {
         window.clearSelection()
       } else {
         window.syncLatestMessages()
@@ -528,7 +529,10 @@ FloatingWindow {
             fontFamily: window.fontFamily
             onAcceptRequested: window.service.acceptIncoming(modelData.receiveId, modelData.deviceId, null)
             onRejectRequested: window.service.rejectIncoming(modelData.receiveId, null)
-            onOpenRequested: window.service.openIncoming(modelData.receiveId, null)
+            onOpenRequested: {
+              window.service.openIncoming(modelData.receiveId, null)
+              if (modelData.deviceId) window.selectDevice(modelData.deviceId, modelData.deviceName)
+            }
             onDismissRequested: window.service.dismissIncoming(modelData.receiveId, null)
           }
         }
@@ -790,20 +794,33 @@ FloatingWindow {
               Repeater {
                 model: window.service ? window.service.nearbyDevices : []
 
-                DeviceRow {
+                Item {
+                  id: nearbyRowWrap
                   required property var modelData
                   width: parent.width
-                  paired: false
-                  deviceId: modelData.deviceId || ""
-                  deviceName: modelData.deviceName || ""
-                  glyph: window.service.deviceGlyph(modelData.deviceType)
-                  reachability: modelData.reachability || ""
-                  foreground: window.foreground
-                  accent: window.accent
-                  urgent: window.urgent
-                  dim: window.dim
-                  fontFamily: window.fontFamily
-                  onPairRequested: window.service.pair(modelData.deviceId, null)
+                  height: nearbyRow.height
+
+                  MouseArea {
+                    anchors.fill: parent
+                    onClicked: window.selectDevice(nearbyRowWrap.modelData.deviceId, nearbyRowWrap.modelData.deviceName)
+                  }
+
+                  DeviceRow {
+                    id: nearbyRow
+                    width: parent.width
+                    paired: false
+                    selected: window.selectedDeviceId === nearbyRowWrap.modelData.deviceId
+                    deviceId: nearbyRowWrap.modelData.deviceId || ""
+                    deviceName: nearbyRowWrap.modelData.deviceName || ""
+                    glyph: window.service.deviceGlyph(nearbyRowWrap.modelData.deviceType)
+                    reachability: nearbyRowWrap.modelData.reachability || ""
+                    foreground: window.foreground
+                    accent: window.accent
+                    urgent: window.urgent
+                    dim: window.dim
+                    fontFamily: window.fontFamily
+                    onPairRequested: window.service.pair(nearbyRowWrap.modelData.deviceId, null)
+                  }
                 }
               }
 
@@ -963,7 +980,7 @@ FloatingWindow {
 
             Text {
               width: parent.width
-              text: "Choose a trusted device on the left to chat or send files."
+              text: "Choose a device on the left to chat or send files."
               horizontalAlignment: Text.AlignHCenter
               wrapMode: Text.WordWrap
               color: window.dim
