@@ -18,7 +18,7 @@ cask "klardrop-nightly" do
   desc "Nightly tester build of Klardrop — share files and clipboard with nearby devices"
   homepage "https://github.com/carlonzo/klardrop"
 
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :sequoia
 
   app "Klardrop.app"
 
