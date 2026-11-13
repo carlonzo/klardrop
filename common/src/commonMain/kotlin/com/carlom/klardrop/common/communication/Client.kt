@@ -25,8 +25,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.invoke
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -168,8 +166,6 @@ internal class ClientImpl internal constructor(
 ) : Client {
 
   private val clientScope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
-  private val visibleDevicesFlow =
-    visibleDevices.visibleDevices.stateIn(clientScope, started = SharingStarted.Eagerly, initialValue = emptyMap())
 
   private val selectorManager = SelectorManager(coroutines.ioDispatcher)
 
@@ -259,7 +255,8 @@ internal class ClientImpl internal constructor(
   // connectTo() invocation's own scope (coroutines.ioDispatcher { ... }), matching the original
   // (pre-coalescing) code's cancellation semantics.
   private suspend fun CoroutineScope.performDial(deviceId: String, connectionJob: CompletableDeferred<ConnectOutcome>): ConnectOutcome {
-    val discoveryDevice = visibleDevicesFlow.value[deviceId] ?: kotlin.run {
+    // Read the source StateFlow directly: a stateIn copy starts empty and races the first dial.
+    val discoveryDevice = visibleDevices.visibleDevices.value[deviceId] ?: kotlin.run {
       log("Client", "cant connect. Device $deviceId cant be found")
       connectionJob.complete(ConnectOutcome.Failed)
       return ConnectOutcome.Failed
