@@ -108,6 +108,7 @@ func handle(_ cmd: InboundCommand) {
     }
     switch registry.session(for: sessionId) {
     case .some(.l2cap(let s)):
+      if let p = s.peripheral { central.cancelConnection(p) } // synchronous, before any reconnect can start
       s.teardown(reason: "closed_by_app")
       writer.sendOk(id: cmd.id)
     case .some(.central): central.closeSession(requestId: cmd.id, sessionId: sessionId)

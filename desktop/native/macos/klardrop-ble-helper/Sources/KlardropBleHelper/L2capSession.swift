@@ -42,7 +42,11 @@ final class L2capSession: NSObject, StreamDelegate {
   // Any thread.
   func start() {
     DispatchQueue.main.async {
-      guard !self.closed, let input = self.channel.inputStream, let output = self.channel.outputStream else { return }
+      guard !self.closed else { return }
+      guard let input = self.channel.inputStream, let output = self.channel.outputStream else {
+        self.teardownOnMain("no_streams")
+        return
+      }
       for s in [input as Stream, output as Stream] {
         s.delegate = self
         s.schedule(in: RunLoop.main, forMode: .common)
@@ -73,8 +77,8 @@ final class L2capSession: NSObject, StreamDelegate {
 
   func stream(_ aStream: Stream, handle eventCode: Stream.Event) {
     if closed { return }
-    if eventCode.contains(.hasBytesAvailable), !drainInput() {
-      teardownOnMain("remote_closed")
+    if eventCode.contains(.hasBytesAvailable), let reason = drainInput() {
+      teardownOnMain(reason)
       return
     }
     if eventCode.contains(.hasSpaceAvailable) { pumpWrites() }
@@ -87,18 +91,19 @@ final class L2capSession: NSObject, StreamDelegate {
 
   // MARK: Main-thread internals
 
-  // Emits every readable byte as chunk events. Returns false on EOF/error (n <= 0).
-  private func drainInput() -> Bool {
-    guard let input = channel.inputStream else { return false }
+  // Emits every readable byte as chunk events. Returns a close reason on EOF/error, else nil.
+  private func drainInput() -> String? {
+    guard let input = channel.inputStream else { return "remote_closed" }
     while input.hasBytesAvailable {
       let n = input.read(&readBuf, maxLength: readBuf.count)
-      if n <= 0 { return false }
+      if n < 0 { return input.streamError?.localizedDescription ?? "remote_closed" }
+      if n == 0 { return "remote_closed" }
       writer.sendEvent("chunk", [
         "sessionId": sessionId,
         "data": Data(readBuf[0..<n]).base64EncodedString(),
       ])
     }
-    return true
+    return nil
   }
 
   // Handles partial writes: a request is acked once its whole chunk was accepted.
