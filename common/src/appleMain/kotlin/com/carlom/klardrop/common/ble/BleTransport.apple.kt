@@ -32,6 +32,7 @@ import platform.CoreBluetooth.CBL2CAPChannel
 import platform.CoreBluetooth.CBL2CAPPSM
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
+import platform.darwin.dispatch_sync
 import platform.CoreBluetooth.CBAdvertisementDataLocalNameKey
 import platform.CoreBluetooth.CBAdvertisementDataServiceDataKey
 import platform.CoreBluetooth.CBAdvertisementDataServiceUUIDsKey
@@ -182,12 +183,23 @@ internal actual class BleTransport {
             } catch (e: CancellationException) {
               // No API to cancel an in-flight open: drop the channel if it arrives later.
               pending.l2capAbandoned = true
+              // cancel() is a no-op if already completed (cancelled => getCompleted throws => null);
+              // otherwise it makes a later complete() fail so the delegate drops the channel.
+              pending.l2capOpened.cancel()
+              runCatching { pending.l2capOpened.getCompleted() }.getOrNull()?.let { dropChannel(it) }
               throw e
             }
-            val s = AppleL2capBleSession(
+            lateinit var s: AppleL2capBleSession
+            s = AppleL2capBleSession(
               channel = channel,
               deviceId = remoteShortDeviceId,
-              onClose = { if (pending.adopted) centralManager.cancelPeripheralConnection(peripheral) },
+              onClose = {
+                if (pending.adopted) centralManager.cancelPeripheralConnection(peripheral)
+                // May run on cbQueue itself (didDisconnect): async, never sync.
+                dispatch_async(cbQueue) {
+                  if (centralL2capSessions[address] === s) centralL2capSessions.remove(address)
+                }
+              },
             )
             try {
               s.open()
@@ -195,7 +207,7 @@ internal actual class BleTransport {
               s.close()
               throw t
             }
-            centralL2capSessions[address] = s
+            dispatch_sync(cbQueue) { centralL2capSessions[address] = s }
             s
           },
           openGatt = {
@@ -219,12 +231,19 @@ internal actual class BleTransport {
             gatt
           },
         )
-        pending.adopted = true
+        if (session is AppleL2capBleSession) {
+          pending.adopted = true
+        } else {
+          // GATT won: drop any stale L2CAP entry (coroutine thread, so go through cbQueue).
+          dispatch_sync(cbQueue) { centralL2capSessions.remove(address) }
+        }
         session
       }
     } catch (t: Throwable) {
       centralSessions.remove(address)
-      centralL2capSessions.remove(address)?.close()
+      var stale: AppleL2capBleSession? = null
+      dispatch_sync(cbQueue) { stale = centralL2capSessions.remove(address) }
+      stale?.close()
       centralManager.cancelPeripheralConnection(peripheral)
       throw t
     } finally {
@@ -436,15 +455,10 @@ internal actual class BleTransport {
         )
         return
       }
-      if (pending == null || pending.l2capAbandoned) {
-        // Late arrival after cancellation: close the streams and drop the channel.
-        dispatch_async(dispatch_get_main_queue()) {
-          didOpenL2CAPChannel.inputStream?.close()
-          didOpenL2CAPChannel.outputStream?.close()
-        }
-        return
+      // Late arrival after cancellation: close the streams and drop the channel.
+      if (pending == null || pending.l2capAbandoned || !pending.l2capOpened.complete(didOpenL2CAPChannel)) {
+        dropChannel(didOpenL2CAPChannel)
       }
-      pending.l2capOpened.complete(didOpenL2CAPChannel)
     }
 
     @ObjCSignatureOverride
@@ -484,6 +498,7 @@ internal actual class BleTransport {
     ) {
       if (error != null) {
         log(TAG, "L2CAP publish failed: ${error.localizedDescription}")
+        published = false // let a later PoweredOn retry
         return
       }
       psm = didPublishL2CAPChannel.toInt()
@@ -500,6 +515,8 @@ internal actual class BleTransport {
         log(TAG, "L2CAP accept failed: ${error?.localizedDescription}")
         return
       }
+      // No set of accepted sessions is kept: the transport lives for the app lifetime and each
+      // session is closed by its bridge on EOF/error (deviation from phaseC.md step 5).
       val session = AppleL2capBleSession(
         channel = didOpenL2CAPChannel,
         deviceId = didOpenL2CAPChannel.peer?.identifier?.UUIDString ?: "unknown",
@@ -595,6 +612,13 @@ internal actual class BleTransport {
     if (published) return
     published = true
     manager.publishL2CAPChannelWithEncryption(false) // insecure like Android; UKEY2 encrypts on top
+  }
+
+  private fun dropChannel(ch: CBL2CAPChannel) {
+    dispatch_async(dispatch_get_main_queue()) {
+      ch.inputStream?.close()
+      ch.outputStream?.close()
+    }
   }
 
   private fun failConnect(peripheral: CBPeripheral, reason: String) {
