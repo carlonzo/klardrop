@@ -32,6 +32,7 @@ import com.carlom.klardrop.common.discovery.CurrentDevice
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
@@ -376,9 +377,12 @@ internal actual class BleTransport(private val context: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || psmChar == null) {
               null
             } else {
-              holder.psmReadIssued = true
-              @Suppress("DEPRECATION")
-              if (!gatt.readCharacteristic(psmChar)) null else BlePsm.decode(holder.psmRead.await())
+              if (!gatt.readCharacteristic(psmChar)) {
+                null
+              } else {
+                holder.psmReadIssued = true
+                BlePsm.decode(holder.psmRead.await())
+              }
             }
           },
           openL2cap = { psm ->
@@ -395,8 +399,14 @@ internal actual class BleTransport(private val context: Context) {
             val descriptor = rx.getDescriptor(cccdUuid)
               ?: throw IllegalStateException("RX characteristic missing CCCD")
             descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            @Suppress("DEPRECATION")
-            if (!gatt.writeDescriptor(descriptor)) throw IllegalStateException("CCCD write rejected")
+            // writeDescriptor is rejected while another GATT op (e.g. the PSM read) is outstanding:
+            // retry; the outer CONNECT_TIMEOUT bounds it. A failed stage rethrows its real cause.
+            while (true) {
+              if (holder.cccdWritten.isCompleted) break // rethrows via await() if it failed
+              @Suppress("DEPRECATION")
+              if (gatt.writeDescriptor(descriptor)) break
+              delay(100)
+            }
             holder.cccdWritten.await()
             AndroidCentralBleSession(
               gatt = gatt,
@@ -441,15 +451,16 @@ internal actual class BleTransport(private val context: Context) {
     return suspendCancellableCoroutine { cont ->
       cont.invokeOnCancellation { runCatching { socket.close() } }
       thread(isDaemon = true, name = "klardrop-l2cap-connect") {
-        try {
+        val session = try {
           socket.connect()
-          val session = AndroidL2capBleSession(socket, deviceId)
-          holder.l2cap = session
-          cont.resume(session) { _, _, _ -> session.close() }
+          AndroidL2capBleSession(socket, deviceId)
         } catch (t: Throwable) {
           runCatching { socket.close() }
           cont.resumeWithException(t)
+          return@thread
         }
+        holder.l2cap = session
+        cont.resume(session) { _, _, _ -> session.close() }
       }
     }
   }
@@ -629,25 +640,22 @@ internal actual class BleTransport(private val context: Context) {
       close()
       return@callbackFlow
     }
-    server.addService(service)
     serverRef = server
+    server.addService(service)
 
+    val l2capSessions = ConcurrentHashMap.newKeySet<AndroidL2capBleSession>()
     if (psmBytes != null && l2capServer != null) {
       log(TAG, "L2CAP listening psm=${l2capServer.psm}")
       launch(Dispatchers.IO) {
         while (isActive) {
           val socket = try {
             l2capServer.accept()
-          } catch (e: IOException) {
+          } catch (e: Exception) {
             break // server socket closed (or broken): stop quietly
           }
-          val session = try {
-            AndroidL2capBleSession(socket, deviceId = socket.remoteDevice.address)
-          } catch (e: IOException) {
-            runCatching { socket.close() }
-            continue
-          }
+          val session = AndroidL2capBleSession(socket, deviceId = socket.remoteDevice.address)
           log(TAG, "L2CAP channel accepted from ${session.deviceId}")
+          l2capSessions.add(session)
           if (!trySend(session).isSuccess) session.close()
         }
       }
@@ -655,6 +663,7 @@ internal actual class BleTransport(private val context: Context) {
 
     awaitClose {
       runCatching { l2capServer?.close() } // first: unblocks accept()
+      l2capSessions.forEach { it.close() }
       runCatching { server.clearServices() }
       runCatching { server.close() }
       sessions.values.forEach { it.session?.markClosed() }
