@@ -1,6 +1,8 @@
 package com.carlom.klardrop.common.ble.mac
 
+import com.carlom.klardrop.common.ble.BleSessionTransport
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -107,5 +109,14 @@ class MacBleHelperProtocolTest {
     val ok = assertIs<HelperLine.Ok>(parsed)
     assertEquals("x", ok.id)
     assertEquals("value", ok.obj.string("unknown"))
+  }
+
+  @Test
+  fun parseTransportDefaultsToGatt() {
+    fun t(json: String) = parseTransport(HelperProtocol.json.parseToJsonElement(json).jsonObject)
+    assertEquals(BleSessionTransport.GATT, t("""{"ok":true}"""))
+    assertEquals(BleSessionTransport.GATT, t("""{"transport":"gatt"}"""))
+    assertEquals(BleSessionTransport.L2CAP, t("""{"transport":"l2cap"}"""))
+    assertEquals(BleSessionTransport.GATT, t("""{"transport":"quic"}"""))
   }
 }

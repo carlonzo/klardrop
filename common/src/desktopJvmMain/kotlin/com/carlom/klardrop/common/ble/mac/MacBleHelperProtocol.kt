@@ -1,5 +1,6 @@
 package com.carlom.klardrop.common.ble.mac
 
+import com.carlom.klardrop.common.ble.BleSessionTransport
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -95,3 +96,7 @@ internal fun JsonObject.bool(key: String): Boolean? = this[key]?.jsonPrimitive?.
 
 internal fun stringField(value: String): JsonElement = JsonPrimitive(value)
 internal fun intField(value: Int): JsonElement = JsonPrimitive(value)
+
+/** Optional `transport` field of connect responses / session_opened events; absent or unknown = GATT (old helper). */
+internal fun parseTransport(obj: JsonObject): BleSessionTransport =
+  if (obj.string("transport") == "l2cap") BleSessionTransport.L2CAP else BleSessionTransport.GATT

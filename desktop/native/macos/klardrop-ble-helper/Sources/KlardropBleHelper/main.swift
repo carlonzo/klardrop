@@ -6,10 +6,11 @@ import Foundation
 
 // Sessions live across both controllers; peripheral-role sessions are created when
 // a remote central subscribes, central-role sessions are created when we connect.
-// SessionRegistry is the routing table for send_chunk/close_session.
+// SessionRegistry is the routing table for send_chunk/close_session (confined to helperQueue).
 enum SessionEntry {
   case central(CentralSession)
   case peripheral(PeripheralSession)
+  case l2cap(L2capSession)
 
   func asCentral() -> CentralSession? { if case .central(let s) = self { return s } else { return nil } }
   func asPeripheral() -> PeripheralSession? { if case .peripheral(let s) = self { return s } else { return nil } }
@@ -95,20 +96,22 @@ func handle(_ cmd: InboundCommand) {
       writer.sendError(id: cmd.id, code: "bad_request", message: "sessionId+data required")
       return
     }
-    if central.sessions(contains: sessionId) {
-      central.sendChunk(requestId: cmd.id, sessionId: sessionId, data: data)
-    } else {
-      peripheral.sendChunk(requestId: cmd.id, sessionId: sessionId, data: data)
+    switch registry.session(for: sessionId) {
+    case .some(.l2cap(let s)): s.enqueue(requestId: cmd.id, data: data)
+    case .some(.central): central.sendChunk(requestId: cmd.id, sessionId: sessionId, data: data)
+    default: peripheral.sendChunk(requestId: cmd.id, sessionId: sessionId, data: data)
     }
   case "close_session":
     guard let sessionId = cmd.raw["sessionId"] as? String else {
       writer.sendError(id: cmd.id, code: "bad_request", message: "sessionId required")
       return
     }
-    if central.sessions(contains: sessionId) {
-      central.closeSession(requestId: cmd.id, sessionId: sessionId)
-    } else {
-      peripheral.closeSession(requestId: cmd.id, sessionId: sessionId)
+    switch registry.session(for: sessionId) {
+    case .some(.l2cap(let s)):
+      s.teardown(reason: "closed_by_app")
+      writer.sendOk(id: cmd.id)
+    case .some(.central): central.closeSession(requestId: cmd.id, sessionId: sessionId)
+    default: peripheral.closeSession(requestId: cmd.id, sessionId: sessionId)
     }
   case "shutdown":
     central.shutdown()
@@ -117,13 +120,6 @@ func handle(_ cmd: InboundCommand) {
     DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { exit(0) }
   default:
     writer.sendError(id: cmd.id, code: "unknown_cmd", message: "Unknown command \(cmd.cmd)")
-  }
-}
-
-extension CentralController {
-  func sessions(contains sessionId: String) -> Bool {
-    if case .some(.central) = registry.session(for: sessionId) { return true }
-    return false
   }
 }
 
