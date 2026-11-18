@@ -13,6 +13,7 @@ import android.bluetooth.BluetoothGattServerCallback
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
@@ -25,22 +26,28 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.ParcelUuid
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.carlom.klardrop.common.discovery.CurrentDevice
 import com.carlom.klardrop.common.utils.log
-import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.coroutines.resume
+import kotlin.concurrent.thread
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration.Companion.seconds
 
@@ -240,12 +247,13 @@ internal actual class BleTransport(private val context: Context) {
     val txUuid = UUID.fromString(BleConstants.TX_CHARACTERISTIC_UUID)
     val rxUuid = UUID.fromString(BleConstants.RX_CHARACTERISTIC_UUID)
     val cccdUuid = UUID.fromString(BleConstants.CCCD_UUID)
+    val psmUuid = UUID.fromString(BleConstants.PSM_CHARACTERISTIC_UUID)
 
     val incoming = Channel<ByteArray>(capacity = Channel.UNLIMITED)
 
     // Step-by-step GATT setup: connect → onConnected → requestMtu → onMtuChanged →
-    // discoverServices → onServicesDiscovered → setCharacteristicNotification +
-    // write CCCD → onDescriptorWrite → session ready.
+    // discoverServices → onServicesDiscovered (stage 1). Then either read PSM + open L2CAP
+    // (stages 2) or setCharacteristicNotification + write CCCD → onDescriptorWrite (stage 3).
     val holder = CentralSessionHolder(
       remoteShortDeviceId = remoteShortDeviceId,
       incoming = incoming,
@@ -255,6 +263,7 @@ internal actual class BleTransport(private val context: Context) {
       override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
         if (status != BluetoothGatt.GATT_SUCCESS) {
           holder.fail(IllegalStateException("GATT connection failed status=$status"))
+          holder.closeL2cap()
           runCatching { gatt.close() }
           incoming.close()
           return
@@ -296,21 +305,38 @@ internal actual class BleTransport(private val context: Context) {
           return
         }
         holder.txCharacteristic = tx
-        gatt.setCharacteristicNotification(rx, true)
-        val descriptor = rx.getDescriptor(cccdUuid)
-        if (descriptor == null) {
-          holder.fail(IllegalStateException("RX characteristic missing CCCD"))
-          return
-        }
-        descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+        holder.rxCharacteristic = rx
+        holder.psmCharacteristic = service.getCharacteristic(psmUuid)
+        holder.discovered.complete(Unit)
+      }
+
+      // API 33+ delivers here; older APIs call the deprecated overload. Both complete the same
+      // complete-once deferred, so a double delivery is harmless. No blocking on binder threads.
+      override fun onCharacteristicRead(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        value: ByteArray,
+        status: Int,
+      ) {
+        if (characteristic.uuid != psmUuid) return
+        holder.psmRead.complete(if (status == BluetoothGatt.GATT_SUCCESS) value.copyOf() else null)
+      }
+
+      @Deprecated("Deprecated in API 33")
+      override fun onCharacteristicRead(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        status: Int,
+      ) {
+        if (characteristic.uuid != psmUuid) return
         @Suppress("DEPRECATION")
-        gatt.writeDescriptor(descriptor)
+        holder.psmRead.complete(if (status == BluetoothGatt.GATT_SUCCESS) characteristic.value?.copyOf() else null)
       }
 
       override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
         if (descriptor.uuid != cccdUuid) return
         if (status == BluetoothGatt.GATT_SUCCESS) {
-          holder.complete(gatt)
+          holder.cccdWritten.complete(Unit)
         } else {
           holder.fail(IllegalStateException("CCCD write failed status=$status"))
         }
@@ -341,19 +367,90 @@ internal actual class BleTransport(private val context: Context) {
       ?: throw IllegalStateException("connectGatt returned null for $address")
 
     return try {
-      withTimeout(CONNECT_TIMEOUT) { holder.awaitReady() }
-      AndroidCentralBleSession(
-        gatt = gatt,
-        txCharacteristic = holder.txCharacteristic!!,
-        deviceId = remoteShortDeviceId,
-        mtu = holder.negotiatedMtu,
-        incoming = incoming,
-        writeAckWaiter = holder::awaitNextWriteAck,
-      )
+      withTimeout(CONNECT_TIMEOUT) {
+        holder.discovered.await()
+        val session = connectPreferringL2cap(
+          peerLabel = address,
+          readPsm = {
+            val psmChar = holder.psmCharacteristic
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || psmChar == null) {
+              null
+            } else {
+              holder.psmReadIssued = true
+              @Suppress("DEPRECATION")
+              if (!gatt.readCharacteristic(psmChar)) null else BlePsm.decode(holder.psmRead.await())
+            }
+          },
+          openL2cap = { psm ->
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) throw IllegalStateException("L2CAP needs API 29")
+            openL2cap(device, psm, remoteShortDeviceId, holder)
+          },
+          openGatt = {
+            // Android allows one outstanding GATT op: let a timed-out PSM read drain first.
+            if (holder.psmReadIssued && !holder.psmRead.isCompleted) {
+              withTimeoutOrNull(PSM_READ_DRAIN_TIMEOUT) { holder.psmRead.join() }
+            }
+            val rx = holder.rxCharacteristic!!
+            gatt.setCharacteristicNotification(rx, true)
+            val descriptor = rx.getDescriptor(cccdUuid)
+              ?: throw IllegalStateException("RX characteristic missing CCCD")
+            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            @Suppress("DEPRECATION")
+            if (!gatt.writeDescriptor(descriptor)) throw IllegalStateException("CCCD write rejected")
+            holder.cccdWritten.await()
+            AndroidCentralBleSession(
+              gatt = gatt,
+              txCharacteristic = holder.txCharacteristic!!,
+              deviceId = remoteShortDeviceId,
+              mtu = holder.negotiatedMtu,
+              incoming = incoming,
+              writeAckWaiter = holder::awaitNextWriteAck,
+            )
+          },
+        )
+        if (session is AndroidL2capBleSession) {
+          // L2CAP rides the GATT link: the session now owns it. The GATT RX channel is unused.
+          session.adoptGatt(gatt)
+          incoming.close()
+        }
+        session
+      }
     } catch (t: Throwable) {
+      holder.closeL2cap()
       runCatching { gatt.close() }
       incoming.close()
       throw t
+    }
+  }
+
+  /**
+   * Connect an insecure L2CAP CoC to [psm]. connect() blocks and only socket.close() unblocks it,
+   * so cancellation closes the socket; a session finishing after cancellation is closed too.
+   * The session gets no GATT link yet (the caller adopts it) so closing a losing session never
+   * kills the link the GATT fallback needs.
+   */
+  @RequiresApi(Build.VERSION_CODES.Q)
+  @SuppressLint("MissingPermission")
+  private suspend fun openL2cap(
+    device: BluetoothDevice,
+    psm: Int,
+    deviceId: String,
+    holder: CentralSessionHolder,
+  ): BleSession {
+    val socket = device.createInsecureL2capChannel(psm)
+    return suspendCancellableCoroutine { cont ->
+      cont.invokeOnCancellation { runCatching { socket.close() } }
+      thread(isDaemon = true, name = "klardrop-l2cap-connect") {
+        try {
+          socket.connect()
+          val session = AndroidL2capBleSession(socket, deviceId)
+          holder.l2cap = session
+          cont.resume(session) { _, _, _ -> session.close() }
+        } catch (t: Throwable) {
+          runCatching { socket.close() }
+          cont.resumeWithException(t)
+        }
+      }
     }
   }
 
@@ -375,8 +472,31 @@ internal actual class BleTransport(private val context: Context) {
     val txUuid = UUID.fromString(BleConstants.TX_CHARACTERISTIC_UUID)
     val rxUuid = UUID.fromString(BleConstants.RX_CHARACTERISTIC_UUID)
     val cccdUuid = UUID.fromString(BleConstants.CCCD_UUID)
+    val psmUuid = UUID.fromString(BleConstants.PSM_CHARACTERISTIC_UUID)
+
+    // Insecure on purpose (no bonding): UKEY2 encrypts on top, and both sides must match.
+    val l2capServer: BluetoothServerSocket? =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) listenL2cap(adapter) else null
+    val psmBytes: ByteArray? = l2capServer?.let { srv ->
+      if (srv.psm in 1..0xFFFF) {
+        BlePsm.encode(srv.psm)
+      } else {
+        log(TAG, "L2CAP listen returned invalid psm=${srv.psm}; no L2CAP")
+        runCatching { srv.close() }
+        null
+      }
+    }
 
     val service = BluetoothGattService(serviceUuid, BluetoothGattService.SERVICE_TYPE_PRIMARY).apply {
+      if (psmBytes != null) {
+        addCharacteristic(
+          BluetoothGattCharacteristic(
+            psmUuid,
+            BluetoothGattCharacteristic.PROPERTY_READ,
+            BluetoothGattCharacteristic.PERMISSION_READ,
+          )
+        )
+      }
       addCharacteristic(
         BluetoothGattCharacteristic(
           txUuid,
@@ -423,6 +543,27 @@ internal actual class BleTransport(private val context: Context) {
         sessions[device.address]?.negotiatedMtu =
           (mtu - BleConstants.ATT_HEADER_SIZE).coerceAtLeast(20)
         log(TAG, "GATT server MTU with ${device.address} = $mtu")
+      }
+
+      override fun onCharacteristicReadRequest(
+        device: BluetoothDevice,
+        requestId: Int,
+        offset: Int,
+        characteristic: BluetoothGattCharacteristic,
+      ) {
+        val server = serverRef ?: return
+        if (characteristic.uuid == psmUuid && psmBytes != null) {
+          if (offset > psmBytes.size) {
+            server.sendResponse(device, requestId, BluetoothGatt.GATT_INVALID_OFFSET, offset, null)
+          } else {
+            server.sendResponse(
+              device, requestId, BluetoothGatt.GATT_SUCCESS, offset,
+              psmBytes.copyOfRange(offset, psmBytes.size),
+            )
+          }
+        } else {
+          server.sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE, offset, null)
+        }
       }
 
       override fun onCharacteristicWriteRequest(
@@ -484,17 +625,49 @@ internal actual class BleTransport(private val context: Context) {
 
     val server = manager.openGattServer(context, serverCallback) ?: run {
       log(TAG, "openGattServer returned null; cannot host Klardrop service")
+      runCatching { l2capServer?.close() }
       close()
       return@callbackFlow
     }
     server.addService(service)
     serverRef = server
 
+    if (psmBytes != null && l2capServer != null) {
+      log(TAG, "L2CAP listening psm=${l2capServer.psm}")
+      launch(Dispatchers.IO) {
+        while (isActive) {
+          val socket = try {
+            l2capServer.accept()
+          } catch (e: IOException) {
+            break // server socket closed (or broken): stop quietly
+          }
+          val session = try {
+            AndroidL2capBleSession(socket, deviceId = socket.remoteDevice.address)
+          } catch (e: IOException) {
+            runCatching { socket.close() }
+            continue
+          }
+          log(TAG, "L2CAP channel accepted from ${session.deviceId}")
+          if (!trySend(session).isSuccess) session.close()
+        }
+      }
+    }
+
     awaitClose {
+      runCatching { l2capServer?.close() } // first: unblocks accept()
       runCatching { server.clearServices() }
       runCatching { server.close() }
       sessions.values.forEach { it.session?.markClosed() }
     }
+  }
+
+  @RequiresApi(Build.VERSION_CODES.Q)
+  @SuppressLint("MissingPermission")
+  private fun listenL2cap(adapter: BluetoothAdapter): BluetoothServerSocket? = try {
+    adapter.listenUsingInsecureL2capChannel()
+  } catch (e: Exception) { // IOException / SecurityException
+    log(TAG, "L2CAP listen failed, GATT only: ${e::class.simpleName}: ${e.message}")
+    null
   }
 
   private companion object {
@@ -502,7 +675,9 @@ internal actual class BleTransport(private val context: Context) {
   }
 }
 
-private val CONNECT_TIMEOUT = 15.seconds
+// Must exceed GATT setup + BleConstants.L2CAP_OPEN_TIMEOUT_MS.
+private val CONNECT_TIMEOUT = 20.seconds
+private val PSM_READ_DRAIN_TIMEOUT = 2.seconds
 private val WRITE_ACK_TIMEOUT = 5.seconds
 
 // ──────────────────────────────────────────────────────────────────────────────────────
@@ -510,8 +685,8 @@ private val WRITE_ACK_TIMEOUT = 5.seconds
 // ──────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Tracks the multi-step GATT handshake (connect → MTU → discover → CCCD) so the
- * `connectCentral` caller can await a fully-ready session with a single suspend point.
+ * Tracks the multi-step GATT handshake as one complete-once deferred per stage, so each stage's
+ * waiter is failed on error/disconnect independently. Callbacks only complete deferreds.
  */
 private class CentralSessionHolder(
   @Suppress("unused") internal val remoteShortDeviceId: String,
@@ -519,28 +694,29 @@ private class CentralSessionHolder(
 ) {
   @Volatile var negotiatedMtu: Int = 20 // safe default before onMtuChanged fires
   @Volatile var txCharacteristic: BluetoothGattCharacteristic? = null
-  private var readyCont: CancellableContinuation<Unit>? = null
+  @Volatile var rxCharacteristic: BluetoothGattCharacteristic? = null
+  @Volatile var psmCharacteristic: BluetoothGattCharacteristic? = null
+  @Volatile var psmReadIssued = false
+  @Volatile var l2cap: AndroidL2capBleSession? = null
+
+  val discovered = CompletableDeferred<Unit>()
+  val psmRead = CompletableDeferred<ByteArray?>()
+  val cccdWritten = CompletableDeferred<Unit>()
   private val writeAckQueue = Channel<Boolean>(capacity = Channel.UNLIMITED)
-  private var closed = false
-
-  suspend fun awaitReady() = suspendCancellableCoroutine<Unit> { cont ->
-    readyCont = cont
-  }
-
-  fun complete(@Suppress("UNUSED_PARAMETER") gatt: BluetoothGatt) {
-    readyCont?.takeIf { it.isActive }?.resume(Unit)
-    readyCont = null
-  }
 
   fun fail(cause: Throwable) {
-    readyCont?.takeIf { it.isActive }?.resumeWithException(cause)
-    readyCont = null
+    discovered.completeExceptionally(cause)
+    psmRead.completeExceptionally(cause)
+    cccdWritten.completeExceptionally(cause)
+  }
+
+  fun closeL2cap() {
+    l2cap?.close()
   }
 
   fun markClosed() {
-    closed = true
-    readyCont?.takeIf { it.isActive }?.resumeWithException(IllegalStateException("Disconnected during handshake"))
-    readyCont = null
+    fail(IllegalStateException("Disconnected during handshake"))
+    closeL2cap()
     writeAckQueue.close()
   }
 
