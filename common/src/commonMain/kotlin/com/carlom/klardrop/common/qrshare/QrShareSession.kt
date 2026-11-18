@@ -5,6 +5,7 @@ import com.carlom.klardrop.common.communication.TransferAnchor
 import com.carlom.klardrop.common.utils.Coroutines
 import com.carlom.klardrop.common.utils.log
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -12,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
@@ -88,6 +90,7 @@ public class QrShareSession internal constructor(
     sessionId = generateConnectionId()
     currentPayload = payload
     currentIpv4 = ipv4
+    currentUrl = ""
     qrSheetVisible = true
     hasClaimed = false
     lastHttpActivity = null
@@ -98,12 +101,38 @@ public class QrShareSession internal constructor(
     transferAnchor.begin("qr:$sessionId:wait", "Waiting for someone to scan", TransferAnchor.Direction.OUTGOING)
     waitAnchorActive = true
 
+    // events is a hot SharedFlow with no replay: an emission with zero subscribers is
+    // dropped. start() binds and accepts before it returns, and a phone (or a camera
+    // prefetch) can GET the moment the URL is on screen. Collect first, otherwise the
+    // first claim's TokenRotated never updates the QR.
+    val scope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
+    sessionScope = scope
+    val eventsSubscribed = CompletableDeferred<Unit>()
+    scope.launch {
+      server.events
+        .onSubscription { eventsSubscribed.complete(Unit) }
+        .collect { event ->
+          handleServerEvent(event)
+        }
+    }
+    try {
+      eventsSubscribed.await()
+    } catch (e: CancellationException) {
+      scope.cancel()
+      sessionScope = null
+      throw e
+    }
+
     val bound = try {
       server.start(payload, waitingToken, ipv4)
     } catch (e: CancellationException) {
+      scope.cancel()
+      sessionScope = null
       throw e
     } catch (e: Exception) {
       log("QrShareSession", "Failed to start LAN HTTP server: ${e.message}")
+      scope.cancel()
+      sessionScope = null
       if (waitAnchorActive) {
         transferAnchor.end("qr:$sessionId:wait")
         waitAnchorActive = false
@@ -114,25 +143,18 @@ public class QrShareSession internal constructor(
     }
 
     currentPort = bound.port
-    val url = "https://$ipv4:${bound.port}/s/$waitingToken"
-    currentUrl = url
+    // A claim that lands while start() is still accepting (before this state publish)
+    // already rotated the URL on the collector. Don't overwrite that with the pre-claim token.
+    val initialUrl = "https://$ipv4:${bound.port}/s/$waitingToken"
+    if (currentUrl.isEmpty()) currentUrl = initialUrl
     log("QrShareSession", "QR URL https://$ipv4:${bound.port}/s/<redacted>")
     val visibleState = QrShareState.QrVisible(
-      url = url,
+      url = currentUrl,
       ipv4 = ipv4,
       port = bound.port,
       payloadSummary = payload.summary(),
     )
     _state.value = visibleState
-
-    val scope = coroutines.newScope(SupervisorJob() + coroutines.ioDispatcher)
-    sessionScope = scope
-
-    scope.launch {
-      server.events.collect { event ->
-        handleServerEvent(event)
-      }
-    }
 
     scope.launch {
       lanAddressSelector.observeChanges().collect { newIpv4 ->

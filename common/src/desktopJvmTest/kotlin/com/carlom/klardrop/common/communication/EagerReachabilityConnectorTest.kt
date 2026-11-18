@@ -216,23 +216,29 @@ class EagerReachabilityConnectorTest {
     connector.stop()
   }
 
+  @OptIn(ExperimentalCoroutinesApi::class)
   @Test
   fun nearbyOnlyPeerIsProbed() = runTest(timeout = 10.seconds) {
+    // The connector's scope is the injected dispatcher. buildConnector() uses real
+    // Dispatchers.IO, and delay() here is virtual time, so a wall-clock pause does not
+    // wait for the probe: stop() then cancels connectTo before it runs (calls=0 on a
+    // busy CI). Drive the whole probe on this test scheduler instead.
+    val dispatcher = StandardTestDispatcher(testScheduler)
+    val coroutines = testCoroutines(this, dispatcher)
     val peerId = "peerNEAR"
     val client = CountingClient()
-    val (connector, pool) = buildConnector(
-      peerId = peerId,
-      client = client,
+    val pool = FakeConnectionPool()
+    val repo = FixedIdPropertiesRepository("aaaaaaaa")
+    val connector = EagerReachabilityConnector(
+      coroutines = coroutines,
       visibleDevices = NearbyOnlyPeerVisibleDevices(peerId),
+      currentDeviceProvider = com.carlom.klardrop.common.discovery.CurrentDeviceProvider(repo),
+      client = client,
+      connectionsPool = pool,
+      networkLifecycleMonitor = NetworkLifecycleMonitor(),
     )
-    pool.reachability.test {
-      connector.start()
-      awaitItem()
-      awaitItem()
-      // Probe launches connectTo on Dispatchers.IO after markProbing; wait for it.
-      delay(500)
-      cancelAndIgnoreRemainingEvents()
-    }
+    connector.start()
+    runCurrent()
     connector.stop()
     assertEquals(
       true,
