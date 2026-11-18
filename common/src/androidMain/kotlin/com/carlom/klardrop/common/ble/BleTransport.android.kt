@@ -661,6 +661,7 @@ internal actual class BleTransport(private val context: Context) {
             continue
           }
           log(TAG, "L2CAP channel accepted from ${session.deviceId}")
+          l2capSessions.removeIf { !it.isOpen }
           l2capSessions.add(session)
           if (!trySend(session).isSuccess) session.close()
         }
