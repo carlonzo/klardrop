@@ -5,6 +5,11 @@ enum BleConstants {
   static let serviceUUID = "a5b7c3e1-7f5a-4b62-9a3c-1d8e2f4b6c8a"
   static let txCharacteristicUUID = "a5b7c3e2-7f5a-4b62-9a3c-1d8e2f4b6c8a"
   static let rxCharacteristicUUID = "a5b7c3e3-7f5a-4b62-9a3c-1d8e2f4b6c8a"
+  // Read-only; value = L2CAP PSM as uint16 little-endian (2 bytes).
+  static let psmCharacteristicUUID = "a5b7c3e4-7f5a-4b62-9a3c-1d8e2f4b6c8a"
+  static let l2capChunkSize = 8192
+  // Budget for PSM read + channel open together, in seconds.
+  static let l2capOpenTimeout = 5.0
 }
 
 // Newline-delimited JSON. Commands carry an `id` for response correlation. Events

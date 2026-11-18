@@ -2,7 +2,9 @@ import Foundation
 import CoreBluetooth
 
 // CBCentralManager driver: scans for Klardrop peripherals, connects, opens GATT, and
-// pumps chunks bidirectionally for any session created in the central role.
+// pumps chunks bidirectionally for any session created in the central role. Prefers an
+// L2CAP CoC channel (PSM read from GATT) and falls back to GATT notify/write.
+// All state is confined to the helper queue (CB delegate queue); L2capSession hops to main itself.
 final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
 
   private let writer: StdoutWriter
@@ -20,6 +22,9 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
 
   // Active central-role sessions keyed by peer identifier UUID string.
   private var sessions: [String: CentralSession] = [:]
+
+  // Active central-role L2CAP sessions keyed by peer identifier UUID string.
+  private var l2capSessions: [String: L2capSession] = [:]
 
   private var scanning = false
 
@@ -102,6 +107,7 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
       manager.cancelPeripheralConnection(session.peripheral)
     }
     sessions.removeAll()
+    for (_, s) in l2capSessions { s.teardown(reason: "shutdown") }
   }
 
   // MARK: CBCentralManagerDelegate
@@ -144,16 +150,17 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
 
   func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
     let peerId = peripheral.identifier.uuidString
-    if let pending = connectInFlight.removeValue(forKey: peerId) {
+    if let pending = dropPending(peerId) {
       writer.sendError(id: pending.requestId, code: "connect_failed", message: error?.localizedDescription ?? "unknown")
     }
   }
 
   func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
     let peerId = peripheral.identifier.uuidString
-    if let pending = connectInFlight.removeValue(forKey: peerId) {
+    if let pending = dropPending(peerId) {
       writer.sendError(id: pending.requestId, code: "disconnected", message: error?.localizedDescription ?? "disconnected during handshake")
     }
+    l2capSessions[peerId]?.teardown(reason: error?.localizedDescription ?? "disconnected")
     if let session = sessions.removeValue(forKey: peerId) {
       registry.remove(sessionId: session.sessionId)
       writer.sendEvent("session_closed", ["sessionId": session.sessionId, "reason": error?.localizedDescription ?? "disconnected"])
@@ -170,6 +177,7 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
     peripheral.discoverCharacteristics([
       CBUUID(string: BleConstants.txCharacteristicUUID),
       CBUUID(string: BleConstants.rxCharacteristicUUID),
+      CBUUID(string: BleConstants.psmCharacteristicUUID),
     ], for: service)
   }
 
@@ -182,7 +190,7 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
       return
     }
     let peerId = peripheral.identifier.uuidString
-    guard let pending = connectInFlight[peerId] else { return }
+    guard let pending = connectInFlight[peerId], pending.gattSession == nil else { return }
     let mtu = peripheral.maximumWriteValueLength(for: .withResponse)
     let session = CentralSession(
       sessionId: pending.sessionId,
@@ -193,10 +201,47 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
       writer: writer,
       queue: queue
     )
-    sessions[peerId] = session
-    registry.add(sessionId: pending.sessionId, session: .central(session))
-    peripheral.setNotifyValue(true, for: rx)
-    // Defer ok until didUpdateNotificationStateFor confirms subscription.
+    guard let psmChar = chars.first(where: { $0.uuid == CBUUID(string: BleConstants.psmCharacteristicUUID) }) else {
+      registerGatt(session)
+      return
+    }
+    // Try L2CAP first. The GATT session stays unregistered (never subscribed) until a
+    // fallback actually chooses GATT.
+    pending.gattSession = session
+    pending.l2capPending = true
+    let timer = DispatchWorkItem { [weak self] in self?.fallbackToGatt(peerId: peerId, reason: "timeout") }
+    pending.timer = timer
+    queue.asyncAfter(deadline: .now() + BleConstants.l2capOpenTimeout, execute: timer)
+    peripheral.readValue(for: psmChar)
+  }
+
+  func peripheral(_ peripheral: CBPeripheral, didOpen channel: CBL2CAPChannel?, error: Error?) {
+    let peerId = peripheral.identifier.uuidString
+    guard let pending = connectInFlight[peerId], pending.l2capPending else {
+      // Late channel after timeout / fallback / failure.
+      if let channel = channel { L2capSession.discard(channel) }
+      return
+    }
+    guard error == nil, let channel = channel else {
+      fallbackToGatt(peerId: peerId, reason: error?.localizedDescription ?? "open_failed")
+      return
+    }
+    pending.timer?.cancel()
+    pending.l2capPending = false
+    pending.gattSession = nil // never subscribed; discard
+    connectInFlight.removeValue(forKey: peerId)
+    let session = L2capSession(
+      channel: channel, sessionId: pending.sessionId, role: "central", peripheral: peripheral,
+      writer: writer, queue: queue
+    ) { [weak self] session, reason in self?.l2capClosed(peerId: peerId, session: session, reason: reason) }
+    l2capSessions[peerId] = session
+    registry.add(sessionId: session.sessionId, session: .l2cap(session))
+    session.start()
+    writer.sendOk(id: pending.requestId, extra: [
+      "sessionId": pending.sessionId,
+      "mtu": BleConstants.l2capChunkSize,
+      "transport": "l2cap",
+    ])
   }
 
   func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
@@ -214,6 +259,20 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
 
   func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
     let peerId = peripheral.identifier.uuidString
+    if characteristic.uuid == CBUUID(string: BleConstants.psmCharacteristicUUID) {
+      guard let pending = connectInFlight[peerId], pending.l2capPending else { return }
+      guard error == nil, let v = characteristic.value, v.count == 2 else {
+        fallbackToGatt(peerId: peerId, reason: error?.localizedDescription ?? "invalid_psm")
+        return
+      }
+      let psm = CBL2CAPPSM(v[v.startIndex]) | (CBL2CAPPSM(v[v.startIndex + 1]) << 8)
+      if psm == 0 {
+        fallbackToGatt(peerId: peerId, reason: "invalid_psm")
+        return
+      }
+      peripheral.openL2CAPChannel(psm)
+      return
+    }
     guard let session = sessions[peerId] else { return }
     if let value = characteristic.value, !value.isEmpty {
       writer.sendEvent("chunk", [
@@ -233,10 +292,44 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
 
   private func failConnect(peripheral: CBPeripheral, code: String, message: String) {
     let peerId = peripheral.identifier.uuidString
-    if let pending = connectInFlight.removeValue(forKey: peerId) {
+    if let pending = dropPending(peerId) {
       writer.sendError(id: pending.requestId, code: code, message: message)
     }
     manager.cancelPeripheralConnection(peripheral)
+  }
+
+  // Removes the in-flight connect and cancels its L2CAP timer.
+  private func dropPending(_ peerId: String) -> PendingConnect? {
+    guard let pending = connectInFlight.removeValue(forKey: peerId) else { return nil }
+    pending.timer?.cancel()
+    pending.l2capPending = false
+    return pending
+  }
+
+  // Idempotent per attempt (guarded by l2capPending).
+  private func fallbackToGatt(peerId: String, reason: String) {
+    guard let pending = connectInFlight[peerId], pending.l2capPending, let session = pending.gattSession else { return }
+    pending.timer?.cancel()
+    pending.l2capPending = false
+    writer.sendLog("info", "L2CAP to \(peerId) failed (\(reason)), using GATT")
+    registerGatt(session)
+  }
+
+  // ok is sent later from didUpdateNotificationStateFor.
+  private func registerGatt(_ session: CentralSession) {
+    let peerId = session.peripheral.identifier.uuidString
+    sessions[peerId] = session
+    registry.add(sessionId: session.sessionId, session: .central(session))
+    writer.sendLog("info", "GATT session \(session.sessionId) role=central mtu=\(session.mtu)")
+    session.peripheral.setNotifyValue(true, for: session.rx)
+  }
+
+  private func l2capClosed(peerId: String, session: L2capSession, reason: String) {
+    if l2capSessions[peerId] === session { l2capSessions.removeValue(forKey: peerId) }
+    registry.remove(sessionId: session.sessionId)
+    // Cancel right away so a fresh reconnect to this peer cannot be killed by a deferred cancel.
+    if let p = session.peripheral { manager.cancelPeripheralConnection(p) }
+    writer.sendEvent("session_closed", ["sessionId": session.sessionId, "reason": reason])
   }
 
   // Pull the short device id from advertisement data. Android peers carry it as
@@ -267,9 +360,18 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
   }
 }
 
-private struct PendingConnect {
+private final class PendingConnect {
   let requestId: String
   let sessionId: String
+  // L2CAP attempt state. gattSession is only registered if the GATT path is chosen.
+  var gattSession: CentralSession?
+  var l2capPending = false
+  var timer: DispatchWorkItem?
+
+  init(requestId: String, sessionId: String) {
+    self.requestId = requestId
+    self.sessionId = sessionId
+  }
 }
 
 // Holds a single central-role GATT connection. Serializes writes so chunks are

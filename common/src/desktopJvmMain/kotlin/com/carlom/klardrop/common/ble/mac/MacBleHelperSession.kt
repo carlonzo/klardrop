@@ -1,6 +1,7 @@
 package com.carlom.klardrop.common.ble.mac
 
 import com.carlom.klardrop.common.ble.BleSession
+import com.carlom.klardrop.common.ble.BleSessionTransport
 import kotlinx.coroutines.channels.Channel
 
 /**
@@ -16,6 +17,7 @@ internal class MacBleHelperSession(
   override val deviceId: String,
   override val mtu: Int,
   private val helper: MacBleHelperProcess,
+  override val transport: BleSessionTransport = BleSessionTransport.GATT,
 ) : BleSession {
 
   private val incoming = Channel<ByteArray>(capacity = Channel.UNLIMITED)
