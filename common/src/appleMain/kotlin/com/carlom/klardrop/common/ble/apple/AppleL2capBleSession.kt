@@ -70,14 +70,16 @@ internal class AppleL2capBleSession(
   /** Schedules and opens both streams on the main run loop. */
   suspend fun open() {
     if (closeRequested.value != 0) return
-    withContext(Dispatchers.Main) {
+    val opened = withContext(Dispatchers.Main) {
+      if (closeRequested.value != 0) return@withContext false
       for (s in listOf<NSStream>(channel.inputStream!!, channel.outputStream!!)) {
         s.delegate = delegate
         s.scheduleInRunLoop(NSRunLoop.mainRunLoop, forMode = NSRunLoopCommonModes)
         s.open()
       }
+      true
     }
-    log(TAG, "L2CAP session $deviceId open psm=${channel.PSM}")
+    if (opened) log(TAG, "L2CAP session $deviceId open psm=${channel.PSM}")
   }
 
   override suspend fun receiveChunk(): ByteArray? = withContext(Dispatchers.Main) {
