@@ -653,7 +653,13 @@ internal actual class BleTransport(private val context: Context) {
           } catch (e: Exception) {
             break // server socket closed (or broken): stop quietly
           }
-          val session = AndroidL2capBleSession(socket, deviceId = socket.remoteDevice.address)
+          val session = try {
+            AndroidL2capBleSession(socket, deviceId = socket.remoteDevice.address)
+          } catch (e: Exception) {
+            log(TAG, "L2CAP session setup failed: ${e::class.simpleName}: ${e.message}")
+            runCatching { socket.close() }
+            continue
+          }
           log(TAG, "L2CAP channel accepted from ${session.deviceId}")
           l2capSessions.add(session)
           if (!trySend(session).isSuccess) session.close()
