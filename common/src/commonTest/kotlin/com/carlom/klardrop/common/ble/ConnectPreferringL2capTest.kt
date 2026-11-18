@@ -2,6 +2,8 @@ package com.carlom.klardrop.common.ble
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.advanceTimeBy
@@ -79,5 +81,29 @@ class ConnectPreferringL2capTest {
     job.cancel()
     assertFailsWith<CancellationException> { job.await() }
     assertEquals(0, gattCalls)
+  }
+
+  @Test
+  fun outerTimeoutDoesNotFallBack() = runTest {
+    assertFailsWith<TimeoutCancellationException> {
+      withTimeout(1_000) {
+        connectPreferringL2cap("p", { 0x81 }, { awaitCancellation() }, openGatt, timeoutMs = 5_000)
+      }
+    }
+    assertEquals(0, gattCalls)
+  }
+
+  @Test
+  fun readPsmThrowsFallsBack() = runTest {
+    val s = connectPreferringL2cap("p", { throw IllegalStateException("gatt read") }, { l2cap }, openGatt)
+    assertSame(gatt, s)
+  }
+
+  @Test
+  fun openGattErrorPropagates() = runTest {
+    val e = assertFailsWith<IllegalArgumentException> {
+      connectPreferringL2cap("p", { null }, { l2cap }, { throw IllegalArgumentException("gatt down") })
+    }
+    assertEquals("gatt down", e.message)
   }
 }

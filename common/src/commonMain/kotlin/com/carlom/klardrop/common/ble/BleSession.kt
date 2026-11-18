@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.ble
 
 /**
- * A connected BLE GATT session between the local peer and a remote peer.
+ * A connected BLE session (GATT or L2CAP) between the local peer and a remote peer.
  *
  * This is the transport primitive the Klardrop communication layer runs over when the TCP
  * path isn't available. The API is deliberately chunk-oriented: BLE has no notion of a
@@ -11,7 +11,7 @@ package com.carlom.klardrop.common.ble
  *
  * Lifecycle:
  *  - The session is live from construction until [close] is called or the remote closes
- *    the GATT connection. After that, [isOpen] is false and [receiveChunk] returns null.
+ *    the underlying link. After that, [isOpen] is false and [receiveChunk] returns null.
  *  - [close] is idempotent.
  *
  * Implementations:
@@ -44,8 +44,8 @@ internal interface BleSession {
   val transport: BleSessionTransport get() = BleSessionTransport.GATT
 
   /**
-   * Send one chunk (≤ [mtu] bytes) to the remote peer over the TX GATT characteristic.
-   * Suspends until the write completes (write-with-response) so that chunks delivered in
+   * Send one chunk (≤ [mtu] bytes) to the remote peer over the underlying link (GATT TX write, or an L2CAP socket write).
+   * Suspends until the write completes (GATT write-with-response; on L2CAP, until the local socket accepts the bytes) so that chunks delivered in
    * order from the caller also arrive in order on the remote peer.
    *
    * @throws IllegalArgumentException if [chunk] is larger than [mtu].
@@ -54,13 +54,12 @@ internal interface BleSession {
   suspend fun sendChunk(chunk: ByteArray)
 
   /**
-   * Suspend until the next chunk from the remote peer arrives (a GATT characteristic
-   * notification on Android / update callback on Apple). Returns `null` when the session
+   * Suspend until the next chunk from the remote peer arrives (a GATT notification or an L2CAP read). Returns `null` when the session
    * closes, at which point no further chunks will arrive.
    */
   suspend fun receiveChunk(): ByteArray?
 
-  /** Close the GATT connection and free native resources. Idempotent. */
+  /** Close the underlying link and free native resources. Idempotent. */
   fun close()
 }
 

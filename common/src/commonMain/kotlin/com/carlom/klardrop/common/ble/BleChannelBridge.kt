@@ -112,8 +112,7 @@ internal class BleChannelBridge(
   fun close() {
     runCatching { writePump?.cancel() }
     runCatching { readPump?.cancel() }
-    txMeter.close()
-    rxMeter.close()
+    // Meters are flushed by the pumps' finally blocks only (not thread-safe).
     runCatching { session.close() }
     runCatching { outgoing.close() }
     runCatching { incoming.close() }
