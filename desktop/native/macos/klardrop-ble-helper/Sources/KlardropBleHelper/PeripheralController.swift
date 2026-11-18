@@ -176,6 +176,7 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
       writer.sendLog("warn", "L2CAP publish failed: \(error.localizedDescription)")
       return
     }
+    guard published, manager.state == .poweredOn else { return }
     psm = PSM
     writer.sendLog("info", "L2CAP listening psm=\(PSM)")
   }
@@ -210,7 +211,6 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
     }
     l2capSessions[session.sessionId] = session
     registry.add(sessionId: session.sessionId, session: .l2cap(session))
-    session.start()
     writer.sendEvent("session_opened", [
       "sessionId": session.sessionId,
       "peerShortDeviceId": channel.peer.identifier.uuidString,
@@ -218,6 +218,7 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
       "role": "peripheral",
       "transport": "l2cap",
     ])
+    session.start() // after the announcement so no chunk event can precede it
   }
 
   func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {

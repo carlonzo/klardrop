@@ -236,12 +236,12 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
     ) { [weak self] session, reason in self?.l2capClosed(peerId: peerId, session: session, reason: reason) }
     l2capSessions[peerId] = session
     registry.add(sessionId: session.sessionId, session: .l2cap(session))
-    session.start()
     writer.sendOk(id: pending.requestId, extra: [
       "sessionId": pending.sessionId,
       "mtu": BleConstants.l2capChunkSize,
       "transport": "l2cap",
     ])
+    session.start() // after the connect ok so no chunk event can precede it
   }
 
   func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
@@ -324,10 +324,13 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
     session.peripheral.setNotifyValue(true, for: session.rx)
   }
 
+  func cancelConnection(_ p: CBPeripheral) { manager.cancelPeripheralConnection(p) }
+
   private func l2capClosed(peerId: String, session: L2capSession, reason: String) {
     if l2capSessions[peerId] === session { l2capSessions.removeValue(forKey: peerId) }
     registry.remove(sessionId: session.sessionId)
-    // Cancel right away so a fresh reconnect to this peer cannot be killed by a deferred cancel.
+    // Remote-initiated close: cancel here. App-initiated close_session already cancelled synchronously
+    // (main.swift); this repeat is idempotent, but a reconnect started in between could be cancelled.
     if let p = session.peripheral { manager.cancelPeripheralConnection(p) }
     writer.sendEvent("session_closed", ["sessionId": session.sessionId, "reason": reason])
   }
