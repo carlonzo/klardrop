@@ -42,10 +42,13 @@ internal suspend fun connectPreferringL2cap(
   timeoutMs: Long = BleConstants.L2CAP_OPEN_TIMEOUT_MS,
 ): BleSession {
   var reason: String
+  // Closed in the catch paths: openL2cap may return just as the timeout fires, so withTimeout throws
+  // and the session would otherwise leak.
+  var opened: BleSession? = null
   try {
     val l2cap = withTimeout(timeoutMs) {
       val psm = readPsm()
-      if (psm == null) null else psm to openL2cap(psm)
+      if (psm == null) null else psm to openL2cap(psm).also { opened = it }
     }
     if (l2cap != null) {
       log(TAG, "BLE session to $peerLabel via L2CAP psm=${l2cap.first}")
@@ -53,9 +56,11 @@ internal suspend fun connectPreferringL2cap(
     }
     reason = "no L2CAP PSM"
   } catch (e: TimeoutCancellationException) {
+    opened?.let { runCatching { it.close() } }
     reason = "L2CAP timed out after ${timeoutMs}ms"
   } catch (e: Throwable) {
-    reason = "L2CAP failed: ${e.message}"
+    opened?.let { runCatching { it.close() } }
+    reason = "L2CAP failed: ${e::class.simpleName}: ${e.message}"
   }
   // Caller (or an outer timeout) cancelled: rethrow instead of falling back.
   currentCoroutineContext().ensureActive()

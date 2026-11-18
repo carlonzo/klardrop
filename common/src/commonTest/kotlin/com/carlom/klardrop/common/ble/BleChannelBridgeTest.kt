@@ -251,7 +251,11 @@ class BleChannelBridgeTest {
       suspend fun ByteReadChannel.readExactly(n: Int): ByteArray {
         val out = ByteArray(n)
         var off = 0
-        while (off < n) off += readAvailable(out, off, n - off).coerceAtLeast(0)
+        while (off < n) {
+          val r = readAvailable(out, off, n - off)
+          check(r >= 0) { "closed early" }
+          off += r
+        }
         return out
       }
 
