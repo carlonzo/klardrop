@@ -31,6 +31,18 @@ class BleThroughputMeterTest {
     time += 2.seconds
     burst(10)
     meter.close()
+    assertEquals(
+      listOf("L: 163840 B in 90 ms = 1820444 B/s", "L: 163840 B in 90 ms = 1820444 B/s"),
+      lines,
+    )
+  }
+
+  @Test
+  fun gapOfExactlyGapMsSplits() {
+    burst(5, size = 64 * 1024)
+    time += 1.seconds
+    meter.record(64 * 1024)
+    meter.close()
     assertEquals(2, lines.size)
   }
 

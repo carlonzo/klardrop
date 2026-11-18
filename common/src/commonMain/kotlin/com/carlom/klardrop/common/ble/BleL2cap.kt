@@ -30,7 +30,9 @@ internal object BlePsm {
  * and never falls back. Errors from [openGatt] propagate.
  *
  * Contract: [openL2cap] MUST tear down its half-open attempt when cancelled (platforms close
- * the socket/channel in invokeOnCancellation).
+ * the socket/channel in invokeOnCancellation), and a session that completes after cancellation
+ * must also be closed (e.g. `cont.resume(session) { session.close() }`), otherwise one that
+ * resumes as the timeout fires leaks the socket.
  */
 internal suspend fun connectPreferringL2cap(
   peerLabel: String,
@@ -53,10 +55,10 @@ internal suspend fun connectPreferringL2cap(
   } catch (e: TimeoutCancellationException) {
     reason = "L2CAP timed out after ${timeoutMs}ms"
   } catch (e: Throwable) {
-    // Caller cancelled (not our timeout): rethrow instead of falling back.
-    currentCoroutineContext().ensureActive()
     reason = "L2CAP failed: ${e.message}"
   }
+  // Caller (or an outer timeout) cancelled: rethrow instead of falling back.
+  currentCoroutineContext().ensureActive()
   log(TAG, "BLE session to $peerLabel via GATT ($reason)")
   return openGatt()
 }
