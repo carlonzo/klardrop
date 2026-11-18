@@ -16,7 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import platform.CoreBluetooth.CBL2CAPChannel
-import platform.Foundation.NSDefaultRunLoopMode
+import platform.Foundation.NSRunLoopCommonModes
 import platform.Foundation.NSRunLoop
 import platform.Foundation.NSStream
 import platform.Foundation.NSStreamDelegateProtocol
@@ -69,10 +69,11 @@ internal class AppleL2capBleSession(
 
   /** Schedules and opens both streams on the main run loop. */
   suspend fun open() {
+    if (closeRequested.value != 0) return
     withContext(Dispatchers.Main) {
       for (s in listOf<NSStream>(channel.inputStream!!, channel.outputStream!!)) {
         s.delegate = delegate
-        s.scheduleInRunLoop(NSRunLoop.mainRunLoop, forMode = NSDefaultRunLoopMode)
+        s.scheduleInRunLoop(NSRunLoop.mainRunLoop, forMode = NSRunLoopCommonModes)
         s.open()
       }
     }
@@ -82,7 +83,8 @@ internal class AppleL2capBleSession(
   override suspend fun receiveChunk(): ByteArray? = withContext(Dispatchers.Main) {
     val input = channel.inputStream!!
     while (true) {
-      if (!open) return@withContext null
+      if (closeRequested.value != 0) return@withContext null
+      // Remote EOF/error keeps buffered bytes readable: only bail once nothing is left.
       if (input.hasBytesAvailable) {
         val n = readBuf.usePinned { input.read(it.addressOf(0).reinterpret(), readBuf.size.toULong()) }
         if (n > 0) return@withContext readBuf.copyOf(n.toInt())
@@ -90,11 +92,12 @@ internal class AppleL2capBleSession(
         return@withContext null
       }
       val st = input.streamStatus
-      if (st == NSStreamStatusAtEnd || st == NSStreamStatusError || st == NSStreamStatusClosed) {
+      if (!open || st == NSStreamStatusAtEnd || st == NSStreamStatusError || st == NSStreamStatusClosed) {
         markClosed()
         return@withContext null
       }
-      if (readable.receiveCatching().isClosed) return@withContext null
+      // A closed signal channel implies markClosed(): the next iteration drains bytes, then returns null.
+      readable.receiveCatching()
     }
     @Suppress("UNREACHABLE_CODE")
     null
@@ -134,14 +137,16 @@ internal class AppleL2capBleSession(
   override fun close() {
     if (!closeRequested.compareAndSet(0, 1)) return
     markClosed()
+    // Synchronous: a late cancelPeripheralConnection could kill a fresh reconnect to the same peripheral.
+    onClose()
+    // The block captures `this`, keeping the CBL2CAPChannel referenced until teardown has run.
     dispatch_async(dispatch_get_main_queue()) {
       for (s in listOf<NSStream?>(channel.inputStream, channel.outputStream)) {
         s ?: continue
         s.delegate = null
-        s.removeFromRunLoop(NSRunLoop.mainRunLoop, forMode = NSDefaultRunLoopMode)
+        s.removeFromRunLoop(NSRunLoop.mainRunLoop, forMode = NSRunLoopCommonModes)
         s.close()
       }
-      onClose()
     }
   }
 
