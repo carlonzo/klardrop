@@ -330,8 +330,11 @@ final class CentralController: NSObject, CBCentralManagerDelegate, CBPeripheralD
     if l2capSessions[peerId] === session { l2capSessions.removeValue(forKey: peerId) }
     registry.remove(sessionId: session.sessionId)
     // Remote-initiated close: cancel here. App-initiated close_session already cancelled synchronously
-    // (main.swift); this repeat is idempotent, but a reconnect started in between could be cancelled.
-    if let p = session.peripheral { manager.cancelPeripheralConnection(p) }
+    // (main.swift); this deferred repeat must not kill a newer connect to the same peer, so cancel
+    // only when nothing newer (connect in flight, GATT or L2CAP session) is using it.
+    if let p = session.peripheral, connectInFlight[peerId] == nil, sessions[peerId] == nil, l2capSessions[peerId] == nil {
+      manager.cancelPeripheralConnection(p)
+    }
     writer.sendEvent("session_closed", ["sessionId": session.sessionId, "reason": reason])
   }
 
