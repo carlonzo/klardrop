@@ -10,6 +10,10 @@ package com.carlom.klardrop.common.ble
  *    chunked to negotiated MTU.
  *  - [RX_CHARACTERISTIC_UUID]: server pushes frames to the client via notifications.
  *
+ * An optional third, read-only characteristic [PSM_CHARACTERISTIC_UUID] advertises an
+ * insecure L2CAP CoC PSM (unsigned 16-bit little-endian, exactly 2 bytes). Centrals that find
+ * it run the whole session over L2CAP instead; old peers ignore it.
+ *
  * The wire format on both characteristics is the same as the TCP transport:
  * `[4-byte big-endian length][1-byte type][protobuf payload]`, reassembled across
  * MTU-sized chunks.
@@ -28,6 +32,15 @@ internal object BleConstants {
 
   /** Server-to-client data channel (notify). */
   const val RX_CHARACTERISTIC_UUID = "a5b7c3e3-7f5a-4b62-9a3c-1d8e2f4b6c8a"
+
+  /** Read-only: PSM of the peripheral's L2CAP CoC as unsigned 16-bit little-endian (2 bytes). */
+  const val PSM_CHARACTERISTIC_UUID = "a5b7c3e4-7f5a-4b62-9a3c-1d8e2f4b6c8a"
+
+  /** Budget for the PSM read plus the L2CAP channel open, together. */
+  const val L2CAP_OPEN_TIMEOUT_MS = 5_000L
+
+  /** `mtu` reported by an L2CAP-backed [BleSession]: max bytes per sendChunk / read buffer size. */
+  const val L2CAP_CHUNK_SIZE = 8192
 
   /** Standard Client Characteristic Configuration Descriptor for enabling notifications. */
   const val CCCD_UUID = "00002902-0000-1000-8000-00805f9b34fb"

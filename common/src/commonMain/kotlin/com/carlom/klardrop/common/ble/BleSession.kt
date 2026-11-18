@@ -15,6 +15,8 @@ package com.carlom.klardrop.common.ble
  *  - [close] is idempotent.
  *
  * Implementations:
+ *  - L2CAP CoC: a socket/channel stream wrapped as a session with a large [mtu]; the whole
+ *    Klardrop session then runs over it and GATT RX is not subscribed.
  *  - `Android`: wraps `BluetoothGatt` (central role) or `BluetoothGattServer` (peripheral).
  *  - `Apple`: wraps `CBPeripheral` / `CBCentralManager`.
  *  - `JVM desktop`: wraps BlueZ D-Bus characteristics (Linux) or a Swift helper process (macOS).
@@ -25,14 +27,21 @@ internal interface BleSession {
   /** The remote peer's short device id, negotiated during the app-level handshake. */
   val deviceId: String
 
-  /** Whether the underlying GATT connection is currently open. */
+  /**
+   * Whether the underlying link is currently open. MUST become false on remote EOF, I/O
+   * error or link loss, not only on [close] (`Connection.Ble.isClosed` reads it).
+   */
   val isOpen: Boolean
 
   /**
-   * Maximum payload bytes allowed per [sendChunk] call (MTU minus the ATT header).
-   * Stable for the lifetime of the session — MTU negotiation happens once on connect.
+   * Maximum payload bytes allowed per [sendChunk] call: the MTU payload (MTU minus the ATT
+   * header) for GATT, [BleConstants.L2CAP_CHUNK_SIZE] for stream-backed L2CAP sessions.
+   * Stable for the lifetime of the session.
    */
   val mtu: Int
+
+  /** Which transport backs this session. */
+  val transport: BleSessionTransport get() = BleSessionTransport.GATT
 
   /**
    * Send one chunk (≤ [mtu] bytes) to the remote peer over the TX GATT characteristic.
@@ -54,3 +63,6 @@ internal interface BleSession {
   /** Close the GATT connection and free native resources. Idempotent. */
   fun close()
 }
+
+/** Transport backing a [BleSession]. */
+internal enum class BleSessionTransport { GATT, L2CAP }
