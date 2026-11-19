@@ -59,6 +59,10 @@ public typealias QrDownloadProgress = ExportedKotlinPackages.com.carlom.klardrop
 public typealias QrShareSession = ExportedKotlinPackages.com.carlom.klardrop.common.qrshare.QrShareSession
 public typealias SharedFile = ExportedKotlinPackages.com.carlom.klardrop.common.qrshare.SharedFile
 
+// Manual add
+public typealias ManualAddInfo = ExportedKotlinPackages.com.carlom.klardrop.common.discovery.ManualAddInfo
+public typealias ManualAddResult = ExportedKotlinPackages.com.carlom.klardrop.common.discovery.ManualAddResult
+
 // Permissions
 public typealias PermissionsState = ExportedKotlinPackages.com.carlom.klardrop.common.permissions.PermissionsState
 public typealias CapabilityGrant = ExportedKotlinPackages.com.carlom.klardrop.common.permissions.CapabilityGrant
