@@ -12,28 +12,46 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.carlom.klardrop.common.discovery.ManualAddInfo
+import com.carlom.klardrop.common.discovery.ManualAddResult
 import com.carlom.klardrop.common.utils.DeviceType
 import com.carlom.klardrop.components.DeviceAvatar
 import com.carlom.klardrop.components.DeviceRow
 import com.carlom.klardrop.components.KdAvatarStyle
 import com.carlom.klardrop.components.KdDeviceKind
 import com.carlom.klardrop.components.KdRowState
+import com.carlom.klardrop.components.QrCodeImage
 import com.carlom.klardrop.components.SectionHead
 import com.carlom.klardrop.theme.KdTheme
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +60,8 @@ internal fun AddDevicePickerSheet(
     isLargeScreen: Boolean,
     onDismiss: () -> Unit,
     onPick: (DeviceUi) -> Unit,
+    manualAddInfo: suspend () -> ManualAddInfo?,
+    onAddManually: suspend (String) -> ManualAddResult,
 ) {
     val colors = KdTheme.colors
     val radii = KdTheme.radii
@@ -56,6 +76,8 @@ internal fun AddDevicePickerSheet(
                     candidates = candidates,
                     onDismiss = onDismiss,
                     onPick = onPick,
+                    manualAddInfo = manualAddInfo,
+                    onAddManually = onAddManually,
                 )
             }
         }
@@ -74,6 +96,8 @@ internal fun AddDevicePickerSheet(
                 candidates = candidates,
                 onDismiss = onDismiss,
                 onPick = onPick,
+                manualAddInfo = manualAddInfo,
+                onAddManually = onAddManually,
             )
         }
     }
@@ -84,6 +108,8 @@ private fun AddDevicePickerContent(
     candidates: List<DeviceUi>,
     onDismiss: () -> Unit,
     onPick: (DeviceUi) -> Unit,
+    manualAddInfo: suspend () -> ManualAddInfo?,
+    onAddManually: suspend (String) -> ManualAddResult,
 ) {
     val colors = KdTheme.colors
     val typography = KdTheme.typography
@@ -92,6 +118,7 @@ private fun AddDevicePickerContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(bottom = spacing.s6),
     ) {
         SectionHead(
@@ -107,7 +134,7 @@ private fun AddDevicePickerContent(
 
         if (candidates.isEmpty()) {
             Text(
-                text = "No nearby devices right now. Make sure Klardrop is open on the device you want to pair, and that both are on the same Wi-Fi.",
+                text = "No nearby devices right now. Make sure Klardrop is open on the device you want to pair, and that both are on the same Wi-Fi. If they still don't show up, add by code below.",
                 style = typography.body.copy(color = colors.text2),
                 modifier = Modifier.padding(horizontal = spacing.s5),
             )
@@ -137,6 +164,8 @@ private fun AddDevicePickerContent(
 
         Spacer(Modifier.height(spacing.s2))
 
+        ManualAddSection(manualAddInfo = manualAddInfo, onAddManually = onAddManually)
+
         Row(
             horizontalArrangement = Arrangement.End,
             modifier = Modifier
@@ -148,6 +177,156 @@ private fun AddDevicePickerContent(
             }
         }
     }
+}
+
+@Composable
+private fun ManualAddSection(
+    manualAddInfo: suspend () -> ManualAddInfo?,
+    onAddManually: suspend (String) -> ManualAddResult,
+) {
+    val colors = KdTheme.colors
+    val typography = KdTheme.typography
+    val spacing = KdTheme.spacing
+    val scope = rememberCoroutineScope()
+
+    var input by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<ManualAddResult?>(null) }
+    var showCode by remember { mutableStateOf(false) }
+    var loaded by remember { mutableStateOf(false) }
+    var info by remember { mutableStateOf<ManualAddInfo?>(null) }
+
+    fun submit(text: String) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            try {
+                val r = onAddManually(text)
+                result = r
+                if (r is ManualAddResult.Added || r is ManualAddResult.AlreadyVisible) input = ""
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    val scan = rememberQrScanner { code ->
+        input = code
+        submit(code)
+    }
+
+    LaunchedEffect(showCode) {
+        if (showCode) {
+            loaded = false
+            info = manualAddInfo()
+            loaded = true
+        }
+    }
+
+    SectionHead(
+        label = "Add by code or IP",
+        modifier = Modifier.padding(horizontal = spacing.s1),
+    )
+    Text(
+        text = "For networks that hide nearby devices. On the other device, open Add a device → Show this device's code.",
+        style = typography.caption.copy(color = colors.text2),
+        modifier = Modifier.padding(start = spacing.s5, end = spacing.s5, bottom = spacing.s3),
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = spacing.s5),
+    ) {
+        OutlinedTextField(
+            value = input,
+            onValueChange = { input = it },
+            enabled = !busy,
+            label = {
+                Text(
+                    "Code or IP, e.g. 37 or 192.168.1.37",
+                    style = typography.caption.copy(color = colors.text2),
+                )
+            },
+            textStyle = typography.body.copy(color = colors.text),
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+            keyboardActions = KeyboardActions(onDone = { submit(input) }),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colors.accent,
+                unfocusedBorderColor = colors.border,
+                cursorColor = colors.accent,
+            ),
+        )
+        if (scan != null) {
+            TextButton(onClick = scan, enabled = !busy) {
+                Text("Scan", style = typography.body.copy(color = colors.accent))
+            }
+        }
+        TextButton(onClick = { submit(input) }, enabled = !busy) {
+            Text(
+                if (busy) "Checking…" else "Add",
+                style = typography.body.copy(color = colors.accent),
+            )
+        }
+    }
+    result?.let {
+        val ok = it is ManualAddResult.Added || it is ManualAddResult.AlreadyVisible
+        Text(
+            text = manualAddMessage(it),
+            style = typography.caption.copy(color = if (ok) colors.text2 else colors.err),
+            modifier = Modifier.padding(horizontal = spacing.s5, vertical = spacing.s1),
+        )
+    }
+
+    TextButton(
+        onClick = { showCode = !showCode },
+        modifier = Modifier.padding(horizontal = spacing.s3),
+    ) {
+        Text(
+            if (showCode) "Hide this device's code" else "Show this device's code",
+            style = typography.body.copy(color = colors.accent),
+        )
+    }
+    if (showCode) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(spacing.s2),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = spacing.s5),
+        ) {
+            val i = info
+            when {
+                !loaded -> Text("Loading…", style = typography.caption.copy(color = colors.text2))
+                i == null -> Text(
+                    "This device isn't connected to Wi-Fi or Ethernet.",
+                    style = typography.caption.copy(color = colors.text2),
+                )
+                else -> {
+                    Text(i.code, style = typography.display.copy(color = colors.text))
+                    QrCodeImage(url = i.qrPayload, modifier = Modifier.size(180.dp))
+                    Text(
+                        "${i.address}:${i.port}",
+                        style = typography.caption.copy(color = colors.text2),
+                    )
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(spacing.s2))
+}
+
+internal fun manualAddMessage(result: ManualAddResult): String = when (result) {
+    is ManualAddResult.Added -> "Added ${result.deviceName}. Tap it above to pair."
+    is ManualAddResult.AlreadyVisible -> "${result.deviceName} is already in the list above."
+    ManualAddResult.ThisDevice -> "That's this device."
+    ManualAddResult.WrongDevice -> "A different device answered there. Ask for a fresh code."
+    is ManualAddResult.Unreachable ->
+        "No Klardrop device answered at ${result.address}. Check that Klardrop is open on it and both are on the same network."
+    ManualAddResult.InvalidInput -> "Enter a code like 37 or 12.37, or an IP address like 192.168.1.37."
+    ManualAddResult.NoLanAddress -> "This device isn't connected to Wi-Fi or Ethernet."
 }
 
 @Composable
