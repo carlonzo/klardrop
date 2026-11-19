@@ -14,10 +14,12 @@ import kotlinx.cinterop.pointed
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.toKString
 import kotlinx.cinterop.value
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import platform.darwin.freeifaddrs
 import platform.darwin.getifaddrs
 import platform.darwin.ifaddrs
@@ -26,15 +28,19 @@ import kotlin.time.Duration.Companion.seconds
 
 internal actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
 
+  // getifaddrs is a blocking syscall: keep it off the main thread.
   actual override suspend fun selectIpv4(): String? =
-    selectLanAddress(enumerateAppleInterfaces())
+    withContext(Dispatchers.Default) { selectLanAddressOf(enumerateAppleInterfaces()) }
+
+  actual override suspend fun selectManualLanAddress(): ManualLanAddress? =
+    withContext(Dispatchers.Default) { selectManualLanAddress(enumerateAppleInterfaces()) }
 
   actual override fun observeChanges(): Flow<String?> = flow {
-    var previous = selectLanAddress(enumerateAppleInterfaces())
+    var previous = selectLanAddressOf(enumerateAppleInterfaces())
     emit(previous)
     while (true) {
       delay(POLL_INTERVAL)
-      val current = selectLanAddress(enumerateAppleInterfaces())
+      val current = selectLanAddressOf(enumerateAppleInterfaces())
       if (current != previous) {
         previous = current
         emit(current)
@@ -47,17 +53,18 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
   }
 }
 
-internal fun enumerateAppleInterfaces(): List<Pair<String, String>> = memScoped {
+internal fun enumerateAppleInterfaces(): List<LanInterfaceAddress> = memScoped {
   return runCatching {
     val ifap = alloc<CPointerVar<ifaddrs>>()
     if (getifaddrs(ifap.ptr) != 0) return emptyList()
-    val result = mutableListOf<Pair<String, String>>()
+    val result = mutableListOf<LanInterfaceAddress>()
     try {
       var cursor: CPointer<ifaddrs>? = ifap.value
       while (cursor != null) {
         val ifa = cursor.pointed
         val name = ifa.ifa_name?.toKString()
         val addr = ifa.ifa_addr
+        val netmask = ifa.ifa_netmask
         val flags = ifa.ifa_flags.toInt()
         // IFF_UP = 0x1, IFF_LOOPBACK = 0x8
         val isUp = (flags and 0x1) != 0
@@ -69,7 +76,17 @@ internal fun enumerateAppleInterfaces(): List<Pair<String, String>> = memScoped 
             val saIn = addr.reinterpret<sockaddr_in>()
             val bytePtr = saIn.pointed.sin_addr.ptr.reinterpret<UByteVar>()
             val ip = "${bytePtr[0]}.${bytePtr[1]}.${bytePtr[2]}.${bytePtr[3]}"
-            result.add(name to ip)
+            val prefix = if (netmask != null) {
+              val maskIn = netmask.reinterpret<sockaddr_in>()
+              val maskBytes = maskIn.pointed.sin_addr.ptr.reinterpret<UByteVar>()
+              // BSD may hand back a shortened netmask sockaddr: bytes past sin_len are 0 (unknown if < 5).
+              val len = maskIn.pointed.sin_len.toInt()
+              if (len < 5) null else {
+                (0..3).sumOf { if (4 + it < len) (maskBytes[it].toInt() and 0xFF).countOneBits() else 0 }
+                  .takeIf { it in 0..32 }
+              }
+            } else null
+            result.add(LanInterfaceAddress(name, ip, prefix))
           }
         }
         cursor = ifa.ifa_next

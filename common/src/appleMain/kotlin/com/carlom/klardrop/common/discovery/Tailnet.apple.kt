@@ -3,7 +3,8 @@ package com.carlom.klardrop.common.discovery
 import com.carlom.klardrop.common.qrshare.enumerateAppleInterfaces
 
 /** Tailscale's network extension shows up as a `utun` interface holding the device's 100.x address. */
-internal actual fun localTailnetIpv4s(): List<String> = tailnetIpv4sOf(enumerateAppleInterfaces())
+internal actual fun localTailnetIpv4s(): List<String> =
+  tailnetIpv4sOf(enumerateAppleInterfaces().map { it.ifaceName to it.address })
 
 /**
  * Not asked on Apple targets: iOS can't read another app's VPN state, and the sandboxed macOS app

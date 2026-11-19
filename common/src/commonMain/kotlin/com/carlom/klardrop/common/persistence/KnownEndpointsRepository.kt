@@ -21,6 +21,8 @@ internal data class KnownEndpoint(
   val port: Int,
   val tailnetAddresses: List<String> = emptyList(),
   val lastSeenMs: Long = 0,
+  val lanAddresses: List<String> = emptyList(),
+  val lanAddressesSeenMs: Long = 0,
 )
 
 /**
@@ -39,11 +41,18 @@ internal interface KnownEndpointsRepository {
    */
   suspend fun record(deviceId: String, port: Int, tailnetAddresses: List<String>)
 
+  /**
+   * Records a peer's manual LAN address. Sets [lanAddresses] (new address first, distinct,
+   * capped at 4), refreshes lastSeenMs and port. Evicts the address from any other entry.
+   */
+  suspend fun recordManual(deviceId: String, port: Int, lanAddress: String)
+
   suspend fun fallbackListenPort(): Int
   suspend fun saveFallbackListenPort(port: Int)
 }
 
 internal val KNOWN_ENDPOINT_TTL = 30.days
+internal val LAN_ADDRESS_TTL = 14.days
 private const val MAX_KNOWN_ENDPOINTS = 64
 
 internal class KnownEndpointsRepositoryImpl(
@@ -62,9 +71,19 @@ internal class KnownEndpointsRepositoryImpl(
   }
 
   override suspend fun endpoints(): Map<String, KnownEndpoint> = withContext(coroutines.ioDispatcher) {
-    val cutoff = nowMs() - KNOWN_ENDPOINT_TTL.inWholeMilliseconds
+    val now = nowMs()
+    val cutoff = now - KNOWN_ENDPOINT_TTL.inWholeMilliseconds
+    val lanCutoff = now - LAN_ADDRESS_TTL.inWholeMilliseconds
     dataStore.data.first().allEndpoints()
       .filter { it.lastSeenMs >= cutoff }
+      .map { endpoint ->
+        // Drop LAN addresses older than 14 days
+        if (endpoint.lanAddresses.isNotEmpty() && endpoint.lanAddressesSeenMs < lanCutoff) {
+          endpoint.copy(lanAddresses = emptyList(), lanAddressesSeenMs = 0)
+        } else {
+          endpoint
+        }
+      }
       .associateBy { it.deviceId }
   }
 
@@ -79,6 +98,8 @@ internal class KnownEndpointsRepositoryImpl(
           port = port,
           tailnetAddresses = tailnetAddresses.distinct().ifEmpty { previous?.tailnetAddresses.orEmpty() },
           lastSeenMs = nowMs(),
+          lanAddresses = previous?.lanAddresses.orEmpty(),
+          lanAddressesSeenMs = previous?.lanAddressesSeenMs ?: 0,
         )
         prefs[endpointKey(deviceId)] = ProtoBuf.encodeToByteArray(updated)
 
@@ -89,6 +110,39 @@ internal class KnownEndpointsRepositoryImpl(
           )
         }
         // Peers seen once on some café Wi-Fi shouldn't pile up forever.
+        others.sortedByDescending { it.lastSeenMs }.drop(MAX_KNOWN_ENDPOINTS - 1).forEach {
+          prefs.remove(endpointKey(it.deviceId))
+        }
+      }
+    }
+  }
+
+  override suspend fun recordManual(deviceId: String, port: Int, lanAddress: String) {
+    if (port <= 0 || lanAddress.isBlank()) return
+    withContext(coroutines.ioDispatcher) {
+      dataStore.edit { prefs ->
+        val all = prefs.allEndpoints()
+        val previous = all.firstOrNull { it.deviceId == deviceId }
+        val cleanLan = lanAddress.trim().trim('[', ']').substringBefore('%')
+        // Addresses not confirmed within LAN_ADDRESS_TTL are stale: don't carry them forward.
+        val fresh = previous?.takeIf { it.lanAddressesSeenMs >= nowMs() - LAN_ADDRESS_TTL.inWholeMilliseconds }
+        val newLanAddresses = (listOf(cleanLan) + fresh?.lanAddresses.orEmpty()).distinct().take(4)
+        val updated = KnownEndpoint(
+          deviceId = deviceId,
+          port = port,
+          tailnetAddresses = previous?.tailnetAddresses.orEmpty(),
+          lastSeenMs = nowMs(),
+          lanAddresses = newLanAddresses,
+          lanAddressesSeenMs = nowMs(),
+        )
+        prefs[endpointKey(deviceId)] = ProtoBuf.encodeToByteArray(updated)
+
+        val others = all.filter { it.deviceId != deviceId }
+        others.filter { other -> other.lanAddresses.any { it in updated.lanAddresses } }.forEach { other ->
+          prefs[endpointKey(other.deviceId)] = ProtoBuf.encodeToByteArray(
+            other.copy(lanAddresses = other.lanAddresses - updated.lanAddresses.toSet()),
+          )
+        }
         others.sortedByDescending { it.lastSeenMs }.drop(MAX_KNOWN_ENDPOINTS - 1).forEach {
           prefs.remove(endpointKey(it.deviceId))
         }

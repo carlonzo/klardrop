@@ -1326,6 +1326,7 @@ final class com.carlom.klardrop.common.di/CommonComponent { // com.carlom.klardr
     final fun foregroundState(): com.carlom.klardrop.common.notifications/ForegroundState // com.carlom.klardrop.common.di/CommonComponent.foregroundState|foregroundState(){}[0]
     final fun incomingAuthorizer(): com.carlom.klardrop.common.communication.router/IncomingAuthorizer // com.carlom.klardrop.common.di/CommonComponent.incomingAuthorizer|incomingAuthorizer(){}[0]
     final fun localPropertiesRepository(): com.carlom.klardrop.common.persistence/LocalPropertiesRepository // com.carlom.klardrop.common.di/CommonComponent.localPropertiesRepository|localPropertiesRepository(){}[0]
+    final fun manualDeviceAdder(): com.carlom.klardrop.common.discovery/ManualDeviceAdder // com.carlom.klardrop.common.di/CommonComponent.manualDeviceAdder|manualDeviceAdder(){}[0]
     final fun messageReceiver(): com.carlom.klardrop.common.receiver/MessageReceiver // com.carlom.klardrop.common.di/CommonComponent.messageReceiver|messageReceiver(){}[0]
     final fun messageRepository(): com.carlom.klardrop.common.persistence/MessageRepository // com.carlom.klardrop.common.di/CommonComponent.messageRepository|messageRepository(){}[0]
     final fun messenger(): com.carlom.klardrop.common.communication/Messenger // com.carlom.klardrop.common.di/CommonComponent.messenger|messenger(){}[0]
@@ -1438,6 +1439,33 @@ final class com.carlom.klardrop.common.discovery/DiscoveryDevice { // com.carlom
     final fun hasNearbyConnection(): kotlin/Boolean // com.carlom.klardrop.common.discovery/DiscoveryDevice.hasNearbyConnection|hasNearbyConnection(){}[0]
     final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.discovery/DiscoveryDevice.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.carlom.klardrop.common.discovery/DiscoveryDevice.toString|toString(){}[0]
+}
+
+final class com.carlom.klardrop.common.discovery/ManualAddInfo { // com.carlom.klardrop.common.discovery/ManualAddInfo|null[0]
+    constructor <init>(kotlin/String, kotlin/String, kotlin/Int, kotlin/String) // com.carlom.klardrop.common.discovery/ManualAddInfo.<init>|<init>(kotlin.String;kotlin.String;kotlin.Int;kotlin.String){}[0]
+
+    final val address // com.carlom.klardrop.common.discovery/ManualAddInfo.address|{}address[0]
+        final fun <get-address>(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddInfo.address.<get-address>|<get-address>(){}[0]
+    final val code // com.carlom.klardrop.common.discovery/ManualAddInfo.code|{}code[0]
+        final fun <get-code>(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddInfo.code.<get-code>|<get-code>(){}[0]
+    final val port // com.carlom.klardrop.common.discovery/ManualAddInfo.port|{}port[0]
+        final fun <get-port>(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddInfo.port.<get-port>|<get-port>(){}[0]
+    final val qrPayload // com.carlom.klardrop.common.discovery/ManualAddInfo.qrPayload|{}qrPayload[0]
+        final fun <get-qrPayload>(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddInfo.qrPayload.<get-qrPayload>|<get-qrPayload>(){}[0]
+
+    final fun component1(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddInfo.component1|component1(){}[0]
+    final fun component2(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddInfo.component2|component2(){}[0]
+    final fun component3(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddInfo.component3|component3(){}[0]
+    final fun component4(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddInfo.component4|component4(){}[0]
+    final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin/Int = ..., kotlin/String = ...): com.carlom.klardrop.common.discovery/ManualAddInfo // com.carlom.klardrop.common.discovery/ManualAddInfo.copy|copy(kotlin.String;kotlin.String;kotlin.Int;kotlin.String){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.discovery/ManualAddInfo.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddInfo.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddInfo.toString|toString(){}[0]
+}
+
+final class com.carlom.klardrop.common.discovery/ManualDeviceAdder { // com.carlom.klardrop.common.discovery/ManualDeviceAdder|null[0]
+    final suspend fun add(kotlin/String): com.carlom.klardrop.common.discovery/ManualAddResult // com.carlom.klardrop.common.discovery/ManualDeviceAdder.add|add(kotlin.String){}[0]
+    final suspend fun thisDeviceInfo(): com.carlom.klardrop.common.discovery/ManualAddInfo? // com.carlom.klardrop.common.discovery/ManualDeviceAdder.thisDeviceInfo|thisDeviceInfo(){}[0]
 }
 
 final class com.carlom.klardrop.common.discovery/TrustedDevicesDirectory { // com.carlom.klardrop.common.discovery/TrustedDevicesDirectory|null[0]
@@ -2063,6 +2091,71 @@ sealed class com.carlom.klardrop.common.communication.message/Message { // com.c
         abstract fun <get-type>(): com.carlom.klardrop.common.communication.message/MessageType // com.carlom.klardrop.common.communication.message/Message.type.<get-type>|<get-type>(){}[0]
     open val id // com.carlom.klardrop.common.communication.message/Message.id|{}id[0]
         open fun <get-id>(): kotlin/Int // com.carlom.klardrop.common.communication.message/Message.id.<get-id>|<get-id>(){}[0]
+}
+
+sealed class com.carlom.klardrop.common.discovery/ManualAddResult { // com.carlom.klardrop.common.discovery/ManualAddResult|null[0]
+    final class Added : com.carlom.klardrop.common.discovery/ManualAddResult { // com.carlom.klardrop.common.discovery/ManualAddResult.Added|null[0]
+        constructor <init>(kotlin/String) // com.carlom.klardrop.common.discovery/ManualAddResult.Added.<init>|<init>(kotlin.String){}[0]
+
+        final val deviceName // com.carlom.klardrop.common.discovery/ManualAddResult.Added.deviceName|{}deviceName[0]
+            final fun <get-deviceName>(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.Added.deviceName.<get-deviceName>|<get-deviceName>(){}[0]
+
+        final fun component1(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.Added.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): com.carlom.klardrop.common.discovery/ManualAddResult.Added // com.carlom.klardrop.common.discovery/ManualAddResult.Added.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.discovery/ManualAddResult.Added.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddResult.Added.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.Added.toString|toString(){}[0]
+    }
+
+    final class AlreadyVisible : com.carlom.klardrop.common.discovery/ManualAddResult { // com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible|null[0]
+        constructor <init>(kotlin/String) // com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible.<init>|<init>(kotlin.String){}[0]
+
+        final val deviceName // com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible.deviceName|{}deviceName[0]
+            final fun <get-deviceName>(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible.deviceName.<get-deviceName>|<get-deviceName>(){}[0]
+
+        final fun component1(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible // com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.AlreadyVisible.toString|toString(){}[0]
+    }
+
+    final class Unreachable : com.carlom.klardrop.common.discovery/ManualAddResult { // com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable|null[0]
+        constructor <init>(kotlin/String) // com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable.<init>|<init>(kotlin.String){}[0]
+
+        final val address // com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable.address|{}address[0]
+            final fun <get-address>(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable.address.<get-address>|<get-address>(){}[0]
+
+        final fun component1(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable.component1|component1(){}[0]
+        final fun copy(kotlin/String = ...): com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable // com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable.copy|copy(kotlin.String){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.Unreachable.toString|toString(){}[0]
+    }
+
+    final object InvalidInput : com.carlom.klardrop.common.discovery/ManualAddResult { // com.carlom.klardrop.common.discovery/ManualAddResult.InvalidInput|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.discovery/ManualAddResult.InvalidInput.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddResult.InvalidInput.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.InvalidInput.toString|toString(){}[0]
+    }
+
+    final object NoLanAddress : com.carlom.klardrop.common.discovery/ManualAddResult { // com.carlom.klardrop.common.discovery/ManualAddResult.NoLanAddress|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.discovery/ManualAddResult.NoLanAddress.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddResult.NoLanAddress.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.NoLanAddress.toString|toString(){}[0]
+    }
+
+    final object ThisDevice : com.carlom.klardrop.common.discovery/ManualAddResult { // com.carlom.klardrop.common.discovery/ManualAddResult.ThisDevice|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.discovery/ManualAddResult.ThisDevice.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddResult.ThisDevice.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.ThisDevice.toString|toString(){}[0]
+    }
+
+    final object WrongDevice : com.carlom.klardrop.common.discovery/ManualAddResult { // com.carlom.klardrop.common.discovery/ManualAddResult.WrongDevice|null[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.carlom.klardrop.common.discovery/ManualAddResult.WrongDevice.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.carlom.klardrop.common.discovery/ManualAddResult.WrongDevice.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.carlom.klardrop.common.discovery/ManualAddResult.WrongDevice.toString|toString(){}[0]
+    }
 }
 
 final object com.carlom.klardrop.common.discovery/TrustChangeEvent { // com.carlom.klardrop.common.discovery/TrustChangeEvent|null[0]

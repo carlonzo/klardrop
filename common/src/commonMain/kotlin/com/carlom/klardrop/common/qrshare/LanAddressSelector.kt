@@ -3,17 +3,80 @@ package com.carlom.klardrop.common.qrshare
 import com.carlom.klardrop.common.discovery.isCgnatIpv4
 import kotlinx.coroutines.flow.Flow
 
+internal data class LanInterfaceAddress(
+  val ifaceName: String,
+  val address: String,
+  val prefixLength: Int? = null,
+)
+
+internal data class ManualLanAddress(
+  val address: String,
+  val prefixLength: Int?,
+  val allAddresses: List<String>,
+)
+
 internal interface LanAddressSelector {
   suspend fun selectIpv4(): String?
+  suspend fun selectManualLanAddress(): ManualLanAddress? = selectIpv4()?.let {
+    ManualLanAddress(it, null, listOf(it))
+  }
   fun observeChanges(): Flow<String?>
 }
 
 internal expect class PlatformLanAddressSelector() : LanAddressSelector {
   override suspend fun selectIpv4(): String?
+  override suspend fun selectManualLanAddress(): ManualLanAddress?
   override fun observeChanges(): Flow<String?>
 }
 
 internal fun LanAddressSelector(): LanAddressSelector = PlatformLanAddressSelector()
+
+/**
+ * Selects the best LAN address for manual add:
+ * 1. [selectLanAddress] result (RFC1918), if present.
+ * 2. Else the first IPv4 on a Wi-Fi/Ethernet interface that is not dropped even if NOT RFC1918 (e.g. campus Wi-Fi).
+ *
+ * The QR `ip` list = that chosen address first, then other non-dropped Wi-Fi/Ethernet IPv4s (distinct, max 4).
+ */
+internal fun selectManualLanAddress(candidates: Iterable<LanInterfaceAddress>): ManualLanAddress? {
+  val pairs = candidates.map { it.ifaceName to it.address }
+  val rfc1918Chosen = selectLanAddress(pairs)
+
+  val chosenCandidate: LanInterfaceAddress? = if (rfc1918Chosen != null) {
+    candidates.firstOrNull { it.address == rfc1918Chosen }
+  } else {
+    candidates.firstOrNull { candidate ->
+      val clean = candidate.address.trim().trim('[', ']').substringBefore('%')
+      !isDroppedAddress(clean) &&
+        !isDroppedInterface(candidate.ifaceName) &&
+        (isWifiOrApInterface(candidate.ifaceName) || isEthernetInterface(candidate.ifaceName))
+    }
+  }
+
+  if (chosenCandidate == null) return null
+
+  val cleanChosen = chosenCandidate.address.trim().trim('[', ']').substringBefore('%')
+
+  val otherIps = candidates.mapNotNull { candidate ->
+    val clean = candidate.address.trim().trim('[', ']').substringBefore('%')
+    if (!isDroppedAddress(clean) &&
+      !isDroppedInterface(candidate.ifaceName) &&
+      (isWifiOrApInterface(candidate.ifaceName) || isEthernetInterface(candidate.ifaceName))
+    ) {
+      clean
+    } else {
+      null
+    }
+  }
+
+  val allAddresses = (listOf(cleanChosen) + otherIps).distinct().take(4)
+
+  return ManualLanAddress(
+    address = cleanChosen,
+    prefixLength = chosenCandidate.prefixLength,
+    allAddresses = allAddresses,
+  )
+}
 
 /**
  * Selects the best IPv4 address for QR LAN sharing from candidate interfaces.
@@ -49,6 +112,9 @@ internal fun selectLanAddress(candidates: Iterable<Pair<String, String>>): Strin
   // address the receiver is actually on (that QR is unreachable).
   return staWifi ?: hotspot ?: ethernet
 }
+
+internal fun selectLanAddressOf(candidates: Iterable<LanInterfaceAddress>): String? =
+  selectLanAddress(candidates.map { it.ifaceName to it.address })
 
 internal fun selectLanIpv4(candidates: Iterable<Pair<String, String>>): String? = selectLanAddress(candidates)
 

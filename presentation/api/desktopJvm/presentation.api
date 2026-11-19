@@ -75,6 +75,7 @@ public final class com/carlom/klardrop/DeviceUi {
 
 public final class com/carlom/klardrop/DiscoveryController : com/carlom/klardrop/OnDeviceActionListener, com/carlom/klardrop/ReceiveNotificationsCallbacks, com/carlom/klardrop/common/trust/PairingApprovalCallback {
 	public fun <init> (Lcom/carlom/klardrop/common/di/CommonComponent;)V
+	public final fun addDeviceManually (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun debugAcceptIncoming (I)V
 	public final fun debugAcceptIncomingFrom (Ljava/lang/String;)V
 	public final fun debugAcceptPairing (Ljava/lang/String;)V
@@ -93,6 +94,7 @@ public final class com/carlom/klardrop/DiscoveryController : com/carlom/klardrop
 	public final fun getScreenStateFlow ()Lkotlinx/coroutines/flow/MutableStateFlow;
 	public final fun getSupportsBackgroundDiscovery ()Z
 	public final fun loadDeviceNames ()V
+	public final fun manualAddInfo (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun markDeviceRead (Ljava/lang/String;)V
 	public final fun markDeviceReadAndWait (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun onAddToTrusted (Lcom/carlom/klardrop/DeviceUi;)V
