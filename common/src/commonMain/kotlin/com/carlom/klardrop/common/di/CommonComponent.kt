@@ -16,6 +16,7 @@ import com.carlom.klardrop.common.communication.di.CommunicationModule
 import com.carlom.klardrop.common.discovery.CurrentDeviceProvider
 import com.carlom.klardrop.common.discovery.DiscoveryNetwork
 import com.carlom.klardrop.common.discovery.KlardropDiscoveryUtils
+import com.carlom.klardrop.common.discovery.ManualDeviceAdder
 import com.carlom.klardrop.common.discovery.NearbyShareDiscoveryUtils
 import com.carlom.klardrop.common.discovery.TrustedDevicesDirectory
 import com.carlom.klardrop.common.discovery.VisibleDevices
@@ -105,6 +106,9 @@ public class CommonComponent(
       knownEndpoints = knownEndpointsRepository,
       defaultListenPort = applicationInfo.listenPort,
       foreground = internalPlatformDependency.foregroundState().isForeground,
+      ownLanAddresses = {
+        internalPlatformDependency.lanAddressSelector().selectManualLanAddress()?.allAddresses.orEmpty()
+      },
     )
   }
 
@@ -224,6 +228,18 @@ public class CommonComponent(
   }
 
   public fun qrShareSession(): QrShareSession = qrShareSession
+
+  private val manualDeviceAdder: ManualDeviceAdder by lazy {
+    ManualDeviceAdder(
+      lanAddressSelector = internalPlatformDependency.lanAddressSelector(),
+      currentDeviceProvider = currentDeviceProvider,
+      serverPort = communicationModule.serverPort(),
+      defaultListenPort = applicationInfo.listenPort,
+      tailnetDiscovery = communicationModule.tailnetDiscovery(),
+    )
+  }
+
+  public fun manualDeviceAdder(): ManualDeviceAdder = manualDeviceAdder
 
   /** Hand a URL to the system handler (browser, etc.). Used by the update banner. */
   public suspend fun openUrl(url: String): Boolean = internalPlatformDependency.openUrl(url)

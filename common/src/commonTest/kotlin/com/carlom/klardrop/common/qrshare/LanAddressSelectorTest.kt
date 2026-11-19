@@ -174,4 +174,58 @@ class LanAddressSelectorTest {
     val result = selectLanIpv4(listOf("wlan0" to "192.168.1.5"))
     assertEquals("192.168.1.5", result)
   }
+
+  @Test
+  fun manualLanAddressPrefersRfc1918AndPreservesPrefix() {
+    val candidates = listOf(
+      LanInterfaceAddress("wlan0", "192.168.1.37", 24),
+      LanInterfaceAddress("eth0", "192.168.1.50", 24),
+    )
+    val result = selectManualLanAddress(candidates)
+    assertEquals("192.168.1.37", result?.address)
+    assertEquals(24, result?.prefixLength)
+    assertEquals(listOf("192.168.1.37", "192.168.1.50"), result?.allAddresses)
+  }
+
+  @Test
+  fun manualLanAddressFallsBackToPublicIpOnWifi() {
+    // EPFL campus Wi-Fi style: public IP 128.178.12.34 on wlan0
+    val candidates = listOf(
+      LanInterfaceAddress("rmnet0", "10.1.2.3", 24), // cellular dropped
+      LanInterfaceAddress("wlan0", "128.178.12.34", 20),
+      LanInterfaceAddress("eth0", "128.178.12.35", 20),
+    )
+    val result = selectManualLanAddress(candidates)
+    assertEquals("128.178.12.34", result?.address)
+    assertEquals(20, result?.prefixLength)
+    assertEquals(listOf("128.178.12.34", "128.178.12.35"), result?.allAddresses)
+  }
+
+  @Test
+  fun manualLanAddressLimitsQrAddressesToFourDistinct() {
+    val candidates = listOf(
+      LanInterfaceAddress("wlan0", "192.168.1.1", 24),
+      LanInterfaceAddress("wlan0", "192.168.1.1", 24), // duplicate
+      LanInterfaceAddress("eth0", "192.168.1.2", 24),
+      LanInterfaceAddress("eth1", "192.168.1.3", 24),
+      LanInterfaceAddress("eth2", "192.168.1.4", 24),
+      LanInterfaceAddress("eth3", "192.168.1.5", 24),
+    )
+    val result = selectManualLanAddress(candidates)
+    assertEquals("192.168.1.1", result?.address)
+    assertEquals(
+      listOf("192.168.1.1", "192.168.1.2", "192.168.1.3", "192.168.1.4"),
+      result?.allAddresses,
+    )
+  }
+
+  @Test
+  fun manualLanAddressReturnsNullWhenNoEligibleInterfaces() {
+    val candidates = listOf(
+      LanInterfaceAddress("rmnet0", "128.178.12.34", 20),
+      LanInterfaceAddress("tun0", "10.8.0.2", 24),
+      LanInterfaceAddress("lo", "127.0.0.1", 8),
+    )
+    assertNull(selectManualLanAddress(candidates))
+  }
 }

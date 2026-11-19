@@ -294,6 +294,20 @@ class DiscoveryControllerPairingQueueTest {
     }
   }
 
+  @Test
+  fun manualAddMethodsReturnExpectedDefaultsWhenNoAdder() = runTest(dispatcher) {
+    val controller = newController()
+    try {
+      assertNull(controller.manualAddInfo())
+      assertEquals(
+        com.carlom.klardrop.common.discovery.ManualAddResult.InvalidInput,
+        controller.addDeviceManually("192.168.1.1"),
+      )
+    } finally {
+      controller.dispose()
+    }
+  }
+
   private fun newController(
     connectivityRestrictionMonitor: com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor =
       com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor(),

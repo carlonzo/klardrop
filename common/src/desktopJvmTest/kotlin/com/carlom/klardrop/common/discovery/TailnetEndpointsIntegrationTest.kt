@@ -38,7 +38,24 @@ class TailnetEndpointsIntegrationTest {
     val recorded = mutableListOf<KnownEndpoint>()
     override suspend fun endpoints() = recorded.associateBy { it.deviceId }
     override suspend fun record(deviceId: String, port: Int, tailnetAddresses: List<String>) {
-      recorded += KnownEndpoint(deviceId, port, tailnetAddresses)
+      val prev = recorded.firstOrNull { it.deviceId == deviceId }
+      recorded.removeAll { it.deviceId == deviceId }
+      recorded += KnownEndpoint(
+        deviceId,
+        port,
+        tailnetAddresses,
+        lanAddresses = prev?.lanAddresses.orEmpty(),
+      )
+    }
+    override suspend fun recordManual(deviceId: String, port: Int, lanAddress: String) {
+      val prev = recorded.firstOrNull { it.deviceId == deviceId }
+      recorded.removeAll { it.deviceId == deviceId }
+      recorded += KnownEndpoint(
+        deviceId,
+        port,
+        tailnetAddresses = prev?.tailnetAddresses.orEmpty(),
+        lanAddresses = listOf(lanAddress),
+      )
     }
     override suspend fun fallbackListenPort() = 0
     override suspend fun saveFallbackListenPort(port: Int) = Unit
@@ -163,5 +180,72 @@ class TailnetEndpointsIntegrationTest {
     assertEquals(0, repo.fallbackListenPort())
     repo.saveFallbackListenPort(51234)
     assertEquals(51234, repo.fallbackListenPort())
+  }
+
+  @Test
+  fun repositoryPreservesLanAddressesAndEvictsOnRecordManual() = runBlocking {
+    val file = Files.createTempDirectory("known-endpoints-manual").resolve("known_endpoints.preferences_pb")
+    var now = 100.days.inWholeMilliseconds
+    val repo = KnownEndpointsRepositoryImpl(
+      PreferenceDataStoreFactory.createWithPath(produceFile = { file.toOkioPath() }),
+      TestCoroutines(),
+      nowMs = { now },
+    )
+
+    // Manual add records peer1 with LAN address
+    repo.recordManual("peer1", 47470, "192.168.1.10")
+    val ep1 = repo.endpoints().getValue("peer1")
+    assertEquals(listOf("192.168.1.10"), ep1.lanAddresses)
+    assertEquals(47470, ep1.port)
+
+    // Later, authenticated record() with tailnet addresses must preserve lanAddresses
+    repo.record("peer1", 47470, listOf("100.64.0.10"))
+    val ep1Updated = repo.endpoints().getValue("peer1")
+    assertEquals(listOf("192.168.1.10"), ep1Updated.lanAddresses)
+    assertEquals(listOf("100.64.0.10"), ep1Updated.tailnetAddresses)
+
+    // Another peer gets recorded with the same LAN address (DHCP reuse eviction)
+    repo.recordManual("peer2", 47470, "192.168.1.10")
+    val ep2 = repo.endpoints().getValue("peer2")
+    assertEquals(listOf("192.168.1.10"), ep2.lanAddresses)
+    // peer1's lanAddresses must have dropped 192.168.1.10
+    val ep1AfterEvict = repo.endpoints().getValue("peer1")
+    assertEquals(emptyList(), ep1AfterEvict.lanAddresses)
+  }
+
+  @Test
+  fun lanAddressesExpireAfter14DaysAndRecordKeepsTheirAge() = runBlocking {
+    val file = Files.createTempDirectory("known-endpoints-lan-ttl").resolve("known_endpoints.preferences_pb")
+    var now = 100.days.inWholeMilliseconds
+    val repo = KnownEndpointsRepositoryImpl(
+      PreferenceDataStoreFactory.createWithPath(produceFile = { file.toOkioPath() }),
+      TestCoroutines(),
+      nowMs = { now },
+    )
+    repo.recordManual("peer1", 47470, "192.168.1.10")
+    now += 10.days.inWholeMilliseconds
+    // A tailnet/mDNS handshake refreshes lastSeenMs but must not refresh the LAN address's age.
+    repo.record("peer1", 47470, listOf("100.64.0.10"))
+    assertEquals(listOf("192.168.1.10"), repo.endpoints().getValue("peer1").lanAddresses)
+    now += 5.days.inWholeMilliseconds
+    val expired = repo.endpoints().getValue("peer1")
+    assertEquals(emptyList(), expired.lanAddresses)
+    assertEquals(listOf("100.64.0.10"), expired.tailnetAddresses)
+
+    // Re-adding after expiry must not resurrect stale addresses.
+    repo.recordManual("peer1", 47470, "192.168.1.11")
+    assertEquals(listOf("192.168.1.11"), repo.endpoints().getValue("peer1").lanAddresses)
+  }
+
+  @Test
+  fun recordManualCapsLanAddressesAtFour() = runBlocking {
+    val file = Files.createTempDirectory("known-endpoints-lan-cap").resolve("known_endpoints.preferences_pb")
+    val repo = KnownEndpointsRepositoryImpl(
+      PreferenceDataStoreFactory.createWithPath(produceFile = { file.toOkioPath() }),
+      TestCoroutines(),
+      nowMs = { 100.days.inWholeMilliseconds },
+    )
+    for (i in 1..6) repo.recordManual("peer1", 47470, "192.168.1.$i")
+    assertEquals(listOf("192.168.1.6", "192.168.1.5", "192.168.1.4", "192.168.1.3"), repo.endpoints().getValue("peer1").lanAddresses)
   }
 }
