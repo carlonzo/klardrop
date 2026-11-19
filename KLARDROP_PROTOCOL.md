@@ -41,6 +41,7 @@ picks the best transport per connection.
 | **Nearby Share TCP** (mDNS `_FC9F5ED42C8A._tcp.`) | jmDNS / NSD | Cross-app interop (e.g., Google Quick Share) | Fast |
 | **Bluetooth Low Energy (BLE)** | Service-UUID scan | Wi-Fi unreachable; falls back to BLE GATT | Slow (≤ ~244-byte chunks) |
 | **Klardrop TCP over Tailscale** | Unicast probe of tailnet peers (`TailnetDiscovery`) | Peers on the same tailnet but not the same LAN | Fast |
+| **Klardrop TCP, manually added** | Short code, IP or QR, then unicast probe | Same LAN but mDNS blocked (e.g. campus Wi-Fi) | Fast |
 
 ### Tailscale
 
@@ -59,6 +60,43 @@ The tailnet carries no multicast, so mDNS never sees peers there. Instead:
   probe remembered addresses only. A probe is a cleartext greeting exchange that is closed before
   UKEY2. A peer that answers is added to the visible devices, and the eager reachability
   connector makes the real encrypted connection.
+
+### Manual add (LAN without mDNS)
+
+Some LANs block multicast (e.g. campus Wi-Fi), so mDNS never sees peers. The user adds the peer
+by hand:
+
+- **Flow.** One device shows its code, QR and `IP:port`; the other types the code (or an IP) or
+  scans the QR. The shown address is the device's LAN IPv4: the RFC1918 one (Wi-Fi, then hotspot,
+  then Ethernet) if any, else the first non-dropped Wi-Fi/Ethernet IPv4 (so public-IP Wi-Fi works).
+  VPN, cellular, loopback, link-local and CGNAT addresses are never used. The QR lists that address
+  first, then the other such addresses (max 4, distinct), with the live listen port.
+- **Code.** The host part of the LAN IPv4, at octet granularity from the prefix length:
+  `ceil((32 - prefix) / 8)` trailing octets, clamped to 1..3 (`/24` -> `37`, `/16` -> `12.37`,
+  `/8` -> `20.12.37`; unknown prefix -> 2 octets). An optional `:port` may follow; the default is
+  `47470`. A full `IPv4[:port]` is also accepted. The typing side prepends the leading octets of
+  each of its own LAN addresses (up to 4) to the code, giving one candidate per address.
+- **QR payload (v1).** `klardrop://add?v=1&id=<8-char shortDeviceId>&ip=<ipv4>[,<ipv4>...]&port=<port>`.
+  The scheme and `add?` are case-insensitive. `v` must be `1` and `port` 1..65535; `ip` is
+  comma-separated, invalid entries are skipped, the rest deduplicated and capped at 4, and the
+  payload is rejected if none is valid. Unknown params are ignored; `id` is optional. If `id` is
+  present, answers from other devices are skipped; if no candidate matches, the result is
+  `WrongDevice`.
+- **Probe.** Every candidate is probed on the given port and on `47470`, all in parallel; the first
+  usable answer in candidate order wins (answers from this device or a non-matching `id` are
+  skipped) and the rest are cancelled. The probe is the same cleartext greeting exchange as for
+  Tailscale, closed before UKEY2. The code or QR is only an address hint, never a trust grant:
+  pairing and trust still go through UKEY2 and the normal trust flow.
+- **Re-probe and expiry.** The answering address is stored in the known endpoint of the device id
+  the probe returned (newest first, max 4). The `TailnetDiscovery` sweep (same schedule as above)
+  re-probes saved LAN addresses without the tailnet gate or any trust check, on the remembered port
+  and `47470`, but only addresses sharing their first two octets with one of this device's LAN
+  addresses, and not for peers already reachable. Saved LAN addresses expire after 14 days (the
+  endpoint after 30) unless a new manual add or a sweep answer from the same device id refreshes
+  them.
+- **Privacy.** LAN addresses are stored only by the manual-add path; a handshake stores only tailnet
+  addresses and never refreshes saved LAN addresses, so Klardrop does not unicast-probe every café
+  peer forever. A manually stored address is removed from any other endpoint (DHCP reuse).
 
 ### Bluetooth as a fallback medium
 
