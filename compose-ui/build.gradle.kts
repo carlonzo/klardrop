@@ -57,6 +57,7 @@ kotlin {
         implementation(deps.androidx.activity.compose)
         implementation(deps.androidx.navigation3.runtime)
         implementation(deps.androidx.navigation3.ui)
+        implementation(deps.play.services.code.scanner)
       }
     }
 

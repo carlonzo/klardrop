@@ -911,7 +911,7 @@ public class DiscoveryController internal constructor(
   public suspend fun manualAddInfo(): ManualAddInfo? =
     manualDeviceAdder?.thisDeviceInfo()
 
-  // InvalidInput is unreachable in practice: manualAddInfo() is null without an adder, so the UI hides manual add.
+  // The adder is always built (lazy in CommonComponent), so the null fallback is defensive only.
   public suspend fun addDeviceManually(input: String): ManualAddResult =
     manualDeviceAdder?.add(input) ?: ManualAddResult.InvalidInput
 
