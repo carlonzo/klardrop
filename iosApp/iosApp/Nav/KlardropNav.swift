@@ -102,6 +102,8 @@ struct KlardropNav: View {
         .sheet(isPresented: $showAddDevicePicker) {
             AddDevicePickerSheet(
                 candidates: nearbyDevices,
+                manualAddInfo: { await model.manualAddInfo() },
+                onAddManually: { await model.addDeviceManually($0) },
                 onDismiss: { showAddDevicePicker = false },
                 onPick: { device in
                     showAddDevicePicker = false

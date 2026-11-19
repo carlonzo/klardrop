@@ -260,7 +260,7 @@ struct QrShareView: View {
 
 // MARK: - CoreImage QR Generation
 
-private func generateQrCode(from urlString: String) -> CGImage? {
+func generateQrCode(from urlString: String) -> CGImage? {
     guard !urlString.isEmpty, let data = urlString.data(using: .utf8) else { return nil }
     guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
     filter.setValue(data, forKey: "inputMessage")
