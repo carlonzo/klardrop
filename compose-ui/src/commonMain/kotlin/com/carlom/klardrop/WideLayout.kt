@@ -237,7 +237,9 @@ fun WideLayout(
             onPick = { device ->
                 showAddDevicePicker = false
                 pendingLink = device
-            }
+            },
+            manualAddInfo = { discoveryController.manualAddInfo() },
+            onAddManually = { discoveryController.addDeviceManually(it) },
         )
     }
 

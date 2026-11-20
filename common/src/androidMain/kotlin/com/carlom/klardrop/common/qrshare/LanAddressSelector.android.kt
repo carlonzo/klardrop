@@ -31,13 +31,17 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
 
   actual override suspend fun selectIpv4(): String? = withContext(Dispatchers.IO) {
     val candidates = enumerateInterfaces()
-    val picked = selectLanAddress(candidates)
+    val picked = selectLanAddressOf(candidates)
     log("LanAddressSelector", "candidates=$candidates picked=$picked")
     picked
   }
 
+  actual override suspend fun selectManualLanAddress(): ManualLanAddress? = withContext(Dispatchers.IO) {
+    selectManualLanAddress(enumerateInterfaces())
+  }
+
   actual override fun observeChanges(): Flow<String?> = callbackFlow {
-    var previous = selectLanAddress(enumerateInterfaces())
+    var previous = selectLanAddressOf(enumerateInterfaces())
     trySend(previous)
 
     val cm = context?.let {
@@ -47,7 +51,7 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
     }
 
     fun checkAndUpdate() {
-      val current = selectLanAddress(enumerateInterfaces())
+      val current = selectLanAddressOf(enumerateInterfaces())
       if (current != previous) {
         previous = current
         trySend(current)
@@ -84,7 +88,7 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
     }
   }.distinctUntilChanged().flowOn(Dispatchers.IO)
 
-  private fun enumerateInterfaces(): List<Pair<String, String>> {
+  private fun enumerateInterfaces(): List<LanInterfaceAddress> {
     val nicAddrs = runCatching {
       val ifaces = NetworkInterface.getNetworkInterfaces() ?: return@runCatching emptyList()
       buildList {
@@ -92,10 +96,12 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
           if (iface.isLoopback) continue
           val isUp = runCatching { iface.isUp }.getOrElse { false }
           if (!isUp) continue
-          for (addr in iface.inetAddresses) {
+          for (ia in iface.interfaceAddresses) {
+            val addr = ia.address
             if (addr is Inet4Address && !addr.isLoopbackAddress) {
               val host = addr.hostAddress ?: continue
-              add(iface.name to host)
+              val prefix = ia.networkPrefixLength.toInt().takeIf { it in 0..32 }
+              add(LanInterfaceAddress(iface.name, host, prefix))
             }
           }
         }
@@ -111,7 +117,7 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
    * Active Wi-Fi / Ethernet IPv4 from ConnectivityManager, tagged as wlan0/eth0 so
    * ranking treats them as STA LAN (ahead of leftover hotspot 192.168.43.1).
    */
-  private fun wifiOrEthernetFromConnectivityManager(): List<Pair<String, String>> {
+  private fun wifiOrEthernetFromConnectivityManager(): List<LanInterfaceAddress> {
     val cm = context?.let {
       runCatching {
         it.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
@@ -129,7 +135,8 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
       val addr = la.address as? Inet4Address ?: return@mapNotNull null
       if (addr.isLoopbackAddress) return@mapNotNull null
       val host = addr.hostAddress ?: return@mapNotNull null
-      ifaceName to host
+      val prefix = la.prefixLength.takeIf { it in 0..32 }
+      LanInterfaceAddress(ifaceName, host, prefix)
     }
   }
 

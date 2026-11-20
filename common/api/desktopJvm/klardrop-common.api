@@ -602,6 +602,7 @@ public final class com/carlom/klardrop/common/di/CommonComponent {
 	public final fun foregroundState ()Lcom/carlom/klardrop/common/notifications/ForegroundState;
 	public final fun incomingAuthorizer ()Lcom/carlom/klardrop/common/communication/router/IncomingAuthorizer;
 	public final fun localPropertiesRepository ()Lcom/carlom/klardrop/common/persistence/LocalPropertiesRepository;
+	public final fun manualDeviceAdder ()Lcom/carlom/klardrop/common/discovery/ManualDeviceAdder;
 	public final fun messageReceiver ()Lcom/carlom/klardrop/common/receiver/MessageReceiver;
 	public final fun messageRepository ()Lcom/carlom/klardrop/common/persistence/MessageRepository;
 	public final fun messenger ()Lcom/carlom/klardrop/common/communication/Messenger;
@@ -755,6 +756,92 @@ public final class com/carlom/klardrop/common/discovery/DiscoveryDevice {
 	public final fun hasNearbyConnection ()Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/ManualAddInfo {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()I
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;)Lcom/carlom/klardrop/common/discovery/ManualAddInfo;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/ManualAddInfo;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/ManualAddInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAddress ()Ljava/lang/String;
+	public final fun getCode ()Ljava/lang/String;
+	public final fun getPort ()I
+	public final fun getQrPayload ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract class com/carlom/klardrop/common/discovery/ManualAddResult {
+}
+
+public final class com/carlom/klardrop/common/discovery/ManualAddResult$Added : com/carlom/klardrop/common/discovery/ManualAddResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/discovery/ManualAddResult$Added;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/ManualAddResult$Added;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/ManualAddResult$Added;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/ManualAddResult$AlreadyVisible : com/carlom/klardrop/common/discovery/ManualAddResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/discovery/ManualAddResult$AlreadyVisible;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/ManualAddResult$AlreadyVisible;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/ManualAddResult$AlreadyVisible;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/ManualAddResult$InvalidInput : com/carlom/klardrop/common/discovery/ManualAddResult {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/discovery/ManualAddResult$InvalidInput;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/ManualAddResult$NoLanAddress : com/carlom/klardrop/common/discovery/ManualAddResult {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/discovery/ManualAddResult$NoLanAddress;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/ManualAddResult$ThisDevice : com/carlom/klardrop/common/discovery/ManualAddResult {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/discovery/ManualAddResult$ThisDevice;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/ManualAddResult$Unreachable : com/carlom/klardrop/common/discovery/ManualAddResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/carlom/klardrop/common/discovery/ManualAddResult$Unreachable;
+	public static synthetic fun copy$default (Lcom/carlom/klardrop/common/discovery/ManualAddResult$Unreachable;Ljava/lang/String;ILjava/lang/Object;)Lcom/carlom/klardrop/common/discovery/ManualAddResult$Unreachable;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAddress ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/ManualAddResult$WrongDevice : com/carlom/klardrop/common/discovery/ManualAddResult {
+	public static final field INSTANCE Lcom/carlom/klardrop/common/discovery/ManualAddResult$WrongDevice;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/carlom/klardrop/common/discovery/ManualDeviceAdder {
+	public final fun add (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun thisDeviceInfo (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class com/carlom/klardrop/common/discovery/TrustChangeEvent {

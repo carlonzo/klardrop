@@ -66,6 +66,8 @@ import androidx.compose.ui.unit.dp
 import com.carlom.klardrop.common.communication.message.ConnectionInfoMessage
 import com.carlom.klardrop.common.connectivity.ConnectivityRestriction
 import com.carlom.klardrop.common.connectivity.ConnectivityRestrictions
+import com.carlom.klardrop.common.discovery.ManualAddInfo
+import com.carlom.klardrop.common.discovery.ManualAddResult
 import com.carlom.klardrop.common.permissions.Capability
 import com.carlom.klardrop.components.DeviceRow
 import com.carlom.klardrop.components.KdAvatarStyle
@@ -156,6 +158,8 @@ fun DiscoveryScreen(
         onRequestExemption = onRequestExemption,
         deviceRowModifier = deviceRowModifier,
         onSettingsClick = { showSettings = true },
+        manualAddInfo = { discoveryController.manualAddInfo() },
+        onAddManually = { discoveryController.addDeviceManually(it) },
         updateBanner = {
             UpdateBanner(
                 status = updateStatus,
@@ -245,6 +249,8 @@ private fun DiscoveryDashboard(
     onRequestCapability: (Capability) -> Unit,
     onRequestExemption: (ConnectivityRestriction) -> Unit = {},
     onSettingsClick: () -> Unit = {},
+    manualAddInfo: suspend () -> ManualAddInfo?,
+    onAddManually: suspend (String) -> ManualAddResult,
     updateBanner: @Composable () -> Unit = {},
     deviceRowModifier: @Composable (deviceId: String) -> Modifier = { Modifier },
 ) {
@@ -390,6 +396,8 @@ private fun DiscoveryDashboard(
                 showAddDevicePicker = false
                 pendingLink = device
             },
+            manualAddInfo = manualAddInfo,
+            onAddManually = onAddManually,
         )
     }
 }

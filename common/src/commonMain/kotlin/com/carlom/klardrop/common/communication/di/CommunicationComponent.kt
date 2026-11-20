@@ -81,6 +81,11 @@ internal class CommunicationModule(
   /** The port every Klardrop install tries first, probed on tailnet peers we haven't met yet. */
   private val defaultListenPort: Int = 0,
   private val foreground: StateFlow<Boolean>? = null,
+  /**
+   * Provides this device's current LAN IPv4 addresses (for subnet-matching saved LAN probe targets).
+   * Defaults to empty (no filtering, no LAN probing) when not wired.
+   */
+  private val ownLanAddresses: suspend () -> List<String> = { emptyList() },
 ) {
 
   private val serializer by lazy { MessageSerializer(protoBuf, coroutines) }
@@ -247,6 +252,7 @@ internal class CommunicationModule(
         isTrusted = trustManager::isTrusted,
         nowMs = clock::currentTimeMillis,
         foreground = foreground,
+        ownLanAddresses = ownLanAddresses,
       )
     }
   }

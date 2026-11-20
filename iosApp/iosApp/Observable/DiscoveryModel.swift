@@ -187,6 +187,12 @@ final class DiscoveryAppModel {
         controller.setActiveChatDeviceId(deviceId: deviceId)
     }
 
+    func manualAddInfo() async -> ManualAddInfo? { try? await controller.manualAddInfo() }
+
+    func addDeviceManually(_ input: String) async -> ManualAddResult? {
+        try? await controller.addDeviceManually(input: input)
+    }
+
     func dismissPairing() {
         controller.dismissPairingDialog()
     }

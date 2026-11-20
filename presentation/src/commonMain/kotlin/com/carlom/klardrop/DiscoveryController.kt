@@ -19,6 +19,9 @@ import com.carlom.klardrop.common.connectivity.ConnectivityRestrictions
 import com.carlom.klardrop.common.connectivity.ConnectivityRestrictionMonitor
 import com.carlom.klardrop.common.di.CommonComponent
 import com.carlom.klardrop.common.discovery.DeviceConnection
+import com.carlom.klardrop.common.discovery.ManualAddInfo
+import com.carlom.klardrop.common.discovery.ManualAddResult
+import com.carlom.klardrop.common.discovery.ManualDeviceAdder
 import com.carlom.klardrop.common.discovery.TrustedDevicesDirectory
 import com.carlom.klardrop.common.discovery.VisibleDevices
 import com.carlom.klardrop.common.features.ClipboardManager
@@ -76,6 +79,7 @@ public class DiscoveryController internal constructor(
   /** [com.carlom.klardrop.common.receiver.MessageReceiver.latestUpdates]: retained per-device
    *  receive state, so a prompt that arrived before this controller existed still badges its row. */
   latestReceives: StateFlow<Map<String, ReceiveMessageUpdate>>,
+  private val manualDeviceAdder: ManualDeviceAdder? = null,
 ) : OnDeviceActionListener, ReceiveNotificationsCallbacks, PairingApprovalCallback {
 
   public constructor(commonComponent: CommonComponent) : this(
@@ -97,6 +101,7 @@ public class DiscoveryController internal constructor(
     commonComponent.notifier(),
     commonComponent.foregroundState(),
     commonComponent.messageReceiver().latestUpdates,
+    commonComponent.manualDeviceAdder(),
   )
 
   private val controllerScope = coroutines.newScope(coroutines.mainDispatcher + SupervisorJob())
@@ -902,6 +907,13 @@ public class DiscoveryController internal constructor(
     currentDeviceProvider.updateCustomDeviceName(customName)
     loadDeviceNames()
   }
+
+  public suspend fun manualAddInfo(): ManualAddInfo? =
+    manualDeviceAdder?.thisDeviceInfo()
+
+  // The adder is always built (lazy in CommonComponent), so the null fallback is defensive only.
+  public suspend fun addDeviceManually(input: String): ManualAddResult =
+    manualDeviceAdder?.add(input) ?: ManualAddResult.InvalidInput
 
   // --- Debug-control entry points. Same methods the UI buttons call, keyed by device id. ---
 

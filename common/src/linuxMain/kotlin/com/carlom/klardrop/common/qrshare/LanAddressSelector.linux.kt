@@ -14,18 +14,22 @@ import kotlin.time.Duration.Companion.seconds
 internal actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
 
   actual override suspend fun selectIpv4(): String? = withContext(sharedNativeIoDispatcher) {
-    selectLanAddress(enumerateInterfaces())
+    selectLanAddressOf(enumerateInterfaces())
+  }
+
+  actual override suspend fun selectManualLanAddress(): ManualLanAddress? = withContext(sharedNativeIoDispatcher) {
+    selectManualLanAddress(enumerateInterfaces())
   }
 
   // Polls getifaddrs every 5s for changes.
   // ponytail: scope is never cancelled — singleton lifecycle.
   // TODO: netlink if latency matters
   actual override fun observeChanges(): Flow<String?> = flow {
-    var previous = selectLanAddress(enumerateInterfaces())
+    var previous = selectLanAddressOf(enumerateInterfaces())
     emit(previous)
     while (true) {
       delay(POLL_INTERVAL)
-      val current = selectLanAddress(enumerateInterfaces())
+      val current = selectLanAddressOf(enumerateInterfaces())
       if (current != previous) {
         previous = current
         emit(current)
@@ -33,11 +37,11 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
     }
   }.distinctUntilChanged().flowOn(sharedNativeIoDispatcher)
 
-  private fun enumerateInterfaces(): List<Pair<String, String>> =
+  private fun enumerateInterfaces(): List<LanInterfaceAddress> =
     getLinuxNetworkInterfaces()
       .filter { it.isUp && !it.isLoopback }
       .filterNot { isVirtualOrDroppedInterface(it.name) }
-      .flatMap { iface -> iface.ipv4Addresses.map { addr -> iface.name to addr } }
+      .flatMap { it.addresses }
 
   private companion object {
     val POLL_INTERVAL = 5.seconds

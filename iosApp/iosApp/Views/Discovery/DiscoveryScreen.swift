@@ -137,7 +137,9 @@ struct DiscoveryScreen: View {
                 onPick: { device in
                     showAddDevicePicker = false
                     pendingLinkDevice = device
-                }
+                },
+                manualAddInfo: { await model.manualAddInfo() },
+                onAddManually: { await model.addDeviceManually($0) }
             )
         }
         .sheet(item: $pendingLinkDevice, onDismiss: { pendingLinkDevice = nil }) { device in

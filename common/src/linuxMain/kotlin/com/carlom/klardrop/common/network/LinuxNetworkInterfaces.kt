@@ -3,6 +3,7 @@
 package com.carlom.klardrop.common.network
 
 import com.carlom.klardrop.common.qrshare.isDroppedInterface
+import com.carlom.klardrop.common.qrshare.LanInterfaceAddress
 import com.carlom.klardrop.common.utils.log
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.CPointerVar
@@ -24,14 +25,16 @@ internal data class LinuxInterfaceInfo(
   internal val name: String,
   internal val isUp: Boolean,
   internal val isLoopback: Boolean,
-  internal val ipv4Addresses: List<String>,
-)
+  internal val addresses: List<LanInterfaceAddress>,
+) {
+  internal val ipv4Addresses: List<String> get() = addresses.map { it.address }
+}
 
 private class MutableInterfaceInfo(
   internal val name: String,
   internal val isUp: Boolean,
   internal val isLoopback: Boolean,
-  internal val ipv4Addresses: MutableList<String> = mutableListOf(),
+  internal val addresses: MutableList<LanInterfaceAddress> = mutableListOf(),
 )
 
 internal fun getLinuxNetworkInterfaces(): List<LinuxInterfaceInfo> = memScoped {
@@ -57,9 +60,15 @@ internal fun getLinuxNetworkInterfaces(): List<LinuxInterfaceInfo> = memScoped {
               val saIn = addr.reinterpret<sockaddr_in>()
               val bytePtr = saIn.pointed.sin_addr.ptr.reinterpret<UByteVar>()
               val ip = "${bytePtr[0]}.${bytePtr[1]}.${bytePtr[2]}.${bytePtr[3]}"
+              val netmask = ifa.ifa_netmask
+              val prefix = if (netmask != null) {
+                val maskIn = netmask.reinterpret<sockaddr_in>()
+                val maskBytes = maskIn.pointed.sin_addr.ptr.reinterpret<UByteVar>()
+                (0..3).sumOf { (maskBytes[it].toInt() and 0xFF).countOneBits() }.takeIf { it in 0..32 }
+              } else null
               if (!ip.startsWith("127.")) {
-                if (!info.ipv4Addresses.contains(ip)) {
-                  info.ipv4Addresses.add(ip)
+                if (info.addresses.none { it.address == ip }) {
+                  info.addresses.add(LanInterfaceAddress(name, ip, prefix))
                 }
               }
             }
@@ -70,7 +79,7 @@ internal fun getLinuxNetworkInterfaces(): List<LinuxInterfaceInfo> = memScoped {
     } finally {
       freeifaddrs(ifap.value)
     }
-    ifaceMap.values.map { LinuxInterfaceInfo(it.name, it.isUp, it.isLoopback, it.ipv4Addresses.toList()) }
+    ifaceMap.values.map { LinuxInterfaceInfo(it.name, it.isUp, it.isLoopback, it.addresses.toList()) }
   }.getOrElse {
     log("LinuxNetworkInterfaces", "interface enumeration failed: ${it.message}")
     emptyList()

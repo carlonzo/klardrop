@@ -15,15 +15,19 @@ import kotlin.time.Duration.Companion.seconds
 internal actual class PlatformLanAddressSelector actual constructor() : LanAddressSelector {
 
   actual override suspend fun selectIpv4(): String? = withContext(Dispatchers.IO) {
-    selectLanAddress(enumerateInterfaces())
+    selectLanAddressOf(enumerateInterfaces())
+  }
+
+  actual override suspend fun selectManualLanAddress(): ManualLanAddress? = withContext(Dispatchers.IO) {
+    selectManualLanAddress(enumerateInterfaces())
   }
 
   actual override fun observeChanges(): Flow<String?> = flow {
-    var previous = selectLanAddress(enumerateInterfaces())
+    var previous = selectLanAddressOf(enumerateInterfaces())
     emit(previous)
     while (true) {
       delay(POLL_INTERVAL)
-      val current = selectLanAddress(enumerateInterfaces())
+      val current = selectLanAddressOf(enumerateInterfaces())
       if (current != previous) {
         previous = current
         emit(current)
@@ -31,7 +35,7 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
     }
   }.distinctUntilChanged().flowOn(Dispatchers.IO)
 
-  private fun enumerateInterfaces(): List<Pair<String, String>> {
+  private fun enumerateInterfaces(): List<LanInterfaceAddress> {
     return runCatching {
       val ifaces = NetworkInterface.getNetworkInterfaces() ?: return emptyList()
       buildList {
@@ -39,10 +43,12 @@ internal actual class PlatformLanAddressSelector actual constructor() : LanAddre
           if (iface.isLoopback) continue
           val isUp = runCatching { iface.isUp }.getOrDefault(false)
           if (!isUp) continue
-          for (addr in iface.inetAddresses) {
+          for (ia in iface.interfaceAddresses) {
+            val addr = ia.address
             if (addr is Inet4Address && !addr.isLoopbackAddress) {
               val host = addr.hostAddress ?: continue
-              add(iface.name to host)
+              val prefix = ia.networkPrefixLength.toInt().takeIf { it in 0..32 }
+              add(LanInterfaceAddress(iface.name, host, prefix))
             }
           }
         }
