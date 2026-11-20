@@ -8,6 +8,7 @@ import com.carlom.klardrop.common.communication.message.TextMessage
 import com.carlom.klardrop.common.communication.readMessage
 import com.carlom.klardrop.common.communication.sendMessage
 import com.carlom.klardrop.common.utils.Coroutines
+import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.close
 import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.writeByteArray
@@ -60,6 +61,7 @@ class BleChannelBridgeTest {
   private class LoopbackBleSession(
     override val deviceId: String,
     override val mtu: Int,
+    override val transport: BleSessionTransport = BleSessionTransport.GATT,
     private val outbound: Channel<ByteArray>,
     private val inbound: Channel<ByteArray>,
   ) : BleSession {
@@ -97,12 +99,16 @@ class BleChannelBridgeTest {
    * Build two [BleChannelBridge]s connected back-to-back. Each end gets its own [BleSession]
    * whose outbound channel feeds the other end's inbound channel.
    */
-  private fun pairedBridges(mtu: Int, scope: CoroutineScope): PairedBridges {
+  private fun pairedBridges(
+    mtu: Int,
+    scope: CoroutineScope,
+    transport: BleSessionTransport = BleSessionTransport.GATT,
+  ): PairedBridges {
     val aToB = Channel<ByteArray>(capacity = Channel.UNLIMITED)
     val bToA = Channel<ByteArray>(capacity = Channel.UNLIMITED)
 
-    val aSession = LoopbackBleSession(deviceId = "peerB", mtu = mtu, outbound = aToB, inbound = bToA)
-    val bSession = LoopbackBleSession(deviceId = "peerA", mtu = mtu, outbound = bToA, inbound = aToB)
+    val aSession = LoopbackBleSession(deviceId = "peerB", mtu = mtu, transport = transport, outbound = aToB, inbound = bToA)
+    val bSession = LoopbackBleSession(deviceId = "peerA", mtu = mtu, transport = transport, outbound = bToA, inbound = aToB)
 
     val aBridge = BleChannelBridge(aSession, scope).start()
     val bBridge = BleChannelBridge(bSession, scope).start()
@@ -232,5 +238,37 @@ class BleChannelBridgeTest {
     assertFalse(pair.aSession.isOpen)
     // Read channel on B eventually closes as its read pump ends.
     assertEquals(true, pair.bBridge.readChannel.isClosedForRead || !pair.bSession.isOpen)
+  }
+
+  @Test
+  fun largeL2capChunksRoundTripBothDirections() = runTest(testDispatcher, timeout = 10.seconds) {
+    coroutineScope {
+      val pair = pairedBridges(BleConstants.L2CAP_CHUNK_SIZE, this, BleSessionTransport.L2CAP)
+      val size = 200_000
+      val a = ByteArray(size) { (it * 7).toByte() }
+      val b = ByteArray(size) { (it * 13 + 1).toByte() }
+
+      suspend fun ByteReadChannel.readExactly(n: Int): ByteArray {
+        val out = ByteArray(n)
+        var off = 0
+        while (off < n) {
+          val r = readAvailable(out, off, n - off)
+          check(r >= 0) { "closed early" }
+          off += r
+        }
+        return out
+      }
+
+      val atB = async { pair.bBridge.readChannel.readExactly(size) }
+      val atA = async { pair.aBridge.readChannel.readExactly(size) }
+      pair.aBridge.writeChannel.apply { writeByteArray(a); flush() }
+      pair.bBridge.writeChannel.apply { writeByteArray(b); flush() }
+
+      assertEquals(a.toList(), atB.await().toList())
+      assertEquals(b.toList(), atA.await().toList())
+
+      pair.aSession.close()
+      pair.bSession.close()
+    }
   }
 }

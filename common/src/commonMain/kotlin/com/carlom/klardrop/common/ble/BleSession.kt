@@ -1,7 +1,7 @@
 package com.carlom.klardrop.common.ble
 
 /**
- * A connected BLE GATT session between the local peer and a remote peer.
+ * A connected BLE session (GATT or L2CAP) between the local peer and a remote peer.
  *
  * This is the transport primitive the Klardrop communication layer runs over when the TCP
  * path isn't available. The API is deliberately chunk-oriented: BLE has no notion of a
@@ -11,10 +11,12 @@ package com.carlom.klardrop.common.ble
  *
  * Lifecycle:
  *  - The session is live from construction until [close] is called or the remote closes
- *    the GATT connection. After that, [isOpen] is false and [receiveChunk] returns null.
+ *    the underlying link. After that, [isOpen] is false and [receiveChunk] returns null.
  *  - [close] is idempotent.
  *
  * Implementations:
+ *  - L2CAP CoC: a socket/channel stream wrapped as a session with a large [mtu]; the whole
+ *    Klardrop session then runs over it and GATT RX is not subscribed.
  *  - `Android`: wraps `BluetoothGatt` (central role) or `BluetoothGattServer` (peripheral).
  *  - `Apple`: wraps `CBPeripheral` / `CBCentralManager`.
  *  - `JVM desktop`: wraps BlueZ D-Bus characteristics (Linux) or a Swift helper process (macOS).
@@ -25,18 +27,25 @@ internal interface BleSession {
   /** The remote peer's short device id, negotiated during the app-level handshake. */
   val deviceId: String
 
-  /** Whether the underlying GATT connection is currently open. */
+  /**
+   * Whether the underlying link is currently open. MUST become false on remote EOF, I/O
+   * error or link loss, not only on [close] (`Connection.Ble.isClosed` reads it).
+   */
   val isOpen: Boolean
 
   /**
-   * Maximum payload bytes allowed per [sendChunk] call (MTU minus the ATT header).
-   * Stable for the lifetime of the session — MTU negotiation happens once on connect.
+   * Maximum payload bytes allowed per [sendChunk] call: the MTU payload (MTU minus the ATT
+   * header) for GATT, [BleConstants.L2CAP_CHUNK_SIZE] for stream-backed L2CAP sessions.
+   * Stable for the lifetime of the session.
    */
   val mtu: Int
 
+  /** Which transport backs this session. */
+  val transport: BleSessionTransport get() = BleSessionTransport.GATT
+
   /**
-   * Send one chunk (≤ [mtu] bytes) to the remote peer over the TX GATT characteristic.
-   * Suspends until the write completes (write-with-response) so that chunks delivered in
+   * Send one chunk (≤ [mtu] bytes) to the remote peer over the underlying link (GATT TX write, or an L2CAP socket write).
+   * Suspends until the write completes (GATT write-with-response; on L2CAP, until the local socket accepts the bytes) so that chunks delivered in
    * order from the caller also arrive in order on the remote peer.
    *
    * @throws IllegalArgumentException if [chunk] is larger than [mtu].
@@ -45,12 +54,14 @@ internal interface BleSession {
   suspend fun sendChunk(chunk: ByteArray)
 
   /**
-   * Suspend until the next chunk from the remote peer arrives (a GATT characteristic
-   * notification on Android / update callback on Apple). Returns `null` when the session
+   * Suspend until the next chunk from the remote peer arrives (a GATT notification or an L2CAP read). Returns `null` when the session
    * closes, at which point no further chunks will arrive.
    */
   suspend fun receiveChunk(): ByteArray?
 
-  /** Close the GATT connection and free native resources. Idempotent. */
+  /** Close the underlying link and free native resources. Idempotent. */
   fun close()
 }
+
+/** Transport backing a [BleSession]. */
+internal enum class BleSessionTransport { GATT, L2CAP }

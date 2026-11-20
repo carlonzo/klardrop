@@ -60,6 +60,9 @@ internal class MacBleHelperProcess(
   private val responseTimeout: Duration = 10.seconds,
 ) {
 
+  // connect = GATT setup + up to 5 s L2CAP attempt + subscribe (20 s with the default responseTimeout).
+  private val connectTimeout: Duration = responseTimeout * 2
+
   private val startMutex = Mutex()
   private val writeMutex = Mutex()
 
@@ -212,6 +215,7 @@ internal class MacBleHelperProcess(
     val response = sendCommand(
       HelperCommands.CONNECT,
       mapOf("peerId" to stringField(peerId)),
+      timeout = connectTimeout,
     )
     val sessionId = response.obj.string("sessionId")
       ?: throw IllegalStateException("Helper connect response missing sessionId")
@@ -222,6 +226,7 @@ internal class MacBleHelperProcess(
       deviceId = remoteShortDeviceId,
       mtu = mtu,
       helper = this,
+      transport = parseTransport(response.obj),
     )
     sessions[sessionId] = session
     return session
@@ -407,7 +412,11 @@ internal class MacBleHelperProcess(
   }
 
   // CompletableDeferred response correlation. Caller suspends on awaitOrThrow.
-  private suspend fun sendCommand(cmd: String, fields: Map<String, JsonElement> = emptyMap()): HelperLine.Ok {
+  private suspend fun sendCommand(
+    cmd: String,
+    fields: Map<String, JsonElement> = emptyMap(),
+    timeout: Duration = responseTimeout,
+  ): HelperLine.Ok {
     val id = UUID.randomUUID().toString()
     val line = HelperProtocol.encodeRequest(id, cmd, fields)
     val deferred = CompletableDeferred<HelperLine>()
@@ -419,10 +428,10 @@ internal class MacBleHelperProcess(
       throw t
     }
     val response = try {
-      withTimeout(responseTimeout) { deferred.await() }
+      withTimeout(timeout) { deferred.await() }
     } catch (e: TimeoutCancellationException) {
       pending.remove(id)
-      throw IllegalStateException("Helper command '$cmd' timed out after $responseTimeout", e)
+      throw IllegalStateException("Helper command '$cmd' timed out after $timeout", e)
     }
     return when (response) {
       is HelperLine.Ok -> response
@@ -483,6 +492,7 @@ internal class MacBleHelperProcess(
             deviceId = peerShort,
             mtu = mtu,
             helper = this,
+            transport = parseTransport(event.obj),
           )
           sessions[sessionId] = session
           inboundSessions.trySend(session)

@@ -3,7 +3,8 @@ import CoreBluetooth
 
 // CBPeripheralManager driver: hosts the Klardrop GATT service, advertises with the
 // short device id in service data + local name, and emits a session every time a
-// remote central subscribes to our RX characteristic.
+// remote central subscribes to our RX characteristic, and publishes an L2CAP CoC channel
+// (PSM readable via GATT). All state is confined to the helper queue (CB delegate queue).
 final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
 
   private let writer: StdoutWriter
@@ -22,6 +23,11 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
 
   // Active peripheral-role sessions keyed by central identifier UUID string.
   private var sessions: [String: PeripheralSession] = [:]
+
+  // Active peripheral-role L2CAP sessions keyed by sessionId.
+  private var l2capSessions: [String: L2capSession] = [:]
+  private var psm: CBL2CAPPSM?
+  private var published = false
 
   init(writer: StdoutWriter, queue: DispatchQueue, registry: SessionRegistry) {
     self.writer = writer
@@ -78,6 +84,7 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
   func shutdown() {
     if manager.isAdvertising { manager.stopAdvertising() }
     sessions.removeAll()
+    for (_, s) in l2capSessions { s.teardown(reason: "shutdown") }
     if serviceAdded {
       manager.removeAllServices()
       serviceAdded = false
@@ -89,8 +96,15 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
   func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
     if peripheral.state == .poweredOn {
       if !serviceAdded { installService() }
+      if !published {
+        published = true
+        manager.publishL2CAPChannel(withEncryption: false)
+      }
       if pendingAdvertiseRequestId != nil { actuallyStartAdvertising() }
     } else {
+      psm = nil
+      published = false
+      for (_, s) in l2capSessions { s.teardown(reason: "manager_off") }
       // Sessions tied to the peripheral manager are now invalid.
       for (_, session) in sessions {
         registry.remove(sessionId: session.sessionId)
@@ -156,6 +170,57 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
     }
   }
 
+  func peripheralManager(_ peripheral: CBPeripheralManager, didPublishL2CAPChannel PSM: CBL2CAPPSM, error: Error?) {
+    if let error = error {
+      published = false // retry on next poweredOn
+      writer.sendLog("warn", "L2CAP publish failed: \(error.localizedDescription)")
+      return
+    }
+    guard published, manager.state == .poweredOn else { return }
+    psm = PSM
+    writer.sendLog("info", "L2CAP listening psm=\(PSM)")
+  }
+
+  func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
+    guard request.characteristic.uuid == CBUUID(string: BleConstants.psmCharacteristicUUID), let psm = psm else {
+      manager.respond(to: request, withResult: .readNotPermitted)
+      return
+    }
+    let value = Data([UInt8(psm & 0xFF), UInt8(psm >> 8)])
+    if request.offset > value.count {
+      manager.respond(to: request, withResult: .invalidOffset)
+      return
+    }
+    request.value = value.subdata(in: request.offset..<value.count)
+    manager.respond(to: request, withResult: .success)
+  }
+
+  func peripheralManager(_ peripheral: CBPeripheralManager, didOpen channel: CBL2CAPChannel?, error: Error?) {
+    guard error == nil, let channel = channel else {
+      writer.sendLog("warn", "L2CAP incoming channel failed: \(error?.localizedDescription ?? "nil channel")")
+      return
+    }
+    let session = L2capSession(
+      channel: channel, sessionId: UUID().uuidString, role: "peripheral", peripheral: nil,
+      writer: writer, queue: queue
+    ) { [weak self] session, reason in
+      guard let self = self else { return }
+      self.l2capSessions.removeValue(forKey: session.sessionId)
+      self.registry.remove(sessionId: session.sessionId)
+      self.writer.sendEvent("session_closed", ["sessionId": session.sessionId, "reason": reason])
+    }
+    l2capSessions[session.sessionId] = session
+    registry.add(sessionId: session.sessionId, session: .l2cap(session))
+    writer.sendEvent("session_opened", [
+      "sessionId": session.sessionId,
+      "peerShortDeviceId": channel.peer.identifier.uuidString,
+      "mtu": BleConstants.l2capChunkSize,
+      "role": "peripheral",
+      "transport": "l2cap",
+    ])
+    session.start() // after the announcement so no chunk event can precede it
+  }
+
   func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
     pumpNotifications()
   }
@@ -170,7 +235,10 @@ final class PeripheralController: NSObject, CBPeripheralManagerDelegate {
     let tx = CBMutableCharacteristic(type: txUuid, properties: [.write], value: nil, permissions: [.writeable])
     let rx = CBMutableCharacteristic(type: rxUuid, properties: [.notify], value: nil, permissions: [.readable])
     let svc = CBMutableService(type: serviceUUID, primary: true)
-    svc.characteristics = [tx, rx]
+    // nil value so reads reach didReceiveRead: the PSM is only known after publish.
+    let psmChar = CBMutableCharacteristic(
+      type: CBUUID(string: BleConstants.psmCharacteristicUUID), properties: [.read], value: nil, permissions: [.readable])
+    svc.characteristics = [tx, rx, psmChar]
 
     self.txCharacteristic = tx
     self.rxCharacteristic = rx

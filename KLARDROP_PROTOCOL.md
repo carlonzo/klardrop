@@ -39,7 +39,7 @@ picks the best transport per connection.
 |---|---|---|---|
 | **Klardrop TCP** (mDNS `_klardrop._tcp.`) | jmDNS / NSD | Both peers on the same Wi-Fi LAN | Fast |
 | **Nearby Share TCP** (mDNS `_FC9F5ED42C8A._tcp.`) | jmDNS / NSD | Cross-app interop (e.g., Google Quick Share) | Fast |
-| **Bluetooth Low Energy (BLE)** | Service-UUID scan | Wi-Fi unreachable; falls back to BLE GATT | Slow (≤ ~244-byte chunks) |
+| **Bluetooth Low Energy (BLE)** | Service-UUID scan | Wi-Fi unreachable; falls back to BLE GATT | Slow (L2CAP: 8 KB chunks; GATT fallback: ≤ ~244-byte chunks) |
 | **Klardrop TCP over Tailscale** | Unicast probe of tailnet peers (`TailnetDiscovery`) | Peers on the same tailnet but not the same LAN | Fast |
 
 ### Tailscale
@@ -86,6 +86,34 @@ How it works:
   (write-with-response, central → server) and RX (notifications,
   server → client). Both carry the same length-prefixed Klardrop wire format,
   reassembled across MTU-sized chunks (`BleFraming` / `BleReassembler`).
+- **L2CAP data channel (optional)**: the GATT service may carry a third,
+  read-only **PSM characteristic** (`a5b7c3e4-7f5a-4b62-9a3c-1d8e2f4b6c8a`).
+  Its value is the PSM of an *insecure* L2CAP CoC the peripheral listens on:
+  an unsigned 16-bit **little-endian** integer, exactly 2 bytes (any other size,
+  or 0, is invalid). Apple peripherals (iOS, native macOS, the macOS helper) always expose the characteristic and answer reads with ATT Read Not Permitted until the channel is published (and again after Bluetooth powers off). Android peripherals add the characteristic only when `listenUsingInsecureL2capChannel` succeeded at GATT-server start (API 29+); otherwise it is absent.
+  - **Negotiation**: after GATT service discovery the central reads the PSM and
+    opens the channel (no bonding; confidentiality comes from the UKEY2-encrypted transport on top, exactly as on GATT). Reading the PSM and opening the channel share one 5 s budget
+    (`L2CAP_OPEN_TIMEOUT_MS`). If the characteristic is missing, the read fails,
+    the PSM is invalid, the open fails, or the budget runs out, the central
+    falls back to subscribing to the GATT RX characteristic exactly as before,
+    so peers without L2CAP are unaffected.
+  - **Framing**: when the channel opens, the whole Klardrop session runs over it (the `HandshakeMessage`, the UKEY2 handshake and every later encrypted frame) with the same byte-stream semantics as GATT
+    chunks (`[4-byte length][1-byte type][protobuf payload]`, reassembled by
+    the receiver). Chunks are at most 8192 bytes (`L2CAP_CHUNK_SIZE`).
+  - **Platforms**: Android needs API 29+ (`listenUsingInsecureL2capChannel` /
+    `createInsecureL2capChannel`); older versions stay on GATT. iOS and native
+    macOS use CoreBluetooth L2CAP channels. The macOS desktop JVM build gets it
+    through the helper, which reports `transport` (`"l2cap"`; absent = GATT) and
+    `mtu` in the `connect` response (central) or `session_opened` event
+    (peripheral). An older helper binary never sends `transport`, so it stays on
+    GATT; L2CAP on macOS JVM needs the rebuilt helper.
+    The Linux desktop (BlueZ) has no L2CAP path: it never publishes a PSM, and as a central it always uses GATT.
+  - **Throughput log**: each session logs (tag `BleThroughput`) one line per
+    transfer burst per direction, e.g.
+    `BLE l2cap tx <deviceId>: <bytes> B in <ms> ms = <B/s> B/s` (`rx` for
+    receive; `gatt` instead of `l2cap` on the fallback). A burst is a run of
+    chunks less than 1 s apart; it is logged when the next chunk arrives ≥ 1 s after the previous one or when the session's pump ends, only if it moved at least 64 KiB; the duration runs from the first to the last chunk of the burst.
+    On Android, iOS and native macOS the connect path also logs `BLE session to <peer> via L2CAP psm=<n>` or `BLE session to <peer> via GATT (<reason>)` (tag `BleL2cap`). The macOS helper instead emits `L2CAP to <peer> failed (<reason>), using GATT` and `L2CAP session <id> role=<central|peripheral> psm=<n>` as `log` events.
 - **Platform implementations**: Android uses `BluetoothLeAdvertiser` /
   `BluetoothGattServer`. iOS / macOS use CoreBluetooth (`CBPeripheralManager` /
   `CBCentralManager`). The macOS desktop JVM build delegates to a small Swift

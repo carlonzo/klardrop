@@ -27,6 +27,9 @@ import kotlinx.coroutines.launch
  *  - Close either side (write channel, read channel, or the session) and the bridge
  *    will propagate closure to the other endpoints.
  *  - [close] is idempotent and cancels the pumps.
+ *
+ * Throughput is logged per burst via [BleThroughputMeter]. rx is the honest number; on L2CAP,
+ * tx only measures how fast the local socket accepts bytes.
  */
 internal class BleChannelBridge(
   private val session: BleSession,
@@ -41,6 +44,9 @@ internal class BleChannelBridge(
 
   /** Bytes the remote peer sent over [session] show up here in order. */
   val readChannel: ByteReadChannel get() = incoming
+
+  private val txMeter = BleThroughputMeter("BLE ${session.transport.name.lowercase()} tx ${session.deviceId}")
+  private val rxMeter = BleThroughputMeter("BLE ${session.transport.name.lowercase()} rx ${session.deviceId}")
 
   private var writePump: Job? = null
   private var readPump: Job? = null
@@ -64,6 +70,7 @@ internal class BleChannelBridge(
         if (read == 0) continue
         val chunk = if (read == mtu) buffer.copyOf() else buffer.copyOf(read)
         session.sendChunk(chunk)
+        txMeter.record(chunk.size)
       }
     } catch (e: CancellationException) {
       throw e
@@ -74,6 +81,7 @@ internal class BleChannelBridge(
     } finally {
       // If the caller stopped writing, close the session and the inbound side too so that
       // readers unblock and the ConnectionMessenger notices closure.
+      txMeter.close()
       runCatching { session.close() }
       runCatching { incoming.close() }
     }
@@ -85,12 +93,14 @@ internal class BleChannelBridge(
         val chunk = session.receiveChunk() ?: break
         if (chunk.isEmpty()) continue
         incoming.writeByteArray(chunk)
+        rxMeter.record(chunk.size)
       }
     } catch (e: CancellationException) {
       throw e
     } catch (e: Throwable) {
       logLocal(TAG, "read pump for ${session.deviceId} failed: ${e.message}", e)
     } finally {
+      rxMeter.close()
       runCatching { incoming.close() }
       // A closed session means the peer is gone — also close the outbound side so writers
       // see the failure instead of hanging.
@@ -102,6 +112,7 @@ internal class BleChannelBridge(
   fun close() {
     runCatching { writePump?.cancel() }
     runCatching { readPump?.cancel() }
+    // Meters are flushed by the pumps' finally blocks only (not thread-safe).
     runCatching { session.close() }
     runCatching { outgoing.close() }
     runCatching { incoming.close() }
