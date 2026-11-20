@@ -6,9 +6,10 @@ import com.carlom.klardrop.common.communication.createTestPlatformFile
 import com.carlom.klardrop.common.utils.CoroutinesImpl
 import io.github.vinceglb.filekit.PlatformFile
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.filterIsInstance
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -57,6 +58,26 @@ data class TestHttpResponse(
 class LanHttpShareServerIntegrationTest {
 
   private var activeServer: LanHttpShareServer? = null
+
+  /**
+   * [LanHttpShareServer.events] is a hot [kotlinx.coroutines.flow.SharedFlow] with no replay.
+   * An event emitted before this collector is registered is dropped, and under CI thread
+   * starvation the child [launch] often has not entered [collect] before the test's GET
+   * is already being handled. Wait until the subscriber is registered, then issue the request.
+   */
+  private suspend fun CoroutineScope.collectSubscribed(
+    server: LanHttpShareServer,
+    onEvent: (LanHttpShareServer.DownloadEvent) -> Unit,
+  ): Job {
+    val subscribed = CompletableDeferred<Unit>()
+    val job = launch {
+      server.events
+        .onSubscription { subscribed.complete(Unit) }
+        .collect(onEvent)
+    }
+    withTimeout(5_000) { subscribed.await() }
+    return job
+  }
 
   @After
   fun tearDown() {
@@ -332,10 +353,10 @@ class LanHttpShareServerIntegrationTest {
 
     val rotatedEvents = mutableListOf<LanHttpShareServer.DownloadEvent.TokenRotated>()
     val rotatedDeferred = CompletableDeferred<LanHttpShareServer.DownloadEvent.TokenRotated>()
-    val collectJob = launch {
-      server.events.filterIsInstance<LanHttpShareServer.DownloadEvent.TokenRotated>().collect {
-        rotatedEvents.add(it)
-        rotatedDeferred.complete(it)
+    val collectJob = collectSubscribed(server) { event ->
+      if (event is LanHttpShareServer.DownloadEvent.TokenRotated) {
+        rotatedEvents.add(event)
+        rotatedDeferred.complete(event)
       }
     }
 
@@ -375,11 +396,9 @@ class LanHttpShareServerIntegrationTest {
 
     val rotatedEvent = CompletableDeferred<LanHttpShareServer.DownloadEvent.TokenRotated>()
     val landingHitEvent = CompletableDeferred<LanHttpShareServer.DownloadEvent.LandingHit>()
-    val collectJob = launch {
-      server.events.collect {
-        if (it is LanHttpShareServer.DownloadEvent.TokenRotated) rotatedEvent.complete(it)
-        if (it is LanHttpShareServer.DownloadEvent.LandingHit) landingHitEvent.complete(it)
-      }
+    val collectJob = collectSubscribed(server) {
+      if (it is LanHttpShareServer.DownloadEvent.TokenRotated) rotatedEvent.complete(it)
+      if (it is LanHttpShareServer.DownloadEvent.LandingHit) landingHitEvent.complete(it)
     }
 
     // Camera prefetch HEAD
@@ -495,12 +514,10 @@ class LanHttpShareServerIntegrationTest {
 
     val events = mutableListOf<LanHttpShareServer.DownloadEvent>()
     val endedDeferred = CompletableDeferred<LanHttpShareServer.DownloadEvent.Ended>()
-    val collectJob = launch {
-      server.events.collect {
-        events.add(it)
-        if (it is LanHttpShareServer.DownloadEvent.Ended) {
-          endedDeferred.complete(it)
-        }
+    val collectJob = collectSubscribed(server) {
+      events.add(it)
+      if (it is LanHttpShareServer.DownloadEvent.Ended) {
+        endedDeferred.complete(it)
       }
     }
 
@@ -545,11 +562,9 @@ class LanHttpShareServerIntegrationTest {
 
     val started = CompletableDeferred<LanHttpShareServer.DownloadEvent.Started>()
     val ended = CompletableDeferred<LanHttpShareServer.DownloadEvent.Ended>()
-    val collectJob = launch {
-      server.events.collect {
-        if (it is LanHttpShareServer.DownloadEvent.Started) started.complete(it)
-        if (it is LanHttpShareServer.DownloadEvent.Ended) ended.complete(it)
-      }
+    val collectJob = collectSubscribed(server) {
+      if (it is LanHttpShareServer.DownloadEvent.Started) started.complete(it)
+      if (it is LanHttpShareServer.DownloadEvent.Ended) ended.complete(it)
     }
 
     val landing = executeRequest(bound.port, "GET", "/s/$waitingToken")
