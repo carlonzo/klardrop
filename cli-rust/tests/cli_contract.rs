@@ -60,6 +60,19 @@ struct Fixture {
     control: PathBuf,
 }
 
+/// Existence is not readiness: a writer that truncates before filling leaves a
+/// window where the path is there and the body is empty. A ready file is one
+/// JSON object that names the bound port.
+fn control_file_ready(path: &Path) -> bool {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return false;
+    };
+    serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()
+        .and_then(|value| value.get("port").and_then(serde_json::Value::as_u64))
+        .is_some()
+}
+
 impl Fixture {
     fn start(tag: &str, behaviors: &[&str]) -> Self {
         let dir = TempDir::new(tag);
@@ -75,14 +88,11 @@ impl Fixture {
             .expect("spawn fixture daemon");
 
         let deadline = Instant::now() + Duration::from_secs(15);
-        while Instant::now() < deadline {
-            if control.exists() {
-                break;
-            }
+        while Instant::now() < deadline && !control_file_ready(&control) {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(
-            control.exists(),
+            control_file_ready(&control),
             "fixture daemon never wrote its control file"
         );
         Self {

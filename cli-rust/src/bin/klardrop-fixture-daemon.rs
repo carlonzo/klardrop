@@ -589,8 +589,16 @@ fn run() -> Result<(), String> {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("cannot create {}: {e}", parent.display()))?;
     }
-    std::fs::write(&control_path, control)
-        .map_err(|e| format!("cannot write {}: {e}", control_path.display()))?;
+    // `fs::write` creates the destination empty and fills it afterwards. The
+    // contract tests treat "the path exists" as "the JSON is readable", and on
+    // a loaded runner that read lands in the window and parses an empty file
+    // (`EOF while parsing a value`). Rename inside one directory is atomic, so
+    // the path appears only once the bytes are complete.
+    let partial = control_path.with_extension("json.partial");
+    std::fs::write(&partial, &control)
+        .map_err(|e| format!("cannot write {}: {e}", partial.display()))?;
+    std::fs::rename(&partial, &control_path)
+        .map_err(|e| format!("cannot publish {}: {e}", control_path.display()))?;
 
     let host = Arc::new(Mutex::new(Host::new(&behaviors)));
     let fixture = Fixture {
