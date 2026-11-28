@@ -1769,9 +1769,25 @@ open(sys.argv[1], 'wb').write(bytes(hdr))
     val tempHome = "$tempDir/home"
     try {
       execProcess(listOf("mkdir", "-p", "$tempHome/.local/bin"))
-      // This test binary is a real ELF for the host arch, so the architecture check
-      // must accept it — the guard rejects the wrong machine, not every machine.
-      val hostElf = requireNotNull(currentExecutablePath()) { "Test process must have a resolvable executable path" }
+      // verifyStagedArch only reads the first 20 bytes (e_ident + e_type + e_machine)
+      // and accepts EM_X86_64 on this linuxX64 target. A header is the whole fixture:
+      // copying the test kexe (tens of MB, and it grows with every linked dependency)
+      // and then gzipping two copies of it exceeds runTest's 60s budget on a busy
+      // runner, which surfaces as UncompletedCoroutinesError rather than an assertion.
+      val hostElf = "$tempDir/host.elf"
+      val py = """
+import sys
+machine = 0x3E  # EM_X86_64
+hdr = bytearray(20)
+hdr[0:4] = b'\x7fELF'
+hdr[4] = 2
+hdr[5] = 1
+hdr[18] = machine & 0xFF
+hdr[19] = (machine >> 8) & 0xFF
+open(sys.argv[1], 'wb').write(bytes(hdr))
+""".trimIndent()
+      execProcess(listOf("python3", "-c", py, hostElf))
+      chmod(hostElf, mode0755)
       execProcess(listOf("cp", hostElf, "$tempHome/.local/bin/klardrop"))
       chmod("$tempHome/.local/bin/klardrop", mode0755)
 
